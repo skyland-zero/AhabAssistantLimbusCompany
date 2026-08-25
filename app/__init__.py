@@ -2,10 +2,10 @@ from enum import Enum
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP
 
-from app.mediator import Mediator
 from module.config import cfg
 
-mediator = Mediator()
+# 事件总线已下沉到核心层（框架无关）；此处仅为兼容 UI 层的旧导入路径而再导出。
+from core.events import mediator
 
 toggle_button_group = {}
 

@@ -38,6 +38,7 @@ from qframelesswindow.titlebar.title_bar_buttons import TitleBarButtonState
 
 from app import AnnouncementStatus, mediator
 from app.announcement_board import AnnouncementBoard, AnnouncementThread
+from app.event_bridge import connect_queued
 from app.card.messagebox_custom import MessageBoxConfirm, MessageBoxWarning
 from app.custom_pivot import FullWidthPivot
 from app.farming_interface import FarmingInterface
@@ -53,7 +54,7 @@ from module.after_completion_types import (
     normalize_after_completion_config,
 )
 from module.config import cfg
-from module.font_manager import font_manager
+from app.font_manager import font_manager
 from module.logger import log
 from module.system_actions import autodaily_exit_to_after_completion_config
 
@@ -563,12 +564,15 @@ class MainWindow(FramelessWindow):
         mediator.close_setting.connect(self.close_setting_page)
         mediator.save_warning.connect(self.show_save_warning)
         mediator.tasks_warning.connect(self.show_tasks_warning)
-        mediator.update_progress.connect(self.set_progress_ring)
-        mediator.download_complete.connect(self.download_and_install)
         mediator.warning.connect(self.show_warning)
-        mediator.hdr_warning.connect(self.show_hdr_warning)
-        # 由任务线程发起请求、由主窗口执行前台切换，避免执行层直接耦合 UI。
-        mediator.request_focus.connect(self._force_foreground)
+        # 以下事件由后台线程（下载线程、脚本线程）发射，经桥接器封送回主线程。
+        self._event_forwarders = [
+            connect_queued(mediator.update_progress, self.set_progress_ring),
+            connect_queued(mediator.download_complete, self.download_and_install),
+            connect_queued(mediator.hdr_warning, self.show_hdr_warning),
+            # 由任务线程发起请求、由主窗口执行前台切换，避免执行层直接耦合 UI。
+            connect_queued(mediator.request_focus, self._force_foreground),
+        ]
 
     def _force_foreground(self) -> None:
         """强制将 AALC 主窗口拉至前台，绕过 Windows 焦点保护。

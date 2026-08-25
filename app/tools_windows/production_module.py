@@ -26,7 +26,7 @@ from tasks.base.make_enkephalin_module import (
     make_enkephalin_module,
 )
 from tasks.base.retry import kill_game
-from tasks.tools.ui_style import apply_tool_window_theme, get_status_label_style
+from app.tools_windows.ui_style import apply_tool_window_theme, get_status_label_style
 
 
 class ProductionWork(QThread):

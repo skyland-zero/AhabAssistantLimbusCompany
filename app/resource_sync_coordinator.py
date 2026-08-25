@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QLabel
 from qfluentwidgets import InfoBarPosition, isDarkTheme
 
 from app.card.messagebox_custom import BaseInfoBar, MessageBoxConfirm
+from app.event_bridge import connect_queued
 from module.config import cfg
 from module.logger import log
 from module.resource_sync import (
@@ -22,11 +23,10 @@ from module.resource_sync import (
     ResourceSyncWorker,
     ResourceWorkerMode,
 )
-from module.update.check_update import (
+from app.update_ui import (
     UpdateStatus,
     check_update,
 )
-
 # start 自动任务模式下，等待资源更新确认的超时时间。
 _RESOURCE_SYNC_CONFIRM_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -68,6 +68,7 @@ class ResourceSyncCoordinator(QObject):
         self._resource_sync_service = service or ResourceSyncService()
         self._resource_sync_worker: ResourceSyncWorker | None = None
         self._resource_sync_worker_context: str | None = None
+        self._resource_sync_worker_forwarders: list | None = None
         self._pending_resource_sync_apply_request: dict[str, Any] | None = None
         self._startup_argv = list(startup_argv)
         self._startup_sequence_continued = False
@@ -304,11 +305,15 @@ class ResourceSyncCoordinator(QObject):
         # 第三步：缓存线程与上下文，并统一连接进度、成功和失败信号。
         self._resource_sync_worker = worker
         self._resource_sync_worker_context = context
-        worker.progressChanged.connect(self._on_resource_sync_progress_changed)
-        worker.checkFinished.connect(self._on_resource_sync_check_finished)
-        worker.applyFinished.connect(self._on_resource_sync_apply_finished)
-        worker.failed.connect(self._on_resource_sync_failed)
-        worker.finished.connect(self._on_resource_sync_worker_finished)
+        # worker 事件在后台线程发射；经桥接器封送回主线程后再触碰 UI。
+        # 转发器引用随 worker 一并缓存，防止被垃圾回收后断开。
+        self._resource_sync_worker_forwarders = [
+            connect_queued(worker.progressChanged, self._on_resource_sync_progress_changed),
+            connect_queued(worker.checkFinished, self._on_resource_sync_check_finished),
+            connect_queued(worker.applyFinished, self._on_resource_sync_apply_finished),
+            connect_queued(worker.failed, self._on_resource_sync_failed),
+            connect_queued(worker.finished, self._on_resource_sync_worker_finished),
+        ]
         worker.start()
         return True
 
@@ -514,12 +519,10 @@ class ResourceSyncCoordinator(QObject):
     def _on_resource_sync_worker_finished(self) -> None:
         """在线程退出后清理状态，并在需要时接力启动应用阶段。"""
         # 第一步：暂存当前线程对象和挂起的应用请求，便于清理后继续处理。
-        finished_worker = self._resource_sync_worker
+        # 第一步：取出挂起的应用请求，便于清理后继续处理。
         pending_request = self._pending_resource_sync_apply_request
-
-        if finished_worker is not None:
-            finished_worker.deleteLater()
-
+        # 释放本轮 worker 的桥接转发器引用（核心层线程对象无需 deleteLater）。
+        self._resource_sync_worker_forwarders = None
         # 第二步：重置协调类上的线程状态引用，避免下一轮启动误判。
         self._resource_sync_worker = None
         self._resource_sync_worker_context = None

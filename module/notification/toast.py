@@ -34,27 +34,16 @@ except ImportError:
             ToastImagePosition,
         )
 
-try:
-    from ..module.config import cfg
-    from ..module.logger import log  # 正常导入方式
-except ImportError:
-    # 如果作为脚本直接运行，使用绝对路径
-    import os
-    import sys
-
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from module.config import cfg
-    from module.logger import log
-
 import sys
 import winreg
 from enum import Enum
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtWidgets import QApplication
-
-from app import mediator
+from core.events import mediator
+from core.i18n import tr
+from module.config import cfg
+from module.logger import log
 
 APPID = "AALC_Notification"
 """注册表内的应用ID"""
@@ -148,9 +137,9 @@ def _normal_template_toast(title, msg, app_id, on_activated, **kwargs):
         if args.arguments == "close":
             mediator.kill_signal.emit()
 
-    confirm_botton = ToastButton(content=QApplication.translate("WindowsToast", "知道了"), arguments="confirm")
+    confirm_botton = ToastButton(content=tr("WindowsToast", "知道了"), arguments="confirm")
     close_botton = ToastButton(
-        content=QApplication.translate("WindowsToast", "关闭 AALC"),
+        content=tr("WindowsToast", "关闭 AALC"),
         arguments="close",
         colour=ToastButtonColour.Red,
     )
@@ -179,7 +168,7 @@ def _test_template_toast(title, msg, app_id, on_activated):
     image2 = ToastDisplayImage.fromPath(imagePath=ICONPATH, position=ToastImagePosition.Hero)
     # AppLogo 位置为通知左侧的小图
     image3 = ToastDisplayImage.fromPath(imagePath=ICONPATH, position=ToastImagePosition.AppLogo)
-    # 按钮的图标 压缩为16x16
+    # 创建按钮的图标 压缩为16x16
     botton_image = ToastImage(ICONPATH)
     # 创建按钮, *tooltip* 为无障碍阅读器使用的文本
     # arguments 是用户点击按钮时传递的参数
@@ -254,8 +243,8 @@ def send_toast(
 ) -> bool:
     """发送 Windows 通知
     Args:
-        title (str): 通知标题
-        msg (str | list[str]): 通知内容，支持多行 ( Windows 最多2行)
+        title (str): 通知标题.
+        msg (str | list[str]): 通知内容，支持多行 ( Windows 最多2行).
         app_name (str, optional): 应用名称.
         app_id (str, optional): 应用ID.
         icon_path (str, optional): 图标路径.
@@ -268,12 +257,12 @@ def send_toast(
     if IMPORT_SUCCESS is False:
         return True
     if template is not TemplateToast.NoneTemplate:
-        title = QApplication.translate("WindowsToast", title)
+        title = tr("WindowsToast", title)
         if isinstance(msg, str):
-            msg = QApplication.translate("WindowsToast", msg)
+            msg = tr("WindowsToast", msg)
         else:
             for index, content in enumerate(msg):
-                msg[index] = QApplication.translate("WindowsToast", content)
+                msg[index] = tr("WindowsToast", content)
 
         return _send_template_toast(title, msg, app_name, app_id, icon_path, template, on_activated, **kwargs)
 

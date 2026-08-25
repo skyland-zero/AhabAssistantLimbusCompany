@@ -1,16 +1,16 @@
 import platform
 import random
 from datetime import datetime
-from threading import Event
+from threading import Event, Lock, Thread
 from time import sleep, time
 
 import win32api
 import win32con
 from playsound3 import playsound
-from PySide6.QtCore import QT_TRANSLATE_NOOP, QMutex, QThread
+from core.events import mediator
+from core.i18n import noop
 
-from app import mediator
-from app.windows_toast import TemplateToast, send_toast
+from module.notification.toast import TemplateToast, send_toast
 from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -408,8 +408,8 @@ def script_task() -> None | int:
         screen.reset_win(activate=False)
 
     log.info("脚本任务已经完成")
-    QT_TRANSLATE_NOOP("WindowsToast", "AALC 运行结束")
-    QT_TRANSLATE_NOOP("WindowsToast", "所有任务已完成")
+    noop("WindowsToast", "AALC 运行结束")
+    noop("WindowsToast", "所有任务已完成")
     dt_start = datetime.fromtimestamp(start_time)
     dt_end = datetime.fromtimestamp(time())
     duration = dt_end - dt_start
@@ -448,11 +448,23 @@ def script_task() -> None | int:
         return 0
 
 
-class my_script_task(QThread):
+class my_script_task(Thread):
+    """主脚本任务线程。
+
+    基于标准库 threading.Thread 实现（核心层不依赖 Qt）：
+    - isRunning() 为 QThread 时代调用点保留的别名；
+    - terminate() 在 Windows 上复刻旧 QThread.terminate 的硬终止语义，
+      并在终止后重置自动化模块的安全锁。
+    """
+
     def __init__(self):
         # 初始化，构造函数
-        super().__init__()
-        self.mutex = QMutex()
+        super().__init__(daemon=True)
+        self.mutex = Lock()
+
+    def isRunning(self) -> bool:
+        """兼容旧 QThread 调用点的别名。"""
+        return self.is_alive()
 
     def run(self):
         self.mutex.lock()
@@ -483,8 +495,26 @@ class my_script_task(QThread):
         mediator.script_finished.emit()
 
     def terminate(self):
+        """硬终止脚本线程（Windows）。
+
+        复刻旧 QThread.terminate 在 Windows 上的 TerminateThread 行为：
+        线程被立即杀掉，不执行任何清理；随后重置自动化模块的安全锁，
+        防止被杀线程持有的锁导致后续任务永久阻塞。
+        """
         retry_monitor.stop()
-        super().terminate()
+        try:
+            import ctypes
+
+            THREAD_TERMINATE = 0x0001
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenThread(THREAD_TERMINATE, False, self.native_id)
+            if handle:
+                try:
+                    kernel32.TerminateThread(handle, 1)
+                finally:
+                    kernel32.CloseHandle(handle)
+        except Exception as e:
+            log.error(f"终止脚本线程失败: {e}")
         # TerminateThread 不会释放被杀线程持有的 RLock,换新锁防止后续任务取锁永久阻塞
         auto.reset_safety_locks()
 
@@ -504,6 +534,6 @@ class my_script_task(QThread):
             if keep_awake_enabled:
                 # 先切回 AALC 再释放线程级防息屏，避免游戏仍持有前台时继续阻止息屏。
                 mediator.request_focus.emit()
-                self.msleep(800)  # 覆盖 WinRT toast 异步归还焦点（延迟约 600ms），再释放防息屏
+                sleep(0.8)  # 覆盖 WinRT toast 异步归还焦点（延迟约 600ms），再释放防息屏
                 apply_power_keep_awake(False)
             auto.clear_img_cache()

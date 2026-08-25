@@ -21,6 +21,7 @@ from qfluentwidgets import (
 )
 
 from app.base_combination import *
+from app.event_bridge import connect_queued
 from app.base_tools import *
 from app.common.ui_config import get_log_text_edit_qss, set_border_style
 from app.language_manager import LanguageManager
@@ -764,13 +765,16 @@ class FarmingInterfaceLeft(QWidget):
         self.pause_resume_button.setVisible(False)
 
     def connect_mediator(self):
-        # 连接所有可能信号
-        mediator.link_start.connect(self.my_stop_shortcut)
-        mediator.pause_resume.connect(self.pause_or_resume_tasks)
-        mediator.kill_signal.connect(self.stop_AALC)
-        # finished_signal 目前用于命令行延迟触发开始/停止按钮逻辑。
+        # link_start/pause_resume 来自快捷键监听线程，kill_signal/script_finished
+        # 来自脚本线程与通知回调线程；均经桥接器封送回主线程处理。
+        self._event_forwarders = [
+            connect_queued(mediator.link_start, self.my_stop_shortcut),
+            connect_queued(mediator.pause_resume, self.pause_or_resume_tasks),
+            connect_queued(mediator.kill_signal, self.stop_AALC),
+            connect_queued(mediator.script_finished, self._on_script_finished),
+        ]
+        # finished_signal 目前用于命令行延迟触发开始/停止按钮逻辑（仅主线程发射）。
         mediator.finished_signal.connect(self.start_and_stop_tasks)
-        mediator.script_finished.connect(self._on_script_finished)
 
     def retranslateUi(self):
         self.set_windows.retranslateUi()
@@ -877,8 +881,11 @@ class FarmingInterfaceRight(QWidget):
         self.main_layout.addWidget(self.scroll_log_edit)
 
     def _connect_log_stream(self):
-        ui_log_dispatcher.new_lines.connect(self._handle_new_lines)
-        ui_log_dispatcher.cleared.connect(self._handle_log_cleared)
+        # 日志行可能来自任意线程，经桥接器封送回主线程后写入文本框。
+        self._log_forwarders = [
+            connect_queued(ui_log_dispatcher.new_lines, self._handle_new_lines),
+            connect_queued(ui_log_dispatcher.cleared, self._handle_log_cleared),
+        ]
 
     def _bootstrap_log_history(self):
         history = ui_log_dispatcher.snapshot()

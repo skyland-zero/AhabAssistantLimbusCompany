@@ -29,6 +29,7 @@ from qfluentwidgets import (
 from qfluentwidgets import FluentIcon as FIF
 
 from app import *
+from app.event_bridge import connect_queued
 from app.base_combination import (
     CheckBoxWithComboBox,
     LabelWithComboBox,
@@ -793,8 +794,11 @@ class PageMirror(PageCard):
         # 连接所有可能信号
         mediator.delete_team_setting.connect(self.delete_team)
         mediator.refresh_teams_order.connect(self.refresh)
-        mediator.mirror_signal.connect(self.update_mirror_bar)
-        mediator.mirror_bar_kill_signal.connect(self.destroy_mirror_bar)
+        # mirror_signal/mirror_bar_kill_signal 由脚本线程发射，经桥接器封送回主线程。
+        self._mirror_forwarders = [
+            connect_queued(mediator.mirror_signal, self.update_mirror_bar),
+            connect_queued(mediator.mirror_bar_kill_signal, self.destroy_mirror_bar),
+        ]
 
     def retranslateUi(self):
         self.mirror_count.retranslateUi()

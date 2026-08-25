@@ -64,10 +64,10 @@ from app.observe_ego_gift_selection import (
     OBSERVE_ROW_VALUES,
     ObserveGiftSelection,
 )
-from module.font_manager import font_manager
+from app.font_manager import font_manager
 from module.logger import log
 from module.my_error.my_error import settingsTypeError
-from module.update.check_update import check_update
+from app.update_ui import check_update
 from utils.utils import decrypt_string, encrypt_string
 
 

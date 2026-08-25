@@ -1,15 +1,19 @@
-import sys
+"""小工具窗口（UI 层组件）。
+
+从 tasks.tools 迁入：这些工具本质是带窗口的 UI 功能，
+依赖 PySide6 / qfluentwidgets，因此归属 UI 层而非核心业务层。
+"""
+
 import threading
 from typing import Literal
 
-from PySide6.QtCore import QObject, QThread, QTimer
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QApplication, QWidget
 
+from app.tools_windows.infinite_battle import InfiniteBattles
+from app.tools_windows.production_module import ProductionModule
+from app.tools_windows.screenshot_module import ScreenshotGet
 from module.logger import log
-from tasks.base.script_task_scheme import init_game
-from tasks.tools.infinite_battle import InfiniteBattles
-from tasks.tools.production_module import ProductionModule
-from tasks.tools.screenshot_module import ScreenshotGet
 
 
 class ToolManager:
@@ -26,7 +30,7 @@ class ToolManager:
             self.initialized = None  # 启动失败返回
 
     def run_tools(self):
-        """自动战斗：在主线程事件循环中展示新窗口"""
+        """在主线程事件循环中展示新窗口"""
         app = QApplication.instance()
         if app is None:
             # 无运行中的 Qt 应用，无法安全创建窗口

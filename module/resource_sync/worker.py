@@ -1,12 +1,12 @@
-"""资源同步后台工作线程。"""
+"""资源同步后台工作线程（核心层实现，不依赖 UI 框架）。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from threading import Thread
 
-from PySide6.QtCore import QThread, Signal
-
+from core.events import Event
 from module.resource_sync.service import (
     ResourceCheckResult,
     ResourceCheckStatus,
@@ -33,17 +33,13 @@ class ResourceCheckPayload:
     sync_plan: ResourceSyncPlan | None = None
 
 
-class ResourceSyncWorker(QThread):
-    """在后台线程中执行图片资源检查与同步，避免阻塞主界面。"""
+class ResourceSyncWorker(Thread):
+    """在后台线程中执行图片资源检查与同步，避免阻塞主界面。
 
-    # 检查阶段完成后回传检查结果与可选同步计划。
-    checkFinished = Signal(object)
-    # 应用阶段完成后回传同步结果。
-    applyFinished = Signal(object)
-    # 任一步骤失败时回传可直接展示的中文错误信息。
-    failed = Signal(str)
-    # 统一向外回传 0 到 100 的进度值。
-    progressChanged = Signal(int)
+    结果通过 core.events.Event 回调；处理器在后台线程被同步调用，
+    订阅方若涉及 UI 操作需自行封送回主线程（见 app.event_bridge）。
+    """
+
 
     def __init__(
         self,
@@ -63,9 +59,22 @@ class ResourceSyncWorker(QThread):
             preferred_source: 用户配置的优先资源源。
             check_result: 应用阶段需要复用的远端检查结果。
             sync_plan: 应用阶段需要复用的同步计划。
-            parent: Qt 父对象。
+            parent: 兼容旧 QThread 构造签名，已不再使用。
         """
-        super().__init__(parent)
+        super().__init__(daemon=True)
+
+        # 实例级事件（与旧 QThread 信号一致：不同实例的订阅互不干扰）。
+        # 检查阶段完成后回传检查结果与可选同步计划。
+        self.checkFinished = Event("resource_check_finished")
+        # 应用阶段完成后回传同步结果。
+        self.applyFinished = Event("resource_apply_finished")
+        # 任一步骤失败时回传可直接展示的中文错误信息。
+        self.failed = Event("resource_failed")
+        # 统一向外回传 0 到 100 的进度值。
+        self.progressChanged = Event("resource_progress_changed")
+        # 线程主体退出后触发（对应旧 QThread.finished）。
+        self.finished = Event("resource_finished")
+
         # 持有服务对象，所有网络与文件操作都交给服务层完成。
         self.service = service
         # 当前线程执行模式。
@@ -79,8 +88,12 @@ class ResourceSyncWorker(QThread):
         # 记录最近一次已发出的进度，避免重复发射相同值。
         self._last_progress: int | None = None
 
+    def isRunning(self) -> bool:
+        """兼容旧 QThread 调用点的别名。"""
+        return self.is_alive()
+
     def _emit_progress(self, value: int) -> None:
-        """仅在进度值发生变化时发射信号，减少 UI 刷新噪声。
+        """仅在进度值发生变化时发射事件，减少 UI 刷新噪声。
 
         参数:
             value: 待发射的原始进度值。
@@ -173,7 +186,7 @@ class ResourceSyncWorker(QThread):
         self.applyFinished.emit(apply_result)
 
     def run(self) -> None:
-        """根据模式分派后台任务，并将异常转换为统一错误信号。"""
+        """根据模式分派后台任务，并将异常转换为统一错误事件。"""
         try:
             # 根据构造时指定的模式进入对应分支，保证线程职责单一明确。
             if self.mode is ResourceWorkerMode.CHECK_ONLY:
@@ -185,5 +198,8 @@ class ResourceSyncWorker(QThread):
             else:
                 raise ValueError(f"不支持的资源同步工作模式: {self.mode}")
         except Exception as exc:
-            # 统一把异常转成失败信号，交由界面层决定如何提示用户。
+            # 统一把异常转成失败事件，交由界面层决定如何提示用户。
             self.failed.emit(str(exc))
+        finally:
+            # 无论成功失败都要通知宿主线程结束，便于清理与接力启动。
+            self.finished.emit()

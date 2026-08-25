@@ -8,9 +8,10 @@ from threading import Lock
 
 import colorlog
 from concurrent_log_handler import ConcurrentRotatingFileHandler
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication
 from ruamel.yaml import YAML
+
+from core.events import Event
+from core.i18n import tr
 
 from module import CONFIG_PATH, VERSION_PATH
 from utils.singletonmeta import SingletonMeta
@@ -22,20 +23,23 @@ class TranslationFormatter(colorlog.ColoredFormatter):
     project_root = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else Path.cwd()
 
     def format(self, record):
-        record.msg = QApplication.translate("Logger", str(record.msg))
+        record.msg = tr("Logger", str(record.msg))
         record.pathname = os.path.relpath(record.pathname, self.project_root)
 
         return super().format(record)
 
 
-class UILogDispatcher(QObject):
-    """线程安全的 UI 日志环形缓冲区，保存user日志并通过信号分发给 UI 组件"""
+class UILogDispatcher:
+    """线程安全的 UI 日志环形缓冲区，保存user日志并通过事件分发给 UI 组件。
 
-    new_lines = Signal(list)
-    cleared = Signal()
+    事件处理器在调用线程被同步执行；UI 层订阅时需自行封送回主线程
+    （参见 app.event_bridge.connect_queued）。
+    """
+
+    new_lines = Event("ui_log_new_lines")
+    cleared = Event("ui_log_cleared")
 
     def __init__(self, max_lines: int = 10000):
-        super().__init__()
         self._lock = Lock()
         self._buffer = deque(maxlen=max_lines)
 
@@ -55,7 +59,6 @@ class UILogDispatcher(QObject):
             self._buffer.clear()
 
         self.cleared.emit()
-
 
 ui_log_dispatcher = UILogDispatcher()
 

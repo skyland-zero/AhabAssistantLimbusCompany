@@ -1,25 +1,31 @@
+"""软件更新检查与下载的核心逻辑。
+
+本模块是核心层实现：不依赖 PySide6 / qfluentwidgets / UI 层。
+- 后台检查线程基于 threading.Thread，结果通过 core.events.Event 回调；
+- 文案翻译走 core.i18n 可插拔钩子；
+- 下载进度通过 core.events.mediator 对外发布。
+"""
+
 import os  # 导入os模块以便操作文件路径
 import re
 import shutil
 import subprocess
 from enum import Enum
 from threading import Thread
-from typing import Callable
-
 import requests  # 导入requests模块，用于发送HTTP请求
 from markdown_it import MarkdownIt
 from packaging.version import parse
-from PySide6.QtCore import QT_TRANSLATE_NOOP, Qt, QThread, Signal
-from qfluentwidgets import InfoBarPosition
 
-from app import mediator
-from app.card.messagebox_custom import BaseInfoBar, MessageBoxUpdate
+from core.events import Event, mediator
+from core.i18n import tr
 from module.config import cfg
-from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
 from utils.utils import decrypt_string
 
 md_renderer = MarkdownIt("gfm-like", {"html": True})
+
+# 更新日志弹窗标题的翻译域，保持与旧 QT_TRANSLATE_NOOP 域名一致
+TRANSLATE_DOMAIN = "UpdateThread"
 
 
 class UpdateStatus(Enum):
@@ -37,14 +43,14 @@ class UpdateStatus(Enum):
     FAILURE = 0
 
 
-class UpdateThread(QThread):
+class UpdateThread(Thread):
     """
-    更新线程类，用于在后台检查和处理软件更新。
-    该类继承自 QThread，使用 Qt 的信号机制来通知 GUI 线程更新状态。
+    更新检查后台线程。
+
+    使用 core.events.Event 通知检查结果；订阅方若涉及 UI 操作，
+    需将回调封送回主线程（见 app.event_bridge.connect_queued）。
     """
 
-    # 定义更新信号，用于通知主线程更新状态
-    updateSignal = Signal(UpdateStatus)
 
     def __init__(self, timeout, flag):
         """
@@ -54,7 +60,9 @@ class UpdateThread(QThread):
         timeout -- 更新检查请求的超时时间（秒）
         flag -- 是否强制遵循配置项 check_update 来决定是否执行检查
         """
-        super().__init__()
+        super().__init__(daemon=True)
+        # 实例级事件（与旧 Qt Signal 一致：不同检查实例的订阅互不干扰）。
+        self.updateSignal = Event("update_signal")
         self.timeout = timeout  # 超时时间
         self.flag = flag  # 标志位，用于控制是否执行检查更新
         self.error_msg = ""  # 错误信息
@@ -106,7 +114,7 @@ class UpdateThread(QThread):
 
     def _emit_version_check_result(self, version: str, current_version, latest_version, content: str) -> None:
         """
-        统一根据版本比较结果发出更新状态信号，并在有更新时准备弹窗展示内容。
+        统一根据版本比较结果发出更新状态事件，并在有更新时准备弹窗展示内容。
 
         参数:
         version -- 本轮检查得到的最新版本号
@@ -116,20 +124,20 @@ class UpdateThread(QThread):
         """
         # 第一步：若远端版本更高，则准备更新弹窗标题与渲染后的正文。
         if latest_version > current_version:
-            self.title = self.tr("发现新版本：{Old_version} ——> {New_version}\n更新日志:").format(
+            self.title = tr(TRANSLATE_DOMAIN, "发现新版本：{Old_version} ——> {New_version}\n更新日志:").format(
                 Old_version=cfg.version, New_version=version
             )
             self.content = "<style>a {color: #586f50; font-weight: bold;}</style>" + md_renderer.render(content)
             self.updateSignal.emit(UpdateStatus.UPDATE_AVAILABLE)
             return
 
-        # 第二步：若当前版本已追平最新版本，则统一发出“已是最新”信号。
+        # 第二步：若当前版本已追平最新版本，则统一发出“已是最新”事件。
         self.updateSignal.emit(UpdateStatus.SUCCESS)
 
     def run(self) -> None:
         """
         更新线程的主逻辑。
-        检查是否有新版本，如果有则发送更新可用信号；否则发送成功信号。
+        检查是否有新版本，如果有则发送更新可用事件；否则发送成功事件。
         """
         try:
             # 如果标志位为 False 且配置中的检查更新标志也为 False，则直接返回
@@ -144,7 +152,7 @@ class UpdateThread(QThread):
             # 第二步：整理更新日志正文，去掉图片，生成可展示文本。
             content = self._build_release_note_content(data["release_note"])
 
-            # 第三步：比较当前版本与最新版本，并统一发出检查结果信号。
+            # 第三步：比较当前版本与最新版本，并统一发出检查结果事件。
             self._emit_version_check_result(version, current_version, latest_version, content)
         except Exception as e:
             # Mirror酱 失败后自动回退到 GitHub，保持原有软件更新逻辑不变。
@@ -166,7 +174,7 @@ class UpdateThread(QThread):
                 # 最后继续复用同一套版本比较逻辑，决定是否弹出更新提示。
                 self._emit_version_check_result(version, current_version, latest_version, content)
             except Exception as e:
-                # 异常处理，发送失败信号
+                # 异常处理，发送失败事件
                 log.error(f"Mirror酱源与GitHub源均检查更新失败:{e}")
                 self.updateSignal.emit(UpdateStatus.FAILURE)
 
@@ -229,7 +237,7 @@ class UpdateThread(QThread):
         markdown_content -- Markdown 格式的文本
 
         返回:
-        移除图片后的 Markdown 文本
+        移除了图片的 Markdown 文本
         """
         img_pattern = re.compile(r"!\[.*?\]\(.*?\)")
         return img_pattern.sub("", markdown_content)
@@ -299,123 +307,10 @@ class UpdateThread(QThread):
             self.updateSignal.emit(UpdateStatus.FAILURE)
 
 
-def handle_update_status(
-    self,
-    update_thread: UpdateThread,
-    status: UpdateStatus,
-    *,
-    show_success: bool = True,
-    show_failure: bool = True,
-    show_update_dialog: bool = True,
-):
-    """根据更新状态执行默认的界面提示逻辑。
-
-    参数:
-        self: 当前界面对象，用于挂载提示框和信息栏。
-        update_thread: 刚完成检查的更新线程对象。
-        status: 更新检查结果状态。
-        show_success: 是否显示“当前已是最新版本”的提示。
-        show_failure: 是否显示“检查更新失败”的提示。
-        show_update_dialog: 是否显示“发现新版本”的更新弹窗。
-    """
-    if status == UpdateStatus.UPDATE_AVAILABLE:
-        # 第一类：发现新版本时，按策略决定是否弹出更新确认框。
-        if not show_update_dialog:
-            return
-
-        messages_box = MessageBoxUpdate(update_thread.title, update_thread.content, self.window())
-        if messages_box.exec():
-            # 如果用户确认更新，则从指定的URL下载更新资源
-            assets_url = update_thread.get_assets_url()
-            if assets_url:
-                start_update_thread(assets_url)
-    elif status == UpdateStatus.SUCCESS:
-        # 第二类：已经是最新版本时，按策略显示成功提示。
-        if not show_success:
-            return
-
-        BaseInfoBar.success(
-            title=QT_TRANSLATE_NOOP("BaseInfoBar", "当前是最新版本(＾∀＾●)"),
-            content="",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=1000,
-            parent=self,
-        )
-    else:
-        # 第三类：检查失败时，按策略展示失败原因。
-        if not show_failure:
-            return
-
-        BaseInfoBar.warning(
-            title=QT_TRANSLATE_NOOP("BaseInfoBar", "检测更新失败(╥﹏╥)"),
-            content=update_thread.error_msg,
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=5000,
-            parent=self,
-        )
-
-
-@begin_and_finish_time_log(task_name="检查更新")
-def check_update(
-    self,
-    timeout=5,
-    flag=False,
-    on_finished: Callable[[UpdateStatus, UpdateThread], None] | None = None,
-    *,
-    show_success: bool = True,
-    show_failure: bool = True,
-    show_update_dialog: bool = True,
-):
-    """启动更新检查线程，并允许调用方监听完成结果。
-
-    参数:
-        self: 当前界面对象。
-        timeout: 更新检查请求的超时时间（秒）。
-        flag: 是否遵循配置项 check_update 来决定是否执行检查。
-        on_finished: 可选回调；线程完成后会收到状态和线程对象。
-        show_success: 是否显示“当前已是最新版本”的提示。
-        show_failure: 是否显示“检查更新失败”的提示。
-        show_update_dialog: 是否显示“发现新版本”的更新弹窗。
-    """
-
-    # 第一步：先创建当前这一次检查专属的线程实例，避免后续再次触发检查时覆盖回调引用。
-    update_thread = UpdateThread(timeout, flag)
-
-    def handler_update(status):
-        """处理线程返回的更新状态，并在需要时回调调用方。
-
-        参数:
-            status: 更新线程发回的状态枚举。
-        """
-        # 第一步：先执行默认的界面提示逻辑。
-        handle_update_status(
-            self,
-            update_thread,
-            status,
-            show_success=show_success,
-            show_failure=show_failure,
-            show_update_dialog=show_update_dialog,
-        )
-        # 第二步：再把结果交给调用方补充后续动作，例如资源同步门禁。
-        if on_finished is not None:
-            on_finished(status, update_thread)
-
-    # 第二步：仍将线程实例缓存到界面对象，保持现有调用方通过 self.update_thread 访问的行为不变。
-    self.update_thread = update_thread
-    # 连接线程完成信号到统一处理函数。
-    update_thread.updateSignal.connect(handler_update)
-    # 启动后台更新检查线程。
-    update_thread.start()
-
-
 def is_valid_url(url):
     """
     判断给定的URL是否有效。
-    该函数通过解析URL的组成部分来验证其有效性。一个有效的URL应该包含方案（scheme）和网络位置（netloc）。
+    该函数通过解析URL的组成部分来验证URL。一个有效的URL应该包含方案（scheme）和网络位置（netloc）。
     参数:
     url (str): 待验证的URL。
     返回:
@@ -429,7 +324,7 @@ def is_valid_url(url):
         # 检查URL是否包含必要的组成部分
         return all([result.scheme, result.netloc])
     except:
-        # 如果解析过程中出现异常，说明URL无效
+        # 解析异常时认为URL无效
         return False
 
 

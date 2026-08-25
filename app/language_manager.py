@@ -3,6 +3,7 @@ import inspect
 from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
 from PySide6.QtWidgets import QApplication
 
+from core.i18n import register_translator as register_core_translator
 from module.config import cfg
 from module.logger import log
 from utils.singletonmeta import SingletonMeta
@@ -114,6 +115,10 @@ class LanguageManager(metaclass=SingletonMeta):
         ts_path = "i18n"
         if self.app_translator.load(f"myapp_{lang_code}", ts_path):
             self.app.installTranslator(self.app_translator)  # type: ignore
+
+        # 注册核心层翻译钩子：核心代码通过 core.i18n.tr 取译文时，
+        # 由已安装的 Qt 翻译器提供实际翻译。
+        register_core_translator(lambda domain, text: QApplication.translate(domain, text))
 
     def set_language(self, lang_code):
         """设置应用语言"""

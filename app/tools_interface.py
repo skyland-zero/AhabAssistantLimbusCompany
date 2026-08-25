@@ -12,7 +12,7 @@ from qfluentwidgets import FluentIcon as FIF
 from app.base_combination import BasePushSettingCard, BaseSettingCardGroup
 from app.card.messagebox_custom import BaseInfoBar
 from app.language_manager import LanguageManager
-from tasks import tools
+from app.tools_windows import start as tools_start
 
 
 class ToolsInterface(ScrollArea):
@@ -97,7 +97,7 @@ class ToolsInterface(ScrollArea):
                 tool.w.activateWindow()
                 tool.w.raise_()
             return
-        tool = tools.start(tool_name)
+        tool = tools_start(tool_name)
         self.tools[tool_name] = tool
         while tool.initialized is False:
             QApplication.processEvents()
