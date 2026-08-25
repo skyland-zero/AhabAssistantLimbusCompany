@@ -467,7 +467,7 @@ class my_script_task(Thread):
         return self.is_alive()
 
     def run(self):
-        self.mutex.lock()
+        self.mutex.acquire()
 
         try:
             self._run()
@@ -490,7 +490,7 @@ class my_script_task(Thread):
             log.exception("脚本线程执行失败")
         finally:
             retry_monitor.stop()
-            self.mutex.unlock()
+            self.mutex.release()
 
         mediator.script_finished.emit()
 
