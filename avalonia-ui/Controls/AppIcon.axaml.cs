@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Media;
 
 namespace AhabAssistant.Avalonia.Controls;
@@ -13,19 +14,24 @@ public partial class AppIcon : UserControl
         AvaloniaProperty.Register<AppIcon, string>(nameof(Icon), string.Empty);
 
     public static readonly StyledProperty<IBrush?> StrokeProperty =
-        AvaloniaProperty.Register<AppIcon, IBrush?>(nameof(Stroke));
+        AvaloniaProperty.Register<AppIcon, IBrush?>(nameof(Stroke), inherits: true);
 
     public static readonly StyledProperty<double> StrokeThicknessProperty =
-        AvaloniaProperty.Register<AppIcon, double>(nameof(StrokeThickness), 2);
+        AvaloniaProperty.Register<AppIcon, double>(nameof(StrokeThickness), 1.5);
 
-    private Geometry? _iconGeometry;
-
-    public static readonly DirectProperty<AppIcon, Geometry?> IconGeometryProperty =
-        AvaloniaProperty.RegisterDirect<AppIcon, Geometry?>(nameof(IconGeometry), icon => icon.IconGeometry);
+    public static readonly StyledProperty<Geometry?> IconGeometryProperty =
+        AvaloniaProperty.Register<AppIcon, Geometry?>(nameof(IconGeometry));
 
     static AppIcon()
     {
         IconProperty.Changed.AddClassHandler<AppIcon>((icon, _) => icon.UpdateGeometry());
+        TextElement.ForegroundProperty.Changed.AddClassHandler<AppIcon>((icon, _) =>
+        {
+            if (!icon.IsSet(StrokeProperty))
+            {
+                icon.SetCurrentValue(StrokeProperty, icon.GetValue(TextElement.ForegroundProperty));
+            }
+        });
     }
 
     public AppIcon()
@@ -42,7 +48,7 @@ public partial class AppIcon : UserControl
 
     public IBrush? Stroke
     {
-        get => GetValue(StrokeProperty);
+        get => GetValue(StrokeProperty) ?? GetValue(TextElement.ForegroundProperty);
         set => SetValue(StrokeProperty, value);
     }
 
@@ -54,9 +60,18 @@ public partial class AppIcon : UserControl
 
     public Geometry? IconGeometry
     {
-        get => _iconGeometry;
-        private set => SetAndRaise(IconGeometryProperty, ref _iconGeometry, value);
+        get => GetValue(IconGeometryProperty);
+        private set => SetValue(IconGeometryProperty, value);
     }
 
     private void UpdateGeometry() => IconGeometry = IconCatalog.Get(Icon);
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (!IsSet(StrokeProperty))
+        {
+            SetCurrentValue(StrokeProperty, GetValue(TextElement.ForegroundProperty));
+        }
+    }
 }

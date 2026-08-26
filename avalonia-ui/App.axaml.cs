@@ -11,7 +11,7 @@ namespace AhabAssistant.Avalonia;
 public partial class App : Application
 {
     /* 应用级外观偏好（对齐 zustand persist "ahab-ui-settings"） */
-    public static string ThemeMode { get; set; } = "system";
+    public static string ThemeMode { get; set; } = "light";
     public static string AccentId { get; set; } = ThemeService.DefaultAccent;
     public static double RightPanelWidth { get; set; } = 280;
     public static bool RightPanelCollapsed { get; set; }
@@ -83,7 +83,7 @@ public partial class App : Application
             var prefs = JsonSerializer.Deserialize(
                 File.ReadAllText(PrefsFile), Models.AalcJsonContext.Default.UiPreferences);
             if (prefs == null) return;
-            ThemeMode = prefs.ThemeMode is "light" or "dark" or "system" ? prefs.ThemeMode : "system";
+            ThemeMode = prefs.ThemeMode is "light" or "dark" or "system" ? prefs.ThemeMode : "light";
             AccentId = prefs.AccentId;
             RightPanelWidth = Math.Clamp(prefs.RightPanelWidth, 240, 800);
             RightPanelCollapsed = prefs.RightPanelCollapsed;

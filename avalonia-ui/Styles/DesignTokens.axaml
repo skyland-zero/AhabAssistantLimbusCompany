@@ -46,6 +46,6 @@
     <SolidColorBrush x:Key="TabBarBrush">#4D181515</SolidColorBrush>
     <SolidColorBrush x:Key="OverlayBrush">#80000000</SolidColorBrush>
 
-    <FontFamily x:Key="UiFont">Segoe UI, Microsoft YaHei UI, Microsoft YaHei, sans-serif</FontFamily>
-    <FontFamily x:Key="MonoFont">Consolas, Cascadia Mono, monospace</FontFamily>
+    <FontFamily x:Key="UiFont">Microsoft YaHei UI, Segoe UI, -apple-system, sans-serif</FontFamily>
+    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, monospace</FontFamily>
 </ResourceDictionary>

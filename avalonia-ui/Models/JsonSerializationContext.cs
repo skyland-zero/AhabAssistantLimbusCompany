@@ -22,7 +22,7 @@ internal partial class AalcJsonContext : JsonSerializerContext
 public class UiPreferences
 {
     [JsonPropertyName("themeMode")]
-    public string ThemeMode { get; set; } = "system";
+    public string ThemeMode { get; set; } = "light";
 
     [JsonPropertyName("accentId")]
     public string AccentId { get; set; } = "crimson";

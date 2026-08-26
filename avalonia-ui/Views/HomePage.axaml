@@ -21,15 +21,15 @@
     </UserControl.Resources>
 
     <!-- ==================== 三列布局：任务流 | 分隔条 | 信息面板 ==================== -->
-    <Grid>
+    <Grid Name="HomeRoot">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="460" />
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="{Binding RightPanelActualWidth, FallbackValue=280}" />
+            <ColumnDefinition Width="{Binding RightPanelActualWidth}" />
         </Grid.ColumnDefinitions>
 
         <!-- ==================== 左侧：固定任务卡片流 + 底部工具栏 ==================== -->
-        <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
+        <Grid Grid.Column="0" Name="LeftPanel" RowDefinitions="Auto,*,Auto">
             <!-- 顶部标题栏状态 -->
                 <Border Grid.Row="0" Background="{DynamicResource TabBarBrush}" Padding="14,8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
@@ -45,7 +45,9 @@
             </Border>
 
             <!-- 任务卡片滚动流 -->
-            <ScrollViewer Grid.Row="1" Padding="14,10,14,4">
+            <ScrollViewer Grid.Row="1" Padding="14,10,14,4"
+                          HorizontalScrollBarVisibility="Disabled"
+                          HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8">
 
                     <!-- ============ 1. 窗口设置 (常开，无勾选框) ============ -->
@@ -744,16 +746,17 @@
         </Grid>
 
         <!-- ==================== 分隔拖拽条 ==================== -->
-        <Border Grid.Column="1" Name="Splitter" Width="4" Background="Transparent" Cursor="SizeWestEast"
+        <Border Grid.Column="1" Name="Splitter" Width="6" Background="Transparent" Cursor="SizeWestEast"
                 PointerPressed="SplitterPressed" PointerMoved="SplitterMoved" PointerReleased="SplitterReleased">
             <Rectangle Width="2" Height="32" RadiusX="1" RadiusY="1" Fill="{DynamicResource InputBorderBrush}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
 
         <!-- ==================== 右侧信息面板：连接 → 截图 → 日志 ==================== -->
-        <Grid Grid.Column="2" RowDefinitions="Auto,Auto,*" Margin="10,10,10,10">
+        <Grid Grid.Column="2" Name="RightPanel" RowDefinitions="Auto,Auto,*" Margin="10,10,10,10"
+              IsVisible="{Binding !RightPanelCollapsed}">
             <!-- 设备连接 -->
-            <Border Grid.Row="0" Classes="card" Margin="0,0,0,8">
+            <Border Grid.Row="0" Name="RightConnection" Classes="card" Margin="0,0,0,8">
                 <StackPanel>
                     <Grid ColumnDefinitions="*,Auto" Margin="12,8" Height="26">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
@@ -786,7 +789,7 @@
             </Border>
 
             <!-- 实时画面 -->
-            <Border Grid.Row="1" Classes="card" Margin="0,0,0,8">
+            <Border Grid.Row="1" Name="RightScreenshot" Classes="card" Margin="0,0,0,8">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,7">
                         <controls:AppIcon Icon="monitor" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
@@ -805,7 +808,7 @@
             </Border>
 
             <!-- 运行日志（占满剩余高度） -->
-            <Border Grid.Row="2" Classes="card">
+            <Border Grid.Row="2" Name="RightLogs" Classes="card">
                 <Grid RowDefinitions="Auto,*">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="10,7" Height="24">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">

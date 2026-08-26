@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using AhabAssistant.Avalonia.Models;
 using AhabAssistant.Avalonia.Services;
+using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -58,7 +59,7 @@ public partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(RightPanelActualWidth));
     }
 
-    public double RightPanelActualWidth => RightPanelCollapsed ? 0 : Math.Max(240, RightPanelWidth);
+    public GridLength RightPanelActualWidth => RightPanelCollapsed ? new GridLength(0) : new GridLength(Math.Max(240, RightPanelWidth));
 
     /* 结束后操作摘要 */
     [ObservableProperty] private string _afterSummary = "";

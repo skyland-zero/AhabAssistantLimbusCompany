@@ -1,13 +1,20 @@
-<Styles xmlns="https://github.com/avaloniaui">
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls">
     <!-- 全局文本：对应 Web UI 的 body foreground / font-family -->
-    <Style Selector="TextBlock">
+    <Style Selector="Window">
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+
+    <Style Selector="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
     <Style Selector="SelectableTextBlock">
-        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
     <!-- Card：Web Card 默认无边框，依靠卡片色与页面背景分层 -->
@@ -185,18 +192,54 @@
         <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="Medium" />
     </Style>
+    <Style Selector="Button.nav-tab /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+    </Style>
+    <Style Selector="Button.nav-tab TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+    </Style>
+    <Style Selector="Button.nav-tab controls|AppIcon">
+        <Setter Property="Stroke" Value="{DynamicResource MutedFgBrush}" />
+    </Style>
+
     <Style Selector="Button.nav-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource MutedBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
     </Style>
+    <Style Selector="Button.nav-tab:pointerover TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.nav-tab:pointerover controls|AppIcon">
+        <Setter Property="Stroke" Value="{DynamicResource FgBrush}" />
+    </Style>
+
     <Style Selector="Button.nav-tab.active">
         <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <Style Selector="Button.nav-tab.active /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+    </Style>
+    <Style Selector="Button.nav-tab.active TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.nav-tab.active controls|AppIcon">
+        <Setter Property="Stroke" Value="{DynamicResource BrandFgBrush}" />
+    </Style>
+
     <Style Selector="Button.nav-tab.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+    </Style>
+    <Style Selector="Button.nav-tab.active:pointerover TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+    </Style>
+    <Style Selector="Button.nav-tab.active:pointerover controls|AppIcon">
+        <Setter Property="Stroke" Value="{DynamicResource BrandFgBrush}" />
     </Style>
 
     <!-- 分段控件：对应 TabsList + TabsTrigger -->

@@ -1,4 +1,5 @@
-﻿using Avalonia;
+using Avalonia;
+using Avalonia.Skia;
 using System;
 
 namespace AhabAssistant.Avalonia;
@@ -16,5 +17,10 @@ class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(new Win32PlatformOptions
+            {
+                RenderingMode = [Win32RenderingMode.AngleEgl, Win32RenderingMode.Software],
+                CompositionMode = [Win32CompositionMode.WinUIComposition, Win32CompositionMode.DirectComposition]
+            })
             .LogToTrace();
 }

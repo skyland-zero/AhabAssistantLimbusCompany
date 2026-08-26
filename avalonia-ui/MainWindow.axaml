@@ -2,10 +2,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
         x:Class="AhabAssistant.Avalonia.MainWindow"
+        WindowDecorations="None"
         Title="Ahab Assistant · Limbus Company"
         Width="900" Height="680" MinWidth="800" MinHeight="560"
         Background="{DynamicResource BgBrush}"
-        FontFamily="{StaticResource UiFont}">
+        FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True">
 
     <Panel Background="{DynamicResource BgBrush}">
         <Grid RowDefinitions="40,36,*">
@@ -106,7 +108,9 @@
             </Border>
 
             <!-- ==================== 页面内容 ==================== -->
-            <ContentControl Grid.Row="2" Name="PageHost" Margin="0" />
+            <ContentControl Grid.Row="2" Name="PageHost" Margin="0"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
         </Grid>
 
         <!-- ==================== Toast 顶部居中浮层 ==================== -->

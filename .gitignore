@@ -16,6 +16,7 @@ GEMINI.md
 build
 dist
 dist_release
+artifacts/
 *.pyc
 *.pyd
 

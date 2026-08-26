@@ -5,6 +5,7 @@ using AhabAssistant.Avalonia.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 
 namespace AhabAssistant.Avalonia.Views;
 
@@ -19,6 +20,16 @@ public partial class HomePage : UserControl
         DataContextChanged += (_, _) => HookVm();
         DetachedFromVisualTree += (_, _) => { };
         DataContext = new HomeViewModel();
+        AttachedToVisualTree += (_, _) =>
+        {
+            void DumpLayout()
+            {
+                Console.Error.WriteLine($"LAYOUT home={Bounds} root={HomeRoot.Bounds} left={LeftPanel.Bounds} splitter={Splitter.Bounds} right={RightPanel.Bounds} conn={RightConnection.Bounds} shot={RightScreenshot.Bounds} logs={RightLogs.Bounds} page={(Parent as Control)?.Bounds}");
+            }
+            Dispatcher.UIThread.Post(DumpLayout, DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(DumpLayout, DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(DumpLayout, DispatcherPriority.ApplicationIdle);
+        };
     }
 
     private void HookVm()
