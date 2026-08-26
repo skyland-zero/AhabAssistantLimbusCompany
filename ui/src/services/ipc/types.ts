@@ -30,108 +30,176 @@ export interface RpcError {
 }
 
 /**
- * 后端主动推送的事件（非 JSON-RPC 信封，独立帧）：
+ * 后端主动推送的事件：
  * { event: string, payload: unknown }
  */
 export type IpcEventName =
   | "screenshot.frame" // payload: { instanceId: string; jpeg: ArrayBuffer; width; height }
-  | "task.progress" // payload: TaskProgressPayload
-  | "task.status" // payload: TaskStatusPayload
+  | "execution.status" // payload: ExecutionStatusPayload
+  | "execution.mirrorProgress" // payload: MirrorProgressPayload
   | "tool.status" // payload: ToolStatusPayload
+  | "device.status" // payload: DeviceStatusPayload
   | "log.entry" // payload: LogEntryPayload
   | "resource.sync.progress" // payload: SyncProgressPayload
   | "app.notice"; // payload: { level: 'info' | 'warn' | 'error'; message: string }
 
-/* ------------------------------ 业务数据模型 ------------------------------ */
+/* ------------------------------ 任务与执行数据模型 ------------------------------ */
 
-export type TaskStatus = "idle" | "queued" | "running" | "paused" | "done" | "failed";
+export type FixedTaskId =
+  | "set_windows"
+  | "daily_task"
+  | "get_reward"
+  | "buy_enkephalin"
+  | "mirror"
+  | "resonate_with_Ahab";
 
-/** 任务队列中的一项（对应旧版 farming_interface 的执行计划） */
-export interface QueueTask {
-  id: string;
-  /** 任务模板 key：mirror / luxcavation / prizes / event ... */
-  kind: string;
-  name: string;
-  teamId?: string;
-  /** 运行次数；null = 无限 */
-  repeat: number | null;
-  status: TaskStatus;
-  /** 进度 0-100 */
-  progress: number;
-  detail?: string;
+export type ExecutionState = "idle" | "running" | "paused";
+
+export type AfterExitAction = "exit_game" | "exit_emulator" | "exit_aalc";
+export type AfterPowerAction = "none" | "sleep" | "hibernate" | "lock" | "shutdown";
+
+export interface AfterCompletionConfig {
+  actions: AfterExitAction[];
+  powerAction: AfterPowerAction;
+  keepAfterCompletion: boolean;
 }
+
+/** 窗口设置 */
+export interface SetWindowsConfig {
+  set_win_size: number;
+  set_win_position: string;
+  set_reduce_miscontact: boolean;
+  screenshot_interval: number;
+  mouse_action_interval: number;
+  mouse_down_duration: number;
+  use_post_message: boolean;
+}
+
+/** 日常任务设置 */
+export interface DailyTaskConfig {
+  set_EXP_count: number;
+  set_thread_count: number;
+  daily_teams: number;
+  use_continuous_combat: boolean;
+  use_continuous_combat_select: number;
+  targeted_teaming_EXP: boolean;
+  EXP_day_1_2: number;
+  EXP_day_3_4: number;
+  EXP_day_5_6: number;
+  EXP_day_7: number;
+  targeted_teaming_thread: boolean;
+  thread_day_1: number;
+  thread_day_2: number;
+  thread_day_3: number;
+  thread_day_4: number;
+  thread_day_5: number;
+  thread_day_6: number;
+  thread_day_7: number;
+}
+
+/** 领取奖励设置 */
+export interface GetRewardConfig {
+  set_get_prize: number; // 0: 全部, 1: 狂气与通行证, 2: 仅邮件
+}
+
+/** 狂气换体设置 */
+export interface BuyEnkephalinConfig {
+  set_lunacy_to_enkephalin: number; // 0-10次
+  Dr_Grandet_mode: boolean;
+  skip_enkephalin: boolean;
+}
+
+/** 镜牢设置 */
+export interface MirrorConfig {
+  set_mirror_count: number;
+  infinite_dungeons: boolean;
+  hard_mirror: boolean;
+  no_weekly_bonuses: boolean;
+  floor_3_exit: boolean;
+  save_rewards: boolean;
+  hard_mirror_single_bonuses: boolean;
+  select_event_pack: boolean;
+  skip_event_pack: boolean;
+  re_claim_rewards: boolean;
+  not_skip_whitegossypium: boolean;
+  fight_to_last_man: boolean;
+  mirror_keyboard_navigation: boolean;
+  mirror_keyboard_simple_pathfinding: boolean;
+}
+
+/** 所有固定任务的完整配置汇总 */
+export interface TasksConfig {
+  enabledTasks: {
+    daily_task: boolean;
+    get_reward: boolean;
+    buy_enkephalin: boolean;
+    mirror: boolean;
+    resonate_with_Ahab: boolean;
+  };
+  set_windows: SetWindowsConfig;
+  daily_task: DailyTaskConfig;
+  get_reward: GetRewardConfig;
+  buy_enkephalin: BuyEnkephalinConfig;
+  mirror: MirrorConfig;
+  resonate_with_Ahab: {
+    enabled: boolean;
+  };
+  afterCompletion: AfterCompletionConfig;
+}
+
+export interface ExecutionStatusPayload {
+  state: ExecutionState;
+  currentTaskId: FixedTaskId | null;
+}
+
+export interface MirrorProgressPayload {
+  current: number;
+  total: number;
+  isHard: boolean;
+  isInfinite: boolean;
+}
+
+/* ------------------------------ 队伍与其他数据模型 ------------------------------ */
 
 export interface TeamSummary {
   id: string;
   name: string;
-  /** 人格头像 key 列表 */
   sinners: string[];
 }
 
-export interface LogEntryPayload {
-  ts: number;
-  level: "debug" | "info" | "warn" | "error";
-  message: string;
-}
-
-/** task.status 事件负载 */
-export interface TaskStatusPayload {
-  taskId: string;
-  status: TaskStatus;
-}
-
-/** task.progress 事件负载 */
-export interface TaskProgressPayload {
-  taskId: string;
-  /** 进度 0-100 */
-  progress: number;
-}
-
-/* ------------------------------ 扩展数据模型 ------------------------------ */
-
-/** 队伍用途 */
 export type TeamPurpose = "mirror" | "luxcavation" | "general";
 
-/** 队伍完整配置（team_setting_card 对应） */
 export interface TeamDetail extends TeamSummary {
   purpose: TeamPurpose;
-  /** 饰品体系 key：burn / tremor / rupture / sinking / poise / charge */
   accessoryScheme: string;
   enabled: boolean;
 }
 
-/** 罪人基础信息 */
 export interface SinnerInfo {
   id: string;
   name: string;
 }
 
-/** 工具箱工具 id */
 export type ToolId = "infinite_battle" | "enkephalin" | "screenshot";
 
-/** tool.status 事件负载 */
 export interface ToolStatusPayload {
   toolId: ToolId;
   running: boolean;
 }
 
-/** 镜牢主题包 */
 export interface ThemePack {
   id: string;
   name: string;
-  /** 出现权重 0-10 */
   weight: number;
   enabled: boolean;
   tier: string;
 }
 
-/** themePack.list 返回状态 */
 export interface ThemePackState {
   hardMirrorActive: boolean;
   packs: ThemePack[];
 }
 
-/** 资源组同步状态 */
 export interface ResourceGroup {
   id: string;
   name: string;
@@ -140,39 +208,60 @@ export interface ResourceGroup {
   lastSyncAt: number | null;
 }
 
-/** resource.sync.progress 事件负载 */
 export interface SyncProgressPayload {
   scope: string;
   progress: number;
 }
 
-/** 公告条目（announcement_board 对应） */
-export interface NoticeItem {
-  id: string;
-  title: string;
-  date: string;
-  level: "info" | "warn" | "error";
-  /** Markdown 内容 */
-  content: string;
+export interface LogEntryPayload {
+  ts: number;
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
 }
 
-/** 任务队列完成后动作 */
-export type AfterCompletionAction = "none" | "close_game" | "shutdown" | "custom";
-
-/** 任务队列全局选项 */
-export interface QueueOptions {
-  afterCompletion: AfterCompletionAction;
-  customCommand?: string;
-}
-
-/** 全局热键配置 */
 export interface HotkeyConfig {
   startStop: string;
+  pauseResume?: string;
   enabled: boolean;
 }
 
-/** 更新检查结果 */
+export interface SystemSettingsConfig {
+  // 模拟器设置
+  simulator: boolean;
+  simulator_type: number; // 0: MuMu, 10: Other
+  simulator_port: number;
+  start_emulator_timeout: number;
+
+  // 系统与内存保护
+  memory_protection: boolean;
+  minimize_to_tray: boolean;
+  autostart: boolean;
+
+  // 实验性功能
+  experimental_keep_screen_awake: boolean;
+  experimental_hdr_warning: boolean;
+
+  // 更新设置
+  update_prerelease_enable: boolean;
+  update_source: "GitHub" | "MirrorChyan";
+  mirrorchyan_cdk: string;
+}
 export interface UpdateInfo {
   updateAvailable: boolean;
   latest: string;
+}
+
+/* ------------------------------ 设备连接 ------------------------------ */
+
+export interface DeviceInfo {
+  id: string;
+  name: string;
+  detail?: string;
+}
+
+export type ConnectionStatus = "disconnected" | "connecting" | "connected";
+
+export interface DeviceStatusPayload {
+  deviceId: string | null;
+  status: ConnectionStatus;
 }

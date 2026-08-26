@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { SideNav } from "@/components/layout/SideNav";
+import { TabBar } from "@/components/layout/TabBar";
 import { TitleBar } from "@/components/layout/TitleBar";
 import { Toaster } from "@/components/ui/sonner";
 import { HelpPage } from "@/pages/HelpPage";
@@ -35,14 +35,12 @@ export default function App() {
   return (
     <>
       <Toaster position="bottom-right" />
-      <div className="flex h-screen min-h-0 flex-col">
+      <div className="flex h-screen min-h-0 flex-col bg-background text-foreground">
         <TitleBar />
-        <div className="flex min-h-0 flex-1">
-          <SideNav />
-          <main className="min-w-0 flex-1 overflow-hidden bg-background">
-            <PageView page={currentPage} />
-          </main>
-        </div>
+        <TabBar />
+        <main className="min-h-0 flex-1 overflow-hidden bg-background">
+          <PageView page={currentPage} />
+        </main>
       </div>
     </>
   );

@@ -1,30 +1,34 @@
 import type { RpcClient } from "../client";
 import type {
+  ConnectionStatus,
+  DeviceInfo,
+  DeviceStatusPayload,
+  ExecutionState,
+  ExecutionStatusPayload,
+  FixedTaskId,
   HotkeyConfig,
   IpcEventName,
-  NoticeItem,
-  QueueOptions,
-  QueueTask,
+  MirrorProgressPayload,
   ResourceGroup,
   RpcError,
-  RpcRequest,
   RpcResponse,
   SinnerInfo,
-  TaskProgressPayload,
-  TaskStatusPayload,
+  SyncProgressPayload,
+  SystemSettingsConfig,
+  TasksConfig,
   TeamDetail,
   ThemePack,
   ThemePackState,
   ToolId,
   ToolStatusPayload,
+  UpdateInfo,
 } from "../types";
 
 type Handler = (params: unknown) => unknown;
 
 /**
  * 内存版 mock 后端。
- * 提供与真实 WebSocket 后端一致的请求/事件语义，
- * 让 UI 在 M0-M5 阶段完全独立开发（不依赖任何后端）。
+ * 提供与真实 Python sidecar 一致的请求/事件语义。
  */
 export function createMockClient(): RpcClient {
   let state: "disconnected" | "connecting" | "connected" = "disconnected";
@@ -35,14 +39,14 @@ export function createMockClient(): RpcClient {
   /* ------------------------------ 假数据 ------------------------------ */
 
   const SINNERS: SinnerInfo[] = [
-    { id: "yi_sang", name: "以升" },
+    { id: "yi_sang", name: "李箱" },
     { id: "faust", name: "浮士德" },
     { id: "don_quixote", name: "堂吉诃德" },
     { id: "ryoshu", name: "良秀" },
     { id: "meursault", name: "默尔索" },
-    { id: "hong_lu", name: "鸿路" },
+    { id: "hong_lu", name: "鸿璐" },
     { id: "heathcliff", name: "希斯克利夫" },
-    { id: "ishmael", name: "伊什梅尔" },
+    { id: "ishmael", name: "以实玛利" },
     { id: "rodion", name: "罗佳" },
     { id: "sinclair", name: "辛克莱" },
     { id: "outis", name: "奥提斯" },
@@ -52,7 +56,7 @@ export function createMockClient(): RpcClient {
   let teams: TeamDetail[] = [
     {
       id: "team-1",
-      name: "一队",
+      name: "编队 1 (震颤)",
       purpose: "mirror",
       sinners: ["faust", "ishmael", "ryoshu", "hong_lu"],
       accessoryScheme: "tremor",
@@ -60,7 +64,7 @@ export function createMockClient(): RpcClient {
     },
     {
       id: "team-2",
-      name: "二队",
+      name: "编队 2 (烧伤)",
       purpose: "luxcavation",
       sinners: ["heathcliff", "rodion", "gregor"],
       accessoryScheme: "burn",
@@ -68,7 +72,7 @@ export function createMockClient(): RpcClient {
     },
     {
       id: "team-3",
-      name: "三队",
+      name: "编队 3 (呼吸)",
       purpose: "general",
       sinners: ["yi_sang", "don_quixote", "meursault", "sinclair", "outis"],
       accessoryScheme: "poise",
@@ -76,38 +80,81 @@ export function createMockClient(): RpcClient {
     },
   ];
 
-  const tasks: QueueTask[] = [
-    {
-      id: "t-1",
-      kind: "mirror",
-      name: "镜牢·自动挂机",
-      teamId: "team-1",
-      repeat: null,
-      status: "idle",
-      progress: 0,
-      detail: "使用队伍：一队",
+  let tasksConfig: TasksConfig = {
+    enabledTasks: {
+      daily_task: true,
+      get_reward: true,
+      buy_enkephalin: false,
+      mirror: true,
+      resonate_with_Ahab: true,
     },
-    {
-      id: "t-2",
-      kind: "luxcavation",
-      name: "经验本·Luxcavation",
-      teamId: "team-2",
-      repeat: 5,
-      status: "idle",
-      progress: 0,
-      detail: "次数 ×5",
+    set_windows: {
+      set_win_size: 1080,
+      set_win_position: "0",
+      set_reduce_miscontact: true,
+      screenshot_interval: 0.5,
+      mouse_action_interval: 0.3,
+      mouse_down_duration: 0.1,
+      use_post_message: false,
     },
-    {
-      id: "t-3",
-      kind: "prizes",
-      name: "每日领奖",
-      status: "idle",
-      repeat: 1,
-      progress: 0,
+    daily_task: {
+      set_EXP_count: 3,
+      set_thread_count: 3,
+      daily_teams: 1,
+      use_continuous_combat: true,
+      use_continuous_combat_select: 3,
+      targeted_teaming_EXP: false,
+      EXP_day_1_2: 1,
+      EXP_day_3_4: 1,
+      EXP_day_5_6: 1,
+      EXP_day_7: 1,
+      targeted_teaming_thread: false,
+      thread_day_1: 1,
+      thread_day_2: 1,
+      thread_day_3: 1,
+      thread_day_4: 1,
+      thread_day_5: 1,
+      thread_day_6: 1,
+      thread_day_7: 1,
     },
-  ];
+    get_reward: {
+      set_get_prize: 0,
+    },
+    buy_enkephalin: {
+      set_lunacy_to_enkephalin: 2,
+      Dr_Grandet_mode: true,
+      skip_enkephalin: false,
+    },
+    mirror: {
+      set_mirror_count: 3,
+      infinite_dungeons: false,
+      hard_mirror: false,
+      no_weekly_bonuses: false,
+      floor_3_exit: false,
+      save_rewards: false,
+      hard_mirror_single_bonuses: false,
+      select_event_pack: false,
+      skip_event_pack: false,
+      re_claim_rewards: false,
+      not_skip_whitegossypium: false,
+      fight_to_last_man: false,
+      mirror_keyboard_navigation: false,
+      mirror_keyboard_simple_pathfinding: false,
+    },
+    resonate_with_Ahab: {
+      enabled: true,
+    },
+    afterCompletion: {
+      actions: ["exit_game"],
+      powerAction: "none",
+      keepAfterCompletion: true,
+    },
+  };
 
-  /** 工具运行状态（内存即可） */
+  let executionState: ExecutionState = "idle";
+  let currentRunningTask: FixedTaskId | null = null;
+  let executionTimer: ReturnType<typeof setTimeout> | null = null;
+
   const toolRunning = new Map<ToolId, boolean>();
 
   const DEFAULT_PACKS: ThemePack[] = [
@@ -142,31 +189,30 @@ export function createMockClient(): RpcClient {
     },
   ];
 
-  const notices: NoticeItem[] = [
-    {
-      id: "n-1",
-      title: "Mock 阶段公告：界面先行，后端未接入",
-      date: "2025-06-01",
-      level: "info",
-      content:
-        "**当前处于 M0-M5 界面阶段**\n\n所有数据均来自内存 mock 后端，与真实 Python sidecar 的对接将在 M6 完成。\n\n- 任务队列 / 队伍 / 工具箱均可交互\n- 配置不会写入 config.yaml\n- 遇到渲染问题请提交 issue 并附上日志页截图",
-    },
-    {
-      id: "n-2",
-      title: "困难镜牢周期进行中",
-      date: "2025-05-28",
-      level: "warn",
-      content:
-        "本周期为**困难镜牢**，建议：\n\n1. 在「主题包」页面提高高星主题包权重\n2. 将困牢次数设置为 3\n3. 优先使用带饰品体系的队伍",
-    },
+  const hotkey: HotkeyConfig = { startStop: "F10", pauseResume: "F11", enabled: true };
+  const systemSettings: SystemSettingsConfig = {
+    simulator: true,
+    simulator_type: 0,
+    simulator_port: 16384,
+    start_emulator_timeout: 60,
+    memory_protection: true,
+    minimize_to_tray: true,
+    autostart: false,
+    experimental_keep_screen_awake: true,
+    experimental_hdr_warning: true,
+    update_prerelease_enable: false,
+    update_source: "GitHub",
+    mirrorchyan_cdk: "",
+  };
+
+  const devices: DeviceInfo[] = [
+    { id: "win-limbus", name: "Limbus Company", detail: "1920×1080 · 窗口化" },
+    { id: "mumu-instance", name: "MuMu 模拟器", detail: "1280×720 · 端口 16384" },
   ];
+  let deviceStatus: ConnectionStatus = "connected";
 
-  const queueOptions: QueueOptions = { afterCompletion: "none", customCommand: "" };
-  const hotkey: HotkeyConfig = { startStop: "", enabled: false };
+  /* ------------------------------ 内部事件发射 ------------------------------ */
 
-  /* ------------------------------ 内部工具 ------------------------------ */
-
-  const runTimers = new Map<string, ReturnType<typeof setInterval>>();
   const listeners = new Map<IpcEventName, Set<(payload: unknown) => void>>();
 
   const emit = (event: IpcEventName, payload: unknown) => {
@@ -181,69 +227,129 @@ export function createMockClient(): RpcClient {
     emit("log.entry", { ts: Date.now(), level, message });
   };
 
-  const findTask = (params: unknown): QueueTask => {
-    const id = (params as { id?: string } | undefined)?.id;
-    const task = tasks.find((t) => t.id === id);
-    if (!task) throw new Error(`task not found: ${String(id)}`);
-    return task;
+  const setExecutionState = (st: ExecutionState, taskId: FixedTaskId | null) => {
+    executionState = st;
+    currentRunningTask = taskId;
+    emit("execution.status", { state: st, currentTaskId: taskId } satisfies ExecutionStatusPayload);
   };
 
-  const setStatus = (task: QueueTask, status: QueueTask["status"]) => {
-    task.status = status;
-    emit("task.status", { taskId: task.id, status } satisfies TaskStatusPayload);
+  const stopExecutionSim = () => {
+    if (executionTimer) {
+      clearTimeout(executionTimer);
+      executionTimer = null;
+    }
+    setExecutionState("idle", null);
   };
 
-  const stopSimulation = (task: QueueTask) => {
-    const timer = runTimers.get(task.id);
-    if (!timer) return;
-    clearInterval(timer);
-    runTimers.delete(task.id);
-  };
+  const startExecutionSim = () => {
+    stopExecutionSim();
+    setExecutionState("running", null);
+    log("info", "Link Start! 开始执行所有已勾选任务");
 
-  const setToolRunning = (toolId: ToolId, running: boolean) => {
-    toolRunning.set(toolId, running);
-    emit("tool.status", { toolId, running } satisfies ToolStatusPayload);
+    const steps: { name: string; id: FixedTaskId; duration: number }[] = [];
+    if (tasksConfig.enabledTasks.daily_task) {
+      steps.push({ name: "日常任务 (经验本 & 纽本)", id: "daily_task", duration: 2500 });
+    }
+    if (tasksConfig.enabledTasks.get_reward) {
+      steps.push({ name: "领取奖励", id: "get_reward", duration: 1500 });
+    }
+    if (tasksConfig.enabledTasks.buy_enkephalin) {
+      steps.push({ name: "狂气换体", id: "buy_enkephalin", duration: 1500 });
+    }
+    if (tasksConfig.enabledTasks.mirror) {
+      steps.push({ name: "坐牢任务 (镜牢探索)", id: "mirror", duration: 4000 });
+    }
+
+    if (steps.length === 0) {
+      log("warn", "未勾选任何执行任务，流程结束");
+      stopExecutionSim();
+      return;
+    }
+
+    let stepIdx = 0;
+    const runNextStep = () => {
+      if (executionState !== "running") return;
+      if (stepIdx >= steps.length) {
+        log("info", "所有任务已完成！");
+        if (
+          tasksConfig.afterCompletion.actions.length > 0 ||
+          tasksConfig.afterCompletion.powerAction !== "none"
+        ) {
+          log(
+            "info",
+            `执行收尾动作：${tasksConfig.afterCompletion.actions.join(", ") || "无"} / ${tasksConfig.afterCompletion.powerAction}`,
+          );
+        }
+        stopExecutionSim();
+        return;
+      }
+      const cur = steps[stepIdx];
+      setExecutionState("running", cur.id);
+      log("info", `>> 开始执行：${cur.name}`);
+
+      if (cur.id === "mirror") {
+        const total = tasksConfig.mirror.infinite_dungeons
+          ? 9999
+          : tasksConfig.mirror.set_mirror_count;
+        emit("execution.mirrorProgress", {
+          current: 1,
+          total,
+          isHard: tasksConfig.mirror.hard_mirror,
+          isInfinite: tasksConfig.mirror.infinite_dungeons,
+        } satisfies MirrorProgressPayload);
+      }
+
+      executionTimer = setTimeout(() => {
+        log("info", `✓ 完成：${cur.name}`);
+        stepIdx++;
+        runNextStep();
+      }, cur.duration);
+    };
+
+    runNextStep();
   };
 
   /* ------------------------------ Handlers ------------------------------ */
 
   const handlers: Record<string, Handler> = {
     "app.ping": () => "pong",
-    "app.version": () => ({ ui: __APP_VERSION__, backend: null }), // backend 未接入
-    "app.checkUpdate": (): { updateAvailable: boolean; latest: string } => ({
+    "app.version": () => ({ ui: __APP_VERSION__, backend: "mock-1.0.0" }),
+    "app.checkUpdate": (): UpdateInfo => ({
       updateAvailable: false,
       latest: __APP_VERSION__,
     }),
 
-    /* 任务队列 */
-    "task.list": () => structuredClone(tasks),
-    "task.start": (params) => {
-      const task = findTask(params);
-      stopSimulation(task);
-      task.progress = 0;
-      setStatus(task, "running");
-      log("info", `[mock] 启动任务：${task.name}`);
-      const timer = setInterval(() => {
-        task.progress = Math.min(100, task.progress + 4 + Math.round(Math.random() * 8));
-        emit("task.progress", {
-          taskId: task.id,
-          progress: task.progress,
-        } satisfies TaskProgressPayload);
-        if (task.progress >= 100) {
-          stopSimulation(task);
-          setStatus(task, "done");
-          log("info", `[mock] 任务完成：${task.name}`);
-        }
-      }, 600);
-      runTimers.set(task.id, timer);
+    /* 任务配置与调度 */
+    "tasks.getConfig": () => structuredClone(tasksConfig),
+    "tasks.setConfig": (params) => {
+      tasksConfig = structuredClone(params as TasksConfig);
       return true;
     },
-    "task.stop": (params) => {
-      const task = findTask(params);
-      stopSimulation(task);
-      task.progress = 0;
-      setStatus(task, "idle");
-      log("info", `[mock] 停止任务：${task.name}`);
+    "execution.getState": (): ExecutionStatusPayload => ({
+      state: executionState,
+      currentTaskId: currentRunningTask,
+    }),
+    "execution.start": () => {
+      startExecutionSim();
+      return true;
+    },
+    "execution.stop": () => {
+      stopExecutionSim();
+      log("warn", "用户手动停止了任务执行");
+      return true;
+    },
+    "execution.pause": () => {
+      if (executionState === "running") {
+        setExecutionState("paused", currentRunningTask);
+        log("info", "任务执行已暂停");
+      }
+      return true;
+    },
+    "execution.resume": () => {
+      if (executionState === "paused") {
+        setExecutionState("running", currentRunningTask);
+        log("info", "任务执行已恢复");
+      }
       return true;
     },
 
@@ -271,155 +377,139 @@ export function createMockClient(): RpcClient {
     "tool.start": (params) => {
       const toolId = (params as { id?: ToolId }).id;
       if (!toolId) throw new Error("tool id required");
-      setToolRunning(toolId, true);
-      log("info", `[mock] 启动工具：${toolId}`);
+      toolRunning.set(toolId, true);
+      emit("tool.status", { toolId, running: true } satisfies ToolStatusPayload);
+      log("info", `[mock] 工具启动：${toolId}`);
       return true;
     },
     "tool.stop": (params) => {
       const toolId = (params as { id?: ToolId }).id;
       if (!toolId) throw new Error("tool id required");
-      setToolRunning(toolId, false);
-      log("info", `[mock] 停止工具：${toolId}`);
+      toolRunning.set(toolId, false);
+      emit("tool.status", { toolId, running: false } satisfies ToolStatusPayload);
+      log("info", `[mock] 工具停止：${toolId}`);
       return true;
     },
     "tool.screenshot": () => {
-      log("info", "[mock] 截图完成：AALC/screenshot_mock.png");
+      log("info", "[mock] 截图完成，已保存至 AALC/screenshots 目录");
+      return { path: "AALC/screenshots/2025-06-01_12-00-00.png" };
+    },
+
+    /* 主题包 */
+    "themePack.list": () => structuredClone(themePackState),
+    "themePack.save": (params) => {
+      const pack = params as ThemePack;
+      const idx = themePackState.packs.findIndex((p) => p.id === pack.id);
+      if (idx >= 0) themePackState.packs[idx] = structuredClone(pack);
+      return true;
+    },
+    "themePack.setHardMirrorActive": (params) => {
+      const active = (params as { active: boolean }).active;
+      themePackState.hardMirrorActive = active;
       return true;
     },
 
-    /* 镜牢主题包 */
-    "themePack.list": (): ThemePackState => structuredClone(themePackState),
-    "themePack.updateAll": (params) => {
-      const packs = (params as { packs?: ThemePack[] })?.packs;
-      if (!Array.isArray(packs)) throw new Error("packs required");
-      themePackState.packs = structuredClone(packs);
-      return true;
-    },
-    "themePack.resetWeights": () => {
-      themePackState.packs = structuredClone(DEFAULT_PACKS);
-      return structuredClone(themePackState);
-    },
-
-    /* 资源同步 */
-    "resource.status": () => structuredClone(resources),
-    "resource.checkUpdate": () => {
-      // mock：远端版本号 +1 位小版本
-      resources = resources.map((g) => ({
-        ...g,
-        remoteVersion: g.localVersion.replace(/(\d+)$/, (m) => String(Number(m) + 1)),
-      }));
-      return structuredClone(resources);
-    },
-    "resource.sync.start": () => {
-      if (syncTimer) return true; // 已在同步中
+    /* 资源中心 */
+    "resource.list": () => structuredClone(resources),
+    "resource.sync": (params) => {
+      const scope = ((params as { scope?: string })?.scope ?? "all") as string;
+      log("info", `[mock] 开始同步资源：${scope}`);
       let progress = 0;
+      if (syncTimer) clearInterval(syncTimer);
       syncTimer = setInterval(() => {
-        progress = Math.min(100, progress + 6 + Math.round(Math.random() * 6));
-        emit("resource.sync.progress", { scope: "all", progress });
+        progress += 25;
+        emit("resource.sync.progress", { scope, progress } satisfies SyncProgressPayload);
         if (progress >= 100) {
-          if (syncTimer) {
-            clearInterval(syncTimer);
-            syncTimer = null;
-          }
-          resources = resources.map((g) =>
-            g.remoteVersion
-              ? { ...g, localVersion: g.remoteVersion, remoteVersion: null, lastSyncAt: Date.now() }
-              : g,
+          if (syncTimer) clearInterval(syncTimer);
+          syncTimer = null;
+          resources = resources.map((r) =>
+            scope === "all" || r.id === scope
+              ? { ...r, localVersion: "v2025.06.2", lastSyncAt: Date.now() }
+              : r,
           );
-          log("info", "[mock] 资源同步完成");
+          log("info", `[mock] 资源同步完成：${scope}`);
         }
-      }, 400);
-      return true;
-    },
-
-    /* 公告板 */
-    "notice.list": () => structuredClone(notices),
-
-    /* 队列全局选项（完成后动作） */
-    "queue.getOptions": (): QueueOptions => structuredClone(queueOptions),
-    "queue.setOption": (params) => {
-      Object.assign(queueOptions, params as Partial<QueueOptions>);
+      }, 300);
       return true;
     },
 
     /* 全局热键 */
-    "hotkey.get": (): HotkeyConfig => ({ ...hotkey }),
+    "hotkey.get": () => structuredClone(hotkey),
     "hotkey.set": (params) => {
-      Object.assign(hotkey, params as Partial<HotkeyConfig>);
+      Object.assign(hotkey, params as HotkeyConfig);
+      return true;
+    },
+
+    /* 系统设置 */
+    "systemSettings.get": () => structuredClone(systemSettings),
+    "systemSettings.set": (params) => {
+      Object.assign(systemSettings, params as Partial<SystemSettingsConfig>);
+      return true;
+    },
+
+    /* 设备连接 */
+    "device.list": () => structuredClone(devices),
+    "device.connect": (params) => {
+      const id = (params as { id: string }).id;
+      deviceStatus = "connected";
+      emit("device.status", { deviceId: id, status: deviceStatus } satisfies DeviceStatusPayload);
+      log("info", `已连接设备：${id}`);
+      return true;
+    },
+    "device.disconnect": () => {
+      deviceStatus = "disconnected";
+      emit("device.status", { deviceId: null, status: deviceStatus } satisfies DeviceStatusPayload);
+      log("info", "设备已断开连接");
       return true;
     },
   };
 
-  /* ------------------------------ Client ------------------------------ */
+  /* ------------------------------ Client 实现 ------------------------------ */
 
-  return {
-    async connect() {
-      if (state === "connected") return; // 防止重复 connect 叠加心跳定时器
-      state = "connected"; // mock 无需真实握手
-      // 演示用：周期性推送一条日志事件，验证事件管线
-      let n = 0;
+  const client: RpcClient = {
+    connect: async () => {
+      if (state === "connected") return;
+      state = "connecting";
+      await new Promise((r) => setTimeout(r, 50));
+      state = "connected";
+
       heartbeat = setInterval(() => {
-        log("info", `[mock] 心跳 #${++n}（真实后端未接入）`);
-      }, 5000);
+        if (Math.random() < 0.05) {
+          emit("log.entry", {
+            ts: Date.now(),
+            level: "debug",
+            message: "自动化引擎心跳探测正常",
+          });
+        }
+      }, 15000);
     },
-    close() {
-      if (heartbeat) {
-        clearInterval(heartbeat);
-        heartbeat = null;
-      }
-      if (syncTimer) {
-        clearInterval(syncTimer);
-        syncTimer = null;
-      }
-      for (const timer of runTimers.values()) {
-        clearInterval(timer);
-      }
-      runTimers.clear();
-      listeners.clear();
+
+    close: () => {
       state = "disconnected";
+      if (heartbeat) clearInterval(heartbeat);
+      if (syncTimer) clearInterval(syncTimer);
+      listeners.clear();
     },
+
     connectionState: () => state,
 
-    request<T>(method: string, params?: unknown): Promise<T> {
-      const respond = (): RpcResponse => {
-        const req: RpcRequest = {
-          jsonrpc: "2.0",
-          id: nextId++,
-          method,
-          params,
-        };
-        const handler = handlers[req.method];
-        if (!handler) {
-          return {
-            jsonrpc: "2.0",
-            id: req.id,
-            error: {
-              code: -32601,
-              message: `Method not found: ${req.method}`,
-            } as RpcError,
-          };
-        }
-        try {
-          return { jsonrpc: "2.0", id: req.id, result: handler(req.params) };
-        } catch (e) {
-          return {
-            jsonrpc: "2.0",
-            id: req.id,
-            error: { code: -32000, message: String(e) },
-          };
-        }
-      };
-
-      // 模拟网络延迟
-      return new Promise<RpcResponse>((resolve) => setTimeout(() => resolve(respond()), 80)).then(
-        (res) => {
-          if (res.error) throw new Error(res.error.message);
-          return res.result as T;
-        },
-      );
+    request: async <T>(method: string, params?: unknown): Promise<T> => {
+      const reqId = nextId++;
+      const handler = handlers[method];
+      if (!handler) {
+        const error: RpcError = { code: -32601, message: `Method not found: ${method}` };
+        const res: RpcResponse = { jsonrpc: "2.0", id: reqId, error };
+        throw new Error(res.error?.message);
+      }
+      try {
+        const result = (await handler(params)) as T;
+        return result;
+      } catch (err) {
+        throw err instanceof Error ? err : new Error(String(err));
+      }
     },
 
-    on(event: IpcEventName, handler: (payload: unknown) => void) {
+    on: (event: IpcEventName, handler: (payload: unknown) => void) => {
       let set = listeners.get(event);
       if (!set) {
         set = new Set();
@@ -427,8 +517,10 @@ export function createMockClient(): RpcClient {
       }
       set.add(handler);
       return () => {
-        listeners.get(event)?.delete(handler);
+        set?.delete(handler);
       };
     },
   };
+
+  return client;
 }

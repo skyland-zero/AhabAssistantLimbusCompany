@@ -15,12 +15,14 @@ interface AppState {
   accentId: string;
   language: "zh-CN" | "en-US";
 
-  /** 主控台右侧面板（截图+日志）收起状态 */
+  /** 主控台右侧面板宽度与收起状态（对齐 MXU rightPanelWidth） */
+  rightPanelWidth: number;
   rightPanelCollapsed: boolean;
 
   setCurrentPage: (page: PageId) => void;
   toggleSidebar: () => void;
-  toggleRightPanel: () => void;
+  setRightPanelWidth: (width: number) => void;
+  setRightPanelCollapsed: (collapsed: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setAccent: (accentId: string) => void;
   setLanguage: (lang: "zh-CN" | "en-US") => void;
@@ -31,6 +33,7 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       currentPage: "home",
       sidebarCollapsed: false,
+      rightPanelWidth: 280,
       rightPanelCollapsed: false,
       themeMode: "system",
       accentId: DEFAULT_ACCENT,
@@ -38,7 +41,8 @@ export const useAppStore = create<AppState>()(
 
       setCurrentPage: (currentPage) => set({ currentPage }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      toggleRightPanel: () => set((s) => ({ rightPanelCollapsed: !s.rightPanelCollapsed })),
+      setRightPanelWidth: (rightPanelWidth) => set({ rightPanelWidth }),
+      setRightPanelCollapsed: (rightPanelCollapsed) => set({ rightPanelCollapsed }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setAccent: (accentId) => set({ accentId }),
       setLanguage: (language) => set({ language }),
@@ -47,6 +51,7 @@ export const useAppStore = create<AppState>()(
       name: "ahab-ui-settings",
       partialize: (s) => ({
         sidebarCollapsed: s.sidebarCollapsed,
+        rightPanelWidth: s.rightPanelWidth,
         rightPanelCollapsed: s.rightPanelCollapsed,
         themeMode: s.themeMode,
         accentId: s.accentId,
