@@ -48,16 +48,20 @@ export function FixedTaskCard({
       )}
     >
       {/* 运行中左侧指示线 */}
-      {isExecuting && <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand animate-pulse" />}
+      {isExecuting && (
+        <div className="absolute bottom-0 left-0 top-0 w-[3px] overflow-hidden">
+          <div
+            className="h-1/2 w-full bg-brand"
+            style={{ animation: "sweep 1.2s linear infinite" }}
+          />
+        </div>
+      )}
 
       {/* 卡片头部 */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: 卡片头部点击展开折叠 */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: 支持点击展开 */}
       <div
-        className={cn(
-          "flex items-center gap-2.5 px-3.5 py-2.5 select-none",
-          hasOptions && "cursor-pointer hover:bg-muted/30",
-        )}
+        className={cn("flex items-center gap-2.5 px-3 py-1.5 select-none")}
         onClick={hasOptions ? onToggleExpanded : undefined}
       >
         {/* 开关/复选框 */}
@@ -104,7 +108,7 @@ export function FixedTaskCard({
                 variant={tag.highlight ? "default" : "secondary"}
                 className={cn(
                   "h-5 px-1.5 text-[11px] font-normal",
-                  tag.highlight && "bg-brand/10 text-brand border border-brand/20",
+                  tag.highlight && "bg-brand/10 text-brand",
                 )}
               >
                 <span>{tag.label}</span>
@@ -128,7 +132,7 @@ export function FixedTaskCard({
 
       {/* 展开后的详细配置内容 */}
       {hasOptions && expanded && (
-        <CardContent className="border-t border-border/60 bg-card/40 p-3.5 pt-3">
+        <CardContent className="animate-in fade-in slide-in-from-top-1 bg-muted/35 px-3 py-2.5 duration-150">
           {children}
         </CardContent>
       )}

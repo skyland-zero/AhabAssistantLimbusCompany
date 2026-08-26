@@ -6,7 +6,6 @@ import { TeamEditModal } from "@/components/teams/TeamEditModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { getIpc } from "@/services/ipc/client";
@@ -105,13 +105,12 @@ export function TeamsPage() {
 
   const sinnerName = (id: string) => sinners.find((s) => s.id === id)?.name ?? id;
 
-  const filteredTeams =
-    activeTab === "all" ? teams : teams.filter((t) => t.purpose === activeTab);
+  const filteredTeams = activeTab === "all" ? teams : teams.filter((t) => t.purpose === activeTab);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* 顶部栏：用途分类切换 Tab + 新建队伍按钮 */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-card/30 px-5 py-2.5">
+      <div className="flex shrink-0 items-center justify-between bg-card/30 px-4 py-2">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FilterPurpose)}>
           <TabsList className="h-8 p-0.5 bg-muted/60">
             <TabsTrigger value="all" className="h-7 px-3 text-xs data-[state=active]:bg-background">
@@ -123,7 +122,11 @@ export function TeamsPage() {
             {PURPOSES.map((p) => {
               const count = teams.filter((t) => t.purpose === p).length;
               return (
-                <TabsTrigger key={p} value={p} className="h-7 px-3 text-xs data-[state=active]:bg-background">
+                <TabsTrigger
+                  key={p}
+                  value={p}
+                  className="h-7 px-3 text-xs data-[state=active]:bg-background"
+                >
                   <span>{t(purposeKey[p])}</span>
                   {count > 0 && (
                     <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.2 text-[10px] font-mono">
@@ -147,7 +150,7 @@ export function TeamsPage() {
 
       {/* 队伍卡片列表 */}
       <ScrollArea className="min-h-0 flex-1">
-        <div className="p-5">
+        <div className="p-4">
           {teams.length === 0 ? (
             <EmptyState
               icon={UsersRound}
@@ -161,7 +164,7 @@ export function TeamsPage() {
               description={t("teams.emptyCategoryDesc")}
             />
           ) : (
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
               {filteredTeams.map((team) => {
                 const mc = team.mirrorConfig;
                 const hasStarlight = mc?.opening_bonus && mc.opening_bonus.some((b) => b > 0);
@@ -169,8 +172,14 @@ export function TeamsPage() {
                   ? Object.values(mc.discard_systems).filter(Boolean).length
                   : 0;
                 return (
-                  <Card key={team.id} className={cn("py-0 gap-0 transition-all", !team.enabled && "opacity-60")}>
-                    <CardContent className="flex items-start gap-3.5 p-4">
+                  <Card
+                    key={team.id}
+                    className={cn(
+                      "py-0 gap-0 transition-colors duration-150 hover:bg-muted/30",
+                      !team.enabled && "opacity-60",
+                    )}
+                  >
+                    <CardContent className="flex items-start gap-3.5 px-3.5 py-3">
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="truncate text-sm font-semibold">{team.name}</span>
@@ -186,7 +195,10 @@ export function TeamsPage() {
                             <span>{t(schemeKey[team.accessoryScheme] ?? "teams.schemeBurn")}</span>
                           </Badge>
                           {!team.enabled && (
-                            <Badge variant="outline" className="h-5 text-[11px] text-muted-foreground">
+                            <Badge
+                              variant="outline"
+                              className="h-5 text-[11px] text-muted-foreground"
+                            >
                               {t("themePacks.disabledPack")}
                             </Badge>
                           )}
@@ -196,34 +208,49 @@ export function TeamsPage() {
                           {hasStarlight && (
                             <span className="inline-flex items-center text-amber-500 font-mono">
                               <Sparkles className="size-3 mr-0.5" />
-                              星光已配
+                              {t("teams.starlightReady")}
                             </span>
                           )}
                           {mc?.second_system && (
-                            <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal">
-                              第二体系
+                            <Badge
+                              variant="secondary"
+                              className="h-4.5 px-1.5 text-[10px] font-normal"
+                            >
+                              {t("teams.secondSystem")}
                             </Badge>
                           )}
                           {discardedCount > 0 && (
-                            <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal text-destructive">
-                              舍弃 ×{discardedCount}
+                            <Badge
+                              variant="secondary"
+                              className="h-4.5 px-1.5 text-[10px] font-normal text-destructive"
+                            >
+                              {t("teams.discardCount", { count: discardedCount })}
                             </Badge>
                           )}
                           {mc?.defense_for_solo && (
-                            <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal text-brand">
-                              良秀单通
+                            <Badge
+                              variant="secondary"
+                              className="h-4.5 px-1.5 text-[10px] font-normal text-brand"
+                            >
+                              {t("teams.soloPass")}
                             </Badge>
                           )}
                           {mc?.use_team_code && (
                             <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-mono">
-                              编队码
+                              {t("teams.teamCode")}
                             </Badge>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-1 pt-0.5">
                           {team.sinners.map((id, idx) => (
-                            <Badge key={id} variant="outline" className="h-5 px-1.5 text-[11px] font-normal gap-1">
-                              <span className="font-mono text-[10px] text-brand font-bold">#{idx + 1}</span>
+                            <Badge
+                              key={id}
+                              variant="outline"
+                              className="h-5 px-1.5 text-[11px] font-normal gap-1"
+                            >
+                              <span className="font-mono text-[10px] text-brand font-bold">
+                                #{idx + 1}
+                              </span>
                               <span>{sinnerName(id)}</span>
                             </Badge>
                           ))}
@@ -276,14 +303,26 @@ export function TeamsPage() {
           <DialogHeader>
             <DialogTitle>{t("teams.deleteConfirmTitle")}</DialogTitle>
             <DialogDescription>
-              {deleteTarget ? t("teams.deleteConfirmDesc", { name: deleteTarget.name }) : t("teams.deleteConfirm")}
+              {deleteTarget
+                ? t("teams.deleteConfirmDesc", { name: deleteTarget.name })
+                : t("teams.deleteConfirm")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDeleteTarget(null)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setDeleteTarget(null)}
+            >
               {t("teams.cancel")}
             </Button>
-            <Button variant="destructive" size="sm" className="h-8 text-xs" onClick={() => void confirmRemove()}>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => void confirmRemove()}
+            >
               {t("teams.delete")}
             </Button>
           </DialogFooter>

@@ -1,5 +1,4 @@
 import type { RpcClient } from "../client";
-import { createDefaultMirrorConfig } from "../types";
 import type {
   ConnectionStatus,
   DeviceInfo,
@@ -24,6 +23,7 @@ import type {
   ToolStatusPayload,
   UpdateInfo,
 } from "../types";
+import { createDefaultMirrorConfig } from "../types";
 
 type Handler = (params: unknown) => unknown;
 
@@ -65,7 +65,11 @@ export function createMockClient(): RpcClient {
       mirrorConfig: {
         ...createDefaultMirrorConfig(),
         team_system: 2,
-        discard_systems: { ...createDefaultMirrorConfig().discard_systems, sinking: true, poise: true },
+        discard_systems: {
+          ...createDefaultMirrorConfig().discard_systems,
+          sinking: true,
+          poise: true,
+        },
         opening_bonus: [2, 2, 1, 1, 0, 0, 0, 0, 0, 0],
       },
     },

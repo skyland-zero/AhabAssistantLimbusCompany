@@ -34,12 +34,15 @@ export default function App() {
 
   return (
     <>
-      <Toaster position="bottom-right" />
+      <Toaster position="top-center" offset={80} />
       <div className="flex h-screen min-h-0 flex-col bg-background text-foreground">
         <TitleBar />
         <TabBar />
-        <main className="min-h-0 flex-1 overflow-hidden bg-background">
-          <PageView page={currentPage} />
+        <main
+          key={currentPage}
+          className="min-h-0 flex-1 animate-in overflow-hidden bg-background fade-in duration-200 slide-in-from-bottom-1"
+        >
+          <PageView key={currentPage} page={currentPage} />
         </main>
       </div>
     </>

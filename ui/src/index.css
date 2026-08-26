@@ -4,8 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  --radius: 0.5rem;
+  /* 扁平化：页面底色带微弱品牌暖调，与纯白卡片形成明度差分层 */
+  --background: oklch(0.963 0.003 25);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -20,8 +21,9 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  /* 扁平化：全局去框线，分区靠明度差；表单控件保留独立描边 */
+  --border: transparent;
+  --input: oklch(0.885 0 0);
   --ring: oklch(0.708 0 0);
 
   /* 语义状态色 */
@@ -33,9 +35,9 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.135 0.005 25);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.2 0.004 25);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.269 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -48,7 +50,8 @@
   --accent: oklch(0.371 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  /* 扁平化：全局去框线 */
+  --border: transparent;
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
 
@@ -118,7 +121,23 @@
   }
 }
 
-/* 细滚动条 */
+/* 允许文本选择的区域（如运行日志，便于复制报错信息） */
+.selectable,
+.selectable * {
+  user-select: text;
+}
+
+/* 任务执行中左侧指示条的流动扫光动画 */
+@keyframes sweep {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+/* 细滚动条（低存在感，hover 加深） */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -127,9 +146,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--muted-foreground);
+  background: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--foreground);
+  background: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
 }

@@ -2,6 +2,7 @@ import {
   CircleHelp,
   House,
   type LucideIcon,
+  Monitor,
   Moon,
   Package,
   Palette,
@@ -44,7 +45,7 @@ export function TabBar() {
   };
 
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-card/60 px-3 backdrop-blur-sm">
+    <div className="flex h-9 shrink-0 items-center justify-between bg-card/60 px-2.5 backdrop-blur-sm">
       {/* 左侧主要页面标签 */}
       <nav className="flex items-center gap-1">
         {NAV_TABS.map((tab) => {
@@ -56,13 +57,13 @@ export function TabBar() {
               type="button"
               onClick={() => setCurrentPage(tab.id)}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150",
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150",
                 isActive
-                  ? "bg-accent/15 text-brand font-semibold shadow-xs"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  ? "bg-brand text-brand-foreground font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Icon className={cn("size-3.5", isActive && "text-brand")} />
+              <Icon className="size-3.5" />
               <span>{t(tab.labelKey)}</span>
             </button>
           );
@@ -79,7 +80,13 @@ export function TabBar() {
           onClick={toggleTheme}
           title={t("settings.themeMode")}
         >
-          {themeMode === "dark" ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
+          {themeMode === "system" ? (
+            <Monitor className="size-3.5" />
+          ) : themeMode === "dark" ? (
+            <Moon className="size-3.5" />
+          ) : (
+            <Sun className="size-3.5" />
+          )}
         </Button>
 
         <Button

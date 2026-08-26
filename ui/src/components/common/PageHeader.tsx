@@ -11,7 +11,7 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-6 py-4">
+    <div className="flex shrink-0 items-center justify-between gap-4 px-4 py-3">
       <div className="min-w-0">
         <h1 className="truncate text-lg font-semibold">{title}</h1>
         {description && (

@@ -64,7 +64,12 @@ export function ResourcesPage() {
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void checkUpdate()}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => void checkUpdate()}
+          >
             <SearchCheck className="size-3.5" /> {t("resources.checkUpdate")}
           </Button>
           <Button
@@ -82,7 +87,8 @@ export function ResourcesPage() {
         <div className="p-6">
           <div className="grid max-w-3xl grid-cols-1 gap-3 lg:grid-cols-2">
             {groups.map((group) => {
-              const hasUpdate = group.remoteVersion !== null && group.remoteVersion !== group.localVersion;
+              const hasUpdate =
+                group.remoteVersion !== null && group.remoteVersion !== group.localVersion;
               return (
                 <Card key={group.id} className="py-4">
                   <CardContent className="flex flex-col gap-3 px-5">
@@ -110,7 +116,10 @@ export function ResourcesPage() {
                     </dl>
                     {syncProgress !== null && (
                       <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${syncProgress}%` }} />
+                        <div
+                          className="h-full rounded-full bg-brand transition-[width]"
+                          style={{ width: `${syncProgress}%` }}
+                        />
                       </div>
                     )}
                   </CardContent>

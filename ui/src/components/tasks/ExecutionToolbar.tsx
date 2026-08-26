@@ -63,7 +63,7 @@ export function ExecutionToolbar({
           <RotateCcw className="size-3.5" />
           <span>{t("tasks.toolbar.clearAll")}</span>
         </Button>
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="mx-1 h-4 w-px bg-muted-foreground/25" />
         <Button
           type="button"
           variant="ghost"
@@ -107,7 +107,7 @@ export function ExecutionToolbar({
           <Button
             type="button"
             size="sm"
-            className="h-9 gap-2 bg-danger px-5 text-xs font-semibold text-white shadow hover:bg-danger/90 animate-pulse"
+            className="h-9 gap-2 bg-danger px-5 text-xs font-semibold text-white ring-2 ring-danger/30 hover:bg-danger/90"
             onClick={onStop}
           >
             <Square className="size-4 fill-current" />
@@ -118,8 +118,8 @@ export function ExecutionToolbar({
             type="button"
             size="sm"
             className={cn(
-              "h-9 gap-2 px-5 text-xs font-semibold shadow-md",
-              "bg-brand text-brand-foreground hover:bg-brand-hover active:scale-[0.98] transition-all",
+              "h-9 gap-2 px-5 text-xs font-semibold",
+              "bg-brand text-brand-foreground hover:bg-brand-hover active:scale-[0.97] transition-all",
             )}
             onClick={onStart}
           >

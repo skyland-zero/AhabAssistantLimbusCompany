@@ -15,7 +15,11 @@ export function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
-      {Icon && <Icon className="size-10 text-muted-foreground/40" strokeWidth={1.5} />}
+      {Icon && (
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+          <Icon className="size-6 text-muted-foreground/60" strokeWidth={1.5} />
+        </div>
+      )}
       <p className="text-sm font-medium">{title}</p>
       {description && <p className="text-xs text-muted-foreground">{description}</p>}
       {action && <div className="mt-3">{action}</div>}

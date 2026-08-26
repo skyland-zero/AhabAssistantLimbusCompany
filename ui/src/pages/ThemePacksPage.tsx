@@ -72,13 +72,28 @@ export function ThemePacksPage() {
           >
             <ArrowDownWideNarrow className="size-3.5" /> {t("themePacks.sortByWeight")}
           </Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void setAllEnabled(true)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => void setAllEnabled(true)}
+          >
             {t("themePacks.enableAll")}
           </Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void setAllEnabled(false)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => void setAllEnabled(false)}
+          >
             {t("themePacks.disableAll")}
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void resetWeights()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs"
+            onClick={() => void resetWeights()}
+          >
             <RotateCcw className="size-3.5" /> {t("themePacks.resetWeights")}
           </Button>
         </div>
@@ -109,7 +124,9 @@ export function ThemePacksPage() {
                     </div>
                   </div>
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <span className="shrink-0 text-xs text-muted-foreground">{t("themePacks.weight")}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {t("themePacks.weight")}
+                    </span>
                     <Slider
                       value={[pack.weight]}
                       max={10}
@@ -117,7 +134,9 @@ export function ThemePacksPage() {
                       disabled={!pack.enabled}
                       onValueChange={([v]) => void patchPack(pack.id, { weight: v })}
                     />
-                    <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums">{pack.weight}</span>
+                    <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums">
+                      {pack.weight}
+                    </span>
                   </div>
                 </CardContent>
               </Card>

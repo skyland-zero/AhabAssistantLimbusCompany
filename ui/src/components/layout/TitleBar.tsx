@@ -115,8 +115,10 @@ function TitleBarButton({
       aria-label={label}
       title={label}
       onClick={() => void onClick()}
-      className={`flex h-full w-12 items-center justify-center text-muted-foreground transition-colors ${
-        danger ? "hover:bg-red-600 hover:text-white" : "hover:bg-secondary hover:text-foreground"
+      className={`flex h-full w-12 items-center justify-center text-muted-foreground transition-colors duration-150 ${
+        danger
+          ? "hover:bg-destructive hover:text-white"
+          : "hover:bg-secondary hover:text-foreground"
       }`}
     >
       {children}

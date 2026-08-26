@@ -25,6 +25,7 @@ import { SetWindowsOptions } from "@/components/tasks/SetWindowsOptions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { isTauri } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import { getIpc } from "@/services/ipc/client";
@@ -266,8 +267,13 @@ export function HomePage() {
 
   if (!tasksConfig) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        Loading tasks configuration...
+      <div className="flex h-full flex-col gap-1.5 bg-background p-3">
+        <Skeleton className="h-11 rounded-lg" />
+        <Skeleton className="h-11 rounded-lg" />
+        <Skeleton className="h-11 rounded-lg" />
+        <Skeleton className="h-11 rounded-lg" />
+        <Skeleton className="h-11 rounded-lg" />
+        <Skeleton className="h-11 rounded-lg" />
       </div>
     );
   }
@@ -276,51 +282,63 @@ export function HomePage() {
 
   /* 选项预览 Tag 计算 (对齐 MXU OptionPreviewTag) */
   const windowTags: PreviewTag[] = [
-    { label: "分辨率", value: `${tasksConfig.set_windows.set_win_size}P` },
+    { label: t("home.tag.resolution"), value: `${tasksConfig.set_windows.set_win_size}P` },
     {
-      label: "异步输入",
-      value: tasksConfig.set_windows.use_post_message ? "开" : "关",
+      label: t("home.tag.asyncInput"),
+      value: tasksConfig.set_windows.use_post_message ? t("home.common.on") : t("home.common.off"),
       highlight: tasksConfig.set_windows.use_post_message,
     },
   ];
 
   const dailyTags: PreviewTag[] = [
-    { label: "经验本", value: `×${tasksConfig.daily_task.set_EXP_count}` },
-    { label: "纽本", value: `×${tasksConfig.daily_task.set_thread_count}` },
+    { label: t("home.tag.exp"), value: `×${tasksConfig.daily_task.set_EXP_count}` },
+    { label: t("home.tag.thread"), value: `×${tasksConfig.daily_task.set_thread_count}` },
     {
-      label: "连战",
+      label: t("home.tag.continuous"),
       value: tasksConfig.daily_task.use_continuous_combat
         ? `×${tasksConfig.daily_task.use_continuous_combat_select}`
-        : "关",
+        : t("home.common.off"),
       highlight: tasksConfig.daily_task.use_continuous_combat,
     },
   ];
 
-  const rewardModeMap = ["全部", "狂气/通行证", "邮件"];
+  const rewardModeMap = [
+    t("home.rewardModeAll"),
+    t("home.rewardModeLunacyPass"),
+    t("home.rewardModeMail"),
+  ];
   const rewardTags: PreviewTag[] = [
-    { label: "模式", value: rewardModeMap[tasksConfig.get_reward.set_get_prize] ?? "全部" },
+    {
+      label: t("home.tag.mode"),
+      value: rewardModeMap[tasksConfig.get_reward.set_get_prize] ?? t("home.rewardModeAll"),
+    },
   ];
 
   const enkephalinTags: PreviewTag[] = [
-    { label: "换体", value: `${tasksConfig.buy_enkephalin.set_lunacy_to_enkephalin}次` },
     {
-      label: "葛朗台",
-      value: tasksConfig.buy_enkephalin.Dr_Grandet_mode ? "开" : "关",
+      label: t("home.tag.swapTimes"),
+      value: `${tasksConfig.buy_enkephalin.set_lunacy_to_enkephalin}${t("home.common.timesUnit")}`,
+    },
+    {
+      label: t("home.tag.grandet"),
+      value: tasksConfig.buy_enkephalin.Dr_Grandet_mode
+        ? t("home.common.on")
+        : t("home.common.off"),
       highlight: tasksConfig.buy_enkephalin.Dr_Grandet_mode,
     },
   ];
 
   const mirrorTags: PreviewTag[] = [
     {
-      label: "坐牢",
+      label: t("home.tag.grind"),
       value: tasksConfig.mirror.infinite_dungeons
         ? "∞"
-        : `${tasksConfig.mirror.set_mirror_count}次`,
+        : `${tasksConfig.mirror.set_mirror_count}${t("home.common.timesUnit")}`,
       highlight: tasksConfig.mirror.infinite_dungeons,
     },
     {
-      label: "难度",
-      value: tasksConfig.mirror.hard_mirror ? "困难" : "普通",
+      label: t("home.tag.difficulty"),
+      value: tasksConfig.mirror.hard_mirror ? t("home.common.hard") : t("home.common.normal"),
       highlight: tasksConfig.mirror.hard_mirror,
     },
   ];
@@ -330,16 +348,22 @@ export function HomePage() {
       {/* 左侧：固定任务卡片流 + 底部工具栏 (Flex-1) */}
       <section className="flex min-w-0 flex-1 flex-col border-r border-border bg-background">
         {/* 顶部标题栏状态 */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-2.5 bg-card/30">
+        <div className="flex shrink-0 items-center justify-between bg-card/30 px-3.5 py-2">
           <div className="flex items-center gap-2.5">
             <h1 className="text-sm font-semibold text-foreground">{t("home.taskSectionTitle")}</h1>
             <Badge
               variant={isBusy ? "default" : "secondary"}
               className={cn(
-                "h-5 text-[11px] font-normal transition-colors",
-                isBusy && "bg-brand text-brand-foreground animate-pulse",
+                "h-5 gap-1.5 text-[11px] font-normal transition-colors",
+                isBusy && "bg-brand text-brand-foreground",
               )}
             >
+              {isBusy && (
+                <span className="relative flex size-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+                  <span className="relative inline-flex size-1.5 rounded-full bg-current" />
+                </span>
+              )}
               {executionState === "running" && currentTaskId
                 ? t("home.runningStatus", { task: t(`tasks.titles.${currentTaskId}`) })
                 : executionState === "paused"
@@ -484,8 +508,10 @@ export function HomePage() {
               isExecuting={currentTaskId === "resonate_with_Ahab"}
               previewTags={[
                 {
-                  label: "语录",
-                  value: tasksConfig.enabledTasks.resonate_with_Ahab ? "开启" : "关闭",
+                  label: t("home.tag.quote"),
+                  value: tasksConfig.enabledTasks.resonate_with_Ahab
+                    ? t("home.common.enabled")
+                    : t("home.common.disabled"),
                   highlight: tasksConfig.enabledTasks.resonate_with_Ahab,
                 },
               ]}
@@ -525,7 +551,7 @@ export function HomePage() {
       {/* 右侧信息面板：连接 → 截图 → 日志 */}
       {!rightPanelCollapsed && (
         <aside
-          className="flex flex-col gap-3 overflow-x-hidden border-l border-transparent bg-background p-3"
+          className="flex flex-col gap-2 overflow-x-hidden bg-background p-2.5"
           style={{ width: rightPanelWidth, minWidth: 240, flexShrink: 1 }}
         >
           {/* 设备连接 */}
@@ -533,13 +559,13 @@ export function HomePage() {
 
           {/* 实时画面卡片 */}
           <div className="flex shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
-            <div className="flex h-9 shrink-0 items-center justify-between px-3">
+            <div className="flex h-8 shrink-0 items-center justify-between px-2.5">
               <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <MonitorPlay className="size-3.5" /> {t("home.screenshotTitle")}
               </span>
             </div>
-            <div className="border-t border-border p-3">
-              <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-md bg-muted text-xs text-muted-foreground">
+            <div className="p-2.5">
+              <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-md border border-dashed border-muted-foreground/25 bg-background text-xs text-muted-foreground">
                 <MonitorPlay className="size-8 opacity-25" strokeWidth={1.5} />
                 <span>{t("home.screenshotPending")}</span>
                 <span className="font-mono text-[10px] opacity-50">16:9 · 1280×720</span>
@@ -549,7 +575,7 @@ export function HomePage() {
 
           {/* 日志卡片（占满剩余高度） */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
-            <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3">
+            <div className="flex h-8 shrink-0 items-center justify-between px-2.5">
               <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <ScrollText className="size-3.5" /> {t("home.logsTab")}
                 <Badge variant="secondary" className="px-1.5 font-mono">
@@ -565,7 +591,7 @@ export function HomePage() {
                 <Trash2 className="size-3" /> {t("home.logsClear")}
               </Button>
             </div>
-            <ScrollArea className="min-h-0 flex-1 px-3 py-2 font-mono text-xs leading-relaxed">
+            <ScrollArea className="selectable min-h-0 flex-1 px-3 py-2 font-mono text-xs leading-relaxed">
               {logs.map((log) => (
                 <div key={log.id} className="flex gap-2 py-0.5">
                   <span className="shrink-0 text-muted-foreground">
@@ -602,5 +628,10 @@ function LogMessage({ level, message }: { level: string; message: string }) {
   if (level === "warn") {
     return <span className="text-warning">{message}</span>;
   }
-  return <span>{message}</span>;
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="size-1 shrink-0 rounded-full bg-muted-foreground/40" />
+      {message}
+    </span>
+  );
 }

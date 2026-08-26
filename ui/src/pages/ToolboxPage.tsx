@@ -90,10 +90,17 @@ export function ToolboxPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{t(tool.titleKey)}</p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t(tool.descKey)}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {t(tool.descKey)}
+                      </p>
                     </div>
                     {isScreenshot ? (
-                      <Button size="sm" variant="outline" className="w-full" onClick={() => void takeScreenshot()}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => void takeScreenshot()}
+                      >
                         <Camera className="size-4" /> {t("toolbox.run")}
                       </Button>
                     ) : isRunning ? (
