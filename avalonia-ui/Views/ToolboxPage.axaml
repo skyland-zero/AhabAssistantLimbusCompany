@@ -52,7 +52,7 @@
 
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="{Binding Title}" FontSize="13" />
-                                    <TextBlock Text="{Binding Desc}" FontSize="11" Foreground="{DynamicResource MutedFgBrush}"
+                                    <TextBlock Text="{Binding Desc}" FontSize="12" Foreground="{DynamicResource MutedFgBrush}"
                                                TextWrapping="Wrap" LineHeight="17" />
                                 </StackPanel>
 
@@ -95,7 +95,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <TextBlock Text="工具均为 Mock 模拟，后端接入后生效" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+            <TextBlock Text="工具均为 Mock 模拟，后端接入后生效" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

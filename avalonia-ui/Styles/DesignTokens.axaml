@@ -46,6 +46,6 @@
     <SolidColorBrush x:Key="TabBarBrush">#4D181515</SolidColorBrush>
     <SolidColorBrush x:Key="OverlayBrush">#80000000</SolidColorBrush>
 
-    <FontFamily x:Key="UiFont">Segoe UI, avares://AhabAssistant.Avalonia/Assets/Fonts#Sarasa Gothic SC, Sarasa UI SC, Sarasa Gothic SC, Noto Sans SC, Source Han Sans CN, Microsoft YaHei UI, -apple-system, sans-serif</FontFamily>
+    <FontFamily x:Key="UiFont">avares://AhabAssistant.Avalonia/Assets/Fonts#Sarasa UI SC, Sarasa UI SC, Segoe UI, Noto Sans SC, Source Han Sans CN, Microsoft YaHei UI, -apple-system, sans-serif</FontFamily>
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, monospace</FontFamily>
 </ResourceDictionary>

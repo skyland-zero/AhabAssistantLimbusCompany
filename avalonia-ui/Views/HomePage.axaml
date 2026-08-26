@@ -115,7 +115,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="窗口分辨率" FontSize="12" />
-                                                <TextBlock Text="设置游戏运行窗口的目标分辨率" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="设置游戏运行窗口的目标分辨率" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ComboBox Grid.Column="1" Classes="app-select" Width="140" SelectedIndex="{Binding WinSizeIndex}">
                                                 <ComboBoxItem>1280 × 720</ComboBoxItem>
@@ -126,7 +126,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="窗口位置" FontSize="12" />
-                                                <TextBlock Text="设置自动调整窗口在屏幕上的摆放位置" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="设置自动调整窗口在屏幕上的摆放位置" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ComboBox Grid.Column="1" Classes="app-select" Width="140" SelectedIndex="{Binding WinPosIndex}">
                                                 <ComboBoxItem>屏幕居中</ComboBoxItem>
@@ -138,7 +138,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="结束后恢复窗口" FontSize="12" />
-                                                <TextBlock Text="任务执行完毕后将窗口恢复为初始状态，防误触" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="任务执行完毕后将窗口恢复为初始状态，防误触" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.SetWindows.SetReduceMiscontact}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
@@ -151,7 +151,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="截图间隔" FontSize="12" />
-                                                <TextBlock Text="两次画面捕获之间的冷却时间" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="两次画面捕获之间的冷却时间" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ComboBox Grid.Column="1" Classes="app-select" Width="150" SelectedIndex="{Binding ShotIntervalIndex}">
                                                 <ComboBoxItem>0.2s (极速)</ComboBoxItem>
@@ -162,7 +162,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="鼠标操作间隔" FontSize="12" />
-                                                <TextBlock Text="模拟鼠标移动与点击的操作间隔" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="模拟鼠标移动与点击的操作间隔" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ComboBox Grid.Column="1" Classes="app-select" Width="150" SelectedIndex="{Binding MouseIntervalIndex}">
                                                 <ComboBoxItem>0.1s</ComboBoxItem>
@@ -173,7 +173,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="异步 PostMessage 输入" FontSize="12" />
-                                                <TextBlock Text="提高键鼠输入效率，低延迟模式" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="提高键鼠输入效率，低延迟模式" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.SetWindows.UsePostMessage}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
@@ -239,7 +239,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="经验本次数" FontSize="12" />
-                                                <TextBlock Text="每日采光·经验采集副本执行次数" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="每日采光·经验采集副本执行次数" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                                 <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="exp:-1" IsEnabled="{Binding ExpMinusEnabled}">
@@ -255,7 +255,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="纽本次数" FontSize="12" />
-                                                <TextBlock Text="每日采光·纽带采集副本执行次数" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="每日采光·纽带采集副本执行次数" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                                 <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="thread:-1" IsEnabled="{Binding ThreadMinusEnabled}">
@@ -271,7 +271,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="默认日常编队" FontSize="12" />
-                                                <TextBlock Text="执行日常经验本与纽本时优先使用的编队" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="执行日常经验本与纽本时优先使用的编队" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ComboBox Grid.Column="1" Classes="app-select" Width="140" ItemsSource="{Binding TeamNames}" SelectedIndex="{Binding DailyTeamIndex}" />
                                         </Grid>
@@ -279,7 +279,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="1">
                                                     <TextBlock Text="连续作战模式" FontSize="12" />
-                                                    <TextBlock Text="自动连战，减少进出副本加载时间" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                    <TextBlock Text="自动连战，减少进出副本加载时间" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                                                     <StackPanel Orientation="Horizontal" Spacing="4"
@@ -309,7 +309,7 @@
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <StackPanel Grid.Column="0" Spacing="1">
                                                         <TextBlock Text="经验本针对性配队" FontSize="12" />
-                                                        <TextBlock Text="根据每周不同属性弱点自动轮换对应克制队伍" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                        <TextBlock Text="根据每周不同属性弱点自动轮换对应克制队伍" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                                     </StackPanel>
                                                     <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.DailyTask.TargetedTeamingExp}" IsCheckedChanged="ConfigSwitchToggled" />
                                                 </Grid>
@@ -342,7 +342,7 @@
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <StackPanel Grid.Column="0" Spacing="1">
                                                         <TextBlock Text="纽本针对性配队" FontSize="12" />
-                                                        <TextBlock Text="根据周一到周日不同罪孽属性自动切换编队" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                        <TextBlock Text="根据周一到周日不同罪孽属性自动切换编队" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                                     </StackPanel>
                                                     <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.DailyTask.TargetedTeamingThread}" IsCheckedChanged="ConfigSwitchToggled" />
                                                 </Grid>
@@ -432,7 +432,7 @@
                                 <Grid ColumnDefinitions="*,Auto">
                                     <StackPanel Grid.Column="0" Spacing="1">
                                         <TextBlock Text="领取奖励模式" FontSize="12" />
-                                        <TextBlock Text="选择需要自动领取的奖励范围" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                        <TextBlock Text="选择需要自动领取的奖励范围" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" Classes="app-select" Width="230" SelectedIndex="{Binding RewardModeIndex}">
                                         <ComboBoxItem>全部领取 (狂气 + 通行证 + 邮件)</ComboBoxItem>
@@ -497,7 +497,7 @@
                                     <Grid ColumnDefinitions="*,Auto">
                                         <StackPanel Grid.Column="0" Spacing="1">
                                             <TextBlock Text="狂气换体次数" FontSize="12" />
-                                            <TextBlock Text="消耗狂气兑换脑啡肽的次数 (0-10)" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                            <TextBlock Text="消耗狂气兑换脑啡肽的次数 (0-10)" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                             <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="buy:-1" IsEnabled="{Binding BuyMinusEnabled}">
@@ -517,14 +517,14 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="葛朗台模式" FontSize="12" />
-                                                <TextBlock Text="仅在体力不足时才进行兑换，避免浪费" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="仅在体力不足时才进行兑换，避免浪费" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.BuyEnkephalin.DrGrandetMode}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="跳过模块合成" FontSize="12" />
-                                                <TextBlock Text="除狂气换体外，不自动将多余体力合成为脑啡肽模块" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="除狂气换体外，不自动将多余体力合成为脑啡肽模块" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.BuyEnkephalin.SkipEnkephalin}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
@@ -619,7 +619,7 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="坐牢次数" FontSize="12" />
-                                                <TextBlock Text="镜牢探索计划执行轮数" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="镜牢探索计划执行轮数" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                                 <StackPanel Orientation="Horizontal" Spacing="6"
@@ -644,14 +644,14 @@
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="无限坐牢" FontSize="12" />
-                                                <TextBlock Text="不设上限持续刷取镜牢，直至体力耗尽或手动停止" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="不设上限持续刷取镜牢，直至体力耗尽或手动停止" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.InfiniteDungeons}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="困难镜牢" FontSize="12" />
-                                                <TextBlock Text="启用困难镜牢模式 (周四自动消耗奖励次数)" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                                <TextBlock Text="启用困难镜牢模式 (周四自动消耗奖励次数)" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.HardMirror}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
@@ -910,7 +910,7 @@
                             BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                             <controls:AppIcon Icon="monitor" Width="32" Height="32" Stroke="{DynamicResource MutedFgBrush}" Opacity="0.35" HorizontalAlignment="Center" />
-                            <TextBlock Text="等待游戏窗口画面接入" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="等待游戏窗口画面接入" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" HorizontalAlignment="Center" />
                             <TextBlock Text="16:9 · 1280×720" FontSize="10" FontFamily="{StaticResource MonoFont}"
                                        Foreground="{DynamicResource MutedFgBrush}" Opacity="0.5" HorizontalAlignment="Center" />
                         </StackPanel>
