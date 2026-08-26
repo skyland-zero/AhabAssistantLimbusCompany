@@ -2,7 +2,6 @@ import { RefreshCw, SearchCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { PageHeader } from "@/components/common/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,19 +54,28 @@ export function ResourcesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title={t("pages.resources.title")} description={t("pages.resources.desc")}>
-        <Button size="sm" variant="outline" onClick={() => void checkUpdate()}>
-          <SearchCheck className="size-4" /> {t("resources.checkUpdate")}
-        </Button>
-        <Button
-          size="sm"
-          className="bg-brand text-brand-foreground hover:bg-brand-hover"
-          disabled={syncProgress !== null}
-          onClick={() => void syncNow()}
-        >
-          <RefreshCw className={cnSyncIcon(syncProgress)} /> {t("resources.syncNow")}
-        </Button>
-      </PageHeader>
+      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-card/30 px-5 py-2.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {syncProgress !== null && (
+            <Badge variant="secondary" className="h-5 text-[11px] font-mono">
+              {t("resources.syncing", { progress: syncProgress })}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void checkUpdate()}>
+            <SearchCheck className="size-3.5" /> {t("resources.checkUpdate")}
+          </Button>
+          <Button
+            size="sm"
+            className="h-7 text-xs bg-brand text-brand-foreground hover:bg-brand-hover"
+            disabled={syncProgress !== null}
+            onClick={() => void syncNow()}
+          >
+            <RefreshCw className={cnSyncIcon(syncProgress)} /> {t("resources.syncNow")}
+          </Button>
+        </div>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid max-w-3xl grid-cols-1 gap-3 lg:grid-cols-2">

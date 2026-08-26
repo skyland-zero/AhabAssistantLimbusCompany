@@ -2,7 +2,6 @@ import { Camera, Crosshair, Pill, Play, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { PageHeader } from "@/components/common/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,8 +66,6 @@ export function ToolboxPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title={t("pages.toolbox.title")} description={t("pages.toolbox.desc")} />
-
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid max-w-3xl grid-cols-1 gap-3 lg:grid-cols-3">
           {TOOLS.map((tool) => {

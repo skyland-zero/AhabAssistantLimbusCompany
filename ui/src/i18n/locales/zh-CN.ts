@@ -211,6 +211,8 @@ const zhCN = {
     emptyCategoryTitle: "该分类下暂无队伍",
     emptyCategoryDesc: "点击右上角新建队伍添加配置",
     deleteConfirm: "确定删除该队伍？",
+    deleteConfirmTitle: "删除队伍",
+    deleteConfirmDesc: "确定删除队伍“{name}”吗？此操作不可撤销。",
     tabs: {
       basic: "基础编成",
       shop: "商店与合成",

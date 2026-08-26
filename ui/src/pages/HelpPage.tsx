@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import Markdown from "react-markdown";
-import { PageHeader } from "@/components/common/PageHeader";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import helpEn from "@/content/help-en.md?raw";
 import helpZh from "@/content/help-zh.md?raw";
@@ -24,8 +23,6 @@ export function HelpPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title={t("help.docTitle")} description={t("help.mockNotice")} />
-
       <div className="flex min-h-0 flex-1">
         {/* 左：目录 */}
         <nav className="w-52 shrink-0 border-r border-border p-3">

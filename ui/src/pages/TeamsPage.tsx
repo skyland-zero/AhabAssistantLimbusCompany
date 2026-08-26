@@ -6,6 +6,14 @@ import { TeamEditModal } from "@/components/teams/TeamEditModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { getIpc } from "@/services/ipc/client";
@@ -46,6 +54,7 @@ export function TeamsPage() {
   /** null = 关闭；否则为正在编辑的队伍 */
   const [editing, setEditing] = useState<TeamDetail | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TeamDetail | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -86,9 +95,10 @@ export function TeamsPage() {
     await reload();
   };
 
-  const remove = async (team: TeamDetail) => {
-    if (!window.confirm(t("teams.deleteConfirm"))) return;
-    await (await getIpc()).request("team.delete", { id: team.id });
+  const confirmRemove = async () => {
+    if (!deleteTarget) return;
+    await (await getIpc()).request("team.delete", { id: deleteTarget.id });
+    setDeleteTarget(null);
     await reload();
   };
 
@@ -235,7 +245,7 @@ export function TeamsPage() {
                         variant="ghost"
                         className="size-8"
                         aria-label={t("teams.delete")}
-                        onClick={() => void remove(team)}
+                        onClick={() => setDeleteTarget(team)}
                       >
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
@@ -259,6 +269,26 @@ export function TeamsPage() {
         }}
         onSave={(tData) => void save(tData)}
       />
+
+      {/* 删除确认 - 组件库 Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t("teams.deleteConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? t("teams.deleteConfirmDesc", { name: deleteTarget.name }) : t("teams.deleteConfirm")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDeleteTarget(null)}>
+              {t("teams.cancel")}
+            </Button>
+            <Button variant="destructive" size="sm" className="h-8 text-xs" onClick={() => void confirmRemove()}>
+              {t("teams.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

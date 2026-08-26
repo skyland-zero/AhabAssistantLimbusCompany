@@ -1,7 +1,6 @@
 import { ArrowDownWideNarrow, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PageHeader } from "@/components/common/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,24 +57,31 @@ export function ThemePacksPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title={t("pages.themes.title")} description={t("pages.themes.desc")}>
-        <Button
-          size="sm"
-          variant={sortByWeight ? "secondary" : "outline"}
-          onClick={() => setSortByWeight((v) => !v)}
-        >
-          <ArrowDownWideNarrow className="size-4" /> {t("themePacks.sortByWeight")}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => void setAllEnabled(true)}>
-          {t("themePacks.enableAll")}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => void setAllEnabled(false)}>
-          {t("themePacks.disableAll")}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => void resetWeights()}>
-          <RotateCcw className="size-4" /> {t("themePacks.resetWeights")}
-        </Button>
-      </PageHeader>
+      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-card/30 px-5 py-2.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{t("themePacks.totalWeight")}：</span>
+          <span className="font-mono font-medium text-foreground">{totalWeight}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant={sortByWeight ? "secondary" : "outline"}
+            className="h-7 text-xs"
+            onClick={() => setSortByWeight((v) => !v)}
+          >
+            <ArrowDownWideNarrow className="size-3.5" /> {t("themePacks.sortByWeight")}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void setAllEnabled(true)}>
+            {t("themePacks.enableAll")}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void setAllEnabled(false)}>
+            {t("themePacks.disableAll")}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void resetWeights()}>
+            <RotateCcw className="size-3.5" /> {t("themePacks.resetWeights")}
+          </Button>
+        </div>
+      </div>
 
       {/* 困难镜牢提示条 */}
       {state.hardMirrorActive && (
@@ -120,9 +126,6 @@ export function ThemePacksPage() {
           ))}
         </div>
 
-        <p className="mt-4 text-xs text-muted-foreground">
-          {t("themePacks.totalWeight")}：<span className="font-mono">{totalWeight}</span>
-        </p>
       </div>
     </div>
   );

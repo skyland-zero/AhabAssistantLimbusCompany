@@ -71,6 +71,7 @@ const purposeKey: Record<TeamPurpose, string> = {
   general: "teams.purposeGeneral",
 };
 
+const getSinnerAvatar = (id: string) => `/sinners/${id}.png`;
 interface TeamEditModalProps {
   open: boolean;
   team: TeamDetail | null;
@@ -226,7 +227,7 @@ export function TeamEditModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-3xl h-[620px] max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header */}
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/60 shrink-0">
           <div className="flex items-center justify-between">
@@ -373,7 +374,7 @@ export function TeamEditModal({
                         type="button"
                         onClick={() => toggleSinner(s.id)}
                         className={cn(
-                          "relative flex flex-col items-center justify-center p-2.5 rounded-lg border text-xs transition-all select-none group",
+                          "relative flex flex-col items-center justify-center p-2 rounded-lg border text-xs transition-all select-none group gap-1.5",
                           isSelected
                             ? "border-brand bg-brand/10 text-foreground font-semibold shadow-xs ring-1 ring-brand/30"
                             : "border-border/60 hover:bg-muted/40 text-muted-foreground hover:text-foreground",
@@ -384,7 +385,15 @@ export function TeamEditModal({
                             #{orderIndex + 1}
                           </span>
                         )}
-                        <span className="mt-1 truncate">{s.name}</span>
+                        <img
+                          src={getSinnerAvatar(s.id)}
+                          alt={s.name}
+                          className="size-12 rounded-md object-cover border border-border/20 bg-muted/20"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                        <span className="truncate w-full text-center leading-none text-[11px]">{s.name}</span>
                       </button>
                     );
                   })}

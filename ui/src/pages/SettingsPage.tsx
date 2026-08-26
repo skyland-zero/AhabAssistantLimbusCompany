@@ -125,8 +125,6 @@ export function SettingsPage() {
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="mx-auto max-w-2xl flex flex-col gap-5 pb-10">
-        <h1 className="text-lg font-semibold">{t("pages.settings.title")}</h1>
-
         {/* 1. 外观个性化 */}
         <Card>
           <CardHeader className="py-3 px-4">

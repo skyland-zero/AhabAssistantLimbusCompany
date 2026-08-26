@@ -12,7 +12,7 @@ export function initI18n(initialLang?: string): void {
     },
     lng: initialLang ?? "zh-CN",
     fallbackLng: "zh-CN",
-    interpolation: { escapeValue: false },
+    interpolation: { escapeValue: false, prefix: "{", suffix: "}" },
   });
 }
 

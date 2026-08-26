@@ -13,9 +13,9 @@
     "windows": [
       {
         "title": "Ahab Assistant · Limbus Company",
-        "width": 1000,
+        "width": 900,
         "height": 680,
-        "minWidth": 850,
+        "minWidth": 800,
         "minHeight": 560,
         "center": true,
         "decorations": false,

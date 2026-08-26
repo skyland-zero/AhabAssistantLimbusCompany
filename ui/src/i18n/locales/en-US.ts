@@ -213,6 +213,8 @@ const enUS: Translation = {
     emptyCategoryTitle: "No teams in this category",
     emptyCategoryDesc: "Click New Team above to create one",
     deleteConfirm: "Delete this team?",
+    deleteConfirmTitle: "Delete Team",
+    deleteConfirmDesc: 'Delete team "{name}"? This action cannot be undone.',
     tabs: {
       basic: "Basic & Formation",
       shop: "Shop & Fusion",
