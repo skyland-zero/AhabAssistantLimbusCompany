@@ -1,4 +1,5 @@
 import type { RpcClient } from "../client";
+import { createDefaultMirrorConfig } from "../types";
 import type {
   ConnectionStatus,
   DeviceInfo,
@@ -61,6 +62,12 @@ export function createMockClient(): RpcClient {
       sinners: ["faust", "ishmael", "ryoshu", "hong_lu"],
       accessoryScheme: "tremor",
       enabled: true,
+      mirrorConfig: {
+        ...createDefaultMirrorConfig(),
+        team_system: 2,
+        discard_systems: { ...createDefaultMirrorConfig().discard_systems, sinking: true, poise: true },
+        opening_bonus: [2, 2, 1, 1, 0, 0, 0, 0, 0, 0],
+      },
     },
     {
       id: "team-2",
@@ -69,6 +76,10 @@ export function createMockClient(): RpcClient {
       sinners: ["heathcliff", "rodion", "gregor"],
       accessoryScheme: "burn",
       enabled: true,
+      mirrorConfig: {
+        ...createDefaultMirrorConfig(),
+        team_system: 0,
+      },
     },
     {
       id: "team-3",
@@ -77,6 +88,10 @@ export function createMockClient(): RpcClient {
       sinners: ["yi_sang", "don_quixote", "meursault", "sinclair", "outis"],
       accessoryScheme: "poise",
       enabled: false,
+      mirrorConfig: {
+        ...createDefaultMirrorConfig(),
+        team_system: 5,
+      },
     },
   ];
 

@@ -161,6 +161,129 @@ export interface MirrorProgressPayload {
 
 /* ------------------------------ 队伍与其他数据模型 ------------------------------ */
 
+export interface TeamMirrorConfig {
+  team_system: number; // 0-9 (0: burn, 1: bleed, 2: tremor, 3: rupture, 4: sinking, 5: poise, 6: charge, 7: slash, 8: pierce, 9: blunt)
+  shop_strategy: number; // 0: 默认, 1: 保守, 2: 激进
+  discard_systems: {
+    burn: boolean;
+    bleed: boolean;
+    tremor: boolean;
+    rupture: boolean;
+    sinking: boolean;
+    poise: boolean;
+    charge: boolean;
+    slash: boolean;
+    pierce: boolean;
+    blunt: boolean;
+  };
+  // 基础操作限制
+  do_not_heal: boolean;
+  do_not_buy: boolean;
+  do_not_fuse: boolean;
+  do_not_sell: boolean;
+  do_not_enhance: boolean;
+  // 合成策略
+  only_aggressive_fuse: boolean;
+  do_not_system_fuse: boolean;
+  only_system_fuse: boolean;
+  aggressive_also_enhance: boolean;
+  aggressive_save_systems: boolean;
+  after_level_IV: boolean;
+  after_level_IV_select: number;
+  // 商店刷新与忽略
+  ignore_shop: boolean[]; // 5 楼层 (1~5层)
+  max_keyword_refresh: number;
+  max_normal_refresh: number;
+  // 第二体系
+  second_system: boolean;
+  second_system_select: number;
+  second_system_setting: number; // 起始楼层 2~5
+  second_system_fuse_IV: boolean;
+  second_system_buy: boolean;
+  second_system_select_reward: boolean;
+  second_system_power_up: boolean;
+  // 战斗与技能偏好
+  avoid_skill_3: boolean;
+  prioritize_skill_3: boolean;
+  re_formation_each_floor: boolean;
+  defense_first_round: boolean;
+  defense_for_solo: boolean;
+  defense_for_solo_turns: number; // 1~5 回合
+  skill_replacement: boolean;
+  skill_replacement_select: number;
+  skill_replacement_mode: number;
+  // 开局星光加成
+  use_starlight: boolean;
+  opening_bonus: number[]; // 10 项 (0: 未选, 1: 基础, 2: +, 3: ++)
+  // 高级与扩展
+  fixed_team_use: boolean;
+  fixed_team_use_select: number; // 0: 困难专用, 1: 普通专用, 2: 全部通用
+  use_team_code: boolean;
+  team_code: string;
+  use_custom_theme_pack_weight: boolean;
+  observe_ego_gift: boolean;
+  observe_ego_gift_selected: string[];
+}
+
+export function createDefaultMirrorConfig(): TeamMirrorConfig {
+  return {
+    team_system: 0,
+    shop_strategy: 0,
+    discard_systems: {
+      burn: false,
+      bleed: false,
+      tremor: false,
+      rupture: false,
+      sinking: false,
+      poise: false,
+      charge: false,
+      slash: false,
+      pierce: false,
+      blunt: false,
+    },
+    do_not_heal: false,
+    do_not_buy: false,
+    do_not_fuse: false,
+    do_not_sell: false,
+    do_not_enhance: false,
+    only_aggressive_fuse: false,
+    do_not_system_fuse: false,
+    only_system_fuse: false,
+    aggressive_also_enhance: false,
+    aggressive_save_systems: false,
+    after_level_IV: false,
+    after_level_IV_select: 0,
+    ignore_shop: [false, false, false, false, false],
+    max_keyword_refresh: 1,
+    max_normal_refresh: 1,
+    second_system: false,
+    second_system_select: 0,
+    second_system_setting: 2,
+    second_system_fuse_IV: true,
+    second_system_buy: true,
+    second_system_select_reward: true,
+    second_system_power_up: true,
+    avoid_skill_3: false,
+    prioritize_skill_3: false,
+    re_formation_each_floor: false,
+    defense_first_round: false,
+    defense_for_solo: false,
+    defense_for_solo_turns: 5,
+    skill_replacement: false,
+    skill_replacement_select: 0,
+    skill_replacement_mode: 0,
+    use_starlight: false,
+    opening_bonus: [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+    fixed_team_use: false,
+    fixed_team_use_select: 0,
+    use_team_code: false,
+    team_code: "",
+    use_custom_theme_pack_weight: false,
+    observe_ego_gift: false,
+    observe_ego_gift_selected: [],
+  };
+}
+
 export interface TeamSummary {
   id: string;
   name: string;
@@ -173,6 +296,7 @@ export interface TeamDetail extends TeamSummary {
   purpose: TeamPurpose;
   accessoryScheme: string;
   enabled: boolean;
+  mirrorConfig?: TeamMirrorConfig;
 }
 
 export interface SinnerInfo {

@@ -42,7 +42,7 @@ export function FixedTaskCard({
   return (
     <Card
       className={cn(
-        "group relative overflow-hidden transition-all duration-200",
+        "group relative overflow-hidden py-0 gap-0 transition-all duration-200",
         isExecuting && "border-brand shadow-sm",
         !enabled && canDisable && "opacity-75 bg-muted/20",
       )}
@@ -55,7 +55,7 @@ export function FixedTaskCard({
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: 支持点击展开 */}
       <div
         className={cn(
-          "flex items-center gap-3 px-4 py-3 select-none",
+          "flex items-center gap-2.5 px-3.5 py-2.5 select-none",
           hasOptions && "cursor-pointer hover:bg-muted/30",
         )}
         onClick={hasOptions ? onToggleExpanded : undefined}
@@ -128,7 +128,7 @@ export function FixedTaskCard({
 
       {/* 展开后的详细配置内容 */}
       {hasOptions && expanded && (
-        <CardContent className="border-t border-border/60 bg-card/40 p-4 pt-3">
+        <CardContent className="border-t border-border/60 bg-card/40 p-3.5 pt-3">
           {children}
         </CardContent>
       )}

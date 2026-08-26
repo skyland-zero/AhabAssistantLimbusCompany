@@ -330,7 +330,7 @@ export function HomePage() {
       {/* 左侧：固定任务卡片流 + 底部工具栏 (Flex-1) */}
       <section className="flex min-w-0 flex-1 flex-col border-r border-border bg-background">
         {/* 顶部标题栏状态 */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-5 py-3 bg-card/30">
+        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-2.5 bg-card/30">
           <div className="flex items-center gap-2.5">
             <h1 className="text-sm font-semibold text-foreground">{t("home.taskSectionTitle")}</h1>
             <Badge
@@ -350,8 +350,8 @@ export function HomePage() {
         </div>
 
         {/* 任务卡片滚动流 */}
-        <ScrollArea className="min-h-0 flex-1 px-4 py-3">
-          <div className="flex flex-col gap-2.5 pb-2">
+        <ScrollArea className="min-h-0 flex-1 px-3.5 py-2.5">
+          <div className="flex flex-col gap-2 pb-2">
             {/* 1. 窗口设置 (常开，无勾选框，纯配置入口) */}
             <FixedTaskCard
               id="set_windows"
