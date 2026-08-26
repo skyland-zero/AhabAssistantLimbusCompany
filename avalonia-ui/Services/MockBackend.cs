@@ -280,7 +280,7 @@ public sealed class MockBackend
             _execTimer?.Stop();
             _execTimer = null;
             if (_executionState != "running") return;
-            Log("info", $"✓ 完成：{cur.Name}");
+            Log("info", $"完成：{cur.Name}");
             _pendingSteps.Dequeue();
             RunNextStep();
         };
@@ -326,7 +326,7 @@ public sealed class MockBackend
             _execTimer?.Stop();
             _execTimer = null;
             if (_executionState != "running") return;
-            Log("info", $"✓ 完成：{cur.Name}");
+            Log("info", $"完成：{cur.Name}");
             _pendingSteps.Dequeue();
             RunNextStep();
         };

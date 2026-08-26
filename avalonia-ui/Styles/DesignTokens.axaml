@@ -1,0 +1,51 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Web UI 的语义令牌映射。
+        这些是初始值，运行时由 ThemeService 根据明暗模式和强调色覆盖。
+        颜色值对应 ui/src/index.css 中的 OKLCH 令牌的 sRGB 表示。
+    -->
+    <SolidColorBrush x:Key="BgBrush">#0A0707</SolidColorBrush>
+    <SolidColorBrush x:Key="FgBrush">#FAFAFA</SolidColorBrush>
+    <SolidColorBrush x:Key="CardBrush">#181515</SolidColorBrush>
+    <SolidColorBrush x:Key="CardFgBrush">#FAFAFA</SolidColorBrush>
+    <SolidColorBrush x:Key="PopoverBrush">#262626</SolidColorBrush>
+    <SolidColorBrush x:Key="PopoverFgBrush">#FAFAFA</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryBrush">#E5E5E5</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryFgBrush">#171717</SolidColorBrush>
+    <SolidColorBrush x:Key="SecondaryBrush">#262626</SolidColorBrush>
+    <SolidColorBrush x:Key="SecondaryFgBrush">#FAFAFA</SolidColorBrush>
+    <SolidColorBrush x:Key="MutedBrush">#262626</SolidColorBrush>
+    <SolidColorBrush x:Key="MutedFgBrush">#A1A1A1</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentBrush">#404040</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentFgBrush">#FAFAFA</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderBrush">#00000000</SolidColorBrush>
+    <SolidColorBrush x:Key="InputBrush">#26FFFFFF</SolidColorBrush>
+    <SolidColorBrush x:Key="InputBorderBrush">#454545</SolidColorBrush>
+    <SolidColorBrush x:Key="RingBrush">#737373</SolidColorBrush>
+    <SolidColorBrush x:Key="DestructiveBrush">#FF6467</SolidColorBrush>
+    <SolidColorBrush x:Key="DestructiveFgBrush">#FFFFFF</SolidColorBrush>
+
+    <!-- 业务状态色 -->
+    <SolidColorBrush x:Key="SuccessBrush">#4CDB7C</SolidColorBrush>
+    <SolidColorBrush x:Key="SuccessLightBrush">#0C341E</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#EAB312</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningLightBrush">#432A08</SolidColorBrush>
+    <SolidColorBrush x:Key="SubtleSurfaceBrush">#1F262626</SolidColorBrush>
+    <SolidColorBrush x:Key="SubtleBorderBrush">#40737373</SolidColorBrush>
+    <SolidColorBrush x:Key="BrandSurfaceBrush">#3A1E24</SolidColorBrush>
+    <SolidColorBrush x:Key="DestructiveLightBrush">#3B1518</SolidColorBrush>
+
+    <!-- 强调色：默认赤红，运行时由 ThemeService 覆盖 -->
+    <SolidColorBrush x:Key="BrandBrush">#E05A72</SolidColorBrush>
+    <SolidColorBrush x:Key="BrandHoverBrush">#C8354F</SolidColorBrush>
+    <SolidColorBrush x:Key="BrandLightBrush">#3A1E24</SolidColorBrush>
+    <SolidColorBrush x:Key="BrandFgBrush">#FFFFFF</SolidColorBrush>
+
+    <!-- 应用壳层资源 -->
+    <SolidColorBrush x:Key="TabBarBrush">#4D181515</SolidColorBrush>
+    <SolidColorBrush x:Key="OverlayBrush">#80000000</SolidColorBrush>
+
+    <FontFamily x:Key="UiFont">Segoe UI, Microsoft YaHei UI, Microsoft YaHei, sans-serif</FontFamily>
+    <FontFamily x:Key="MonoFont">Consolas, Cascadia Mono, monospace</FontFamily>
+</ResourceDictionary>

@@ -95,10 +95,10 @@ public class LogLevelBrush : IValueConverter
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
-public class LogLevelText : IValueConverter
+public class LogLevelIcon : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value switch { "error" => "⚠ ", "warn" => "! ", _ => "· " };
+        => value switch { "error" => "circle-x", "warn" => "triangle-alert", _ => "info" };
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }

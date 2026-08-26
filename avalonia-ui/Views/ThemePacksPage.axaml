@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
              xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
              xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
              x:Class="AhabAssistant.Avalonia.Views.ThemePacksPage"
@@ -12,7 +13,7 @@
         <!-- 顶部操作栏 -->
         <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource InputBorderBrush}" Padding="20,10">
             <Border.Background>
-                <SolidColorBrush Color="#30FFFFFF" />
+                <DynamicResource ResourceKey="TabBarBrush" />
             </Border.Background>
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
@@ -23,7 +24,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                     <Button Classes="app-btn outline" Height="28" Padding="10,0" Command="{Binding ToggleSortCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="5">
-                            <TextBlock Text="⇅" FontSize="11" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="arrow-up-down" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="按权重排序" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -31,7 +32,7 @@
                     <Button Classes="app-btn outline" Height="28" Padding="10,0" Content="全部停用" Command="{Binding DisableAllCommand}" />
                     <Button Classes="app-btn" Height="28" Padding="10,0" Foreground="{DynamicResource MutedFgBrush}" Command="{Binding ResetWeightsCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="5">
-                            <TextBlock Text="↺" FontSize="11" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="rotate-ccw" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="恢复默认权重" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -42,8 +43,11 @@
         <!-- 困难镜牢提示条 -->
         <Border Grid.Row="1" Background="{DynamicResource WarningLightBrush}" Padding="24,8"
                 IsVisible="{Binding HardMirrorBannerVisible}">
-            <TextBlock Text="⚠ 困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重" FontSize="12"
-                       Foreground="{DynamicResource WarningBrush}" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <controls:AppIcon Icon="triangle-alert" Width="15" Height="15" Stroke="{DynamicResource WarningBrush}" />
+                <TextBlock Text="困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重" FontSize="12"
+                           Foreground="{DynamicResource WarningBrush}" />
+            </StackPanel>
         </Border>
 
         <!-- 主题包列表 -->

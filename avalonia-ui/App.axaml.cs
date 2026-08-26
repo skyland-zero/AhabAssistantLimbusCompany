@@ -85,7 +85,7 @@ public partial class App : Application
             if (prefs == null) return;
             ThemeMode = prefs.ThemeMode is "light" or "dark" or "system" ? prefs.ThemeMode : "system";
             AccentId = prefs.AccentId;
-            RightPanelWidth = Math.Clamp(prefs.RightPanelWidth, 280, 800);
+            RightPanelWidth = Math.Clamp(prefs.RightPanelWidth, 240, 800);
             RightPanelCollapsed = prefs.RightPanelCollapsed;
             Language = prefs.Language;
         }

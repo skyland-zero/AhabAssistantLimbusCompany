@@ -94,7 +94,7 @@ public partial class HomePage : UserControl
             return;
         }
         var maxWidth = Math.Min(800, Bounds.Width - 460 - 4);
-        Vm.RightPanelWidth = Math.Max(280, Math.Min(maxWidth, newWidth));
+        Vm.RightPanelWidth = Math.Max(240, Math.Min(maxWidth, newWidth));
         Vm.RightPanelCollapsed = false;
     }
 

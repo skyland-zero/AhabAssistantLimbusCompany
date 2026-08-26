@@ -1,9 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
              xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
              xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
              x:Class="AhabAssistant.Avalonia.Views.TeamsPage"
-             x:DataType="vm:TeamsViewModel">
+             x:DataType="vm:TeamsViewModel"
+             SizeChanged="OnSizeChanged">
     <UserControl.Resources>
         <c:NullToVis x:Key="NullVis" />
         <c:SchemeIcon x:Key="SchemeIcon" />
@@ -12,10 +14,7 @@
 
     <Grid RowDefinitions="Auto,*">
         <!-- 顶部栏：用途分类切换 Tab + 新建队伍按钮 -->
-        <Border Grid.Row="0" Padding="16,8">
-            <Border.Background>
-                <SolidColorBrush Color="#30FFFFFF" />
-            </Border.Background>
+        <Border Grid.Row="0" Background="{DynamicResource TabBarBrush}" Padding="16,8">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                     <Button Classes="app-btn seg" Height="28" Click="TabClick" Tag="all"
@@ -43,9 +42,9 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
-                <Button Grid.Column="1" Classes="brand" Height="32" Padding="12,0" Command="{Binding NewTeamCommand}">
+                <Button Grid.Column="1" Classes="app-btn brand" Height="32" Padding="12,0" Command="{Binding NewTeamCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="＋" VerticalAlignment="Center" />
+                        <controls:AppIcon Icon="plus" Width="14" Height="14" Stroke="{DynamicResource BrandFgBrush}" VerticalAlignment="Center" />
                         <TextBlock Text="新建队伍" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -54,7 +53,7 @@
 
         <!-- 队伍卡片列表 -->
         <ScrollViewer Grid.Row="1" Padding="16,12">
-            <ItemsControl ItemsSource="{Binding FilteredCards}">
+            <ItemsControl Name="TeamItems" ItemsSource="{Binding FilteredCards}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel Orientation="Horizontal" ItemWidth="480" />
@@ -82,8 +81,11 @@
                                     <!-- 元信息行 -->
                                     <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
                                         <TextBlock Text="{Binding MemberCountText}" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" Margin="0,0,8,3" />
-                                        <TextBlock Text="✨ 星光已配" FontSize="11" FontFamily="{StaticResource MonoFont}" Margin="0,0,8,3"
-                                                   Foreground="#F59E0B" IsVisible="{Binding HasStarlight}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,8,3" IsVisible="{Binding HasStarlight}">
+                                            <controls:AppIcon Icon="sparkles" Width="13" Height="13" Stroke="{DynamicResource WarningBrush}" />
+                                            <TextBlock Text="星光已配" FontSize="11" FontFamily="{StaticResource MonoFont}"
+                                                       Foreground="{DynamicResource WarningBrush}" />
+                                        </StackPanel>
                                         <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3" IsVisible="{Binding HasSecondSystem}">
                                             <TextBlock Text="第二体系" FontSize="10" />
                                         </Border>
@@ -124,12 +126,16 @@
                                     </ItemsControl>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
-                                    <Button Classes="app-btn icon-btn" Content="✎" ToolTip.Tip="编辑队伍"
+                                    <Button Classes="app-btn icon-btn" ToolTip.Tip="编辑队伍"
                                             Command="{Binding $parent[UserControl].((vm:TeamsViewModel)DataContext).EditTeamCommand}"
-                                            CommandParameter="{Binding Team}" />
-                                    <Button Classes="app-btn icon-btn danger-ghost" Content="🗑" ToolTip.Tip="删除"
+                                            CommandParameter="{Binding Team}">
+                                        <controls:AppIcon Icon="pencil" Width="15" Height="15" />
+                                    </Button>
+                                    <Button Classes="app-btn icon-btn danger-ghost" ToolTip.Tip="删除"
                                             Command="{Binding $parent[UserControl].((vm:TeamsViewModel)DataContext).AskDeleteCommand}"
-                                            CommandParameter="{Binding Team}" />
+                                            CommandParameter="{Binding Team}">
+                                        <controls:AppIcon Icon="trash-2" Width="15" Height="15" Stroke="{DynamicResource DestructiveBrush}" />
+                                    </Button>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -141,7 +147,7 @@
         <!-- 空状态（对应 React EmptyState） -->
         <StackPanel Grid.Row="1" IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center"
                     VerticalAlignment="Center" Spacing="8" Margin="24">
-            <TextBlock Text="👥" FontSize="32" HorizontalAlignment="Center" Opacity="0.45" />
+            <controls:AppIcon Icon="users-round" Width="36" Height="36" Stroke="{DynamicResource MutedFgBrush}" HorizontalAlignment="Center" Opacity="0.65" />
             <TextBlock Text="{Binding EmptyTitle}" FontSize="14" FontWeight="SemiBold"
                        HorizontalAlignment="Center" />
             <TextBlock Text="{Binding EmptyDescription}" FontSize="11"
@@ -149,17 +155,26 @@
         </StackPanel>
 
         <!-- 删除确认弹窗 -->
-        <Border Grid.Row="1" Background="#80000000" IsVisible="{Binding DeleteTarget, Converter={StaticResource NullVis}}">
-            <Border Classes="card" Width="400" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="删除队伍" FontSize="15" FontWeight="SemiBold" />
-                    <TextBlock FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextWrapping="Wrap">
+        <Border Name="DeleteOverlay" Grid.RowSpan="2" Background="{DynamicResource OverlayBrush}"
+                Focusable="True" KeyDown="OnDeleteOverlayKeyDown" PointerPressed="OnDeleteOverlayPointerPressed"
+                IsVisible="{Binding DeleteTarget, Converter={StaticResource NullVis}}">
+            <Border Classes="dialog-surface" MaxWidth="400" Margin="16"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                <StackPanel Spacing="16">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="删除队伍" FontSize="18" FontWeight="SemiBold" />
+                        <Button Grid.Column="1" Classes="app-btn dialog-close"
+                                ToolTip.Tip="关闭" Command="{Binding CancelDeleteCommand}">
+                            <controls:AppIcon Icon="x" Width="13" Height="13" Stroke="{DynamicResource MutedFgBrush}" />
+                        </Button>
+                    </Grid>
+                    <TextBlock FontSize="14" Foreground="{DynamicResource MutedFgBrush}" TextWrapping="Wrap">
                         <Run Text="确定删除队伍“" /><Run Text="{Binding DeleteTarget.Name, Mode=OneWay}" /><Run Text="”吗？此操作不可撤销。" />
                     </TextBlock>
-                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
-                        <Button Grid.Column="1" Classes="app-btn outline" Height="30" Content="取消" Margin="0,0,8,0"
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <Button Grid.Column="1" Classes="app-btn outline" Height="32" FontSize="12" Content="取消" Margin="0,0,8,0"
                                 Command="{Binding CancelDeleteCommand}" />
-                        <Button Grid.Column="2" Classes="destructive" Height="30" Padding="14,0" Content="删除"
+                        <Button Grid.Column="2" Classes="app-btn destructive" Height="32" FontSize="12" Padding="12,0" Content="删除"
                                 Command="{Binding ConfirmDeleteCommand}" />
                     </Grid>
                 </StackPanel>

@@ -2,6 +2,7 @@ using System.Linq;
 using AhabAssistant.Avalonia.Models;
 using AhabAssistant.Avalonia.Services;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 
 namespace AhabAssistant.Avalonia.Views;
@@ -53,4 +54,15 @@ public partial class AfterCompletionWindow : Window
     private void OnApplyOnce(object? sender, RoutedEventArgs e) => CloseWith(false);
 
     private void OnSaveDefault(object? sender, RoutedEventArgs e) => CloseWith(true);
+
+    private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close(false);
+        }
+    }
 }

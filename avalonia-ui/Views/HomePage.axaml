@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
              xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
              xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
              x:Class="AhabAssistant.Avalonia.Views.HomePage"
@@ -13,7 +14,7 @@
         <c:HighlightFg x:Key="HlFg" />
         <c:ConnectionStatusBrush x:Key="ConnBrush" />
         <c:LogLevelBrush x:Key="LogBrush" />
-        <c:LogLevelText x:Key="LogPrefix" />
+        <c:LogLevelIcon x:Key="LogIcon" />
         <c:MirrorPercent x:Key="MirrorPercent" />
         <c:TaskExecutingBrush x:Key="TaskBrush" />
         <c:StringEqualsConv x:Key="StrEq" />
@@ -30,10 +31,7 @@
         <!-- ==================== 左侧：固定任务卡片流 + 底部工具栏 ==================== -->
         <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
             <!-- 顶部标题栏状态 -->
-            <Border Grid.Row="0" Padding="14,8">
-                <Border.Background>
-                    <SolidColorBrush Color="#30FFFFFF" />
-                </Border.Background>
+                <Border Grid.Row="0" Background="{DynamicResource TabBarBrush}" Padding="14,8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Text="自动化任务" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <Border Classes="badge" Padding="8,2" CornerRadius="10">
@@ -61,7 +59,7 @@
                                                Foreground="{DynamicResource MutedFgBrush}" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="🎛" FontSize="13" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
+                                    <controls:AppIcon Icon="settings" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="窗口设置" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding WindowTags}"
@@ -77,11 +75,11 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="3" Text="⌄" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             </Grid>
 
                             <!-- 展开内容 -->
-                            <Border Background="#20F4F3F3" Padding="12,10,12,12" IsVisible="{Binding SetWindowsExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding SetWindowsExpanded}" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="SetWindowsTabClick"
@@ -170,7 +168,7 @@
                                     <ToggleSwitch Classes="compact" IsChecked="{Binding Config.EnabledTasks.DailyTask}" IsCheckedChanged="ConfigSwitchToggled" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="📅" FontSize="13" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
+                                    <controls:AppIcon Icon="calendar-days" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="日常任务" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding DailyTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
@@ -185,10 +183,10 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="3" Text="⌄" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             </Grid>
 
-                            <Border Background="#20F4F3F3" Padding="12,10,12,12" IsVisible="{Binding DailyExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding DailyExpanded}" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="DailyTabClick"
@@ -205,10 +203,14 @@
                                                 <TextBlock Text="每日采光·经验采集副本执行次数" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="−" Command="{Binding StepCommand}" CommandParameter="exp:-1" IsEnabled="{Binding ExpMinusEnabled}" />
+                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="exp:-1" IsEnabled="{Binding ExpMinusEnabled}">
+                                                    <controls:AppIcon Icon="minus" Width="14" Height="14" />
+                                                </Button>
                                                 <TextBlock Text="{Binding Config.DailyTask.SetExpCount, Mode=OneWay}" Width="32" TextAlignment="Center"
                                                            FontFamily="{StaticResource MonoFont}" FontWeight="Medium" VerticalAlignment="Center" />
-                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="＋" Command="{Binding StepCommand}" CommandParameter="exp:+1" IsEnabled="{Binding ExpPlusEnabled}" />
+                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="exp:+1" IsEnabled="{Binding ExpPlusEnabled}">
+                                                    <controls:AppIcon Icon="plus" Width="14" Height="14" />
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                         <Grid ColumnDefinitions="*,Auto">
@@ -217,10 +219,14 @@
                                                 <TextBlock Text="每日采光·纽带采集副本执行次数" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="−" Command="{Binding StepCommand}" CommandParameter="thread:-1" IsEnabled="{Binding ThreadMinusEnabled}" />
+                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="thread:-1" IsEnabled="{Binding ThreadMinusEnabled}">
+                                                    <controls:AppIcon Icon="minus" Width="14" Height="14" />
+                                                </Button>
                                                 <TextBlock Text="{Binding Config.DailyTask.SetThreadCount, Mode=OneWay}" Width="32" TextAlignment="Center"
                                                            FontFamily="{StaticResource MonoFont}" FontWeight="Medium" VerticalAlignment="Center" />
-                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="＋" Command="{Binding StepCommand}" CommandParameter="thread:+1" IsEnabled="{Binding ThreadPlusEnabled}" />
+                                                <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="thread:+1" IsEnabled="{Binding ThreadPlusEnabled}">
+                                                    <controls:AppIcon Icon="plus" Width="14" Height="14" />
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                         <Grid ColumnDefinitions="*,Auto">
@@ -230,7 +236,7 @@
                                             </StackPanel>
                                             <ComboBox Grid.Column="1" Classes="app-select" Width="140" ItemsSource="{Binding TeamNames}" SelectedIndex="{Binding DailyTeamIndex}" />
                                         </Grid>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="10">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="10">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="1">
                                                     <TextBlock Text="连续作战模式" FontSize="12" FontWeight="Medium" />
@@ -238,10 +244,14 @@
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                                                     <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding Config.DailyTask.UseContinuousCombat}">
-                                                        <Button Classes="app-btn outline icon-btn" Width="24" Height="24" FontSize="11" Content="−" Command="{Binding StepCommand}" CommandParameter="cont:-1" IsEnabled="{Binding ContMinusEnabled}" />
+                                                        <Button Classes="app-btn outline icon-btn" Width="24" Height="24" FontSize="11" Command="{Binding StepCommand}" CommandParameter="cont:-1" IsEnabled="{Binding ContMinusEnabled}">
+                                                            <controls:AppIcon Icon="minus" Width="12" Height="12" />
+                                                        </Button>
                                                         <TextBlock Text="{Binding Config.DailyTask.UseContinuousCombatSelect, Mode=OneWay}" Width="22" TextAlignment="Center"
                                                                    FontFamily="{StaticResource MonoFont}" FontSize="11" VerticalAlignment="Center" />
-                                                        <Button Classes="app-btn outline icon-btn" Width="24" Height="24" FontSize="11" Content="＋" Command="{Binding StepCommand}" CommandParameter="cont:+1" IsEnabled="{Binding ContPlusEnabled}" />
+                                                        <Button Classes="app-btn outline icon-btn" Width="24" Height="24" FontSize="11" Command="{Binding StepCommand}" CommandParameter="cont:+1" IsEnabled="{Binding ContPlusEnabled}">
+                                                            <controls:AppIcon Icon="plus" Width="12" Height="12" />
+                                                        </Button>
                                                     </StackPanel>
                                                     <ToggleSwitch Classes="compact" IsChecked="{Binding Config.DailyTask.UseContinuousCombat}" IsCheckedChanged="ConfigSwitchToggled" />
                                                 </StackPanel>
@@ -251,7 +261,7 @@
 
                                     <!-- 高级：针对性配队 -->
                                     <StackPanel Spacing="16" IsVisible="{Binding DailyTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}">
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="10"><StackPanel Spacing="10">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="10"><StackPanel Spacing="10">
                                             <StackPanel>
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <StackPanel Grid.Column="0" Spacing="1">
@@ -283,7 +293,7 @@
                                             </StackPanel>
                                         </Border>
 
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="10"><StackPanel Spacing="10">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="10"><StackPanel Spacing="10">
                                             <StackPanel>
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <StackPanel Grid.Column="0" Spacing="1">
@@ -341,7 +351,7 @@
                                     <ToggleSwitch Classes="compact" IsChecked="{Binding Config.EnabledTasks.GetReward}" IsCheckedChanged="ConfigSwitchToggled" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="🎁" FontSize="13" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
+                                    <controls:AppIcon Icon="gift" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="领取奖励" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding RewardTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
@@ -356,10 +366,10 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="3" Text="⌄" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             </Grid>
 
-                            <Border Background="#20F4F3F3" Padding="12,12" IsVisible="{Binding RewardExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,12" IsVisible="{Binding RewardExpanded}" IsEnabled="{Binding !IsBusy}">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <StackPanel Grid.Column="0" Spacing="1">
                                         <TextBlock Text="领取奖励模式" FontSize="12" FontWeight="Medium" />
@@ -384,7 +394,7 @@
                                     <ToggleSwitch Classes="compact" IsChecked="{Binding Config.EnabledTasks.BuyEnkephalin}" IsCheckedChanged="ConfigSwitchToggled" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="⚡" FontSize="13" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
+                                    <controls:AppIcon Icon="zap" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="狂气换体" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding EnkephalinTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
@@ -399,10 +409,10 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="3" Text="⌄" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             </Grid>
 
-                            <Border Background="#20F4F3F3" Padding="12,10,12,12" IsVisible="{Binding EnkephalinExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding EnkephalinExpanded}" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="EnkephalinTabClick"
@@ -417,10 +427,14 @@
                                             <TextBlock Text="消耗狂气兑换脑啡肽的次数 (0-10)" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                            <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="−" Command="{Binding StepCommand}" CommandParameter="buy:-1" IsEnabled="{Binding BuyMinusEnabled}" />
+                                            <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="buy:-1" IsEnabled="{Binding BuyMinusEnabled}">
+                                                <controls:AppIcon Icon="minus" Width="14" Height="14" />
+                                            </Button>
                                             <TextBlock Text="{Binding Config.BuyEnkephalin.SetLunacyToEnkephalin, Mode=OneWay}" Width="32" TextAlignment="Center"
                                                        FontFamily="{StaticResource MonoFont}" FontWeight="Medium" VerticalAlignment="Center" />
-                                            <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="＋" Command="{Binding StepCommand}" CommandParameter="buy:+1" IsEnabled="{Binding BuyPlusEnabled}" />
+                                            <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="buy:+1" IsEnabled="{Binding BuyPlusEnabled}">
+                                                <controls:AppIcon Icon="plus" Width="14" Height="14" />
+                                            </Button>
                                         </StackPanel>
                                     </Grid>
 
@@ -454,7 +468,7 @@
                                     <ToggleSwitch Classes="compact" IsChecked="{Binding Config.EnabledTasks.Mirror}" IsCheckedChanged="ConfigSwitchToggled" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="🧭" FontSize="13" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
+                                    <controls:AppIcon Icon="compass" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="坐牢设置 (镜牢)" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding MirrorTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
@@ -469,10 +483,10 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="3" Text="⌄" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             </Grid>
 
-                            <Border Background="#20F4F3F3" Padding="12,10,12,12" IsVisible="{Binding MirrorExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding MirrorExpanded}" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="MirrorTabClick"
@@ -482,7 +496,7 @@
                                     </StackPanel>
 
                                     <!-- 运行中进度条 -->
-                                    <Border CornerRadius="6" BorderThickness="1" BorderBrush="#80E05A72" Padding="10"
+                                    <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource BrandBrush}" Padding="10"
                                             IsVisible="{Binding MirrorProgress, Converter={StaticResource NullVis}}"><StackPanel Spacing="6">
                                         <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
                                             <TextBlock Grid.Column="0" FontSize="12" Foreground="{DynamicResource BrandBrush}" FontWeight="Medium">
@@ -511,10 +525,14 @@
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                                 <StackPanel Orientation="Horizontal" Spacing="6"
                                                             IsVisible="{Binding Config.Mirror.InfiniteDungeons, Converter={StaticResource BoolVisInv}}">
-                                                    <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="−" Command="{Binding StepCommand}" CommandParameter="mirror:-1" IsEnabled="{Binding MirrorMinusEnabled}" />
+                                                    <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="mirror:-1" IsEnabled="{Binding MirrorMinusEnabled}">
+                                                        <controls:AppIcon Icon="minus" Width="14" Height="14" />
+                                                    </Button>
                                                     <TextBlock Text="{Binding Config.Mirror.SetMirrorCount, Mode=OneWay}" Width="32" TextAlignment="Center"
                                                                FontFamily="{StaticResource MonoFont}" FontWeight="Medium" VerticalAlignment="Center" />
-                                                    <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Content="＋" Command="{Binding StepCommand}" CommandParameter="mirror:+1" IsEnabled="{Binding MirrorPlusEnabled}" />
+                                                    <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="mirror:+1" IsEnabled="{Binding MirrorPlusEnabled}">
+                                                        <controls:AppIcon Icon="plus" Width="14" Height="14" />
+                                                    </Button>
                                                 </StackPanel>
                                                 <Border Classes="badge" Padding="8,3"
                                                         IsVisible="{Binding Config.Mirror.InfiniteDungeons}">
@@ -541,7 +559,7 @@
                                     <!-- 高级：10 个开关网格 -->
                                     <UniformGrid Columns="2" Rows="5" IsVisible="{Binding MirrorTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}">
                                         <!-- 每格由代码后置绑定，直接写死 10 个 -->
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,6,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,6,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="不使用每周加成" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -550,7 +568,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.NoWeeklyBonuses}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,0,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,0,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="只打三层" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -559,7 +577,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.Floor3Exit}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,6,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,6,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="保存困牢奖励" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -568,7 +586,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.SaveRewards}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,0,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,0,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="困牢单次加成" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -577,7 +595,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.HardMirrorSingleBonuses}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,6,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,6,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="第5层选活动包" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -586,7 +604,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.SelectEventPack}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,0,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,0,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="第5层跳过活动包" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -595,7 +613,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.SkipEventPack}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,6,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,6,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="再次领取奖励" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -604,7 +622,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.ReClaimRewards}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,0,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,0,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="不跳过白棉花" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -613,7 +631,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.NotSkipWhitegossypium}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,6,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,6,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="战斗直到全灭" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -622,7 +640,7 @@
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.FightToLastMan}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
                                         </Border>
-                                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="#40888888" Background="#20F4F3F3" Padding="8" Margin="0,0,0,6">
+                                        <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,0,6">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="键盘寻路导航" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
@@ -645,7 +663,7 @@
                                 <ToggleSwitch Classes="compact" IsChecked="{Binding Config.EnabledTasks.ResonateWithAhab}" IsCheckedChanged="ConfigSwitchToggled" />
                             </Border>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="📻" FontSize="13" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
+                                <controls:AppIcon Icon="radio" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
                                 <TextBlock Text="亚哈共鸣" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
                             </StackPanel>
                             <ItemsControl Grid.Column="2" ItemsSource="{Binding ResonateTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
@@ -670,13 +688,23 @@
             <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource InputBorderBrush}"
                     Background="{DynamicResource CardBrush}" Padding="12" Margin="0,6,0,0">
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" VerticalAlignment="Center">
-                    <Button Grid.Column="0" Classes="app-btn outline" Height="32" Content="☑ 全选" Command="{Binding SelectAllCommand}" IsEnabled="{Binding !IsBusy}" Margin="0,0,8,0" />
-                    <Button Grid.Column="1" Classes="app-btn outline" Height="32" Content="↺ 清空" Foreground="{DynamicResource MutedFgBrush}" Command="{Binding ClearAllCommand}" IsEnabled="{Binding !IsBusy}" />
+                    <Button Grid.Column="0" Classes="app-btn outline" Height="32" Command="{Binding SelectAllCommand}" IsEnabled="{Binding !IsBusy}" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <controls:AppIcon Icon="list-checks" Width="14" Height="14" />
+                            <TextBlock Text="全选" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Classes="app-btn outline" Height="32" Foreground="{DynamicResource MutedFgBrush}" Command="{Binding ClearAllCommand}" IsEnabled="{Binding !IsBusy}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <controls:AppIcon Icon="rotate-ccw" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" />
+                            <TextBlock Text="清空" />
+                        </StackPanel>
+                    </Button>
                     <Rectangle Grid.Column="2" Width="1" Height="16" Fill="{DynamicResource MutedFgBrush}" Opacity="0.35" Margin="8,0" />
                     <Button Grid.Column="3" Classes="app-btn" Height="32" HorizontalContentAlignment="Left"
                             Command="{Binding OpenAfterCompletionCommand}" ToolTip.Tip="点击配置所有任务执行完成后的收尾与电源动作">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="⚙" Foreground="{DynamicResource BrandBrush}" FontSize="12" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="settings" Width="14" Height="14" Stroke="{DynamicResource BrandBrush}" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding AfterSummary}" FontSize="12" Foreground="{DynamicResource MutedFgBrush}"
                                        MaxWidth="280" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         </StackPanel>
@@ -685,27 +713,27 @@
                         <Button Classes="app-btn outline" Height="36" Padding="12,0"
                                 IsVisible="{Binding IsBusy}" Command="{Binding PauseResumeCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="▶" FontSize="11" VerticalAlignment="Center"
-                                           IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=paused}" />
-                                <TextBlock Text="⏸" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource WarningBrush}"
-                                           IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=running}" />
+                                <controls:AppIcon Icon="play" Width="14" Height="14" VerticalAlignment="Center"
+                                                  IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=paused}" />
+                                <controls:AppIcon Icon="pause" Width="14" Height="14" VerticalAlignment="Center" Stroke="{DynamicResource WarningBrush}"
+                                                  IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=running}" />
                                 <TextBlock Text="{Binding PauseResumeText}" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button Classes="brand destructive" Height="36" Padding="20,0"
+                        <Button Classes="app-btn brand destructive" Height="36" Padding="20,0"
                                 IsVisible="{Binding IsBusy}" Command="{Binding StopCommand}"
-                                Background="{DynamicResource DestructiveBrush}" Foreground="White">
+                                 Background="{DynamicResource DestructiveBrush}" Foreground="{DynamicResource DestructiveFgBrush}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="■" FontSize="13" VerticalAlignment="Center" />
+                                <controls:AppIcon Icon="circle-stop" Width="15" Height="15" Stroke="{DynamicResource DestructiveFgBrush}" VerticalAlignment="Center" />
                                 <TextBlock Text="Stop!" FontWeight="Bold" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button Classes="brand" Height="36" Padding="20,0"
+                        <Button Classes="app-btn brand" Height="36" Padding="20,0"
                                 IsVisible="{Binding IsBusy, Converter={StaticResource BoolVisInv}}" Command="{Binding StartCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="▶" FontSize="13" VerticalAlignment="Center" />
+                                <controls:AppIcon Icon="play" Width="15" Height="15" Stroke="{DynamicResource BrandFgBrush}" VerticalAlignment="Center" />
                                 <TextBlock Text="Link Start!" FontWeight="Bold" VerticalAlignment="Center" />
-                                <Border Background="#30000000" CornerRadius="3" Padding="4,1">
+                                <Border Background="{DynamicResource InputBrush}" CornerRadius="3" Padding="4,1">
                                     <TextBlock Text="F10" FontFamily="{StaticResource MonoFont}" FontSize="10" VerticalAlignment="Center" />
                                 </Border>
                             </StackPanel>
@@ -729,7 +757,7 @@
                 <StackPanel>
                     <Grid ColumnDefinitions="*,Auto" Margin="12,8" Height="26">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="🖥" FontSize="12" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="monitor" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             <TextBlock Text="设备连接" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                         </StackPanel>
                         <Border Grid.Column="1" Classes="badge" Padding="6,2" Background="{Binding ConnectionStatus, Converter={StaticResource ConnBrush}}">
@@ -744,11 +772,15 @@
                                   ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
                                   HorizontalAlignment="Stretch" Width="170"
                                   SelectionChanged="DeviceSelectionChanged" />
-                        <Button Classes="app-btn icon-btn" Content="🔄" FontSize="11" Command="{Binding RescanDevicesCommand}"
-                                IsEnabled="{Binding !Scanning}" ToolTip.Tip="重新扫描" />
-                        <Button Classes="app-btn icon-btn" Content="✕" FontSize="11" Command="{Binding DisconnectCommand}"
+                        <Button Classes="app-btn icon-btn" Command="{Binding RescanDevicesCommand}"
+                                IsEnabled="{Binding !Scanning}" ToolTip.Tip="重新扫描">
+                            <controls:AppIcon Icon="refresh-cw" Width="14" Height="14" />
+                        </Button>
+                        <Button Classes="app-btn icon-btn" Command="{Binding DisconnectCommand}"
                                 IsVisible="{Binding ConnectionStatus, Converter={StaticResource StrEq}, ConverterParameter=connected}"
-                                ToolTip.Tip="断开" />
+                                ToolTip.Tip="断开">
+                            <controls:AppIcon Icon="x" Width="14" Height="14" />
+                        </Button>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -757,13 +789,13 @@
             <Border Grid.Row="1" Classes="card" Margin="0,0,0,8">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,7">
-                        <TextBlock Text="📺" FontSize="12" VerticalAlignment="Center" />
+                        <controls:AppIcon Icon="monitor" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                         <TextBlock Text="实时画面" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                     </StackPanel>
                     <Border Margin="10,0,10,10" Height="120" CornerRadius="6" Background="{DynamicResource BgBrush}"
-                            BorderBrush="#40888888" BorderThickness="1">
+                            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="📺" FontSize="26" Opacity="0.25" HorizontalAlignment="Center" />
+                            <controls:AppIcon Icon="monitor" Width="32" Height="32" Stroke="{DynamicResource MutedFgBrush}" Opacity="0.35" HorizontalAlignment="Center" />
                             <TextBlock Text="等待游戏窗口画面接入" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" HorizontalAlignment="Center" />
                             <TextBlock Text="16:9 · 1280×720" FontSize="10" FontFamily="{StaticResource MonoFont}"
                                        Foreground="{DynamicResource MutedFgBrush}" Opacity="0.5" HorizontalAlignment="Center" />
@@ -777,14 +809,19 @@
                 <Grid RowDefinitions="Auto,*">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="10,7" Height="24">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="📜" FontSize="12" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="file-text" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             <TextBlock Text="运行日志" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                             <Border Classes="badge" Padding="5,1" Background="{DynamicResource SecondaryBrush}">
                                 <TextBlock Text="{Binding Logs.Count, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" FontSize="10" />
                             </Border>
                         </StackPanel>
                         <Button Grid.Column="1" Classes="app-btn danger-ghost" FontSize="11" Padding="6,1" Height="22"
-                                Command="{Binding ClearLogsCommand}" Content="🗑 清空" />
+                                Command="{Binding ClearLogsCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <controls:AppIcon Icon="trash-2" Width="13" Height="13" Stroke="{DynamicResource DestructiveBrush}" />
+                                <TextBlock Text="清空" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
                     <ListBox Grid.Row="1" Name="LogsList" ItemsSource="{Binding Logs}" Margin="4,0,4,8"
                              Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -811,10 +848,13 @@
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="{Binding TimeText, Mode=OneWay}" FontFamily="{StaticResource MonoFont}"
                                                FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
-                                    <SelectableTextBlock FontFamily="{StaticResource MonoFont}" FontSize="11"
-                                                         TextWrapping="Wrap" Foreground="{Binding Level, Converter={StaticResource LogBrush}}">
-                                        <Run Text="{Binding Level, Converter={StaticResource LogPrefix}, Mode=OneWay}" /><Run Text="{Binding Message}" />
-                                    </SelectableTextBlock>
+                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                        <controls:AppIcon Icon="{Binding Level, Converter={StaticResource LogIcon}}" Width="13" Height="13"
+                                                          Stroke="{Binding Level, Converter={StaticResource LogBrush}}" VerticalAlignment="Top" />
+                                        <SelectableTextBlock FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                                             TextWrapping="Wrap" Foreground="{Binding Level, Converter={StaticResource LogBrush}}"
+                                                             Text="{Binding Message}" />
+                                    </StackPanel>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

@@ -47,7 +47,7 @@ public partial class HelpPage : UserControl
                 var heading = new Border
                 {
                     BorderThickness = new Thickness(0, 0, 0, 1),
-                    BorderBrush = new SolidColorBrush(Color.Parse("#40888888")),
+                    BorderBrush = (IBrush)global::Avalonia.Application.Current!.Resources["SubtleBorderBrush"]!,
                     Margin = new Thickness(0, 28, 0, 8),
                     Padding = new Thickness(0, 0, 0, 4),
                     Child = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold },

@@ -344,7 +344,7 @@ public static class Localization
         ["开局星光换钱"] = "Convert Starlight to Cost",
         ["开局消耗星光兑换镜牢初始经费"] = "Consume starlight for starting cost",
         ["一键全选:"] = "Set All:",
-        ["✨ 总计消耗星光:"] = "✨ Total Starlight Cost:",
+        ["总计消耗星光:"] = "Total Starlight Cost:",
         ["0 关闭"] = "0 Off",
         ["1 基础"] = "1 Base",
         ["2 增益+"] = "2 Buff+",
@@ -352,10 +352,10 @@ public static class Localization
         ["观测 E.G.O 饰品"] = "Observe E.G.O Gifts",
         ["进入镜牢时优先抓取的特定 E.G.O 饰品名称"] = "Prioritize specific E.G.O gifts when encountered",
         ["输入饰品名称并按回车添加"] = "Enter gift name and press Enter",
-        ["＋ 添加"] = "+ Add",
+        ["添加"] = "Add",
         ["队伍专属主题包权重"] = "Custom Theme Pack Weight",
         ["为此编队单独启用独立的主题卡包出现权重配置"] = "Use independent theme pack weights for this team",
-        ["⇩ 粘贴配置覆盖"] = "Paste Config Override",
+        ["粘贴配置覆盖"] = "Paste Config Override",
         ["队伍配置导入 / 导出"] = "Import / Export Configuration",
         ["队伍配置已复制到剪贴板"] = "Team config copied to clipboard",
         ["复制失败"] = "Copy failed",
@@ -436,8 +436,8 @@ public static class Localization
                     if (BindingOperations.GetBindingExpressionBase(comboItem, ContentControl.ContentProperty) == null && comboItem.Content is string comboText)
                         comboItem.Content = T(comboText);
                     break;
-                case TextBox textBox when !string.IsNullOrEmpty(textBox.Watermark):
-                    textBox.Watermark = T(textBox.Watermark!);
+                case TextBox textBox when !string.IsNullOrEmpty(textBox.PlaceholderText):
+                    textBox.PlaceholderText = T(textBox.PlaceholderText!);
                     break;
             }
 

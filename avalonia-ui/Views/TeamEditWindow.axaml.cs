@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using AhabAssistant.Avalonia.Controls;
 using AhabAssistant.Avalonia.Models;
 using AhabAssistant.Avalonia.Services;
 using AhabAssistant.Avalonia.ViewModels;
@@ -93,7 +94,7 @@ public partial class TeamEditWindow : Window
 
     private static ToggleSwitch MakeSwitch(bool initial, Action<bool> onChanged)
     {
-        var sw = new ToggleSwitch { IsChecked = initial };
+        var sw = new ToggleSwitch { Classes = { "compact" }, IsChecked = initial };
         sw.IsCheckedChanged += (_, _) => onChanged(sw.IsChecked == true);
         return sw;
     }
@@ -116,7 +117,7 @@ public partial class TeamEditWindow : Window
 
     private ComboBox MakeCombo(string[] options, int index, Action<int> onChanged, double width = 180)
     {
-        var cb = new ComboBox { MinWidth = width };
+        var cb = new ComboBox { Classes = { "app-select" }, MinWidth = width };
         foreach (var o in options) cb.Items.Add(Localization.T(o));
         cb.SelectedIndex = index;
         cb.SelectionChanged += (_, _) => onChanged(cb.SelectedIndex);
@@ -125,7 +126,14 @@ public partial class TeamEditWindow : Window
 
     private TextBox MakeInput(string text, string watermark, Action<string> onChanged, double minWidth = 160)
     {
-        var tb = new TextBox { Text = text, Watermark = watermark, MinWidth = minWidth, MinHeight = 30 };
+        var tb = new TextBox
+        {
+            Classes = { "app-input" },
+            Text = text,
+            PlaceholderText = watermark,
+            MinWidth = minWidth,
+            MinHeight = 30,
+        };
         tb.TextChanged += (_, _) => onChanged(tb.Text ?? "");
         return tb;
     }
@@ -195,6 +203,7 @@ public partial class TeamEditWindow : Window
             panel.Children.Add(Label(sys.Label));
             var btn = new Button
             {
+                Classes = { "app-btn" },
                 Content = panel,
                 Padding = new Thickness(10, 7),
                 CornerRadius = new CornerRadius(8),
@@ -287,10 +296,11 @@ public partial class TeamEditWindow : Window
 
             var btn = new Button
             {
+                Classes = { "app-btn" },
                 Content = stack,
                 Padding = new Thickness(8, 8),
                 CornerRadius = new CornerRadius(8),
-                Background = selected ? new SolidColorBrush(Color.Parse("#20E05A72")) : (IBrush)global::Avalonia.Application.Current!.Resources["CardBrush"]!,
+                Background = selected ? (IBrush)global::Avalonia.Application.Current!.Resources["BrandSurfaceBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["CardBrush"]!,
                 Margin = new Thickness(0, 0, 8, 8),
             };
             if (selected)
@@ -412,7 +422,7 @@ public partial class TeamEditWindow : Window
         {
             var idx = f;
             var ignored = idx < Mc.IgnoreShop.Count && Mc.IgnoreShop[idx];
-            var btn = new Button { Content = $"{idx + 1}F", Padding = new Thickness(12, 5), Tag = idx };
+            var btn = new Button { Classes = { "app-btn" }, Content = $"{idx + 1}F", Padding = new Thickness(12, 5), Tag = idx };
             UpdateFloorStyle(btn, ignored);
             btn.Click += (_, _) =>
             {
@@ -430,7 +440,14 @@ public partial class TeamEditWindow : Window
 
     private TextBox NumInput(int value, Action<int> set)
     {
-        var tb = new TextBox { Text = value.ToString(), Width = 64, MinHeight = 28, TextAlignment = TextAlignment.Right };
+        var tb = new TextBox
+        {
+            Classes = { "app-input" },
+            Text = value.ToString(),
+            Width = 64,
+            MinHeight = 28,
+            TextAlignment = TextAlignment.Right,
+        };
         tb.TextChanged += (_, _) => { if (int.TryParse(tb.Text, out var n)) set(Math.Clamp(n, 0, 10)); };
         return tb;
     }
@@ -438,7 +455,7 @@ public partial class TeamEditWindow : Window
     private void UpdateFloorStyle(Button btn, bool ignored)
     {
         var res = global::Avalonia.Application.Current!.Resources;
-        btn.Background = ignored ? new SolidColorBrush(Color.Parse("#30F25555")) : (IBrush)res["CardBrush"]!;
+        btn.Background = ignored ? (IBrush)res["DestructiveLightBrush"]! : (IBrush)res["CardBrush"]!;
         btn.Foreground = ignored ? (IBrush)res["DestructiveBrush"]! : (IBrush)res["MutedFgBrush"]!;
         btn.FontWeight = ignored ? FontWeight.Bold : FontWeight.Normal;
     }
@@ -447,7 +464,7 @@ public partial class TeamEditWindow : Window
     {
         var res = global::Avalonia.Application.Current!.Resources;
         border.BorderBrush = discarded ? (IBrush)res["DestructiveBrush"]! : (IBrush)res["InputBorderBrush"]!;
-        border.Background = discarded ? new SolidColorBrush(Color.Parse("#15F25555")) : (IBrush)res["CardBrush"]!;
+        border.Background = discarded ? (IBrush)res["DestructiveLightBrush"]! : (IBrush)res["CardBrush"]!;
         if (border.Child is StackPanel sp)
             foreach (var c in sp.Children)
                 if (c is TextBlock tb)
@@ -561,17 +578,28 @@ public partial class TeamEditWindow : Window
             quickBar.Children.Add(btn);
         }
         var totalCost = StarlightItems.Select((it, i) => it.Cost * Math.Max(0, Mc.OpeningBonus.ElementAtOrDefault(i))).Sum();
+        var costContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        costContent.Children.Add(new AppIcon
+        {
+            Icon = "sparkles",
+            Width = 13,
+            Height = 13,
+            Stroke = (IBrush)global::Avalonia.Application.Current!.Resources["WarningBrush"]!,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        costContent.Children.Add(new TextBlock
+        {
+            Text = $"{Localization.T("总计消耗星光:")} {totalCost}",
+            FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
+            FontSize = 11,
+            Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["WarningBrush"]!,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
         var costBadge = new Border
         {
             Classes = { "badge" },
-            Background = new SolidColorBrush(Color.Parse("#20F59E0B")),
-            Child = new TextBlock
-            {
-                Text = $"{Localization.T("✨ 总计消耗星光:")} {totalCost}",
-                FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.Parse("#F59E0B")),
-            },
+            Background = (IBrush)global::Avalonia.Application.Current!.Resources["WarningLightBrush"]!,
+            Child = costContent,
         };
         var bar = Row(quickBar, costBadge);
         root.Children.Add(Section(bar));
@@ -587,14 +615,24 @@ public partial class TeamEditWindow : Window
 
             var titleStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
             titleStack.Children.Add(Label(item.Zh, 12, weight: FontWeight.SemiBold));
-            titleStack.Children.Add(new TextBlock
+            var costText = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
+            costText.Children.Add(new AppIcon
             {
-                Text = $"({item.Cost} ★)",
+                Icon = "star",
+                Width = 11,
+                Height = 11,
+                Stroke = (IBrush)global::Avalonia.Application.Current!.Resources["WarningBrush"]!,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            costText.Children.Add(new TextBlock
+            {
+                Text = item.Cost.ToString(),
                 FontSize = 10,
                 FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
                 Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
                 VerticalAlignment = VerticalAlignment.Center,
             });
+            titleStack.Children.Add(costText);
 
             var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
             string[] segNames = { "0", "1", "2+", "3++" };
@@ -603,13 +641,14 @@ public partial class TeamEditWindow : Window
                 var l = lvl;
                 var segBtn = new Button
                 {
+                    Classes = { "app-btn" },
                     Content = segNames[l],
                     FontSize = 10,
                     FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
                     Padding = new Thickness(6, 1),
                     CornerRadius = new CornerRadius(2),
                 };
-                segBtn.Background = currentLvl == l ? new SolidColorBrush(Color.Parse("#F59E0B")) : Brushes.Transparent;
+                segBtn.Background = currentLvl == l ? (IBrush)global::Avalonia.Application.Current!.Resources["WarningBrush"]! : Brushes.Transparent;
                 segBtn.Foreground = currentLvl == l ? Brushes.White : (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!;
                 segBtn.Click += (_, _) =>
                 {
@@ -628,8 +667,8 @@ public partial class TeamEditWindow : Window
                 Margin = new Thickness(0, 0, 10, 10),
                 Width = 370,
                 BorderThickness = new Thickness(1),
-                BorderBrush = active ? new SolidColorBrush(Color.Parse("#50F59E0B")) : (IBrush)global::Avalonia.Application.Current!.Resources["InputBorderBrush"]!,
-                Background = active ? new SolidColorBrush(Color.Parse("#10F59E0B")) : (IBrush)global::Avalonia.Application.Current!.Resources["CardBrush"]!,
+                BorderBrush = active ? (IBrush)global::Avalonia.Application.Current!.Resources["WarningBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["InputBorderBrush"]!,
+                Background = active ? (IBrush)global::Avalonia.Application.Current!.Resources["WarningLightBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["CardBrush"]!,
                 Child = new StackPanel { Spacing = 5, Children = { headGrid, Muted(item.Desc, 10) } },
             };
             itemsWrap.Children.Add(card);
@@ -652,13 +691,29 @@ public partial class TeamEditWindow : Window
         if (Mc.ObserveEgoGift)
         {
             var inputRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            _observeInput = new TextBox { Watermark = "输入饰品名称并按回车添加", MinWidth = 260, MinHeight = 30 };
+            _observeInput = new TextBox
+            {
+                Classes = { "app-input" },
+                PlaceholderText = "输入饰品名称并按回车添加",
+                MinWidth = 260,
+                MinHeight = 30,
+            };
             _observeInput.KeyDown += (_, e) =>
             {
                 if (e.Key == Key.Enter) AddObserveGift();
             };
             inputRow.Children.Add(_observeInput);
-            var addBtn = new Button { Classes = { "brand" }, Height = 30, Padding = new Thickness(12, 0), Content = "＋ 添加" };
+            var addBtn = new Button { Classes = { "app-btn", "brand" }, Height = 30, Padding = new Thickness(12, 0) };
+            var addContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+            addContent.Children.Add(new AppIcon
+            {
+                Icon = "plus",
+                Width = 13,
+                Height = 13,
+                Stroke = (IBrush)global::Avalonia.Application.Current!.Resources["BrandFgBrush"]!,
+            });
+            addContent.Children.Add(new TextBlock { Text = Localization.T("添加") });
+            addBtn.Content = addContent;
             addBtn.Click += (_, _) => AddObserveGift();
             inputRow.Children.Add(addBtn);
             observe.Children.Add(inputRow);
@@ -674,7 +729,16 @@ public partial class TeamEditWindow : Window
             MakeSwitch(Mc.UseCustomThemePackWeight, v => Mc.UseCustomThemePackWeight = v))));
 
         // 导入 / 导出
-        var pasteBtn = new Button { Classes = { "app-btn", "outline" }, Height = 26, Padding = new Thickness(10, 0), Content = "⇩ 粘贴配置覆盖" };
+        var pasteBtn = new Button { Classes = { "app-btn", "outline" }, Height = 26, Padding = new Thickness(10, 0) };
+        var pasteContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+        pasteContent.Children.Add(new AppIcon
+        {
+            Icon = "clipboard-paste",
+            Width = 13,
+            Height = 13,
+        });
+        pasteContent.Children.Add(new TextBlock { Text = Localization.T("粘贴配置覆盖") });
+        pasteBtn.Content = pasteContent;
         pasteBtn.Click += OnPasteJson;
         var ioPanel = WrapVertical(null, Row(Label("队伍配置导入 / 导出"), pasteBtn));
         root.Children.Add(Section(ioPanel.Children.ToArray()));
@@ -700,8 +764,25 @@ public partial class TeamEditWindow : Window
             var g = gift;
             var chip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
             chip.Children.Add(Label(gift, 11));
-            var closeBtn = new TextBlock { Text = "✕", FontSize = 10, Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
-            closeBtn.PointerPressed += (_, _) =>
+            var closeBtn = new Button
+            {
+                Classes = { "app-btn" },
+                Width = 18,
+                Height = 18,
+                MinHeight = 18,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(4),
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                Content = new AppIcon
+                {
+                    Icon = "x",
+                    Width = 12,
+                    Height = 12,
+                    Stroke = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
+                },
+            };
+            closeBtn.Click += (_, _) =>
             {
                 Mc.ObserveEgoGiftSelected.Remove(g);
                 RebuildObserveTags();
@@ -778,7 +859,7 @@ public partial class TeamEditWindow : Window
         try
         {
             var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-            var text = clipboard != null ? await clipboard.GetTextAsync() : null;
+            var text = clipboard != null ? await clipboard.TryGetTextAsync() : null;
             if (string.IsNullOrWhiteSpace(text))
             {
                 MainWindow.Toast("剪贴板为空，导入失败", "warning");
@@ -858,6 +939,15 @@ public partial class TeamEditWindow : Window
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close(false);
+        }
+    }
 
     private void OnSave(object? sender, RoutedEventArgs e)
     {

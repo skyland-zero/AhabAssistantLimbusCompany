@@ -16,9 +16,9 @@ public partial class ToolboxViewModel : ObservableObject
 
     public ToolboxViewModel()
     {
-        Tools.Add(new ToolCardVm("infinite_battle", "🎯", Localization.T("自动战斗"), Localization.T("循环执行战斗直至手动停止"), this));
-        Tools.Add(new ToolCardVm("enkephalin", "💊", Localization.T("体力换饼"), Localization.T("自动将狂气转换为体力并合成脑啡肽模块，防止体力溢出"), this));
-        Tools.Add(new ToolCardVm("screenshot", "📷", Localization.T("辅助截图"), Localization.T("截取当前游戏窗口画面并保存到 AALC 目录"), this));
+        Tools.Add(new ToolCardVm("infinite_battle", "target", Localization.T("自动战斗"), Localization.T("循环执行战斗直至手动停止"), this));
+        Tools.Add(new ToolCardVm("enkephalin", "pill", Localization.T("体力换饼"), Localization.T("自动将狂气转换为体力并合成脑啡肽模块，防止体力溢出"), this));
+        Tools.Add(new ToolCardVm("screenshot", "camera", Localization.T("辅助截图"), Localization.T("截取当前游戏窗口画面并保存到 AALC 目录"), this));
 
         Backend.ToolStatus += s =>
         {

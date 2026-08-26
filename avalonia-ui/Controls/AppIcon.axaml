@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AhabAssistant.Avalonia.Controls.AppIcon"
+             x:Name="Root"
+             Width="16"
+             Height="16"
+             IsHitTestVisible="False"
+             Stroke="{DynamicResource FgBrush}"
+             StrokeThickness="2">
+    <Path Data="{Binding IconGeometry, ElementName=Root}"
+          Fill="Transparent"
+          Stroke="{Binding Stroke, ElementName=Root}"
+          StrokeThickness="{Binding StrokeThickness, ElementName=Root}"
+          StrokeLineCap="Round"
+          StrokeJoin="Round"
+          Stretch="Uniform" />
+</UserControl>

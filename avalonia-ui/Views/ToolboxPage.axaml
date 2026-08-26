@@ -1,9 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
              xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
              xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
              x:Class="AhabAssistant.Avalonia.Views.ToolboxPage"
-             x:DataType="vm:ToolboxViewModel">
+             x:DataType="vm:ToolboxViewModel"
+             SizeChanged="OnSizeChanged">
     <UserControl.Resources>
         <c:BoolToVis x:Key="BoolVis" />
         <c:BoolToVis x:Key="BoolVisInv" Invert="True" />
@@ -11,18 +13,18 @@
 
     <ScrollViewer Padding="24">
         <StackPanel Spacing="16">
-            <ItemsControl ItemsSource="{Binding Tools}">
+            <ItemsControl Name="ToolItems" ItemsSource="{Binding Tools}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <UniformGrid Columns="3" />
+                        <WrapPanel Orientation="Horizontal" ItemWidth="360" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:ToolCardVm">
-                        <Border Classes="card" Margin="0,0,16,16" Padding="16" MinHeight="180">
+                        <Border Classes="card" Margin="0,0,12,12" Padding="16" MinHeight="180">
                             <StackPanel Spacing="12">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="20" />
+                                    <controls:AppIcon Grid.Column="0" Icon="{Binding Icon}" Width="24" Height="24" />
                                     <Border Grid.Column="1" Classes="badge" Background="{DynamicResource SuccessLightBrush}"
                                             IsVisible="{Binding Running}">
                                         <StackPanel Orientation="Horizontal" Spacing="5">
@@ -48,26 +50,29 @@
                                         Command="{Binding $parent[UserControl].((vm:ToolboxViewModel)DataContext).TakeScreenshotCommand}"
                                         IsVisible="{Binding IsScreenshot}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <TextBlock Text="📷" VerticalAlignment="Center" /><TextBlock Text="运行" VerticalAlignment="Center" />
+                                        <controls:AppIcon Icon="camera" Width="14" Height="14" />
+                                        <TextBlock Text="运行" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
 
                                 <!-- 运行中 → 停止 -->
                                 <Button Classes="app-btn outline" Height="32" HorizontalAlignment="Stretch"
-                                        Foreground="#EF4444" BorderBrush="#80EF4444"
+                                        Foreground="{DynamicResource DestructiveBrush}" BorderBrush="{DynamicResource DestructiveBrush}"
                                         Command="{Binding RunCommand}"
                                         IsVisible="{Binding ShowStopButton}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <TextBlock Text="■" VerticalAlignment="Center" /><TextBlock Text="停止" VerticalAlignment="Center" />
+                                        <controls:AppIcon Icon="circle-stop" Width="14" Height="14" Stroke="{DynamicResource DestructiveBrush}" />
+                                        <TextBlock Text="停止" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
 
                                 <!-- 待机 → 运行 -->
-                                <Button Classes="brand" Height="32" HorizontalAlignment="Stretch"
+                                <Button Classes="app-btn brand" Height="32" HorizontalAlignment="Stretch"
                                         Command="{Binding RunCommand}"
                                         IsVisible="{Binding ShowRunButton}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <TextBlock Text="▶" VerticalAlignment="Center" /><TextBlock Text="运行" VerticalAlignment="Center" />
+                                        <controls:AppIcon Icon="play" Width="14" Height="14" Stroke="{DynamicResource BrandFgBrush}" />
+                                        <TextBlock Text="运行" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>

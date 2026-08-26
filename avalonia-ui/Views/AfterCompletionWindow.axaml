@@ -1,55 +1,68 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
         x:Class="AhabAssistant.Avalonia.Views.AfterCompletionWindow"
         Title="结束后操作"
-        Width="380" SizeToContent="Height" MaxWidth="380"
+        Width="384" SizeToContent="Height" MaxWidth="384"
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BgBrush}"
         FontFamily="{StaticResource UiFont}"
         TransparencyLevelHint="None"
-        SystemDecorations="Full">
+        WindowDecorations="None"
+        KeyDown="OnKeyDown">
 
-    <StackPanel Margin="20" Spacing="16">
-        <TextBlock Text="结束后操作" FontSize="15" FontWeight="SemiBold" />
+    <Border Classes="dialog-surface" Padding="24">
+        <Grid RowDefinitions="Auto,*">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="结束后操作" FontSize="16" FontWeight="SemiBold" />
+                <Button Grid.Column="1" Classes="app-btn dialog-close"
+                        ToolTip.Tip="关闭" Click="OnCancel">
+                    <controls:AppIcon Icon="x" Width="13" Height="13" Stroke="{DynamicResource MutedFgBrush}" />
+                </Button>
+            </Grid>
 
-        <!-- 前置动作 -->
-        <StackPanel Spacing="8">
-            <TextBlock Text="前置动作 (可多选)" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" />
-            <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource InputBorderBrush}"
-                    Background="{DynamicResource CardBrush}" Padding="12"><StackPanel Spacing="10">
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0" Text="退出游戏" FontSize="12" VerticalAlignment="Center" />
-                    <ToggleSwitch Grid.Column="1" Classes="compact" Name="SwExitGame" />
-                </Grid>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0" Text="退出模拟器" FontSize="12" VerticalAlignment="Center" />
-                    <ToggleSwitch Grid.Column="1" Classes="compact" Name="SwExitEmulator" />
-                </Grid>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0" Text="退出 AALC" FontSize="12" VerticalAlignment="Center" />
-                    <ToggleSwitch Grid.Column="1" Classes="compact" Name="SwExitAalc" />
+            <StackPanel Grid.Row="1" Margin="0,16,0,0" Spacing="16">
+                <!-- 前置动作 -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="前置动作 (可多选)" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" />
+                    <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"
+                            Background="{DynamicResource CardBrush}" Padding="12">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="退出游戏" FontSize="12" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" Classes="compact" Name="SwExitGame" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="退出模拟器" FontSize="12" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" Classes="compact" Name="SwExitEmulator" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="退出 AALC" FontSize="12" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" Classes="compact" Name="SwExitAalc" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 最终电源动作 -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="最终动作 (单选)" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" />
+                    <ComboBox Name="PowerCombo" Classes="app-select" FontSize="12" HorizontalAlignment="Stretch" MinHeight="36">
+                        <ComboBoxItem>无动作</ComboBoxItem>
+                        <ComboBoxItem>睡眠</ComboBoxItem>
+                        <ComboBoxItem>休眠</ComboBoxItem>
+                        <ComboBoxItem>锁屏</ComboBoxItem>
+                        <ComboBoxItem>关机</ComboBoxItem>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- 底部按钮 -->
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <Button Grid.Column="1" Classes="app-btn outline" Height="32" FontSize="12" Content="仅本次生效" Margin="0,0,8,0" Click="OnApplyOnce" />
+                    <Button Grid.Column="2" Classes="app-btn brand" Height="32" FontSize="12" Padding="12,0" Content="保存为默认" Click="OnSaveDefault" />
                 </Grid>
             </StackPanel>
-            </Border>
-        </StackPanel>
-
-        <!-- 最终电源动作 -->
-        <StackPanel Spacing="8">
-            <TextBlock Text="最终动作 (单选)" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" />
-            <ComboBox Name="PowerCombo" Classes="app-select" HorizontalAlignment="Stretch" MinHeight="34">
-                <ComboBoxItem>无动作</ComboBoxItem>
-                <ComboBoxItem>睡眠</ComboBoxItem>
-                <ComboBoxItem>休眠</ComboBoxItem>
-                <ComboBoxItem>锁屏</ComboBoxItem>
-                <ComboBoxItem>关机</ComboBoxItem>
-            </ComboBox>
-        </StackPanel>
-
-        <!-- 底部按钮 -->
-        <Grid ColumnDefinitions="*,Auto,Auto">
-            <Button Grid.Column="1" Classes="app-btn outline" Height="30" Content="仅本次生效" Margin="0,0,8,0" Click="OnApplyOnce" />
-            <Button Grid.Column="2" Classes="brand" Height="30" Padding="14,0" Content="保存为默认" Click="OnSaveDefault" />
         </Grid>
-    </StackPanel>
+    </Border>
 </Window>

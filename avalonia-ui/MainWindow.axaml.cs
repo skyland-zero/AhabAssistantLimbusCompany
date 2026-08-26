@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using AhabAssistant.Avalonia.Services;
 using AhabAssistant.Avalonia.Views;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -29,7 +30,6 @@ public partial class MainWindow : Window
 
         // 无边框窗口：自绘标题栏
         ExtendClientAreaToDecorationsHint = true;
-        ExtendClientAreaChromeHints = global::Avalonia.Platform.ExtendClientAreaChromeHints.NoChrome;
         ExtendClientAreaTitleBarHeightHint = 40;
 
         // F10 / F11 全局热键（窗口级）
@@ -53,7 +53,7 @@ public partial class MainWindow : Window
     private void OnToggleMaximize(object? sender, RoutedEventArgs e)
     {
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-        MaxBtn.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        MaxIcon.Icon = WindowState == WindowState.Maximized ? "copy" : "square";
     }
 
     private void OnClose(object? sender, RoutedEventArgs e)
@@ -112,11 +112,11 @@ public partial class MainWindow : Window
 
     private void UpdateThemeIcon()
     {
-        ThemeIcon.Text = App.ThemeMode switch
+        ThemeIcon.Icon = App.ThemeMode switch
         {
-            "system" => "🖥",
-            "dark" => "🌙",
-            _ => "☀️",
+            "system" => "monitor",
+            "dark" => "moon",
+            _ => "sun",
         };
     }
 
@@ -176,12 +176,19 @@ public partial class MainWindow : Window
     public void ShowToast(string message, string type = "success")
     {
         ToastText.Text = message;
-        ToastIcon.Text = type switch
+        ToastIcon.Icon = type switch
         {
-            "warning" => "⚠️",
-            "error" => "❌",
-            "info" => "💡",
-            _ => "✅",
+            "warning" => "triangle-alert",
+            "error" => "circle-x",
+            "info" => "lightbulb",
+            _ => "circle-check",
+        };
+        ToastIcon.Stroke = type switch
+        {
+            "warning" => (IBrush)Application.Current!.Resources["WarningBrush"]!,
+            "error" => (IBrush)Application.Current!.Resources["DestructiveBrush"]!,
+            "info" => (IBrush)Application.Current!.Resources["BrandBrush"]!,
+            _ => (IBrush)Application.Current!.Resources["SuccessBrush"]!,
         };
         ToastHost.IsVisible = true;
         _toastTimer?.Stop();

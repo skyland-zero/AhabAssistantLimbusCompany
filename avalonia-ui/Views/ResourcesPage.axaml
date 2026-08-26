@@ -1,10 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
              xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
              xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
              xmlns:models="clr-namespace:AhabAssistant.Avalonia.Models"
              x:Class="AhabAssistant.Avalonia.Views.ResourcesPage"
-             x:DataType="vm:ResourcesViewModel">
+             x:DataType="vm:ResourcesViewModel"
+             SizeChanged="OnSizeChanged">
     <UserControl.Resources>
         <c:NullToVis x:Key="NullVis" />
         <c:NullToVis x:Key="NullVisInv" Invert="True" />
@@ -15,7 +17,7 @@
         <!-- 顶部操作栏 -->
         <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource InputBorderBrush}" Padding="20,10">
             <Border.Background>
-                <SolidColorBrush Color="#30FFFFFF" />
+                <DynamicResource ResourceKey="TabBarBrush" />
             </Border.Background>
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
@@ -26,14 +28,14 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                     <Button Classes="app-btn outline" Height="28" Padding="10,0" Command="{Binding CheckUpdateCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="5">
-                            <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="search" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="检查更新" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <Button Classes="brand" Height="28" Padding="10,0" Command="{Binding SyncNowCommand}"
+                    <Button Classes="app-btn brand" Height="28" Padding="10,0" Command="{Binding SyncNowCommand}"
                             IsEnabled="{Binding SyncButtonEnabled}">
                         <StackPanel Orientation="Horizontal" Spacing="5">
-                            <TextBlock Text="🔄" FontSize="11" VerticalAlignment="Center" />
+                            <controls:AppIcon Icon="refresh-cw" Width="14" Height="14" Stroke="{DynamicResource BrandFgBrush}" VerticalAlignment="Center" />
                             <TextBlock Text="立即同步" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -43,9 +45,9 @@
 
         <!-- 资源分组卡片 -->
         <ScrollViewer Grid.Row="1" Padding="24,16">
-            <ItemsControl ItemsSource="{Binding Groups}" MaxWidth="760" HorizontalAlignment="Left">
+            <ItemsControl Name="ResourceItems" ItemsSource="{Binding Groups}" MaxWidth="768" HorizontalAlignment="Left">
                 <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" ItemWidth="370" /></ItemsPanelTemplate>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" ItemWidth="372" /></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="models:ResourceGroup">
