@@ -29,7 +29,6 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
-    <AvaloniaResource Include="..\assets\app\fonts\ChineseFont.ttf" Link="Assets\Fonts\ChineseFont.ttf" />
   </ItemGroup>
 
   <ItemGroup>
