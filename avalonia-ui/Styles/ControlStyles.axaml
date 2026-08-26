@@ -4,17 +4,14 @@
     <Style Selector="Window">
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
     <Style Selector="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
     <Style Selector="SelectableTextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
-        <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
     <!-- Card：Web Card 默认无边框，依靠卡片色与页面背景分层 -->
