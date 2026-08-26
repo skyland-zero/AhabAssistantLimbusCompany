@@ -54,7 +54,7 @@
                         <Border Classes="card" Margin="0,0,12,12" Padding="20">
                             <StackPanel Spacing="12">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" FontWeight="Medium" />
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" />
                                     <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource FgBrush}" />
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">

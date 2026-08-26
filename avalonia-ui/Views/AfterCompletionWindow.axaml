@@ -15,7 +15,7 @@
     <Border Classes="dialog-surface" Padding="24">
         <Grid RowDefinitions="Auto,*">
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="结束后操作" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="0" Text="结束后操作" FontSize="16" />
                 <Button Grid.Column="1" Classes="app-btn dialog-close"
                         ToolTip.Tip="关闭" Click="OnCancel">
                     <controls:AppIcon Icon="x" Width="13" Height="13" Stroke="{DynamicResource MutedFgBrush}" />
@@ -25,7 +25,7 @@
             <StackPanel Grid.Row="1" Margin="0,16,0,0" Spacing="16">
                 <!-- 前置动作 -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="前置动作 (可多选)" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" />
+                    <TextBlock Text="前置动作 (可多选)" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                     <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"
                             Background="{DynamicResource CardBrush}" Padding="12">
                         <StackPanel Spacing="8">
@@ -47,7 +47,7 @@
 
                 <!-- 最终电源动作 -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="最终动作 (单选)" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}" />
+                    <TextBlock Text="最终动作 (单选)" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" />
                     <ComboBox Name="PowerCombo" Classes="app-select" FontSize="12" HorizontalAlignment="Stretch" MinHeight="36">
                         <ComboBoxItem>无动作</ComboBoxItem>
                         <ComboBoxItem>睡眠</ComboBoxItem>

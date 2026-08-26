@@ -40,7 +40,7 @@
                                 </Grid>
 
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" />
+                                    <TextBlock Text="{Binding Title}" FontSize="13" />
                                     <TextBlock Text="{Binding Desc}" FontSize="11" Foreground="{DynamicResource MutedFgBrush}"
                                                TextWrapping="Wrap" LineHeight="17" />
                                 </StackPanel>

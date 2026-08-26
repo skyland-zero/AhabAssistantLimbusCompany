@@ -6,7 +6,7 @@
         <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource InputBorderBrush}" Padding="12">
             <ScrollViewer>
                 <StackPanel>
-                    <TextBlock Text="目录" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedFgBrush}"
+                    <TextBlock Text="目录" FontSize="11" Foreground="{DynamicResource MutedFgBrush}"
                                Margin="8,4,8,8" />
                     <ItemsControl Name="TocList" />
                 </StackPanel>

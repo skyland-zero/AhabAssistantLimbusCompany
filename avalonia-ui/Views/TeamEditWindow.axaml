@@ -16,7 +16,7 @@
             <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
                     Padding="24,20,24,12">
                 <Grid ColumnDefinitions="*,Auto,Auto">
-                    <TextBlock Grid.Column="0" Name="TitleText" Text="新建队伍" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Name="TitleText" Text="新建队伍" FontSize="16" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="app-btn outline" Height="28" FontSize="12" Padding="10,0" Click="OnCopyJson">
                         <StackPanel Orientation="Horizontal" Spacing="5">
                             <controls:AppIcon Icon="copy" Width="13" Height="13" />
