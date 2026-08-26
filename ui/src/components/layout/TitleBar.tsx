@@ -1,7 +1,7 @@
 import { Minus, Square, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import appLogo from "@/assets/logo.png";
+import bannerLogo from "@/assets/limbus_title_banner.png";
 import { isTauri } from "@/lib/env";
 
 /** Windows 风格还原图标（两个叠加方框） */
@@ -64,9 +64,16 @@ export function TitleBar() {
         className="flex h-full flex-1 items-center gap-2 pl-3"
         onDoubleClick={() => void toggleMaximize()}
       >
-        <img src={appLogo} alt="Logo" className="size-4 shrink-0 rounded-xs object-contain" />
-        <span data-tauri-drag-region className="text-xs font-medium text-muted-foreground">
-          {t("app.name")}
+        <img
+          src={bannerLogo}
+          alt="Limbus Company"
+          className="h-5.5 shrink-0 object-contain drop-shadow-xs"
+        />
+        <span
+          data-tauri-drag-region
+          className="text-[11px] font-medium text-muted-foreground/80 font-mono"
+        >
+          · Ahab Assistant
         </span>
       </div>
 
