@@ -1,0 +1,210 @@
+<!-- zigui view: AhabAssistant home page in Native markup.
+     All CJK copy flows through model bindings ({l.xxx}) - the bundled
+     fonts cover Latin only, so literal CJK fails the tofu guard;
+     registered SimHei renders it at runtime. Semantic labels stay ASCII. -->
+<column background="background">
+  <row height="52" padding="12" cross="center" label="Ahab header">
+    <text><span weight="bold">{l.app_title}</span></text>
+    <spacer grow="1" />
+    <if test="{isRunning}">
+      <badge>{statusText}</badge>
+    </if>
+    <else>
+      <if test="{isPaused}">
+        <badge>{statusText}</badge>
+      </if>
+      <else>
+        <badge foreground="text_muted">{statusText}</badge>
+      </else>
+    </else>
+  </row>
+  <separator />
+
+  <!-- overall execution progress while busy -->
+  <if test="{busy}">
+    <progress value="{progress}" height="4" label="Execution progress" />
+  </if>
+
+  <!-- body: left task column + right info column -->
+  <row grow="1">
+    <!-- ============ left: task cards ============ -->
+    <column grow="1" padding="12" gap="8" label="Task section">
+      <row gap="8" cross="center" label="Tasks title">
+        <text size="sm" foreground="text_muted">{l.task_section_title}</text>
+        <badge>{selectedCount}</badge>
+        <spacer grow="1" />
+      </row>
+
+      <scroll grow="1" label="Task cards">
+        <column gap="8">
+          <for each="cards" key="id" as="c">
+            <panel background="surface" radius="lg" padding="10" label="{c.title}">
+              <column gap="8">
+                <row gap="8" cross="center" label="{c.title}">
+                  <if test="{c.can_disable}">
+                    <checkbox checked="{c.enabled}" on-toggle="card_toggle:{c.id}" text="{c.title}" />
+                  </if>
+                  <else>
+                    <checkbox checked="true" disabled="true" text="{c.title}" />
+                  </else>
+                  <spacer grow="1" />
+                  <badge>{c.tag}</badge>
+                  <button variant="ghost" size="sm" icon="chevron-down" on-press="card_expand:{c.id}" label="Toggle options"></button>
+                </row>
+                <if test="{c.showProgress}">
+                  <progress value="{progress}" height="4" label="{c.title}" />
+                </if>
+
+                <!-- per-card expanded options -->
+                <if test="{c.expanded}">
+                  <column gap="8" background="background" radius="md" padding="10" label="{c.title}">
+                    <if test="{c.id == 1}">
+                      <row gap="10" cross="center">
+                        <text size="sm">{l.resolution}</text>
+                        <toggle-group gap="4" label="{l.resolution}">
+                          <toggle-button size="sm" selected="{win_size == 0}" on-toggle="size_720">720P</toggle-button>
+                          <toggle-button size="sm" selected="{win_size == 1}" on-toggle="size_1080">1080P</toggle-button>
+                          <toggle-button size="sm" selected="{win_size == 2}" on-toggle="size_1600">1600P</toggle-button>
+                        </toggle-group>
+                      </row>
+                      <switch checked="{post_message}" on-toggle="toggle_postmsg">{l.async_input}</switch>
+                    </if>
+                    <if test="{c.id == 2}">
+                      <row gap="10" cross="center">
+                        <text size="sm">{l.exp_count}</text>
+                        <button variant="outline" size="sm" on-press="dec_exp" label="Fewer EXP runs">-</button>
+                        <text>{exp_count}</text>
+                        <button variant="outline" size="sm" on-press="inc_exp" label="More EXP runs">+</button>
+                      </row>
+                      <row gap="10" cross="center">
+                        <text size="sm">{l.thread_count}</text>
+                        <button variant="outline" size="sm" on-press="dec_thread" label="Fewer thread runs">-</button>
+                        <text>{thread_count}</text>
+                        <button variant="outline" size="sm" on-press="inc_thread" label="More thread runs">+</button>
+                      </row>
+                      <switch checked="{continuous}" on-toggle="toggle_continuous">{l.continuous}</switch>
+                    </if>
+                    <if test="{c.id == 3}">
+                      <row gap="10" cross="center">
+                        <text size="sm">{l.reward_mode}</text>
+                        <toggle-group gap="4" label="{l.reward_mode}">
+                          <toggle-button size="sm" selected="{reward_mode == 0}" on-toggle="set_reward_all">{l.reward_all}</toggle-button>
+                          <toggle-button size="sm" selected="{reward_mode == 1}" on-toggle="set_reward_pass">{l.reward_pass}</toggle-button>
+                          <toggle-button size="sm" selected="{reward_mode == 2}" on-toggle="set_reward_mail">{l.reward_mail}</toggle-button>
+                        </toggle-group>
+                      </row>
+                    </if>
+                    <if test="{c.id == 4}">
+                      <row gap="10" cross="center">
+                        <text size="sm">{l.swap_count}</text>
+                        <button variant="outline" size="sm" on-press="dec_swap" label="Fewer swaps">-</button>
+                        <text>{swap_count}</text>
+                        <button variant="outline" size="sm" on-press="inc_swap" label="More swaps">+</button>
+                      </row>
+                      <switch checked="{grandet}" on-toggle="toggle_grandet">{l.grandet}</switch>
+                    </if>
+                    <if test="{c.id == 5}">
+                      <row gap="10" cross="center">
+                        <text size="sm">{l.mirror_count}</text>
+                        <button variant="outline" size="sm" disabled="{infinite_mirror}" on-press="dec_mirror_n" label="Fewer mirror runs">-</button>
+                        <text>{mirror_count}</text>
+                        <button variant="outline" size="sm" disabled="{infinite_mirror}" on-press="inc_mirror_n" label="More mirror runs">+</button>
+                      </row>
+                      <switch checked="{infinite_mirror}" on-toggle="toggle_infinite">{l.infinite}</switch>
+                      <switch checked="{hard_mirror}" on-toggle="toggle_hard">{l.hard_mirror}</switch>
+                    </if>
+                    <if test="{c.id == 6}">
+                      <text size="sm" foreground="text_muted" wrap="true">{l.resonate_hint}</text>
+                    </if>
+                  </column>
+                </if>
+              </column>
+            </panel>
+          </for>
+        </column>
+      </scroll>
+
+      <!-- sticky execution toolbar -->
+      <separator />
+      <row gap="8" cross="center" label="Execution toolbar">
+        <button variant="ghost" size="sm" on-press="select_all" disabled="{busy}">{l.select_all}</button>
+        <button variant="ghost" size="sm" on-press="clear_all" disabled="{busy}">{l.clear_all}</button>
+        <spacer grow="1" />
+        <button variant="primary" icon="play" on-press="start" disabled="{not canStart}">{l.start}</button>
+        <if test="{isPaused}">
+          <button variant="secondary" icon="play" on-press="resume_task">{l.resume_label}</button>
+        </if>
+        <else>
+          <button variant="secondary" icon="pause" on-press="pause_task" disabled="{not isRunning}">{l.pause_label}</button>
+        </else>
+        <button variant="destructive" icon="x" on-press="stop" disabled="{not busy}">{l.stop}</button>
+      </row>
+    </column>
+
+    <separator />
+
+    <!-- ============ right: connection / screenshot / logs ============ -->
+    <column width="320" padding="10" gap="8" label="Info panel">
+      <panel background="surface" radius="lg" padding="10" label="{l.connection}">
+        <column gap="6">
+          <row gap="6" cross="center">
+            <badge foreground="text_muted">{l.disconnected}</badge>
+            <spacer grow="1" />
+          </row>
+          <button variant="outline" size="sm" disabled="true">{l.connect_btn}</button>
+        </column>
+      </panel>
+
+      <panel background="surface" radius="lg" padding="10" label="{l.screenshot_title}">
+        <column gap="6">
+          <text size="sm" foreground="text_muted">{l.screenshot_title}</text>
+          <panel background="background" radius="md" height="120" label="Screenshot placeholder">
+            <column main="center" cross="center" gap="4">
+              <icon name="eye" width="20" height="20" foreground="disabled" />
+              <text size="sm" foreground="text_muted">{l.screenshot_pending}</text>
+              <text size="sm" foreground="disabled">16:9 · 1280x720</text>
+            </column>
+          </panel>
+        </column>
+      </panel>
+
+      <panel background="surface" radius="lg" padding="10" grow="1" label="{l.logs_title}">
+        <column gap="6" grow="1">
+          <row gap="6" cross="center">
+            <text size="sm" foreground="text_muted">{l.logs_title}</text>
+            <badge>{log_count}</badge>
+            <spacer grow="1" />
+            <button variant="ghost" size="sm" icon="trash" on-press="clear_logs" label="Clear logs"></button>
+          </row>
+          <scroll grow="1" label="Logs scroll">
+            <!-- scroll 内多个子元素必须包在 column 里，否则会叠在一起 -->
+            <column gap="6">
+              <for each="logRows" key="id" as="g">
+                <row gap="6" key="{g.id}" cross="start" label="Log entry">
+                  <text size="sm" foreground="disabled">{pad(g.hh, 2)}:{pad(g.mm, 2)}:{pad(g.ss, 2)}</text>
+                  <!-- wrap 高度只在 column 中保留，正文必须包在 column 里 -->
+                  <column grow="1">
+                    <if test="{g.isErr}">
+                      <text size="sm" foreground="destructive" wrap="true">{g.text}</text>
+                    </if>
+                    <else>
+                      <if test="{g.isWarn}">
+                        <text size="sm" foreground="warning" wrap="true">{g.text}</text>
+                      </if>
+                      <else>
+                        <text size="sm" wrap="true">{g.text}</text>
+                      </else>
+                    </else>
+                  </column>
+                </row>
+              </for>
+              <else>
+                <text size="sm" foreground="text_muted">{l.no_logs}</text>
+              </else>
+            </column>
+          </scroll>
+        </column>
+      </panel>
+    </column>
+  </row>
+</column>

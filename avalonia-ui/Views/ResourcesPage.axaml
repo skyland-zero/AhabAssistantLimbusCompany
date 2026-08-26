@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
+             xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
+             xmlns:models="clr-namespace:AhabAssistant.Avalonia.Models"
+             x:Class="AhabAssistant.Avalonia.Views.ResourcesPage"
+             x:DataType="vm:ResourcesViewModel">
+    <UserControl.Resources>
+        <c:NullToVis x:Key="NullVis" />
+        <c:NullToVis x:Key="NullVisInv" Invert="True" />
+        <c:StringEqualsConv x:Key="StrEq" />
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- 顶部操作栏 -->
+        <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource InputBorderBrush}" Padding="20,10">
+            <Border.Background>
+                <SolidColorBrush Color="#30FFFFFF" />
+            </Border.Background>
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                    <Border Classes="badge" Height="20" IsVisible="{Binding SyncProgress, Converter={StaticResource NullVis}}">
+                        <TextBlock Text="{Binding SyncText}" FontSize="11" FontFamily="{StaticResource MonoFont}" />
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <Button Classes="app-btn outline" Height="28" Padding="10,0" Command="{Binding CheckUpdateCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" />
+                            <TextBlock Text="检查更新" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="brand" Height="28" Padding="10,0" Command="{Binding SyncNowCommand}"
+                            IsEnabled="{Binding SyncButtonEnabled}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Text="🔄" FontSize="11" VerticalAlignment="Center" />
+                            <TextBlock Text="立即同步" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 资源分组卡片 -->
+        <ScrollViewer Grid.Row="1" Padding="24,16">
+            <ItemsControl ItemsSource="{Binding Groups}" MaxWidth="760" HorizontalAlignment="Left">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" ItemWidth="370" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="models:ResourceGroup">
+                        <Border Classes="card" Margin="0,0,12,12" Padding="20">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" FontWeight="Medium" />
+                                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource FgBrush}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="本地版本" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" Margin="0,0,16,3" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding LocalVersion}" FontFamily="{StaticResource MonoFont}" FontSize="11" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="远端版本" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" Margin="0,0,16,3" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RemoteVersionText}" FontFamily="{StaticResource MonoFont}" FontSize="11" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="上次同步" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" Margin="0,0,16,0" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LastSyncText}" FontFamily="{StaticResource MonoFont}" FontSize="11" />
+                                </Grid>
+                                <!-- 同步时显示与 React 版本一致的进度条 -->
+                                <ProgressBar Value="{Binding $parent[UserControl].((vm:ResourcesViewModel)DataContext).SyncProgress}"
+                                             Maximum="100" Height="4" Margin="0,3,0,0"
+                                             IsVisible="{Binding $parent[UserControl].((vm:ResourcesViewModel)DataContext).SyncProgress, Converter={StaticResource NullVis}}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -1,0 +1,243 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AhabAssistant.Avalonia.App"
+             RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <!-- 语义色板（运行时由 ThemeService 覆盖，对齐 ui/src/index.css） -->
+        <SolidColorBrush x:Key="BgBrush">#1B1918</SolidColorBrush>
+        <SolidColorBrush x:Key="CardBrush">#272525</SolidColorBrush>
+        <SolidColorBrush x:Key="FgBrush">#FAFAFA</SolidColorBrush>
+        <SolidColorBrush x:Key="MutedBrush">#353332</SolidColorBrush>
+        <SolidColorBrush x:Key="MutedFgBrush">#ABABAB</SolidColorBrush>
+        <SolidColorBrush x:Key="SecondaryBrush">#353332</SolidColorBrush>
+        <SolidColorBrush x:Key="SecondaryFgBrush">#FAFAFA</SolidColorBrush>
+        <SolidColorBrush x:Key="InputBorderBrush">#454342</SolidColorBrush>
+        <SolidColorBrush x:Key="DestructiveBrush">#F25555</SolidColorBrush>
+        <SolidColorBrush x:Key="SuccessBrush">#46D17F</SolidColorBrush>
+        <SolidColorBrush x:Key="SuccessLightBrush">#25332C</SolidColorBrush>
+        <SolidColorBrush x:Key="WarningBrush">#FBBF24</SolidColorBrush>
+        <SolidColorBrush x:Key="WarningLightBrush">#33302A</SolidColorBrush>
+        <SolidColorBrush x:Key="BrandBrush">#E05A72</SolidColorBrush>
+        <SolidColorBrush x:Key="BrandHoverBrush">#C8354F</SolidColorBrush>
+        <SolidColorBrush x:Key="BrandFgBrush">#FFFFFF</SolidColorBrush>
+        <SolidColorBrush x:Key="TabBarBrush">#A6272525</SolidColorBrush>
+
+        <!-- 字体 -->
+        <FontFamily x:Key="UiFont">Segoe UI, Microsoft YaHei UI, Microsoft YaHei, sans-serif</FontFamily>
+        <FontFamily x:Key="MonoFont">Consolas, Cascadia Mono, monospace</FontFamily>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- ============ 全局文本默认色 ============ -->
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        </Style>
+
+        <!-- ============ Card：圆角边框容器 ============ -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <!-- ============ 按钮（ghost / outline / brand / danger）============ -->
+        <Style Selector="Button.app-btn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Name="PART_ContentPresenter"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Padding="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.app-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Button.app-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+        <Style Selector="Button.app-btn:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+
+        <!-- outline 变体 -->
+        <Style Selector="Button.outline">
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <!-- brand 实心变体 -->
+        <Style Selector="Button.brand">
+            <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.brand:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BrandHoverBrush}" />
+        </Style>
+        <!-- destructive -->
+        <Style Selector="Button.destructive">
+            <Setter Property="Background" Value="{DynamicResource DestructiveBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.danger-ghost">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
+        </Style>
+
+        <!-- 图标小按钮 -->
+        <Style Selector="Button.icon-btn">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.icon-btn.active">
+            <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}" />
+        </Style>
+        <Style Selector="Button.icon-btn.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        </Style>
+
+        <!-- 标题栏窗口按钮 -->
+        <Style Selector="Button.titlebar-btn">
+            <Setter Property="Width" Value="48" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style Selector="Button.titlebar-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="Button.titlebar-close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E81123" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <!-- ============ 导航 Tab 按钮 ============ -->
+        <Style Selector="Button.nav-tab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+        <Style Selector="Button.nav-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="Button.nav-tab.active">
+            <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.nav-tab.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+        </Style>
+
+        <!-- 分段控件（segmented） -->
+        <Style Selector="Button.seg">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.seg.active">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+        <Style Selector="Button.seg:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+
+        <!-- ============ Badge ============ -->
+        <Style Selector="Border.badge">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- ============ TextBox / ComboBox 尺寸与配色 ============ -->
+        <Style Selector="TextBox.app-input">
+            <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="ComboBox.app-select">
+            <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="32" />
+        </Style>
+        <Style Selector="ComboBox.app-select:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+        </Style>
+
+        <!-- ToggleSwitch 紧凑化并使用品牌色 -->
+        <Style Selector="ToggleSwitch.compact">
+            <Setter Property="MinWidth" Value="40" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+        <Style Selector="ToggleSwitch.compact /template/ Border#PART_SwitchContainer">
+            <Setter Property="MinWidth" Value="36" />
+        </Style>
+        <Style Selector="ToggleSwitch.compact:checked /template/ Border#PART_SwitchContainer">
+            <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+        </Style>
+        <Style Selector="ToggleSwitch.compact /template/ Ellipse#PART_SwitchKnob">
+            <Setter Property="Fill" Value="White" />
+        </Style>
+        <Style Selector="ToggleSwitch.compact:off /template/ Border#PART_SwitchContainer">
+            <Setter Property="Background" Value="{DynamicResource MutedBrush}" />
+        </Style>
+
+        <!-- Slider 品牌色轨道 -->
+        <Style Selector="Slider">
+            <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        </Style>
+
+        <!-- 滚动条细化 -->
+        <Style Selector="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <!-- 日志区可选中文本 -->
+        <Style Selector="SelectableTextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        </Style>
+    </Application.Styles>
+</Application>

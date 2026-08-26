@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+*.suo
+ahab-ui-settings.json
+tasks-config.json
+system-settings.json
+hotkey.json
+teams.json
+theme-packs.json

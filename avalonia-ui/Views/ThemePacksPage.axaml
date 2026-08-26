@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
+             xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
+             x:Class="AhabAssistant.Avalonia.Views.ThemePacksPage"
+             x:DataType="vm:ThemePacksViewModel">
+    <UserControl.Resources>
+        <c:EnabledOpacity x:Key="EnabledOpacity" />
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+        <!-- 顶部操作栏 -->
+        <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource InputBorderBrush}" Padding="20,10">
+            <Border.Background>
+                <SolidColorBrush Color="#30FFFFFF" />
+            </Border.Background>
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="总权重：" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding TotalWeight}" FontSize="12" FontWeight="Medium"
+                               FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <Button Classes="app-btn outline" Height="28" Padding="10,0" Command="{Binding ToggleSortCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Text="⇅" FontSize="11" VerticalAlignment="Center" />
+                            <TextBlock Text="按权重排序" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="app-btn outline" Height="28" Padding="10,0" Content="全部启用" Command="{Binding EnableAllCommand}" />
+                    <Button Classes="app-btn outline" Height="28" Padding="10,0" Content="全部停用" Command="{Binding DisableAllCommand}" />
+                    <Button Classes="app-btn" Height="28" Padding="10,0" Foreground="{DynamicResource MutedFgBrush}" Command="{Binding ResetWeightsCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Text="↺" FontSize="11" VerticalAlignment="Center" />
+                            <TextBlock Text="恢复默认权重" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 困难镜牢提示条 -->
+        <Border Grid.Row="1" Background="{DynamicResource WarningLightBrush}" Padding="24,8"
+                IsVisible="{Binding HardMirrorBannerVisible}">
+            <TextBlock Text="⚠ 困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重" FontSize="12"
+                       Foreground="{DynamicResource WarningBrush}" />
+        </Border>
+
+        <!-- 主题包列表 -->
+        <ScrollViewer Grid.Row="2" Padding="24,16">
+            <ItemsControl ItemsSource="{Binding Packs}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:PackCardVm">
+                        <Border Classes="card" Margin="0,0,0,8" Opacity="{Binding Enabled, Converter={StaticResource EnabledOpacity}}">
+                            <Grid ColumnDefinitions="Auto,180,*,Auto" Margin="20,12">
+                                <ToggleSwitch Grid.Column="0" Classes="compact" IsChecked="{Binding Enabled}" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"
+                                               MaxWidth="120" TextTrimming="CharacterEllipsis" />
+                                    <Border Classes="badge"><TextBlock Text="{Binding Tier}" FontSize="11" /></Border>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="12,0,0,0">
+                                    <TextBlock Text="权重" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+                                    <Slider Width="220" Minimum="0" Maximum="10" TickFrequency="1" IsSnapToTickEnabled="True"
+                                           Value="{Binding Weight}" IsEnabled="{Binding Enabled}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding WeightText}" Width="24" TextAlignment="Right"
+                                               FontFamily="{StaticResource MonoFont}" FontSize="11" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

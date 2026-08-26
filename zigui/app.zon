@@ -1,0 +1,36 @@
+.{
+    .id = "com.ahab.zigui",
+    .name = "zigui",
+    .display_name = "Ahab Assistant · Native SDK Demo",
+    .description = "AhabAssistantLimbusCompany 主控台 UI 的 Native SDK 原生渲染演示版（Zig core + Native markup）。",
+    .version = "0.1.0",
+    .platforms = .{ "windows", "macos", "linux" },
+    .permissions = .{ "view", "command" },
+    .capabilities = .{ "native_views", "gpu_surfaces" },
+    // 品牌强调色：Ahab 品牌红（对齐 ui/src/themes 的 accent 思路）
+    .theme_accent = "#c8452c",
+    .shell = .{
+        .windows = .{
+            .{
+                .label = "main",
+                .title = "Ahab Assistant · Limbus Company",
+                .width = 1180,
+                .height = 760,
+                .min_width = 980,
+                .min_height = 620,
+                .restore_policy = "center_on_primary",
+                .views = .{
+                    // Windows/Linux 上声明 metal 会自动回退到软件/Direct2D 路径，不报错
+                    .{ .label = "ahab-canvas", .kind = "gpu_surface", .fill = true, .role = "Ahab main canvas", .accessibility_label = "Ahab 主控台画布", .gpu_backend = "metal", .gpu_pixel_format = "bgra8_unorm", .gpu_present_mode = "timer", .gpu_alpha_mode = "opaque", .gpu_color_space = "srgb", .gpu_vsync = true },
+                },
+            },
+        },
+    },
+    .security = .{
+        .navigation = .{
+            .allowed_origins = .{ "zero://app", "zero://inline" },
+            .external_links = .{ .action = "deny" },
+        },
+    },
+    .web_engine = "system",
+}

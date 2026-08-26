@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AhabAssistant.Avalonia.ViewModels"
+             xmlns:c="clr-namespace:AhabAssistant.Avalonia.Converters"
+             x:Class="AhabAssistant.Avalonia.Views.ToolboxPage"
+             x:DataType="vm:ToolboxViewModel">
+    <UserControl.Resources>
+        <c:BoolToVis x:Key="BoolVis" />
+        <c:BoolToVis x:Key="BoolVisInv" Invert="True" />
+    </UserControl.Resources>
+
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="16">
+            <ItemsControl ItemsSource="{Binding Tools}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="3" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:ToolCardVm">
+                        <Border Classes="card" Margin="0,0,16,16" Padding="16" MinHeight="180">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="20" />
+                                    <Border Grid.Column="1" Classes="badge" Background="{DynamicResource SuccessLightBrush}"
+                                            IsVisible="{Binding Running}">
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                            <Ellipse Width="6" Height="6" Fill="{DynamicResource SuccessBrush}" />
+                                            <TextBlock Text="运行中" FontSize="11" Foreground="{DynamicResource SuccessBrush}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Classes="badge" IsVisible="{Binding Running, Converter={StaticResource BoolVisInv}}">
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource MutedFgBrush}">
+                                            <Run Text="{Binding IsScreenshotText}" />
+                                        </TextBlock>
+                                    </Border>
+                                </Grid>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" />
+                                    <TextBlock Text="{Binding Desc}" FontSize="11" Foreground="{DynamicResource MutedFgBrush}"
+                                               TextWrapping="Wrap" LineHeight="17" />
+                                </StackPanel>
+
+                                <!-- 截图工具：仅运行按钮 -->
+                                <Button Classes="app-btn outline" Height="32" HorizontalAlignment="Stretch"
+                                        Command="{Binding $parent[UserControl].((vm:ToolboxViewModel)DataContext).TakeScreenshotCommand}"
+                                        IsVisible="{Binding IsScreenshot}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="📷" VerticalAlignment="Center" /><TextBlock Text="运行" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- 运行中 → 停止 -->
+                                <Button Classes="app-btn outline" Height="32" HorizontalAlignment="Stretch"
+                                        Foreground="#EF4444" BorderBrush="#80EF4444"
+                                        Command="{Binding RunCommand}"
+                                        IsVisible="{Binding ShowStopButton}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="■" VerticalAlignment="Center" /><TextBlock Text="停止" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- 待机 → 运行 -->
+                                <Button Classes="brand" Height="32" HorizontalAlignment="Stretch"
+                                        Command="{Binding RunCommand}"
+                                        IsVisible="{Binding ShowRunButton}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="▶" VerticalAlignment="Center" /><TextBlock Text="运行" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="工具均为 Mock 模拟，后端接入后生效" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

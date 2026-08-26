@@ -1,0 +1,6 @@
+.native/
+zig-out/
+zig-cache/
+.zig-cache/
+*.exe
+*.pdb
