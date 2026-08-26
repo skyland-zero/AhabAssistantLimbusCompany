@@ -1,7 +1,25 @@
-import { Copy, Hexagon, Minus, Square, X } from "lucide-react";
+import { Hexagon, Minus, Square, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { isTauri } from "@/lib/env";
+
+/** Windows 风格还原图标（两个叠加方框） */
+function RestoreIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 11 11"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      aria-hidden="true"
+    >
+      <path d="M3.5 1.5h6v6" />
+      <rect x="1.5" y="3.5" width="6" height="6" />
+    </svg>
+  );
+}
 
 /** 自绘标题栏（无边框窗口），参考 MXU TitleBar */
 export function TitleBar() {
@@ -39,7 +57,12 @@ export function TitleBar() {
   return (
     <header className="flex h-10 shrink-0 select-none items-center justify-between border-b border-border bg-card">
       {/* 左：logo + 标题（可拖拽区） */}
-      <div data-tauri-drag-region className="flex h-full flex-1 items-center gap-2 pl-3">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: 无边框窗口拖拽区域，双击切换最大化 */}
+      <div
+        data-tauri-drag-region
+        className="flex h-full flex-1 items-center gap-2 pl-3"
+        onDoubleClick={() => void toggleMaximize()}
+      >
         <Hexagon className="size-4 text-brand" strokeWidth={2.5} />
         <span data-tauri-drag-region className="text-xs font-medium text-muted-foreground">
           {t("app.name")}
@@ -56,11 +79,7 @@ export function TitleBar() {
             label={isMaximized ? t("titlebar.unmaximize") : t("titlebar.maximize")}
             onClick={toggleMaximize}
           >
-            {isMaximized ? (
-              <Copy className="size-3.5 -scale-x-100" />
-            ) : (
-              <Square className="size-3" />
-            )}
+            {isMaximized ? <RestoreIcon /> : <Square className="size-3" />}
           </TitleBarButton>
           <TitleBarButton label={t("titlebar.close")} onClick={close} danger>
             <X className="size-4" />

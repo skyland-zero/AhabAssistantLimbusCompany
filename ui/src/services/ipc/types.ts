@@ -37,6 +37,7 @@ export type IpcEventName =
   | "screenshot.frame" // payload: { instanceId: string; jpeg: ArrayBuffer; width; height }
   | "task.progress" // payload: TaskProgressPayload
   | "task.status" // payload: TaskStatusPayload
+  | "tool.status" // payload: ToolStatusPayload
   | "log.entry" // payload: LogEntryPayload
   | "resource.sync.progress" // payload: SyncProgressPayload
   | "app.notice"; // payload: { level: 'info' | 'warn' | 'error'; message: string }
@@ -71,4 +72,107 @@ export interface LogEntryPayload {
   ts: number;
   level: "debug" | "info" | "warn" | "error";
   message: string;
+}
+
+/** task.status 事件负载 */
+export interface TaskStatusPayload {
+  taskId: string;
+  status: TaskStatus;
+}
+
+/** task.progress 事件负载 */
+export interface TaskProgressPayload {
+  taskId: string;
+  /** 进度 0-100 */
+  progress: number;
+}
+
+/* ------------------------------ 扩展数据模型 ------------------------------ */
+
+/** 队伍用途 */
+export type TeamPurpose = "mirror" | "luxcavation" | "general";
+
+/** 队伍完整配置（team_setting_card 对应） */
+export interface TeamDetail extends TeamSummary {
+  purpose: TeamPurpose;
+  /** 饰品体系 key：burn / tremor / rupture / sinking / poise / charge */
+  accessoryScheme: string;
+  enabled: boolean;
+}
+
+/** 罪人基础信息 */
+export interface SinnerInfo {
+  id: string;
+  name: string;
+}
+
+/** 工具箱工具 id */
+export type ToolId = "infinite_battle" | "enkephalin" | "screenshot";
+
+/** tool.status 事件负载 */
+export interface ToolStatusPayload {
+  toolId: ToolId;
+  running: boolean;
+}
+
+/** 镜牢主题包 */
+export interface ThemePack {
+  id: string;
+  name: string;
+  /** 出现权重 0-10 */
+  weight: number;
+  enabled: boolean;
+  tier: string;
+}
+
+/** themePack.list 返回状态 */
+export interface ThemePackState {
+  hardMirrorActive: boolean;
+  packs: ThemePack[];
+}
+
+/** 资源组同步状态 */
+export interface ResourceGroup {
+  id: string;
+  name: string;
+  localVersion: string;
+  remoteVersion: string | null;
+  lastSyncAt: number | null;
+}
+
+/** resource.sync.progress 事件负载 */
+export interface SyncProgressPayload {
+  scope: string;
+  progress: number;
+}
+
+/** 公告条目（announcement_board 对应） */
+export interface NoticeItem {
+  id: string;
+  title: string;
+  date: string;
+  level: "info" | "warn" | "error";
+  /** Markdown 内容 */
+  content: string;
+}
+
+/** 任务队列完成后动作 */
+export type AfterCompletionAction = "none" | "close_game" | "shutdown" | "custom";
+
+/** 任务队列全局选项 */
+export interface QueueOptions {
+  afterCompletion: AfterCompletionAction;
+  customCommand?: string;
+}
+
+/** 全局热键配置 */
+export interface HotkeyConfig {
+  startStop: string;
+  enabled: boolean;
+}
+
+/** 更新检查结果 */
+export interface UpdateInfo {
+  updateAvailable: boolean;
+  latest: string;
 }

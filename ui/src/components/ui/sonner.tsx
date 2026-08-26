@@ -7,15 +7,28 @@ import {
 	OctagonXIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { useAppStore } from "@/stores/appStore";
+import { resolveSystemMode, watchSystemMode } from "@/themes";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-	const { theme = "system" } = useTheme();
+	// 不依赖 next-themes：直接从 appStore 取主题模式并自行解析 system
+	const themeMode = useAppStore((s) => s.themeMode);
+	const [resolved, setResolved] = useState<"light" | "dark">(resolveSystemMode);
+
+	useEffect(() => {
+		if (themeMode !== "system") {
+			setResolved(themeMode);
+			return;
+		}
+		setResolved(resolveSystemMode());
+		return watchSystemMode(() => setResolved(resolveSystemMode()));
+	}, [themeMode]);
 
 	return (
 		<Sonner
-			theme={theme as ToasterProps["theme"]}
+			theme={resolved}
 			className="toaster group"
 			icons={{
 				success: <CircleCheckIcon className="size-4" />,

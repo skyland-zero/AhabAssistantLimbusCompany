@@ -1,4 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="AhabAssistantUI" type="win32"/>
+  <description>Ahab Assistant Limbus Company</description>
   <dependency>
     <dependentAssembly>
       <assemblyIdentity
@@ -14,8 +17,10 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <!-- 整个应用（Rust 壳 + Python sidecar 子进程）以管理员运行 -->
+        <!-- Default: run as invoker. Restore requireAdministrator when sidecar elevation is needed -->
+        <!--
         <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        -->
       </requestedPrivileges>
     </security>
   </trustInfo>

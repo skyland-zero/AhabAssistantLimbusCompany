@@ -1,4 +1,5 @@
 import {
+  CircleHelp,
   House,
   type LucideIcon,
   Package,
@@ -27,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "themes", labelKey: "nav.themes", icon: Palette },
   { id: "toolbox", labelKey: "nav.toolbox", icon: Wrench },
   { id: "resources", labelKey: "nav.resources", icon: Package },
+  { id: "help", labelKey: "nav.help", icon: CircleHelp },
 ];
 
 export function SideNav() {

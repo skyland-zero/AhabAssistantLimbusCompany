@@ -2,9 +2,14 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { SideNav } from "@/components/layout/SideNav";
 import { TitleBar } from "@/components/layout/TitleBar";
+import { Toaster } from "@/components/ui/sonner";
+import { HelpPage } from "@/pages/HelpPage";
 import { HomePage } from "@/pages/HomePage";
-import { PlaceholderPage } from "@/pages/PlaceholderPage";
+import { ResourcesPage } from "@/pages/ResourcesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { TeamsPage } from "@/pages/TeamsPage";
+import { ThemePacksPage } from "@/pages/ThemePacksPage";
+import { ToolboxPage } from "@/pages/ToolboxPage";
 import { useAppStore } from "@/stores/appStore";
 import { applyTheme, watchSystemMode } from "@/themes";
 
@@ -28,15 +33,18 @@ export default function App() {
   }, [themeMode, accentId]);
 
   return (
-    <div className="flex h-screen min-h-0 flex-col">
-      <TitleBar />
-      <div className="flex min-h-0 flex-1">
-        <SideNav />
-        <main className="min-w-0 flex-1 overflow-hidden bg-background">
-          <PageView page={currentPage} />
-        </main>
+    <>
+      <Toaster position="bottom-right" />
+      <div className="flex h-screen min-h-0 flex-col">
+        <TitleBar />
+        <div className="flex min-h-0 flex-1">
+          <SideNav />
+          <main className="min-w-0 flex-1 overflow-hidden bg-background">
+            <PageView page={currentPage} />
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -45,13 +53,15 @@ function PageView({ page }: { page: ReturnType<typeof useAppStore.getState>["cur
     case "home":
       return <HomePage />;
     case "teams":
-      return <PlaceholderPage pageKey="teams" />;
+      return <TeamsPage />;
     case "themes":
-      return <PlaceholderPage pageKey="themes" />;
+      return <ThemePacksPage />;
     case "toolbox":
-      return <PlaceholderPage pageKey="toolbox" />;
+      return <ToolboxPage />;
     case "resources":
-      return <PlaceholderPage pageKey="resources" />;
+      return <ResourcesPage />;
+    case "help":
+      return <HelpPage />;
     case "settings":
       return <SettingsPage />;
   }

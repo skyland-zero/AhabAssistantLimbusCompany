@@ -6,8 +6,18 @@ import path from "node:path";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+import fs from "node:fs";
+
+/** 注入 package.json 版本号，供设置页「关于」显示 */
+const pkg = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+) as { version: string };
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

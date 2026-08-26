@@ -23,6 +23,13 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+
+  /* 语义状态色 */
+  --success: oklch(0.627 0.17 149);
+  --success-light: oklch(0.962 0.044 156);
+  --warning: oklch(0.666 0.15 58);
+  --warning-light: oklch(0.968 0.055 90);
+  --danger: oklch(0.577 0.245 27.325);
 }
 
 .dark {
@@ -44,6 +51,13 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+
+  /* 语义状态色（暗色） */
+  --success: oklch(0.792 0.18 151);
+  --success-light: oklch(0.29 0.06 155);
+  --warning: oklch(0.795 0.16 86);
+  --warning-light: oklch(0.31 0.06 70);
+  --danger: oklch(0.704 0.191 22.216);
 }
 
 @theme inline {
@@ -70,10 +84,18 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* 语义状态色 */
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-danger: var(--danger);
+
   /* 强调色（运行时可被主题系统覆盖） */
   --color-brand: var(--brand, oklch(0.546 0.245 262.881));
   --color-brand-hover: var(--brand-hover, oklch(0.488 0.243 264.376));
   --color-brand-light: var(--brand-light, oklch(0.928 0.006 264.531));
+  --color-brand-foreground: var(--brand-foreground, oklch(0.985 0 0));
 }
 
 @layer base {
