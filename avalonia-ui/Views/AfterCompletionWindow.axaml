@@ -1,16 +1,16 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
-        x:Class="AhabAssistant.Avalonia.Views.AfterCompletionWindow"
-        Title="结束后操作"
-        Width="384" SizeToContent="Height" MaxWidth="384"
-        CanResize="False"
-        WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource BgBrush}"
-        FontFamily="{StaticResource UiFont}"
-        TransparencyLevelHint="None"
-        WindowDecorations="None"
-        KeyDown="OnKeyDown">
+<controls:MotionWindow xmlns="https://github.com/avaloniaui"
+                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                       xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
+                       x:Class="AhabAssistant.Avalonia.Views.AfterCompletionWindow"
+                       Title="结束后操作"
+                       Width="384" SizeToContent="Height" MaxWidth="384"
+                       CanResize="False"
+                       WindowStartupLocation="CenterOwner"
+                       Background="{DynamicResource BgBrush}"
+                       FontFamily="{StaticResource UiFont}"
+                       TransparencyLevelHint="None"
+                       WindowDecorations="None"
+                       KeyDown="OnKeyDown">
 
     <Border Classes="dialog-surface" Padding="24">
         <Grid RowDefinitions="Auto,*">
@@ -65,4 +65,4 @@
             </StackPanel>
         </Grid>
     </Border>
-</Window>
+</controls:MotionWindow>

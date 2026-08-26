@@ -157,7 +157,19 @@ public class SchemeIcon : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is string id && !string.IsNullOrEmpty(id))
-            return new global::Avalonia.Media.Imaging.Bitmap($"avares://AhabAssistant.Avalonia/Assets/status_effects/{id}.png");
+        {
+            try
+            {
+                using var stream = global::Avalonia.Platform.AssetLoader.Open(
+                    new Uri($"avares://AhabAssistant.Avalonia/Assets/status_effects/{id}.png"));
+                return new global::Avalonia.Media.Imaging.Bitmap(stream);
+            }
+            catch
+            {
+                // A missing optional icon should not take down the page.
+            }
+        }
+
         return null;
     }
 

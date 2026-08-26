@@ -21,9 +21,11 @@
             </Border.Background>
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                    <Border Classes="badge" Height="20" IsVisible="{Binding SyncProgress, Converter={StaticResource NullVis}}">
+                    <controls:MotionVisibility Classes="motion-state" IsShown="{Binding SyncProgress, Converter={StaticResource NullVis}}" Mode="Fade">
+                    <Border Classes="badge" Height="20">
                         <TextBlock Text="{Binding SyncText}" FontSize="11" FontFamily="{StaticResource MonoFont}" />
                     </Border>
+                    </controls:MotionVisibility>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                     <Button Classes="app-btn outline" Height="28" Padding="10,0" Command="{Binding CheckUpdateCommand}">
@@ -32,7 +34,7 @@
                             <TextBlock Text="检查更新" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <Button Classes="app-btn brand" Height="28" Padding="10,0" Command="{Binding SyncNowCommand}"
+                    <Button Classes="app-btn brand motion-action" Height="28" Padding="10,0" Command="{Binding SyncNowCommand}"
                             IsEnabled="{Binding SyncButtonEnabled}">
                         <StackPanel Orientation="Horizontal" Spacing="5">
                             <controls:AppIcon Icon="refresh-cw" Width="14" Height="14" Stroke="{DynamicResource BrandFgBrush}" VerticalAlignment="Center" />
@@ -45,13 +47,21 @@
 
         <!-- 资源分组卡片 -->
         <ScrollViewer Grid.Row="1" Padding="24,16">
-            <ItemsControl Name="ResourceItems" ItemsSource="{Binding Groups}" MaxWidth="768" HorizontalAlignment="Left">
+            <ItemsControl Name="ResourceItems" Classes="motion-list motion-stagger-8" ItemsSource="{Binding Groups}" MaxWidth="768" HorizontalAlignment="Left">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" ItemWidth="372" /></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="models:ResourceGroup">
+                        <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
                         <Border Classes="card" Margin="0,0,12,12" Padding="20">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+                                    <BrushTransition Property="Background" Duration="0:0:0.16" />
+                                    <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                                </Transitions>
+                            </Border.Transitions>
                             <StackPanel Spacing="12">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" />
@@ -66,11 +76,20 @@
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LastSyncText}" FontFamily="{StaticResource MonoFont}" FontSize="11" />
                                 </Grid>
                                 <!-- 同步时显示与 React 版本一致的进度条 -->
+                                <controls:MotionVisibility Classes="motion-progress" IsShown="{Binding $parent[UserControl].((vm:ResourcesViewModel)DataContext).SyncProgress, Converter={StaticResource NullVis}}" Mode="Fade">
                                 <ProgressBar Value="{Binding $parent[UserControl].((vm:ResourcesViewModel)DataContext).SyncProgress}"
-                                             Maximum="100" Height="4" Margin="0,3,0,0"
-                                             IsVisible="{Binding $parent[UserControl].((vm:ResourcesViewModel)DataContext).SyncProgress, Converter={StaticResource NullVis}}" />
+                                             Maximum="100" Height="4" Margin="0,3,0,0">
+                                    <ProgressBar.Transitions>
+                                        <Transitions>
+                                            <DoubleTransition Property="Value" Duration="0:0:0.22" />
+                                            <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+                                        </Transitions>
+                                    </ProgressBar.Transitions>
+                                </ProgressBar>
+                                </controls:MotionVisibility>
                             </StackPanel>
                         </Border>
+                        </controls:MotionVisibility>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

@@ -4,6 +4,13 @@
     <Style Selector="Window">
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
     </Style>
 
     <Style Selector="TextBlock">
@@ -21,6 +28,13 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="0" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.20" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.20" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
     </Style>
 
     <!-- DialogContent：对应 Web Dialog 的 bg-background / rounded-lg / p-6 -->
@@ -31,6 +45,13 @@
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="24" />
         <Setter Property="BoxShadow" Value="0 10 25 0 #40000000" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.22" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.22" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.22" />
+            </Transitions>
+        </Setter>
     </Style>
 
     <!-- 页面内嵌分区：对应 Web UI 的 bg-card/20 + border-border/60 -->
@@ -39,6 +60,13 @@
         <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.20" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.20" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="Button.app-btn.dialog-close">
         <Setter Property="Width" Value="24" />
@@ -62,6 +90,14 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.16" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.16" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+            </Transitions>
+        </Setter>
         <Setter Property="Template">
             <ControlTemplate>
                 <ContentPresenter Name="PART_ContentPresenter"
@@ -76,6 +112,17 @@
                                   HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                                   VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
             </ControlTemplate>
+        </Setter>
+    </Style>
+    <!-- 模板部件单独过渡，覆盖 pointerover/focus/pressed 对 ContentPresenter 的状态设置。 -->
+    <Style Selector="Button.app-btn /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.16" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.16" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+            </Transitions>
         </Setter>
     </Style>
     <Style Selector="Button.app-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -184,6 +231,14 @@
         <Setter Property="MinHeight" Value="30" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="FontSize" Value="12" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.16" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.16" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="Button.nav-tab /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="Transparent" />
@@ -242,6 +297,14 @@
         <Setter Property="MinHeight" Value="28" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="FontSize" Value="12" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.16" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.16" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="Button.app-btn.seg.active">
         <Setter Property="Background" Value="{DynamicResource BgBrush}" />
@@ -264,6 +327,13 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
 
     <!-- 表单控件：对应 Input h-9 / Select h-9 -->
@@ -276,6 +346,14 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinHeight" Value="36" />
         <Setter Property="Padding" Value="12,6" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="TextBox.app-input:focus">
         <Setter Property="BorderBrush" Value="{DynamicResource RingBrush}" />
@@ -293,6 +371,14 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinHeight" Value="36" />
         <Setter Property="Padding" Value="12,6" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="ComboBox.app-select:pointerover">
         <Setter Property="Background" Value="{DynamicResource InputBrush}" />
@@ -306,16 +392,37 @@
     <Style Selector="ToggleSwitch.compact">
         <Setter Property="MinWidth" Value="32" />
         <Setter Property="FontSize" Value="11" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="ToggleSwitch.compact /template/ Border#PART_SwitchContainer">
         <Setter Property="MinWidth" Value="32" />
         <Setter Property="MinHeight" Value="18" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="ToggleSwitch.compact:checked /template/ Border#PART_SwitchContainer">
         <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
     </Style>
     <Style Selector="ToggleSwitch.compact /template/ Ellipse#PART_SwitchKnob">
         <Setter Property="Fill" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Fill" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
     <Style Selector="ToggleSwitch.compact:off /template/ Border#PART_SwitchContainer">
         <Setter Property="Background" Value="{DynamicResource InputBrush}" />
@@ -325,16 +432,46 @@
 
     <Style Selector="Slider">
         <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- 进度数值由绑定驱动，Value 过渡可避免同步进度跳变。 -->
+    <Style Selector="ProgressBar">
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Value" Duration="0:0:0.18" />
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
 
     <!-- 低存在感滚动条 -->
     <Style Selector="ScrollBar">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Opacity" Value="0.75" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
     </Style>
 
     <Style Selector="Separator">
         <Setter Property="Background" Value="{DynamicResource InputBorderBrush}" />
         <Setter Property="Height" Value="1" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
     </Style>
 </Styles>

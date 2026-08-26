@@ -10,12 +10,26 @@
         <c:StringEqualsConv x:Key="StrEq" />
         <c:BoolToVis x:Key="BoolVis" />
         <c:NullToVis x:Key="NullVis" />
+        <c:AccentPresetBrush x:Key="AccentPresetBrush" />
     </UserControl.Resources>
+    <UserControl.Styles>
+        <!-- 页面卡片沿用基础动效层的入场策略；Transitions 负责状态变化时的轻微过渡。 -->
+        <Style Selector="Border.card">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+                    <BrushTransition Property="Background" Duration="0:0:0.16" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                </Transitions>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
 
     <ScrollViewer>
         <StackPanel MaxWidth="620" HorizontalAlignment="Center" Margin="0,16,0,32" Spacing="12">
 
             <!-- ============ 1. 外观个性化 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="16">
                     <TextBlock Text="外观" FontSize="13" />
@@ -44,7 +58,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="services:AccentPreset">
                                     <Button Classes="app-btn" Width="24" Height="24" CornerRadius="12" Padding="0"
-                                            Background="{Binding LightBrand, Converter={StaticResource AccentBrush}}"
+                                            Background="{Binding LightBrand, Converter={StaticResource AccentPresetBrush}}"
                                             Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).SetAccentCommand}"
                                             CommandParameter="{Binding Id}"
                                             ToolTip.Tip="{Binding Name}" />
@@ -68,8 +82,10 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <!-- ============ 2. 全局热键 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="14">
                     <TextBlock Text="全局热键" FontSize="13" />
@@ -81,7 +97,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Grid.Column="0" Text="启动 / 停止热键" FontSize="12" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <Border Name="CaptureStartStop" MinWidth="130" Height="30" CornerRadius="6"
+                            <Border Name="CaptureStartStop" Classes="motion-input" MinWidth="130" Height="30" CornerRadius="6"
                                     Background="{DynamicResource BgBrush}" BorderThickness="1"
                                     BorderBrush="{DynamicResource InputBorderBrush}" Cursor="Hand"
                                     Tapped="CaptureStartStopTapped">
@@ -95,7 +111,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Grid.Column="0" Text="暂停 / 继续热键" FontSize="12" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <Border Name="CapturePauseResume" MinWidth="130" Height="30" CornerRadius="6"
+                            <Border Name="CapturePauseResume" Classes="motion-input" MinWidth="130" Height="30" CornerRadius="6"
                                     Background="{DynamicResource BgBrush}" BorderThickness="1"
                                     BorderBrush="{DynamicResource InputBorderBrush}" Cursor="Hand"
                                     Tapped="CapturePauseResumeTapped">
@@ -108,8 +124,10 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <!-- ============ 3. 模拟器与连接设置 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="14">
                     <TextBlock Text="模拟器设置" FontSize="13" />
@@ -121,7 +139,8 @@
                         <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Sys.Simulator}" IsCheckedChanged="SysSwitchToggled" />
                     </Grid>
 
-                    <StackPanel Spacing="14" IsVisible="{Binding ShowSimulatorOptions}">
+                    <controls:MotionVisibility IsShown="{Binding ShowSimulatorOptions}" Mode="Reveal">
+                    <StackPanel Spacing="14">
                         <Separator Margin="0" />
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0">
@@ -141,7 +160,8 @@
                             <TextBox Grid.Column="1" Classes="app-input" Width="110" Height="30" TextAlignment="Right"
                                      Text="{Binding Sys.SimulatorPort}" LostFocus="PortLostFocus" />
                         </Grid>
-                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowMuMuTimeout}">
+                        <controls:MotionVisibility IsShown="{Binding ShowMuMuTimeout}" Mode="Reveal">
+                        <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="启动模拟器超时 (秒)" FontSize="12" />
                                 <TextBlock Text="仅限 MuMu 模拟器拉起等待时间" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
@@ -149,11 +169,15 @@
                             <TextBox Grid.Column="1" Classes="app-input" Width="110" Height="30" TextAlignment="Right"
                                      Text="{Binding Sys.StartEmulatorTimeout}" LostFocus="TimeoutLostFocus" />
                         </Grid>
+                        </controls:MotionVisibility>
                     </StackPanel>
+                    </controls:MotionVisibility>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <!-- ============ 4. 系统与防护设置 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="14">
                     <TextBlock Text="系统与防护" FontSize="13" />
@@ -182,8 +206,10 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <!-- ============ 5. 实验性功能 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="14">
                     <TextBlock Text="实验性功能" FontSize="13" />
@@ -204,8 +230,10 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <!-- ============ 6. 更新源与 Mirror 酱 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="14">
                     <TextBlock Text="更新与源配置" FontSize="13" />
@@ -227,11 +255,13 @@
                             <ComboBoxItem>Mirror 酱</ComboBoxItem>
                         </ComboBox>
                     </Grid>
-                    <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowMirrorChyanCdk}">
+                    <controls:MotionVisibility IsShown="{Binding ShowMirrorChyanCdk}" Mode="Reveal">
+                    <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Grid.Column="0" Text="Mirror 酱 CDK" FontSize="12" VerticalAlignment="Center" />
                         <TextBox Grid.Column="1" Classes="app-input" Width="230" PlaceholderText="输入 Mirror 酱 CDK (选填)"
                                  Text="{Binding Sys.MirrorchyanCdk}" LostFocus="CdkLostFocus" />
                     </Grid>
+                    </controls:MotionVisibility>
                     <Button Classes="app-btn outline" Height="30" HorizontalContentAlignment="Left" Command="{Binding CheckUpdateCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <controls:AppIcon Icon="search" Width="14" Height="14" VerticalAlignment="Center" />
@@ -240,8 +270,10 @@
                     </Button>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <!-- ============ 7. 关于 ============ -->
+            <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
             <Border Classes="card" Padding="14">
                 <StackPanel Spacing="12">
                     <TextBlock Text="关于" FontSize="13" />
@@ -262,6 +294,7 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            </controls:MotionVisibility>
 
             <TextBlock Text="{Binding FooterText}" FontSize="11" Foreground="{DynamicResource MutedFgBrush}"
                        HorizontalAlignment="Center" Margin="0,8,0,0" />

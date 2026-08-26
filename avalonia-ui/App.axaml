@@ -13,5 +13,6 @@
     <Application.Styles>
         <SimpleTheme />
         <StyleInclude Source="avares://AhabAssistant.Avalonia/Styles/ControlStyles.axaml" />
+        <StyleInclude Source="avares://AhabAssistant.Avalonia/Styles/MotionStyles.axaml" />
     </Application.Styles>
 </Application>

@@ -1,20 +1,22 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
              x:Class="AhabAssistant.Avalonia.Views.HelpPage">
     <Grid ColumnDefinitions="208,*">
         <!-- 左：目录 -->
-        <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource InputBorderBrush}" Padding="12">
+        <Border Grid.Column="0" Classes="motion-toc" BorderThickness="0,0,1,0"
+                BorderBrush="{DynamicResource InputBorderBrush}" Padding="12">
             <ScrollViewer>
                 <StackPanel>
                     <TextBlock Text="目录" FontSize="11" Foreground="{DynamicResource MutedFgBrush}"
                                Margin="8,4,8,8" />
-                    <ItemsControl Name="TocList" />
+                    <ItemsControl Name="TocList" Classes="motion-list motion-stagger-8" />
                 </StackPanel>
             </ScrollViewer>
         </Border>
 
         <!-- 右：正文 -->
-        <ScrollViewer Grid.Column="1" Padding="32,24" Name="HelpOuter">
+        <ScrollViewer Grid.Column="1" Padding="32,24" Name="HelpOuter" Classes="motion-scroll">
             <ContentControl Name="HelpScroll" HorizontalAlignment="Center" Width="660" />
         </ScrollViewer>
     </Grid>

@@ -53,7 +53,7 @@
 
         <!-- 队伍卡片列表 -->
         <ScrollViewer Grid.Row="1" Padding="16,12">
-            <ItemsControl Name="TeamItems" ItemsSource="{Binding FilteredCards}">
+            <ItemsControl Name="TeamItems" Classes="motion-list motion-stagger-8" ItemsSource="{Binding FilteredCards}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel Orientation="Horizontal" ItemWidth="480" />
@@ -61,7 +61,15 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:TeamCardVm">
+                        <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
                         <Border Classes="card" Margin="0,0,8,8" Padding="0">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+                                    <BrushTransition Property="Background" Duration="0:0:0.16" />
+                                    <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                                </Transitions>
+                            </Border.Transitions>
                             <Grid ColumnDefinitions="*,Auto" Margin="14,12">
                                 <StackPanel Grid.Column="0" Spacing="8" Margin="0,0,8,0">
                                     <!-- 名称 + 徽章行 -->
@@ -81,28 +89,40 @@
                                     <!-- 元信息行 -->
                                     <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
                                         <TextBlock Text="{Binding MemberCountText}" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" Margin="0,0,8,3" />
-                                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,8,3" IsVisible="{Binding HasStarlight}">
+                                        <controls:MotionVisibility IsShown="{Binding HasStarlight}" Mode="Fade">
+                                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,8,3">
                                             <controls:AppIcon Icon="sparkles" Width="13" Height="13" Stroke="{DynamicResource WarningBrush}" />
                                             <TextBlock Text="星光已配" FontSize="11" FontFamily="{StaticResource MonoFont}"
                                                        Foreground="{DynamicResource WarningBrush}" />
                                         </StackPanel>
-                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3" IsVisible="{Binding HasSecondSystem}">
+                                        </controls:MotionVisibility>
+                                        <controls:MotionVisibility IsShown="{Binding HasSecondSystem}" Mode="Fade">
+                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3">
                                             <TextBlock Text="第二体系" FontSize="10" />
                                         </Border>
-                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3" IsVisible="{Binding HasSoloPass}">
+                                        </controls:MotionVisibility>
+                                        <controls:MotionVisibility IsShown="{Binding HasSoloPass}" Mode="Fade">
+                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3">
                                             <TextBlock Text="良秀单通" FontSize="10" Foreground="{DynamicResource BrandBrush}" />
                                         </Border>
-                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3" IsVisible="{Binding HasTeamCode}">
+                                        </controls:MotionVisibility>
+                                        <controls:MotionVisibility IsShown="{Binding HasTeamCode}" Mode="Fade">
+                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3">
                                             <TextBlock Text="编队码" FontSize="10" FontFamily="{StaticResource MonoFont}" />
                                         </Border>
-                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3" IsVisible="{Binding HasDiscard}">
+                                        </controls:MotionVisibility>
+                                        <controls:MotionVisibility IsShown="{Binding HasDiscard}" Mode="Fade">
+                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,6,3">
                                             <TextBlock FontSize="10" Foreground="{DynamicResource DestructiveBrush}">
                                                 <Run Text="舍弃 ×" /><Run Text="{Binding DiscardCount}" />
                                             </TextBlock>
                                         </Border>
-                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,0,3" IsVisible="{Binding Disabled}">
+                                        </controls:MotionVisibility>
+                                        <controls:MotionVisibility IsShown="{Binding Disabled}" Mode="Fade">
+                                        <Border Classes="badge" Height="18" Padding="5,1" Margin="0,0,0,3">
                                             <TextBlock Text="已停用" FontSize="10" Foreground="{DynamicResource MutedFgBrush}" />
                                         </Border>
+                                        </controls:MotionVisibility>
                                     </WrapPanel>
                                     <!-- 人格标签 -->
                                     <ItemsControl ItemsSource="{Binding Chips}">
@@ -139,26 +159,29 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        </controls:MotionVisibility>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
 
         <!-- 空状态（对应 React EmptyState） -->
-        <StackPanel Grid.Row="1" IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center"
-                    VerticalAlignment="Center" Spacing="8" Margin="24">
+        <controls:MotionVisibility Grid.Row="1" Classes="motion-empty" IsShown="{Binding IsEmpty}" Mode="Fade">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Margin="24">
             <controls:AppIcon Icon="users-round" Width="36" Height="36" Stroke="{DynamicResource MutedFgBrush}" HorizontalAlignment="Center" Opacity="0.65" />
             <TextBlock Text="{Binding EmptyTitle}" FontSize="14"
                        HorizontalAlignment="Center" />
             <TextBlock Text="{Binding EmptyDescription}" FontSize="11"
                        Foreground="{DynamicResource MutedFgBrush}" HorizontalAlignment="Center" />
         </StackPanel>
+        </controls:MotionVisibility>
 
         <!-- 删除确认弹窗 -->
-        <Border Name="DeleteOverlay" Grid.RowSpan="2" Background="{DynamicResource OverlayBrush}"
-                Focusable="True" KeyDown="OnDeleteOverlayKeyDown" PointerPressed="OnDeleteOverlayPointerPressed"
-                IsVisible="{Binding DeleteTarget, Converter={StaticResource NullVis}}">
-            <Border Classes="dialog-surface" MaxWidth="400" Margin="16"
+        <controls:MotionVisibility Grid.RowSpan="2" Classes="motion-overlay"
+                                   IsShown="{Binding DeleteTarget, Converter={StaticResource NullVis}}" Mode="Fade">
+        <Border Name="DeleteOverlay" Background="{DynamicResource OverlayBrush}"
+                Focusable="True" KeyDown="OnDeleteOverlayKeyDown" PointerPressed="OnDeleteOverlayPointerPressed">
+            <Border Classes="dialog-surface motion-dialog" MaxWidth="400" Margin="16"
                     HorizontalAlignment="Stretch" VerticalAlignment="Center">
                 <StackPanel Spacing="16">
                     <Grid ColumnDefinitions="*,Auto">
@@ -180,5 +203,6 @@
                 </StackPanel>
             </Border>
         </Border>
+        </controls:MotionVisibility>
     </Grid>
 </UserControl>

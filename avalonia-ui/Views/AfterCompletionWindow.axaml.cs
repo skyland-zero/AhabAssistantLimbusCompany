@@ -1,15 +1,16 @@
 using System.Linq;
 using AhabAssistant.Avalonia.Models;
+using AhabAssistant.Avalonia.Controls;
 using AhabAssistant.Avalonia.Services;
-using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 
 namespace AhabAssistant.Avalonia.Views;
 
-public partial class AfterCompletionWindow : Window
+public partial class AfterCompletionWindow : MotionWindow
 {
     private readonly AfterCompletionConfig _original;
+    private bool _closeRequested;
     public bool Saved { get; private set; }
     public AfterCompletionConfig? Result { get; private set; }
 
@@ -44,25 +45,34 @@ public partial class AfterCompletionWindow : Window
         };
     }
 
-    private void CloseWith(bool keep)
+    private async Task CloseWithAsync(bool keep)
     {
+        if (_closeRequested) return;
         Result = BuildResult(keep);
         Saved = true;
-        Close(true);
+        _closeRequested = true;
+        await RequestCloseAsync(true);
     }
 
-    private void OnApplyOnce(object? sender, RoutedEventArgs e) => CloseWith(false);
+    private async void OnApplyOnce(object? sender, RoutedEventArgs e) => await CloseWithAsync(false);
 
-    private void OnSaveDefault(object? sender, RoutedEventArgs e) => CloseWith(true);
+    private async void OnSaveDefault(object? sender, RoutedEventArgs e) => await CloseWithAsync(true);
 
-    private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+    private async void OnCancel(object? sender, RoutedEventArgs e) => await CloseWithAnimationAsync(false);
 
-    private void OnKeyDown(object? sender, KeyEventArgs e)
+    private async void OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
-            Close(false);
+            await CloseWithAnimationAsync(false);
         }
+    }
+
+    private async Task CloseWithAnimationAsync(bool dialogResult)
+    {
+        if (_closeRequested) return;
+        _closeRequested = true;
+        await RequestCloseAsync(dialogResult);
     }
 }

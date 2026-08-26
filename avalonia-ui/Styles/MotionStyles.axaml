@@ -1,0 +1,129 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls">
+    <!--
+        全局动效基础：只响应属性变化，不包含循环 Animation，避免装饰性常驻动画。
+        过渡集中在画刷、透明度和控件数值；颜色资源被 ThemeService 替换时也能平滑更新。
+    -->
+
+    <!-- 未被更具体 class 样式覆盖的基础元素。 -->
+    <Style Selector="Border">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="TextBlock">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="ContentPresenter">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|AppIcon">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Stroke" Duration="0:0:0.16" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- 页面/列表项只提供可复用的淡入淡出基础，实际显示时序由页面代理控制。 -->
+    <Style Selector="Control.page">
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.24" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Control.motion-item">
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- 通用弹层 surface：使用现有语义资源，进入/退出时可由 Opacity 驱动。 -->
+    <Style Selector="Border.modal-surface">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BoxShadow" Value="0 10 25 0 #40000000" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.22" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.22" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.22" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.popover-surface">
+        <Setter Property="Background" Value="{DynamicResource PopoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BoxShadow" Value="0 6 18 0 #40000000" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.20" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.20" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.20" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- Popup/Flyout 内容若使用这些类型，同样获得平滑状态反馈。 -->
+    <Style Selector="ToolTip">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="ListBoxItem">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="ComboBoxItem">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+            </Transitions>
+        </Setter>
+    </Style>
+</Styles>

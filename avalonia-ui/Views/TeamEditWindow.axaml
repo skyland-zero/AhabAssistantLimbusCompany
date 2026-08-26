@@ -1,14 +1,14 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
-        x:Class="AhabAssistant.Avalonia.Views.TeamEditWindow"
-        Title="编辑队伍"
-        Width="768" Height="620" MinWidth="600" MinHeight="420" MaxWidth="768"
-        WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource BgBrush}"
-        FontFamily="{StaticResource UiFont}"
-        WindowDecorations="None"
-        KeyDown="OnKeyDown">
+<controls:MotionWindow xmlns="https://github.com/avaloniaui"
+                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                       xmlns:controls="clr-namespace:AhabAssistant.Avalonia.Controls"
+                       x:Class="AhabAssistant.Avalonia.Views.TeamEditWindow"
+                       Title="编辑队伍"
+                       Width="768" Height="620" MinWidth="600" MinHeight="420" MaxWidth="768"
+                       WindowStartupLocation="CenterOwner"
+                       Background="{DynamicResource BgBrush}"
+                       FontFamily="{StaticResource UiFont}"
+                       WindowDecorations="None"
+                       KeyDown="OnKeyDown">
 
     <Border Classes="dialog-surface" Padding="0">
         <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -43,7 +43,7 @@
 
             <!-- 内容 -->
             <ScrollViewer Grid.Row="2" Padding="24,16">
-                <ContentControl Name="TabHost" />
+                <controls:MotionContentHost Name="TabHost" ClipToBounds="True" />
             </ScrollViewer>
 
             <!-- Footer -->
@@ -56,4 +56,4 @@
             </Border>
         </Grid>
     </Border>
-</Window>
+</controls:MotionWindow>

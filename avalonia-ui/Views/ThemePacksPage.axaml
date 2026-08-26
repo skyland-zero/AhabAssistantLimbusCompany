@@ -41,21 +41,32 @@
         </Border>
 
         <!-- 困难镜牢提示条 -->
-        <Border Grid.Row="1" Background="{DynamicResource WarningLightBrush}" Padding="24,8"
-                IsVisible="{Binding HardMirrorBannerVisible}">
+            <controls:MotionVisibility Grid.Row="1" Classes="motion-state"
+                                       IsShown="{Binding HardMirrorBannerVisible}" Mode="Fade">
+            <Border Background="{DynamicResource WarningLightBrush}" Padding="24,8">
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <controls:AppIcon Icon="triangle-alert" Width="15" Height="15" Stroke="{DynamicResource WarningBrush}" />
                 <TextBlock Text="困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重" FontSize="12"
                            Foreground="{DynamicResource WarningBrush}" />
             </StackPanel>
-        </Border>
+            </Border>
+            </controls:MotionVisibility>
 
         <!-- 主题包列表 -->
         <ScrollViewer Grid.Row="2" Padding="24,16">
-            <ItemsControl ItemsSource="{Binding Packs}">
+            <ItemsControl Classes="motion-list motion-stagger-8" ItemsSource="{Binding Packs}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:PackCardVm">
-                        <Border Classes="card" Margin="0,0,0,8" Opacity="{Binding Enabled, Converter={StaticResource EnabledOpacity}}">
+                        <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
+                        <Border Classes="card" Margin="0,0,0,8"
+                                Opacity="{Binding Enabled, Converter={StaticResource EnabledOpacity}}">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+                                    <BrushTransition Property="Background" Duration="0:0:0.16" />
+                                    <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                                </Transitions>
+                            </Border.Transitions>
                             <Grid ColumnDefinitions="Auto,180,*,Auto" Margin="20,12">
                                 <ToggleSwitch Grid.Column="0" Classes="compact" IsChecked="{Binding Enabled}" />
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -72,6 +83,7 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        </controls:MotionVisibility>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

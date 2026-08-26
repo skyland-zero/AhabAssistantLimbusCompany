@@ -13,7 +13,7 @@
 
     <ScrollViewer Padding="24">
         <StackPanel Spacing="16">
-            <ItemsControl Name="ToolItems" ItemsSource="{Binding Tools}">
+            <ItemsControl Name="ToolItems" Classes="motion-list motion-stagger-8" ItemsSource="{Binding Tools}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel Orientation="Horizontal" ItemWidth="360" />
@@ -21,22 +21,33 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:ToolCardVm">
+                        <controls:MotionVisibility Classes="motion-item motion-card" IsShown="True" Mode="Slide">
                         <Border Classes="card" Margin="0,0,12,12" Padding="16" MinHeight="180">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+                                    <BrushTransition Property="Background" Duration="0:0:0.16" />
+                                    <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+                                </Transitions>
+                            </Border.Transitions>
                             <StackPanel Spacing="12">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <controls:AppIcon Grid.Column="0" Icon="{Binding Icon}" Width="24" Height="24" />
-                                    <Border Grid.Column="1" Classes="badge" Background="{DynamicResource SuccessLightBrush}"
-                                            IsVisible="{Binding Running}">
+                                    <controls:MotionVisibility Grid.Column="1" IsShown="{Binding Running}" Mode="Fade">
+                                    <Border Classes="badge" Background="{DynamicResource SuccessLightBrush}">
                                         <StackPanel Orientation="Horizontal" Spacing="5">
                                             <Ellipse Width="6" Height="6" Fill="{DynamicResource SuccessBrush}" />
                                             <TextBlock Text="运行中" FontSize="11" Foreground="{DynamicResource SuccessBrush}" />
                                         </StackPanel>
                                     </Border>
-                                    <Border Grid.Column="1" Classes="badge" IsVisible="{Binding Running, Converter={StaticResource BoolVisInv}}">
+                                    </controls:MotionVisibility>
+                                    <controls:MotionVisibility Grid.Column="1" IsShown="{Binding Running, Converter={StaticResource BoolVisInv}}" Mode="Fade">
+                                    <Border Classes="badge">
                                         <TextBlock FontSize="11" Foreground="{DynamicResource MutedFgBrush}">
                                             <Run Text="{Binding IsScreenshotText}" />
                                         </TextBlock>
                                     </Border>
+                                    </controls:MotionVisibility>
                                 </Grid>
 
                                 <StackPanel Spacing="4">
@@ -46,37 +57,41 @@
                                 </StackPanel>
 
                                 <!-- 截图工具：仅运行按钮 -->
+                                <controls:MotionVisibility IsShown="{Binding IsScreenshot}" Mode="Fade">
                                 <Button Classes="app-btn outline" Height="32" HorizontalAlignment="Stretch"
-                                        Command="{Binding $parent[UserControl].((vm:ToolboxViewModel)DataContext).TakeScreenshotCommand}"
-                                        IsVisible="{Binding IsScreenshot}">
+                                        Command="{Binding $parent[UserControl].((vm:ToolboxViewModel)DataContext).TakeScreenshotCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <controls:AppIcon Icon="camera" Width="14" Height="14" />
                                         <TextBlock Text="运行" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
+                                </controls:MotionVisibility>
 
                                 <!-- 运行中 → 停止 -->
+                                <controls:MotionVisibility IsShown="{Binding ShowStopButton}" Mode="Fade">
                                 <Button Classes="app-btn outline" Height="32" HorizontalAlignment="Stretch"
                                         Foreground="{DynamicResource DestructiveBrush}" BorderBrush="{DynamicResource DestructiveBrush}"
-                                        Command="{Binding RunCommand}"
-                                        IsVisible="{Binding ShowStopButton}">
+                                        Command="{Binding RunCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <controls:AppIcon Icon="circle-stop" Width="14" Height="14" Stroke="{DynamicResource DestructiveBrush}" />
                                         <TextBlock Text="停止" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
+                                </controls:MotionVisibility>
 
                                 <!-- 待机 → 运行 -->
+                                <controls:MotionVisibility IsShown="{Binding ShowRunButton}" Mode="Fade">
                                 <Button Classes="app-btn brand" Height="32" HorizontalAlignment="Stretch"
-                                        Command="{Binding RunCommand}"
-                                        IsVisible="{Binding ShowRunButton}">
+                                        Command="{Binding RunCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <controls:AppIcon Icon="play" Width="14" Height="14" Stroke="{DynamicResource BrandFgBrush}" />
                                         <TextBlock Text="运行" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
+                                </controls:MotionVisibility>
                             </StackPanel>
                         </Border>
+                        </controls:MotionVisibility>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

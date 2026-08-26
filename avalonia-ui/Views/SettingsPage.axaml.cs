@@ -23,10 +23,12 @@ public partial class SettingsPage : UserControl
             {
                 _capturing = false;
                 Vm.CapturingTarget = null;
+                UpdateCaptureVisualState();
             }
         };
         KeyDown += OnCaptureKeyDown;
         DataContext = new SettingsViewModel();
+        UpdateCaptureVisualState();
     }
 
     private void InitCombo()
@@ -40,6 +42,7 @@ public partial class SettingsPage : UserControl
     {
         _capturing = true;
         Vm.CapturingTarget = target;
+        UpdateCaptureVisualState();
         Focus();
     }
 
@@ -63,10 +66,20 @@ public partial class SettingsPage : UserControl
         if (combo.Length == 0) return; // 单独按修饰键不生效
         Vm.SetHotkey(Vm.CapturingTarget ?? "startStop", combo);
         _capturing = false;
+        UpdateCaptureVisualState();
     }
 
-    private void ClearStartStop(object? sender, RoutedEventArgs e) => Vm.SetHotkey("startStop", "");
-    private void ClearPauseResume(object? sender, RoutedEventArgs e) => Vm.SetHotkey("pauseResume", "");
+    private void ClearStartStop(object? sender, RoutedEventArgs e)
+    {
+        Vm.SetHotkey("startStop", "");
+        UpdateCaptureVisualState();
+    }
+
+    private void ClearPauseResume(object? sender, RoutedEventArgs e)
+    {
+        Vm.SetHotkey("pauseResume", "");
+        UpdateCaptureVisualState();
+    }
 
     private void HotkeySwitchToggled(object? sender, RoutedEventArgs e) => Vm.SaveHotkey();
 
@@ -104,4 +117,11 @@ public partial class SettingsPage : UserControl
     }
 
     private void CdkLostFocus(object? sender, RoutedEventArgs e) => Vm.SaveSysSettings();
+
+    private void UpdateCaptureVisualState()
+    {
+        if (CaptureStartStop == null || CapturePauseResume == null || Vm == null) return;
+        CaptureStartStop.Classes.Set("capturing", Vm.CapturingTarget == "startStop");
+        CapturePauseResume.Classes.Set("capturing", Vm.CapturingTarget == "pauseResume");
+    }
 }

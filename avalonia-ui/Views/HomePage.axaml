@@ -34,10 +34,17 @@
                 <Border Grid.Row="0" Background="{DynamicResource TabBarBrush}" Padding="14,8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Text="自动化任务" FontSize="13" VerticalAlignment="Center" />
-                    <Border Classes="badge" Padding="8,2" CornerRadius="10">
+                    <Border Name="StatusBadge" Classes="badge" Padding="8,2" CornerRadius="10">
+                        <Border.Transitions>
+                            <Transitions>
+                                <BrushTransition Property="Background" Duration="0:0:0.18" />
+                            </Transitions>
+                        </Border.Transitions>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Ellipse Width="6" Height="6" Fill="{DynamicResource BrandBrush}"
-                                     IsVisible="{Binding IsRunningDot}" />
+                            <controls:MotionVisibility Width="6" Height="6"
+                                                        IsShown="{Binding IsRunningDot}" Mode="Fade">
+                                <Ellipse Width="6" Height="6" Fill="{DynamicResource BrandBrush}" />
+                            </controls:MotionVisibility>
                             <TextBlock Text="{Binding StatusBadgeText}" FontSize="11" />
                         </StackPanel>
                     </Border>
@@ -77,11 +84,23 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Name="SetWindowsChevron" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                    <controls:AppIcon.RenderTransform>
+                                        <RotateTransform Angle="0">
+                                            <RotateTransform.Transitions>
+                                                <Transitions>
+                                                    <DoubleTransition Property="Angle" Duration="0:0:0.18" />
+                                                </Transitions>
+                                            </RotateTransform.Transitions>
+                                        </RotateTransform>
+                                    </controls:AppIcon.RenderTransform>
+                                </controls:AppIcon>
                             </Grid>
 
                             <!-- 展开内容 -->
-                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding SetWindowsExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <controls:MotionVisibility Name="SetWindowsMotion"
+                                                        IsShown="{Binding SetWindowsExpanded}" Mode="Reveal">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="SetWindowsTabClick"
@@ -91,7 +110,8 @@
                                     </StackPanel>
 
                                     <!-- 常规 -->
-                                    <StackPanel Spacing="14" IsVisible="{Binding SetWindowsTab, Converter={StaticResource StrEq}, ConverterParameter=general}">
+                                    <controls:MotionVisibility IsShown="{Binding SetWindowsTab, Converter={StaticResource StrEq}, ConverterParameter=general}" Mode="Fade">
+                                    <StackPanel Spacing="14">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="窗口分辨率" FontSize="12" />
@@ -123,9 +143,11 @@
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.SetWindows.SetReduceMiscontact}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
                                     </StackPanel>
+                                    </controls:MotionVisibility>
 
                                     <!-- 高级 -->
-                                    <StackPanel Spacing="14" IsVisible="{Binding SetWindowsTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}">
+                                    <controls:MotionVisibility IsShown="{Binding SetWindowsTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}" Mode="Fade">
+                                    <StackPanel Spacing="14">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="截图间隔" FontSize="12" />
@@ -156,8 +178,10 @@
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.SetWindows.UsePostMessage}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
                                     </StackPanel>
+                                    </controls:MotionVisibility>
                                 </StackPanel>
                             </Border>
+                            </controls:MotionVisibility>
                         </StackPanel>
                     </Border>
 
@@ -185,10 +209,22 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Name="DailyChevron" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                    <controls:AppIcon.RenderTransform>
+                                        <RotateTransform Angle="0">
+                                            <RotateTransform.Transitions>
+                                                <Transitions>
+                                                    <DoubleTransition Property="Angle" Duration="0:0:0.18" />
+                                                </Transitions>
+                                            </RotateTransform.Transitions>
+                                        </RotateTransform>
+                                    </controls:AppIcon.RenderTransform>
+                                </controls:AppIcon>
                             </Grid>
 
-                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding DailyExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <controls:MotionVisibility Name="DailyMotion"
+                                                        IsShown="{Binding DailyExpanded}" Mode="Reveal">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="DailyTabClick"
@@ -198,7 +234,8 @@
                                     </StackPanel>
 
                                     <!-- 常规 -->
-                                    <StackPanel Spacing="14" IsVisible="{Binding DailyTab, Converter={StaticResource StrEq}, ConverterParameter=general}">
+                                    <controls:MotionVisibility IsShown="{Binding DailyTab, Converter={StaticResource StrEq}, ConverterParameter=general}" Mode="Fade">
+                                    <StackPanel Spacing="14">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="经验本次数" FontSize="12" />
@@ -245,7 +282,9 @@
                                                     <TextBlock Text="自动连战，减少进出副本加载时间" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
-                                                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding Config.DailyTask.UseContinuousCombat}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4"
+                                                                controls:MotionVisibility.IsVisible="{Binding Config.DailyTask.UseContinuousCombat}"
+                                                                controls:MotionVisibility.Mode="Fade">
                                                         <Button Classes="app-btn outline icon-btn" Width="24" Height="24" FontSize="11" Command="{Binding StepCommand}" CommandParameter="cont:-1" IsEnabled="{Binding ContMinusEnabled}">
                                                             <controls:AppIcon Icon="minus" Width="12" Height="12" />
                                                         </Button>
@@ -260,9 +299,11 @@
                                             </Grid>
                                         </Border>
                                     </StackPanel>
+                                    </controls:MotionVisibility>
 
                                     <!-- 高级：针对性配队 -->
-                                    <StackPanel Spacing="16" IsVisible="{Binding DailyTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}">
+                                    <controls:MotionVisibility IsShown="{Binding DailyTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}" Mode="Fade">
+                                    <StackPanel Spacing="16">
                                         <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="10"><StackPanel Spacing="10">
                                             <StackPanel>
                                                 <Grid ColumnDefinitions="*,Auto">
@@ -273,7 +314,8 @@
                                                     <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.DailyTask.TargetedTeamingExp}" IsCheckedChanged="ConfigSwitchToggled" />
                                                 </Grid>
                                                 <Separator Margin="0,8,0,2" />
-                                                <WrapPanel IsVisible="{Binding Config.DailyTask.TargetedTeamingExp}">
+                                                <WrapPanel controls:MotionVisibility.IsVisible="{Binding Config.DailyTask.TargetedTeamingExp}"
+                                                           controls:MotionVisibility.Mode="Reveal">
                                                     <Grid ColumnDefinitions="Auto,Auto" Margin="0,6,40,0" Width="220">
                                                         <TextBlock Grid.Column="0" Text="周一/二 (斩击)" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                                                         <ComboBox Grid.Column="1" Classes="app-select" Height="28" MinHeight="28" Width="110" FontSize="11" ItemsSource="{Binding TeamNames}" SelectedIndex="{Binding ExpDay12Index}" HorizontalAlignment="Right" />
@@ -305,7 +347,8 @@
                                                     <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.DailyTask.TargetedTeamingThread}" IsCheckedChanged="ConfigSwitchToggled" />
                                                 </Grid>
                                                 <Separator Margin="0,8,0,2" />
-                                                <WrapPanel IsVisible="{Binding Config.DailyTask.TargetedTeamingThread}">
+                                                <WrapPanel controls:MotionVisibility.IsVisible="{Binding Config.DailyTask.TargetedTeamingThread}"
+                                                           controls:MotionVisibility.Mode="Reveal">
                                                     <Grid ColumnDefinitions="Auto,Auto" Margin="0,6,40,0" Width="220">
                                                         <TextBlock Grid.Column="0" Text="周一 (色欲)" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
                                                         <ComboBox Grid.Column="1" Classes="app-select" Height="28" MinHeight="28" Width="110" FontSize="11" ItemsSource="{Binding TeamNames}" SelectedIndex="{Binding ThreadDay1Index}" HorizontalAlignment="Right" />
@@ -339,8 +382,10 @@
     </StackPanel>
                                         </Border>
                                     </StackPanel>
+                                    </controls:MotionVisibility>
                                 </StackPanel>
                             </Border>
+                            </controls:MotionVisibility>
                         </StackPanel>
                     </Border>
 
@@ -368,10 +413,22 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Name="RewardChevron" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                    <controls:AppIcon.RenderTransform>
+                                        <RotateTransform Angle="0">
+                                            <RotateTransform.Transitions>
+                                                <Transitions>
+                                                    <DoubleTransition Property="Angle" Duration="0:0:0.18" />
+                                                </Transitions>
+                                            </RotateTransform.Transitions>
+                                        </RotateTransform>
+                                    </controls:AppIcon.RenderTransform>
+                                </controls:AppIcon>
                             </Grid>
 
-                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,12" IsVisible="{Binding RewardExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <controls:MotionVisibility Name="RewardMotion"
+                                                        IsShown="{Binding RewardExpanded}" Mode="Reveal">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,12" IsEnabled="{Binding !IsBusy}">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <StackPanel Grid.Column="0" Spacing="1">
                                         <TextBlock Text="领取奖励模式" FontSize="12" />
@@ -384,6 +441,7 @@
                                     </ComboBox>
                                 </Grid>
                             </Border>
+                            </controls:MotionVisibility>
                         </StackPanel>
                     </Border>
 
@@ -411,10 +469,22 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Name="EnkephalinChevron" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                    <controls:AppIcon.RenderTransform>
+                                        <RotateTransform Angle="0">
+                                            <RotateTransform.Transitions>
+                                                <Transitions>
+                                                    <DoubleTransition Property="Angle" Duration="0:0:0.18" />
+                                                </Transitions>
+                                            </RotateTransform.Transitions>
+                                        </RotateTransform>
+                                    </controls:AppIcon.RenderTransform>
+                                </controls:AppIcon>
                             </Grid>
 
-                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding EnkephalinExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <controls:MotionVisibility Name="EnkephalinMotion"
+                                                        IsShown="{Binding EnkephalinExpanded}" Mode="Reveal">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsEnabled="{Binding !IsBusy}">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="EnkephalinTabClick"
@@ -423,7 +493,8 @@
                                                 Classes.active="{Binding EnkephalinTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}" />
                                     </StackPanel>
 
-                                    <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding EnkephalinTab, Converter={StaticResource StrEq}, ConverterParameter=general}">
+                                    <controls:MotionVisibility IsShown="{Binding EnkephalinTab, Converter={StaticResource StrEq}, ConverterParameter=general}" Mode="Fade">
+                                    <Grid ColumnDefinitions="*,Auto">
                                         <StackPanel Grid.Column="0" Spacing="1">
                                             <TextBlock Text="狂气换体次数" FontSize="12" />
                                             <TextBlock Text="消耗狂气兑换脑啡肽的次数 (0-10)" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />
@@ -439,8 +510,10 @@
                                             </Button>
                                         </StackPanel>
                                     </Grid>
+                                    </controls:MotionVisibility>
 
-                                    <StackPanel Spacing="14" IsVisible="{Binding EnkephalinTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}">
+                                    <controls:MotionVisibility IsShown="{Binding EnkephalinTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}" Mode="Fade">
+                                    <StackPanel Spacing="14">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="葛朗台模式" FontSize="12" />
@@ -456,8 +529,10 @@
                                             <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.BuyEnkephalin.SkipEnkephalin}" IsCheckedChanged="ConfigSwitchToggled" />
                                         </Grid>
                                     </StackPanel>
+                                    </controls:MotionVisibility>
                                 </StackPanel>
                             </Border>
+                            </controls:MotionVisibility>
                         </StackPanel>
                     </Border>
 
@@ -485,10 +560,22 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <controls:AppIcon Grid.Column="3" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
+                                <controls:AppIcon Grid.Column="3" Name="MirrorChevron" Icon="chevron-down" Width="14" Height="14" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                    <controls:AppIcon.RenderTransform>
+                                        <RotateTransform Angle="0">
+                                            <RotateTransform.Transitions>
+                                                <Transitions>
+                                                    <DoubleTransition Property="Angle" Duration="0:0:0.18" />
+                                                </Transitions>
+                                            </RotateTransform.Transitions>
+                                        </RotateTransform>
+                                    </controls:AppIcon.RenderTransform>
+                                </controls:AppIcon>
                             </Grid>
 
-                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsVisible="{Binding MirrorExpanded}" IsEnabled="{Binding !IsBusy}">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" Padding="12,10,12,12" IsEnabled="{Binding !IsBusy}"
+                                    controls:MotionVisibility.IsVisible="{Binding MirrorExpanded}"
+                                    controls:MotionVisibility.Mode="Reveal">
                                 <StackPanel Spacing="12">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <Button Classes="app-btn seg" Content="常规设置" Tag="general" Click="MirrorTabClick"
@@ -499,26 +586,36 @@
 
                                     <!-- 运行中进度条 -->
                                     <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource BrandBrush}" Padding="10"
-                                            IsVisible="{Binding MirrorProgress, Converter={StaticResource NullVis}}"><StackPanel Spacing="6">
-                                        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                                            <TextBlock Grid.Column="0" FontSize="12" Foreground="{DynamicResource BrandBrush}">
-                                                <Run Text="镜牢探索进度 (" /><Run Text="{Binding MirrorProgress.ModeText}" /><Run Text=")" />
-                                            </TextBlock>
-                                            <Border Grid.Column="1" Classes="badge" Padding="6,1" Background="{DynamicResource BgBrush}" BorderThickness="1" BorderBrush="{DynamicResource InputBorderBrush}">
-                                                <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="11">
-                                                    <Run Text="{Binding MirrorProgress.Current}" /><Run Text=" / " /><Run Text="{Binding MirrorProgress.TotalText}" />
-                                                </TextBlock>
-                                            </Border>
-                                        </Grid>
-                                        <Border Height="6" CornerRadius="3" Background="{DynamicResource MutedBrush}" ClipToBounds="True">
-                                            <Rectangle Fill="{DynamicResource BrandBrush}" RadiusX="3" RadiusY="3" HorizontalAlignment="Left"
-                                                       Width="{Binding MirrorProgress, Converter={StaticResource MirrorPercent}}" />
+                                            controls:MotionVisibility.IsVisible="{Binding MirrorProgress, Converter={StaticResource NullVis}}"
+                                            controls:MotionVisibility.Mode="Fade">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                                                    <TextBlock Grid.Column="0" FontSize="12" Foreground="{DynamicResource BrandBrush}">
+                                                        <Run Text="镜牢探索进度 (" /><Run Text="{Binding MirrorProgress.ModeText}" /><Run Text=")" />
+                                                    </TextBlock>
+                                                    <Border Grid.Column="1" Classes="badge" Padding="6,1" Background="{DynamicResource BgBrush}" BorderThickness="1" BorderBrush="{DynamicResource InputBorderBrush}">
+                                                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="11">
+                                                            <Run Text="{Binding MirrorProgress.Current}" /><Run Text=" / " /><Run Text="{Binding MirrorProgress.TotalText}" />
+                                                        </TextBlock>
+                                                    </Border>
+                                                </Grid>
+                                                <Border Height="6" CornerRadius="3" Background="{DynamicResource MutedBrush}" ClipToBounds="True">
+                                                    <Rectangle Fill="{DynamicResource BrandBrush}" RadiusX="3" RadiusY="3" HorizontalAlignment="Left"
+                                                               Width="{Binding MirrorProgress, Converter={StaticResource MirrorPercent}}">
+                                                        <Rectangle.Transitions>
+                                                            <Transitions>
+                                                                <DoubleTransition Property="Width" Duration="0:0:0.24" />
+                                                            </Transitions>
+                                                        </Rectangle.Transitions>
+                                                    </Rectangle>
+                                                </Border>
+                                            </StackPanel>
                                         </Border>
-                                    </StackPanel>
-                                    </Border>
 
                                     <!-- 常规 -->
-                                    <StackPanel Spacing="14" IsVisible="{Binding MirrorTab, Converter={StaticResource StrEq}, ConverterParameter=general}">
+                                    <StackPanel Spacing="14"
+                                                controls:MotionVisibility.IsVisible="{Binding MirrorTab, Converter={StaticResource StrEq}, ConverterParameter=general}"
+                                                controls:MotionVisibility.Mode="Fade">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="1">
                                                 <TextBlock Text="坐牢次数" FontSize="12" />
@@ -526,7 +623,8 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                                 <StackPanel Orientation="Horizontal" Spacing="6"
-                                                            IsVisible="{Binding Config.Mirror.InfiniteDungeons, Converter={StaticResource BoolVisInv}}">
+                                                            controls:MotionVisibility.IsVisible="{Binding Config.Mirror.InfiniteDungeons, Converter={StaticResource BoolVisInv}}"
+                                                            controls:MotionVisibility.Mode="Fade">
                                                     <Button Classes="app-btn outline icon-btn" Width="28" Height="28" Command="{Binding StepCommand}" CommandParameter="mirror:-1" IsEnabled="{Binding MirrorMinusEnabled}">
                                                         <controls:AppIcon Icon="minus" Width="14" Height="14" />
                                                     </Button>
@@ -537,7 +635,8 @@
                                                     </Button>
                                                 </StackPanel>
                                                 <Border Classes="badge" Padding="8,3"
-                                                        IsVisible="{Binding Config.Mirror.InfiniteDungeons}">
+                                                        controls:MotionVisibility.IsVisible="{Binding Config.Mirror.InfiniteDungeons}"
+                                                        controls:MotionVisibility.Mode="Fade">
                                                     <TextBlock Text="∞ 无限模式" FontFamily="{StaticResource MonoFont}" FontSize="12" />
                                                 </Border>
                                             </StackPanel>
@@ -559,7 +658,9 @@
                                     </StackPanel>
 
                                     <!-- 高级：10 个开关网格 -->
-                                    <UniformGrid Columns="2" Rows="5" IsVisible="{Binding MirrorTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}">
+                                    <UniformGrid Columns="2" Rows="5"
+                                                 controls:MotionVisibility.IsVisible="{Binding MirrorTab, Converter={StaticResource StrEq}, ConverterParameter=advanced}"
+                                                 controls:MotionVisibility.Mode="Fade">
                                         <!-- 每格由代码后置绑定，直接写死 10 个 -->
                                         <Border Classes="surface" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SubtleSurfaceBrush}" Padding="8" Margin="0,0,6,6">
                                             <Grid ColumnDefinitions="*,Auto">
@@ -713,25 +814,33 @@
                     </Button>
                     <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8">
                         <Button Classes="app-btn outline" Height="36" Padding="12,0"
-                                IsVisible="{Binding IsBusy}" Command="{Binding PauseResumeCommand}">
+                                Command="{Binding PauseResumeCommand}"
+                                controls:MotionVisibility.IsVisible="{Binding IsBusy}"
+                                controls:MotionVisibility.Mode="Fade">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <controls:AppIcon Icon="play" Width="14" Height="14" VerticalAlignment="Center"
-                                                  IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=paused}" />
+                                                  controls:MotionVisibility.IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=paused}"
+                                                  controls:MotionVisibility.Mode="Fade" />
                                 <controls:AppIcon Icon="pause" Width="14" Height="14" VerticalAlignment="Center" Stroke="{DynamicResource WarningBrush}"
-                                                  IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=running}" />
+                                                  controls:MotionVisibility.IsVisible="{Binding ExecutionState, Converter={StaticResource StrEq}, ConverterParameter=running}"
+                                                  controls:MotionVisibility.Mode="Fade" />
                                 <TextBlock Text="{Binding PauseResumeText}" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <Button Classes="app-btn brand destructive" Height="36" Padding="20,0"
-                                IsVisible="{Binding IsBusy}" Command="{Binding StopCommand}"
-                                 Background="{DynamicResource DestructiveBrush}" Foreground="{DynamicResource DestructiveFgBrush}">
+                                Command="{Binding StopCommand}"
+                                controls:MotionVisibility.IsVisible="{Binding IsBusy}"
+                                controls:MotionVisibility.Mode="Fade"
+                                Background="{DynamicResource DestructiveBrush}" Foreground="{DynamicResource DestructiveFgBrush}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <controls:AppIcon Icon="circle-stop" Width="15" Height="15" Stroke="{DynamicResource DestructiveFgBrush}" VerticalAlignment="Center" />
                                 <TextBlock Text="Stop!" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <Button Classes="app-btn brand" Height="36" Padding="20,0"
-                                IsVisible="{Binding IsBusy, Converter={StaticResource BoolVisInv}}" Command="{Binding StartCommand}">
+                                Command="{Binding StartCommand}"
+                                controls:MotionVisibility.IsVisible="{Binding IsBusy, Converter={StaticResource BoolVisInv}}"
+                                controls:MotionVisibility.Mode="Fade">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <controls:AppIcon Icon="play" Width="15" Height="15" Stroke="{DynamicResource BrandFgBrush}" VerticalAlignment="Center" />
                                 <TextBlock Text="Link Start!" VerticalAlignment="Center" />
@@ -754,7 +863,8 @@
 
         <!-- ==================== 右侧信息面板：连接 → 截图 → 日志 ==================== -->
         <Grid Grid.Column="2" Name="RightPanel" RowDefinitions="Auto,Auto,*" Margin="10,10,10,10"
-              IsVisible="{Binding !RightPanelCollapsed}">
+              controls:MotionVisibility.IsVisible="{Binding !RightPanelCollapsed}"
+              controls:MotionVisibility.Mode="Fade">
             <!-- 设备连接 -->
             <Border Grid.Row="0" Name="RightConnection" Classes="card" Margin="0,0,0,8">
                 <StackPanel>
@@ -780,7 +890,8 @@
                             <controls:AppIcon Icon="refresh-cw" Width="14" Height="14" />
                         </Button>
                         <Button Classes="app-btn icon-btn" Command="{Binding DisconnectCommand}"
-                                IsVisible="{Binding ConnectionStatus, Converter={StaticResource StrEq}, ConverterParameter=connected}"
+                                controls:MotionVisibility.IsVisible="{Binding ConnectionStatus, Converter={StaticResource StrEq}, ConverterParameter=connected}"
+                                controls:MotionVisibility.Mode="Fade"
                                 ToolTip.Tip="断开">
                             <controls:AppIcon Icon="x" Width="14" Height="14" />
                         </Button>

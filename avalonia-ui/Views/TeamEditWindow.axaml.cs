@@ -18,11 +18,13 @@ using global::Avalonia.Media.Imaging;
 
 namespace AhabAssistant.Avalonia.Views;
 
-public partial class TeamEditWindow : Window
+public partial class TeamEditWindow : MotionWindow
 {
     private readonly TeamDetail _team;          // 工作副本
     private TeamMirrorConfig Mc => _team.MirrorConfig!;
     private readonly List<SinnerInfo> _sinners;
+    private int _activeTabIndex = -1;
+    private bool _closeRequested;
     public bool Saved { get; private set; }
     public TeamDetail? Result { get; private set; }
 
@@ -63,7 +65,7 @@ public partial class TeamEditWindow : Window
 
         TitleText.Text = Localization.T(string.IsNullOrEmpty(_team.Id) ? "新建队伍" : "编辑队伍");
         BuildTabs();
-        OnTab(TabBasic, null!);
+        SelectTab(TabBasic, animate: false);
         AttachedToVisualTree += (_, _) => Localization.ApplyStatic(this);
     }
 
@@ -138,9 +140,23 @@ public partial class TeamEditWindow : Window
         return tb;
     }
 
+    private static Bitmap? LoadSchemeIcon(string id)
+    {
+        try
+        {
+            using var stream = global::Avalonia.Platform.AssetLoader.Open(
+                new Uri($"avares://AhabAssistant.Avalonia/Assets/status_effects/{id}.png"));
+            return new Bitmap(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private Image SchemeIcon(string id) => new()
     {
-        Source = new Bitmap($"avares://AhabAssistant.Avalonia/Assets/status_effects/{id}.png"),
+        Source = LoadSchemeIcon(id),
         Width = 18, Height = 18,
     };
 
@@ -154,9 +170,23 @@ public partial class TeamEditWindow : Window
     private void OnTab(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button btn) return;
+        SelectTab(btn, animate: true);
+    }
+
+    private void SelectTab(Button btn, bool animate)
+    {
         foreach (var b in new[] { TabBasic, TabShop, TabCombat, TabStarlight, TabAdvanced })
             b.Classes.Set("active", b == btn);
-        TabHost.Content = btn.Tag switch
+
+        var tabIndex = btn == TabBasic ? 0
+            : btn == TabShop ? 1
+            : btn == TabCombat ? 2
+            : btn == TabStarlight ? 3
+            : 4;
+        var direction = tabIndex >= _activeTabIndex
+            ? MotionDirection.Forward
+            : MotionDirection.Backward;
+        var content = btn.Tag switch
         {
             "basic" => BuildBasic(),
             "shop" => BuildShop(),
@@ -164,8 +194,13 @@ public partial class TeamEditWindow : Window
             "starlight" => BuildStarlight(),
             _ => BuildAdvanced(),
         };
-        if (TabHost.Content is Control content)
-            Localization.ApplyStatic(content);
+
+        Localization.ApplyStatic(content);
+        TabHost.TransitionTo(
+            content,
+            direction,
+            animate && _activeTabIndex >= 0 && tabIndex != _activeTabIndex && UiMotion.IsEnabled);
+        _activeTabIndex = tabIndex;
     }
 
     private Control BuildBasic()
@@ -834,7 +869,7 @@ public partial class TeamEditWindow : Window
     private void RefreshTab()
     {
         var current = new[] { TabBasic, TabShop, TabCombat, TabStarlight, TabAdvanced }.First(b => b.Classes.Contains("active"));
-        OnTab(current, null!);
+        SelectTab(current, animate: false);
     }
 
     /* ==================== 导入 / 导出 / 保存 ==================== */
@@ -938,18 +973,19 @@ public partial class TeamEditWindow : Window
         return def;
     }
 
-    private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+    private async void OnCancel(object? sender, RoutedEventArgs e)
+        => await CloseWithAnimationAsync(false);
 
-    private void OnKeyDown(object? sender, KeyEventArgs e)
+    private async void OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
-            Close(false);
+            await CloseWithAnimationAsync(false);
         }
     }
 
-    private void OnSave(object? sender, RoutedEventArgs e)
+    private async void OnSave(object? sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_team.Name))
         {
@@ -959,6 +995,13 @@ public partial class TeamEditWindow : Window
         // 返回工作副本，由 TeamsViewModel 统一负责新增/更新和持久化。
         Result = Clone(_team);
         Saved = true;
-        Close(true);
+        await CloseWithAnimationAsync(true);
+    }
+
+    private async Task CloseWithAnimationAsync(bool dialogResult)
+    {
+        if (_closeRequested) return;
+        _closeRequested = true;
+        await RequestCloseAsync(dialogResult);
     }
 }

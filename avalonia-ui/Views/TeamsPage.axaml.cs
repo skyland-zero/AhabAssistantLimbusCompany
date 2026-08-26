@@ -1,8 +1,10 @@
 using System;
 using AhabAssistant.Avalonia.Models;
+using AhabAssistant.Avalonia.Controls;
 using AhabAssistant.Avalonia.Services;
 using AhabAssistant.Avalonia.ViewModels;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -11,6 +13,7 @@ namespace AhabAssistant.Avalonia.Views;
 
 public partial class TeamsPage : UserControl
 {
+    private const int MaxStaggeredCards = 8;
     private TeamsViewModel Vm => (TeamsViewModel)DataContext!;
 
     public TeamsPage()
@@ -20,7 +23,19 @@ public partial class TeamsPage : UserControl
         DataContext = new TeamsViewModel();
         Vm.RequestEditModal += OpenEditModal;
         Vm.PropertyChanged += OnViewModelPropertyChanged;
+        TeamItems.ContainerPrepared += OnTeamContainerPrepared;
         LayoutUpdated += OnLayoutUpdated;
+    }
+
+    private static void OnTeamContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        // A filter/reload can materialize a large collection in one pass. Keep
+        // the first eight cards eligible for the entrance motion and make all
+        // later/recycled cards settle immediately.
+        if (e.Container is ContentPresenter { Content: MotionVisibility motion })
+            motion.Duration = e.Index < MaxStaggeredCards
+                ? UiMotion.StandardDuration
+                : TimeSpan.Zero;
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -71,8 +86,20 @@ public partial class TeamsPage : UserControl
     {
         var win = new TeamEditWindow(team, Vm);
         var owner = Window.GetTopLevel(this) as Window;
-        if (owner != null) await win.ShowDialog<bool>(owner);
-        else win.Show();
+        var mainOwner = owner as MainWindow;
+
+        // 编辑窗口使用真正的模态对话框；主窗口遮罩的生命周期必须覆盖
+        // ShowDialog（包括窗口的退出动画），避免窗口关闭后遮罩残留。
+        mainOwner?.BeginModal();
+        try
+        {
+            if (owner != null) await win.ShowDialog<bool>(owner);
+            else win.Show();
+        }
+        finally
+        {
+            mainOwner?.EndModal();
+        }
 
         if (win.Saved && win.Result != null) Vm.SaveTeam(win.Result);
     }

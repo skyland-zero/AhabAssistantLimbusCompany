@@ -1,10 +1,13 @@
 using System;
+using System.ComponentModel;
 using System.Linq;
+using AhabAssistant.Avalonia.Controls;
 using AhabAssistant.Avalonia.Services;
 using AhabAssistant.Avalonia.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 
 namespace AhabAssistant.Avalonia.Views;
@@ -12,6 +15,8 @@ namespace AhabAssistant.Avalonia.Views;
 public partial class HomePage : UserControl
 {
     private HomeViewModel Vm => (HomeViewModel)DataContext!;
+    private HomeViewModel? _hookedVm;
+    private int _statusPulseGeneration;
 
     public HomePage()
     {
@@ -34,12 +39,85 @@ public partial class HomePage : UserControl
 
     private void HookVm()
     {
-        Vm.RequestLogAutoScroll += () =>
+        if (ReferenceEquals(_hookedVm, DataContext))
         {
-            if (Vm.Logs.Count > 0)
-                LogsList.ScrollIntoView(Vm.Logs[^1]);
-        };
-        Vm.RequestAfterCompletionModal += OpenAfterCompletionWindow;
+            UpdateChevrons();
+            return;
+        }
+
+        if (_hookedVm is not null)
+        {
+            _hookedVm.RequestLogAutoScroll -= OnRequestLogAutoScroll;
+            _hookedVm.RequestAfterCompletionModal -= OpenAfterCompletionWindow;
+            _hookedVm.PropertyChanged -= OnVmPropertyChanged;
+        }
+
+        if (DataContext is not HomeViewModel vm) return;
+
+        _hookedVm = vm;
+        vm.RequestLogAutoScroll += OnRequestLogAutoScroll;
+        vm.RequestAfterCompletionModal += OpenAfterCompletionWindow;
+        vm.PropertyChanged += OnVmPropertyChanged;
+        UpdateChevrons();
+    }
+
+    private void OnRequestLogAutoScroll()
+    {
+        if (Vm.Logs.Count > 0)
+            LogsList.ScrollIntoView(Vm.Logs[^1]);
+    }
+
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(HomeViewModel.SetWindowsExpanded):
+                UpdateChevron(SetWindowsChevron, Vm.SetWindowsExpanded);
+                break;
+            case nameof(HomeViewModel.DailyExpanded):
+                UpdateChevron(DailyChevron, Vm.DailyExpanded);
+                break;
+            case nameof(HomeViewModel.RewardExpanded):
+                UpdateChevron(RewardChevron, Vm.RewardExpanded);
+                break;
+            case nameof(HomeViewModel.EnkephalinExpanded):
+                UpdateChevron(EnkephalinChevron, Vm.EnkephalinExpanded);
+                break;
+            case nameof(HomeViewModel.MirrorExpanded):
+                UpdateChevron(MirrorChevron, Vm.MirrorExpanded);
+                break;
+            case nameof(HomeViewModel.ExecutionState):
+            case nameof(HomeViewModel.StatusBadgeText):
+                PulseStatusBadge();
+                break;
+        }
+    }
+
+    private void UpdateChevrons()
+    {
+        if (_hookedVm is not { } vm) return;
+        UpdateChevron(SetWindowsChevron, vm.SetWindowsExpanded);
+        UpdateChevron(DailyChevron, vm.DailyExpanded);
+        UpdateChevron(RewardChevron, vm.RewardExpanded);
+        UpdateChevron(EnkephalinChevron, vm.EnkephalinExpanded);
+        UpdateChevron(MirrorChevron, vm.MirrorExpanded);
+    }
+
+    private static void UpdateChevron(AppIcon chevron, bool expanded)
+    {
+        if (chevron.RenderTransform is RotateTransform rotate)
+            rotate.Angle = expanded ? 180 : 0;
+    }
+
+    private void PulseStatusBadge()
+    {
+        var generation = ++_statusPulseGeneration;
+        StatusBadge.Opacity = 0.72;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (generation == _statusPulseGeneration)
+                StatusBadge.Opacity = 1;
+        }, DispatcherPriority.Render);
     }
 
     /* ==================== 卡片展开/折叠 ==================== */
@@ -121,9 +199,20 @@ public partial class HomePage : UserControl
     {
         var win = new AfterCompletionWindow(Vm.Config.AfterCompletion);
         var owner = global::Avalonia.Controls.Window.GetTopLevel(this) as global::Avalonia.Controls.Window;
+        var mainOwner = owner as MainWindow;
         bool saved = false;
         if (owner != null)
-            saved = await win.ShowDialog<bool>(owner);
+        {
+            mainOwner?.BeginModal();
+            try
+            {
+                saved = await win.ShowDialog<bool>(owner);
+            }
+            finally
+            {
+                mainOwner?.EndModal();
+            }
+        }
 
         if (saved && win.Result != null)
         {

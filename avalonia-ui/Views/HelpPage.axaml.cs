@@ -1,21 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using AhabAssistant.Avalonia.Controls;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using AhabAssistant.Avalonia.Services;
 
 namespace AhabAssistant.Avalonia.Views;
 
 public partial class HelpPage : UserControl
 {
+    private const int MaxStaggeredTocItems = 8;
+    private const double ScrollAnimationDurationMs = 240;
+
     private record Heading(string Title, Control Anchor);
 
     private readonly List<Heading> _headings = new();
+    private DispatcherTimer? _scrollAnimationTimer;
+    private Vector _scrollAnimationStart;
+    private Vector _scrollAnimationTarget;
+    private long _scrollAnimationStartedAt;
 
     public HelpPage()
     {
@@ -23,6 +34,7 @@ public partial class HelpPage : UserControl
         Localization.ApplyStatic(this);
         RenderHelp();
         Localization.ApplyStatic(this);
+        DetachedFromVisualTree += (_, _) => _scrollAnimationTimer?.Stop();
     }
 
     private void RenderHelp()
@@ -115,24 +127,72 @@ public partial class HelpPage : UserControl
 
     private void AddTocItem(string title, int index)
     {
+        var text = new TextBlock
+        {
+            Text = title,
+            FontSize = 11.5,
+            Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        text.Transitions = new Transitions
+        {
+            new BrushTransition
+            {
+                Property = TextBlock.ForegroundProperty,
+                Duration = TimeSpan.FromMilliseconds(140),
+            },
+        };
+
         var btn = new Button
         {
-            Content = new TextBlock
-            {
-                Text = title,
-                FontSize = 11.5,
-                Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            },
+            Content = text,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(8, 5),
             CornerRadius = new CornerRadius(6),
             Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
             Tag = index,
         };
+        btn.Classes.Add("motion-toc-item");
+        btn.Transitions = new Transitions
+        {
+            new BrushTransition
+            {
+                Property = Button.BackgroundProperty,
+                Duration = TimeSpan.FromMilliseconds(140),
+            },
+            new BrushTransition
+            {
+                Property = Button.BorderBrushProperty,
+                Duration = TimeSpan.FromMilliseconds(140),
+            },
+            new DoubleTransition
+            {
+                Property = Button.OpacityProperty,
+                Duration = TimeSpan.FromMilliseconds(140),
+            },
+        };
+
+        // 目录通常很短，但文档增长时只让前八项错峰，后续项目立即显示。
+        if (index < MaxStaggeredTocItems && UiMotion.IsEnabled)
+        {
+            var motion = new MotionVisibility
+            {
+                IsShown = true,
+                Mode = MotionVisibilityMode.Slide,
+                Content = btn,
+            };
+            motion.Classes.Add("motion-item");
+            TocList.Items.Add(motion);
+        }
+        else
+        {
+            btn.Classes.Add("motion-no-stagger");
+            TocList.Items.Add(btn);
+        }
+
         btn.Click += (_, _) => JumpTo(index);
-        TocList.Items.Add(btn);
     }
 
     private void JumpTo(int index)
@@ -141,7 +201,50 @@ public partial class HelpPage : UserControl
         var anchor = _headings[index].Anchor;
         var pos = anchor.TranslatePoint(default, HelpScroll);
         if (pos.HasValue)
-            HelpOuter.Offset = new global::Avalonia.Vector(0, Math.Max(0, pos.Value.Y - 8));
+        {
+            var target = new global::Avalonia.Vector(0, Math.Max(0, pos.Value.Y - 8));
+            if (!UiMotion.IsEnabled)
+            {
+                StopScrollAnimation();
+                HelpOuter.Offset = target;
+            }
+            else
+            {
+                StartScrollAnimation(target);
+            }
+        }
+    }
+
+    private void StartScrollAnimation(Vector target)
+    {
+        StopScrollAnimation();
+        _scrollAnimationStart = HelpOuter.Offset;
+        _scrollAnimationTarget = target;
+        _scrollAnimationStartedAt = Stopwatch.GetTimestamp();
+        _scrollAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _scrollAnimationTimer.Tick += OnScrollAnimationTick;
+        _scrollAnimationTimer.Start();
+    }
+
+    private void OnScrollAnimationTick(object? sender, EventArgs e)
+    {
+        var elapsedMs = Stopwatch.GetElapsedTime(_scrollAnimationStartedAt).TotalMilliseconds;
+        var progress = Math.Clamp(elapsedMs / ScrollAnimationDurationMs, 0, 1);
+        var eased = 1 - Math.Pow(1 - progress, 3);
+        HelpOuter.Offset = new Vector(
+            _scrollAnimationStart.X + (_scrollAnimationTarget.X - _scrollAnimationStart.X) * eased,
+            _scrollAnimationStart.Y + (_scrollAnimationTarget.Y - _scrollAnimationStart.Y) * eased);
+
+        if (progress >= 1)
+            StopScrollAnimation();
+    }
+
+    private void StopScrollAnimation()
+    {
+        if (_scrollAnimationTimer == null) return;
+        _scrollAnimationTimer.Stop();
+        _scrollAnimationTimer.Tick -= OnScrollAnimationTick;
+        _scrollAnimationTimer = null;
     }
 
     private static string ReadHelp(string file)
