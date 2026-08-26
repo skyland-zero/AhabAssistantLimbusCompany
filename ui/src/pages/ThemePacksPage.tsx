@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -90,43 +91,40 @@ export function ThemePacksPage() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="flex flex-col gap-2">
-          {sortedPacks.map((pack) => (
-            <Card key={pack.id} className={cn("py-3", !pack.enabled && "opacity-60")}>
-              <CardContent className="flex items-center gap-4 px-5">
-                <Switch
-                  checked={pack.enabled}
-                  onCheckedChange={(v) => void patchPack(pack.id, { enabled: v })}
-                  aria-label={t("themePacks.enabled")}
-                />
-                <div className="w-44 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">{pack.name}</span>
-                    <Badge variant="secondary">{pack.tier}</Badge>
-                  </div>
-                </div>
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {t("themePacks.weight")}
-                  </span>
-                  <Slider
-                    value={[pack.weight]}
-                    max={10}
-                    step={1}
-                    disabled={!pack.enabled}
-                    onValueChange={([v]) => void patchPack(pack.id, { weight: v })}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-6">
+          <div className="flex flex-col gap-2">
+            {sortedPacks.map((pack) => (
+              <Card key={pack.id} className={cn("py-3", !pack.enabled && "opacity-60")}>
+                <CardContent className="flex items-center gap-4 px-5">
+                  <Switch
+                    checked={pack.enabled}
+                    onCheckedChange={(v) => void patchPack(pack.id, { enabled: v })}
+                    aria-label={t("themePacks.enabled")}
                   />
-                  <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums">
-                    {pack.weight}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="w-44 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{pack.name}</span>
+                      <Badge variant="secondary">{pack.tier}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="shrink-0 text-xs text-muted-foreground">{t("themePacks.weight")}</span>
+                    <Slider
+                      value={[pack.weight]}
+                      max={10}
+                      step={1}
+                      disabled={!pack.enabled}
+                      onValueChange={([v]) => void patchPack(pack.id, { weight: v })}
+                    />
+                    <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums">{pack.weight}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-
-      </div>
+      </ScrollArea>
     </div>
   );
 }

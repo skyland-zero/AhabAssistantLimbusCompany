@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -123,8 +124,9 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mx-auto max-w-2xl flex flex-col gap-5 pb-10">
+    <ScrollArea className="h-full">
+      <div className="p-6">
+        <div className="mx-auto max-w-2xl flex flex-col gap-5 pb-10">
         {/* 1. 外观个性化 */}
         <Card>
           <CardHeader className="py-3 px-4">
@@ -574,7 +576,8 @@ export function SettingsPage() {
         <p className="text-center text-[11px] text-muted-foreground" data-testid="lang-indicator">
           {i18n.language} · Ahab Assistant Limbus Company v{__APP_VERSION__}
         </p>
+        </div>
       </div>
-    </div>
+    </ScrollArea>
   );
 }

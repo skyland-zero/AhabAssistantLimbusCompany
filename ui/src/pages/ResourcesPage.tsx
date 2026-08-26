@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { getIpc } from "@/services/ipc/client";
 import type { ResourceGroup, SyncProgressPayload } from "@/services/ipc/types";
 
@@ -77,52 +78,48 @@ export function ResourcesPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="grid max-w-3xl grid-cols-1 gap-3 lg:grid-cols-2">
-          {groups.map((group) => {
-            const hasUpdate =
-              group.remoteVersion !== null && group.remoteVersion !== group.localVersion;
-            return (
-              <Card key={group.id} className="py-4">
-                <CardContent className="flex flex-col gap-3 px-5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{group.name}</span>
-                    {syncProgress !== null ? (
-                      <Badge>{t("resources.syncing", { progress: syncProgress })}</Badge>
-                    ) : hasUpdate ? (
-                      <Badge className="bg-warning-light text-warning dark:bg-warning-dark/40">
-                        {t("resources.updateAvailable", { version: group.remoteVersion })}
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-success-light text-success dark:bg-success-dark/40">
-                        {t("resources.upToDate")}
-                      </Badge>
-                    )}
-                  </div>
-
-                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-                    <dt className="text-muted-foreground">{t("resources.localVersion")}</dt>
-                    <dd className="font-mono">{group.localVersion}</dd>
-                    <dt className="text-muted-foreground">{t("resources.remoteVersion")}</dt>
-                    <dd className="font-mono">{group.remoteVersion ?? "—"}</dd>
-                    <dt className="text-muted-foreground">{t("resources.lastSync")}</dt>
-                    <dd className="font-mono">{fmtTime(group.lastSyncAt)}</dd>
-                  </dl>
-
-                  {syncProgress !== null && (
-                    <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-brand transition-[width]"
-                        style={{ width: `${syncProgress}%` }}
-                      />
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-6">
+          <div className="grid max-w-3xl grid-cols-1 gap-3 lg:grid-cols-2">
+            {groups.map((group) => {
+              const hasUpdate = group.remoteVersion !== null && group.remoteVersion !== group.localVersion;
+              return (
+                <Card key={group.id} className="py-4">
+                  <CardContent className="flex flex-col gap-3 px-5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{group.name}</span>
+                      {syncProgress !== null ? (
+                        <Badge>{t("resources.syncing", { progress: syncProgress })}</Badge>
+                      ) : hasUpdate ? (
+                        <Badge className="bg-warning-light text-warning dark:bg-warning-dark/40">
+                          {t("resources.updateAvailable", { version: group.remoteVersion })}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-success-light text-success dark:bg-success-dark/40">
+                          {t("resources.upToDate")}
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+                      <dt className="text-muted-foreground">{t("resources.localVersion")}</dt>
+                      <dd className="font-mono">{group.localVersion}</dd>
+                      <dt className="text-muted-foreground">{t("resources.remoteVersion")}</dt>
+                      <dd className="font-mono">{group.remoteVersion ?? "—"}</dd>
+                      <dt className="text-muted-foreground">{t("resources.lastSync")}</dt>
+                      <dd className="font-mono">{fmtTime(group.lastSyncAt)}</dd>
+                    </dl>
+                    {syncProgress !== null && (
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${syncProgress}%` }} />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }

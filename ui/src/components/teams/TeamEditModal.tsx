@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -277,7 +278,8 @@ export function TeamEditModal({
           </div>
 
           {/* Tab Contents Scroll Area */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="px-6 py-4 space-y-4">
             {/* 1. Basic & Formation */}
             <TabsContent value="basic" className="m-0 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1105,7 +1107,8 @@ export function TeamEditModal({
                 )}
               </div>
             </TabsContent>
-          </div>
+            </div>
+          </ScrollArea>
         </Tabs>
 
         {/* Footer */}

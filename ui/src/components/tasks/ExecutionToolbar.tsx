@@ -39,7 +39,7 @@ export function ExecutionToolbar({
 
   return (
     <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card/95 p-3 backdrop-blur-md">
-      {/* 左侧：全选与清空快捷按钮 */}
+      {/* 左侧：全选/清空 + 结束后操作（方案A） */}
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
@@ -63,15 +63,12 @@ export function ExecutionToolbar({
           <RotateCcw className="size-3.5" />
           <span>{t("tasks.toolbar.clearAll")}</span>
         </Button>
-      </div>
-
-      {/* 中间：结束后操作按钮 */}
-      <div className="flex items-center">
+        <div className="mx-1 h-4 w-px bg-border" />
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 max-w-[260px] gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 max-w-[280px] gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
           onClick={onOpenAfterCompletion}
           title={t("afterCompletion.hint")}
         >

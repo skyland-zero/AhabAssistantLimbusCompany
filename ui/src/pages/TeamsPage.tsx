@@ -6,6 +6,7 @@ import { TeamEditModal } from "@/components/teams/TeamEditModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -145,118 +146,117 @@ export function TeamsPage() {
       </div>
 
       {/* 队伍卡片列表 */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {teams.length === 0 ? (
-          <EmptyState
-            icon={UsersRound}
-            title={t("teams.emptyTitle")}
-            description={t("teams.emptyDesc")}
-          />
-        ) : filteredTeams.length === 0 ? (
-          <EmptyState
-            icon={UsersRound}
-            title={t("teams.emptyCategoryTitle")}
-            description={t("teams.emptyCategoryDesc")}
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {filteredTeams.map((team) => {
-              const mc = team.mirrorConfig;
-              const hasStarlight = mc?.opening_bonus && mc.opening_bonus.some((b) => b > 0);
-              const discardedCount = mc?.discard_systems ? Object.values(mc.discard_systems).filter(Boolean).length : 0;
-              return (
-                <Card key={team.id} className={cn("py-0 gap-0 transition-all", !team.enabled && "opacity-60")}>
-                  <CardContent className="flex items-start gap-3.5 p-4">
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="truncate text-sm font-semibold">{team.name}</span>
-                        <Badge variant="secondary" className="h-5 text-[11px] font-normal">
-                          {t(purposeKey[team.purpose])}
-                        </Badge>
-                        <Badge variant="outline" className="h-5 gap-1 text-[11px] font-normal">
-                          <img
-                            src={`/status_effects/${team.accessoryScheme || "burn"}.png`}
-                            alt=""
-                            className="size-3.5 object-contain"
-                          />
-                          <span>{t(schemeKey[team.accessoryScheme] ?? "teams.schemeBurn")}</span>
-                        </Badge>
-                        {!team.enabled && (
-                          <Badge variant="outline" className="h-5 text-[11px] text-muted-foreground">
-                            {t("themePacks.disabledPack")}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-5">
+          {teams.length === 0 ? (
+            <EmptyState
+              icon={UsersRound}
+              title={t("teams.emptyTitle")}
+              description={t("teams.emptyDesc")}
+            />
+          ) : filteredTeams.length === 0 ? (
+            <EmptyState
+              icon={UsersRound}
+              title={t("teams.emptyCategoryTitle")}
+              description={t("teams.emptyCategoryDesc")}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {filteredTeams.map((team) => {
+                const mc = team.mirrorConfig;
+                const hasStarlight = mc?.opening_bonus && mc.opening_bonus.some((b) => b > 0);
+                const discardedCount = mc?.discard_systems
+                  ? Object.values(mc.discard_systems).filter(Boolean).length
+                  : 0;
+                return (
+                  <Card key={team.id} className={cn("py-0 gap-0 transition-all", !team.enabled && "opacity-60")}>
+                    <CardContent className="flex items-start gap-3.5 p-4">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="truncate text-sm font-semibold">{team.name}</span>
+                          <Badge variant="secondary" className="h-5 text-[11px] font-normal">
+                            {t(purposeKey[team.purpose])}
                           </Badge>
-                        )}
+                          <Badge variant="outline" className="h-5 gap-1 text-[11px] font-normal">
+                            <img
+                              src={`/status_effects/${team.accessoryScheme || "burn"}.png`}
+                              alt=""
+                              className="size-3.5 object-contain"
+                            />
+                            <span>{t(schemeKey[team.accessoryScheme] ?? "teams.schemeBurn")}</span>
+                          </Badge>
+                          {!team.enabled && (
+                            <Badge variant="outline" className="h-5 text-[11px] text-muted-foreground">
+                              {t("themePacks.disabledPack")}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span>{t("teams.memberCount", { n: team.sinners.length })}</span>
+                          {hasStarlight && (
+                            <span className="inline-flex items-center text-amber-500 font-mono">
+                              <Sparkles className="size-3 mr-0.5" />
+                              星光已配
+                            </span>
+                          )}
+                          {mc?.second_system && (
+                            <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal">
+                              第二体系
+                            </Badge>
+                          )}
+                          {discardedCount > 0 && (
+                            <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal text-destructive">
+                              舍弃 ×{discardedCount}
+                            </Badge>
+                          )}
+                          {mc?.defense_for_solo && (
+                            <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal text-brand">
+                              良秀单通
+                            </Badge>
+                          )}
+                          {mc?.use_team_code && (
+                            <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-mono">
+                              编队码
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {team.sinners.map((id, idx) => (
+                            <Badge key={id} variant="outline" className="h-5 px-1.5 text-[11px] font-normal gap-1">
+                              <span className="font-mono text-[10px] text-brand font-bold">#{idx + 1}</span>
+                              <span>{sinnerName(id)}</span>
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-
-                      {/* 镜牢策略概览标签 */}
-                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <span>{t("teams.memberCount", { n: team.sinners.length })}</span>
-                        {hasStarlight && (
-                          <span className="inline-flex items-center text-amber-500 font-mono">
-                            <Sparkles className="size-3 mr-0.5" />
-                            星光已配
-                          </span>
-                        )}
-                        {mc?.second_system && (
-                          <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal">
-                            第二体系
-                          </Badge>
-                        )}
-                        {discardedCount > 0 && (
-                          <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal text-destructive">
-                            舍弃 ×{discardedCount}
-                          </Badge>
-                        )}
-                        {mc?.defense_for_solo && (
-                          <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px] font-normal text-brand">
-                            良秀单通
-                          </Badge>
-                        )}
-                        {mc?.use_team_code && (
-                          <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-mono">
-                            编队码
-                          </Badge>
-                        )}
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8"
+                          aria-label={t("teams.editTeam")}
+                          onClick={() => openEdit(team)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8"
+                          aria-label={t("teams.delete")}
+                          onClick={() => setDeleteTarget(team)}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
                       </div>
-
-                      {/* 出战人格位次 */}
-                      <div className="flex flex-wrap gap-1 pt-0.5">
-                        {team.sinners.map((id, idx) => (
-                          <Badge key={id} variant="outline" className="h-5 px-1.5 text-[11px] font-normal gap-1">
-                            <span className="font-mono text-[10px] text-brand font-bold">#{idx + 1}</span>
-                            <span>{sinnerName(id)}</span>
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-8"
-                        aria-label={t("teams.editTeam")}
-                        onClick={() => openEdit(team)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-8"
-                        aria-label={t("teams.delete")}
-                        onClick={() => setDeleteTarget(team)}
-                      >
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
 
       {/* 5-Tab 完整镜牢策略编辑模态框 */}
       <TeamEditModal
