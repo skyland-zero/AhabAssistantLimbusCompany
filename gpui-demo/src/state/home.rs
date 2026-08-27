@@ -109,19 +109,8 @@ impl HomeState {
             client,
             tasks,
             execution: ExecutionStatusPayload::default(),
-            logs: VecDeque::from([
-                LogEntryPayload {
-                    ts: 12 * 60 * 60 * 1000 + 1000,
-                    level: LogLevel::Info,
-                    message: "GPUI 原生 Home 已启动".to_owned(),
-                },
-                LogEntryPayload {
-                    ts: 12 * 60 * 60 * 1000 + 2000,
-                    level: LogLevel::Info,
-                    message: "等待本地自动化服务".to_owned(),
-                },
-            ]),
-            log_revision: 2,
+            logs: VecDeque::new(),
+            log_revision: 0,
             devices,
             selected_device: None,
             device_status: ConnectionStatus::Disconnected,

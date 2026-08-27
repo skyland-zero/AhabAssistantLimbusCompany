@@ -78,6 +78,19 @@ impl Page {
             Self::Settings => "SETTINGS",
         }
     }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value.to_ascii_lowercase().as_str() {
+            "home" | "console" => Self::Home,
+            "teams" => Self::Teams,
+            "themes" | "theme-packs" => Self::ThemePacks,
+            "toolbox" => Self::Toolbox,
+            "resources" => Self::Resources,
+            "help" => Self::Help,
+            "settings" => Self::Settings,
+            _ => return None,
+        })
+    }
 }
 
 /// Root UI state. Home owns its task, execution, device, and log state so the
@@ -109,9 +122,37 @@ pub struct AhabApp {
     home_log_revision_seen: u64,
 }
 
+fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
+    if let Ok(theme) = std::env::var("AHAB_VISUAL_THEME") {
+        settings.themeMode = match theme.to_ascii_lowercase().as_str() {
+            "light" => crate::model::ThemeMode::Light,
+            "dark" => crate::model::ThemeMode::Dark,
+            "system" => crate::model::ThemeMode::System,
+            _ => settings.themeMode,
+        };
+    }
+    if let Ok(language) = std::env::var("AHAB_VISUAL_LANGUAGE") {
+        settings.language = match language.as_str() {
+            "en-US" | "en-us" | "en" => crate::model::Language::EnUs,
+            "zh-CN" | "zh-cn" | "zh" => crate::model::Language::ZhCn,
+            _ => settings.language,
+        };
+    }
+    if let Ok(accent) = std::env::var("AHAB_VISUAL_ACCENT")
+        && !accent.trim().is_empty()
+    {
+        settings.accentId = accent;
+    }
+}
+
 impl AhabApp {
     pub fn new() -> Self {
-        let state = AppState::load();
+        let mut state = AppState::load();
+        apply_visual_overrides(&mut state.settings);
+        let current_page = std::env::var("AHAB_VISUAL_PAGE")
+            .ok()
+            .and_then(|page| Page::parse(&page))
+            .unwrap_or(Page::Home);
         let client = MockClient::default();
         let home = HomeState::with_client(
             client.shared(),
@@ -120,7 +161,7 @@ impl AhabApp {
         );
 
         Self {
-            current_page: Page::Home,
+            current_page,
             state,
             home,
             teams: TeamsState::with_client(client.shared()),

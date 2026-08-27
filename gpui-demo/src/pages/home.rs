@@ -4,15 +4,16 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, ClipboardItem, Context, Div, KeyDownEvent, Render, Svg, Window, div,
-    prelude::*, px, svg,
+    Animation, AnimationExt, Context, Div, KeyDownEvent, Render, Svg, Window, div, prelude::*, px,
+    svg,
 };
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, render_rgb as rgb, render_rgba as rgba,
-        scroll_area_with_id, select_option, select_popup, select_trigger, switch,
+        BadgeTone, ButtonVariant, badge, button, card, current_render_palette, palette_rgb,
+        render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_option, select_popup,
+        select_trigger, switch, switch_accent,
     },
     i18n::{self, Key as I18nKey},
     model::{
@@ -30,26 +31,30 @@ const SPLITTER_COLLAPSED_WIDTH: f32 = 16.0;
 const SPLITTER_COLLAPSE_THRESHOLD: f32 = 160.0;
 const MIN_LEFT_PANEL_WIDTH: f32 = 460.0;
 
-const ICON_SLIDERS: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><line x1=\"4\" y1=\"6\" x2=\"20\" y2=\"6\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"4\" y1=\"18\" x2=\"20\" y2=\"18\"/><circle cx=\"9\" cy=\"6\" r=\"2\"/><circle cx=\"15\" cy=\"12\" r=\"2\"/><circle cx=\"10\" cy=\"18\" r=\"2\"/></svg>"#;
-const ICON_CALENDAR_CHECK: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"17\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5\"/></svg>"#;
-const ICON_GIFT: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\"/><path d=\"M12 8v13M3 12h18M12 8H7.5a2.5 2.5 0 1 1 2.5-2.5C12 5.5 12 8 12 8ZM12 8h4.5a2.5 2.5 0 1 0-2.5-2.5C12 5.5 12 8 12 8Z\"/></svg>"#;
-const ICON_ZAP: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"13 2 3 14 12 14 11 22 21 10 12 10 13 2\"/></svg>"#;
-const ICON_COMPASS: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polygon points=\"16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76\"/></svg>"#;
-const ICON_RADIO: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"2\"/><path d=\"M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14\"/></svg>"#;
-const ICON_CHECK_SQUARE: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>"#;
-const ICON_ROTATE: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"1 4 1 10 7 10\"/><path d=\"M3.51 15a9 9 0 1 0 .49-9.5L1 10\"/></svg>"#;
-const ICON_PAUSE: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"6\" y=\"4\" width=\"4\" height=\"16\"/><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\"/></svg>"#;
-const ICON_PLAY: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"5 3 19 12 5 21 5 3\"/></svg>"#;
-const ICON_SQUARE: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"2\"/></svg>"#;
-const ICON_SETTINGS: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.1h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-2.8-2.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.8 2.8-.1.1a1.7 1.7 0 0 0-.3 1.9c.3.6.9 1 1.5 1h.1v4h-.1c-.6 0-1.2.4-1.5 1Z\"/></svg>"#;
-const ICON_REFRESH: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4\"/></svg>"#;
-const ICON_X: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6 6 18\"/></svg>"#;
-const ICON_MINUS: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M5 12h14\"/></svg>"#;
-const ICON_PLUS: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M12 5v14M5 12h14\"/></svg>"#;
-const ICON_CHEVRON_DOWN: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m6 9 6 6 6-6\"/></svg>"#;
-const ICON_CHEVRON_UP: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m18 15-6-6-6 6\"/></svg>"#;
-const ICON_ALERT_CIRCLE: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\"/><line x1=\"12\" y1=\"16\" x2=\"12.01\" y2=\"16\"/></svg>"#;
-const ICON_ALERT_TRIANGLE: &[u8] = br#"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z\"/><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"13\"/><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"/></svg>"#;
+const ICON_SLIDERS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg>"#;
+const ICON_CALENDAR_CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"/></svg>"#;
+const ICON_GIFT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8H7.5a2.5 2.5 0 1 1 2.5-2.5C12 5.5 12 8 12 8ZM12 8h4.5a2.5 2.5 0 1 0-2.5-2.5C12 5.5 12 8 12 8Z"/></svg>"#;
+const ICON_ZAP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>"#;
+const ICON_COMPASS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>"#;
+const ICON_RADIO: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>"#;
+const ICON_CHECK_SQUARE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>"#;
+const ICON_ROTATE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-9.5L1 10"/></svg>"#;
+const ICON_TRASH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14H5V6m3 0V4h8v2M10 11v6M14 11v6"/></svg>"#;
+const ICON_PAUSE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>"#;
+const ICON_PLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>"#;
+const ICON_SQUARE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>"#;
+const ICON_SETTINGS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.1h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-2.8-2.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.8 2.8-.1.1a1.7 1.7 0 0 0-.3 1.9c.3.6.9 1 1.5 1h.1v4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>"#;
+const ICON_REFRESH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>"#;
+const ICON_X: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>"#;
+const ICON_MINUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>"#;
+const ICON_PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"#;
+const ICON_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>"#;
+const ICON_CHEVRON_UP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>"#;
+const ICON_MONITOR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"#;
+const ICON_MONITOR_PLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10 8 15 11 10 14 10 8"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"#;
+const ICON_SCROLL_TEXT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5h12"/><path d="M8 9h12"/><path d="M8 13h8"/><path d="M4 4v13a3 3 0 0 0 3 3h13"/><path d="M4 8H2"/><path d="M4 12H2"/></svg>"#;
+const ICON_ALERT_CIRCLE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>"#;
+const ICON_ALERT_TRIANGLE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>"#;
 
 #[derive(Clone, Copy)]
 struct Localized {
@@ -83,6 +88,14 @@ fn action_icon(data: &'static [u8], size: f32, color: u32) -> Svg {
         .data(data)
         .size(px(size))
         .text_color(rgb(color))
+        .flex_none()
+}
+
+fn brand_action_icon(data: &'static [u8], size: f32) -> Svg {
+    svg()
+        .data(data)
+        .size(px(size))
+        .text_color(palette_rgb(current_render_palette().brand_foreground))
         .flex_none()
 }
 
@@ -132,7 +145,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let task_list = div()
         .id("home-task-scroll")
         .overflow_y_scroll()
-        .scrollbar_width(px(6.))
         .flex_1()
         .min_h_0()
         .px(px(14.0))
@@ -146,7 +158,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex()
         .flex_col()
         .border_r_1()
-        .border_color(rgb(BORDER))
+        .border_color(rgba(0))
         .child(task_header(
             execution_state,
             current_task,
@@ -217,9 +229,10 @@ fn task_header(
         .flex_none()
         .flex()
         .items_center()
-        .justify_between()
+        .gap(px(10.0))
         .px(px(14.0))
-        .py(px(8.0))
+        .h(px(36.0))
+        .py_0()
         .bg(rgba((SURFACE << 8) | 0x4d))
         .child(
             div()
@@ -1500,7 +1513,7 @@ fn task_card_with_toggle(
     preview_tags: Vec<Div>,
     body: Option<Div>,
 ) -> Div {
-    let mut toggle = switch(enabled).id(task_id(task));
+    let mut toggle = switch_accent(enabled).id(task_id(task));
     if !busy {
         toggle = toggle.on_click(cx.listener(move |view, _, _, cx| {
             view.home.toggle_task(task);
@@ -1553,7 +1566,8 @@ fn task_card(
         .items_center()
         .gap_2()
         .px_3()
-        .py(px(6.0));
+        .h(px(32.0))
+        .py_0();
     if has_options {
         header = header
             .cursor_pointer()
@@ -1636,7 +1650,7 @@ fn task_card(
         .min_w_0()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(if executing { ACCENT } else { BORDER }))
+        .border_color(if executing { rgb(ACCENT) } else { rgba(0) })
         .bg(rgb(SURFACE));
     if !enabled {
         root = root.opacity(0.75).bg(rgba((SURFACE_HOVER << 8) | 0x30));
@@ -1658,20 +1672,37 @@ fn task_card(
 }
 
 fn task_icon(label: &'static str, executing: bool) -> Div {
+    let color = if executing { BACKGROUND } else { TEXT_MUTED };
+    if label == "SET" {
+        return div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .w(px(20.0))
+                    .h(px(20.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_md()
+                    .bg(rgb(if executing { ACCENT } else { SURFACE_HOVER }))
+                    .text_color(rgb(color))
+                    .font_family("monospace")
+                    .text_size(px(9.0))
+                    .child(label),
+            )
+            .child(action_icon(ICON_SLIDERS, 16., color));
+    }
+
     div()
-        .w(px(20.0))
-        .h(px(20.0))
+        .w(px(16.0))
+        .h(px(16.0))
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
-        .bg(rgb(if executing { ACCENT } else { SURFACE_HOVER }))
-        .text_color(rgb(if executing { BACKGROUND } else { TEXT_MUTED }))
-        .child(action_icon(
-            task_icon_data(label),
-            14.,
-            if executing { BACKGROUND } else { TEXT_MUTED },
-        ))
+        .text_color(rgb(color))
+        .child(action_icon(task_icon_data(label), 16., color))
 }
 
 fn running_sweep() -> Div {
@@ -1737,11 +1768,17 @@ fn execution_toolbar(
     let mut select_all = button("", ButtonVariant::Outline)
         .id("select-all")
         .h(px(32.0))
+        .px(px(8.0))
+        .gap(px(4.0))
+        .text_size(px(12.0))
         .child(action_icon(ICON_CHECK_SQUARE, 14., TEXT))
         .child(text("全选", "Select All").get(language));
     let mut clear_all = button("", ButtonVariant::Outline)
         .id("clear-all")
         .h(px(32.0))
+        .px(px(8.0))
+        .gap(px(4.0))
+        .text_size(px(12.0))
         .child(action_icon(ICON_ROTATE, 14., TEXT_MUTED))
         .child(text("清空", "Clear All").get(language));
     if !busy {
@@ -1760,14 +1797,17 @@ fn execution_toolbar(
     let mut after_button = button("", ButtonVariant::Ghost)
         .id("after-completion-open")
         .h(px(32.0))
-        .flex_1()
+        .flex_none()
+        .max_w(px(280.0))
         .min_w_0()
-        .child(action_icon(ICON_SETTINGS, 14., ACCENT))
-        .child(format!(
-            "{} · {}",
-            text("设置", "Settings").get(language),
-            after_completion_summary(&app.home.tasks.afterCompletion, app.state.settings.language,)
-        ));
+        .px(px(10.0))
+        .gap(px(6.0))
+        .text_size(px(12.0))
+        .child(action_icon(ICON_SLIDERS, 14., ACCENT))
+        .child(div().min_w_0().truncate().child(after_completion_summary(
+            &app.home.tasks.afterCompletion,
+            app.state.settings.language,
+        )));
     if !busy {
         after_button = after_button.on_click(cx.listener(|view, _, _, cx| {
             view.home.set_after_completion_open(true);
@@ -1784,6 +1824,9 @@ fn execution_toolbar(
     let mut pause = button("", ButtonVariant::Outline)
         .id("pause-resume")
         .h(px(36.0))
+        .px(px(12.0))
+        .gap(px(6.0))
+        .text_size(px(12.0))
         .child(action_icon(pause_icon, 14., TEXT))
         .child(pause_label);
     if busy {
@@ -1797,13 +1840,29 @@ fn execution_toolbar(
     let (run_icon, run_label, run_variant) = if busy {
         (ICON_SQUARE, "Stop!", ButtonVariant::Destructive)
     } else {
-        (ICON_PLAY, "Link Start!  F10", ButtonVariant::Default)
+        (ICON_PLAY, "Link Start!", ButtonVariant::Default)
     };
     let mut run = button("", run_variant)
         .id("start-stop")
         .h(px(36.0))
-        .child(action_icon(run_icon, 14., TEXT))
+        .w(px(132.0))
+        .px_0()
+        .gap(px(8.0))
+        .text_size(px(12.0))
+        .child(brand_action_icon(run_icon, 14.))
         .child(run_label);
+    if !busy {
+        run = run.child(
+            div()
+                .rounded_sm()
+                .bg(rgba(0x00000033))
+                .px(px(4.0))
+                .py(px(2.0))
+                .font_family("monospace")
+                .text_size(px(10.0))
+                .child("F10"),
+        );
+    }
     if busy {
         run = run.on_click(cx.listener(|view, _, _, cx| {
             view.home.stop();
@@ -1852,12 +1911,18 @@ fn execution_toolbar(
             div()
                 .min_w_0()
                 .flex()
-                .flex_1()
                 .flex_wrap()
                 .items_center()
                 .gap_1()
                 .child(select_all)
                 .child(clear_all)
+                .child(
+                    div()
+                        .mx_1()
+                        .w(px(1.0))
+                        .h(px(16.0))
+                        .bg(rgba((TEXT_MUTED << 8) | 0x40)),
+                )
                 .child(after_button),
         )
         .child(command_group)
@@ -2062,26 +2127,43 @@ fn after_completion_summary(
     config: &crate::model::AfterCompletionConfig,
     language: Language,
 ) -> String {
-    let exits = if config.actions.is_empty() {
-        text("无", "None").get(language).to_owned()
+    let power = match config.powerAction {
+        crate::model::AfterPowerAction::None => None,
+        action => Some(after_power_label(action, language)),
+    };
+    let mode = if config.keepAfterCompletion {
+        text("默认", "Default").get(language)
     } else {
-        config
+        text("本次", "This run").get(language)
+    };
+
+    let summary = if config.actions.is_empty() && power.is_none() {
+        text("什么也不干", "Do nothing").get(language).to_owned()
+    } else if config.actions.is_empty() {
+        power.unwrap_or_default().to_owned()
+    } else {
+        let exits = config
             .actions
             .iter()
-            .map(|action| after_exit_label(*action, language))
+            .map(|action| after_exit_short_label(*action, language))
             .collect::<Vec<_>>()
             .join(if matches!(language, Language::ZhCn) {
-                "、"
+                "与"
             } else {
                 ", "
-            })
+            });
+        let prefix = text("退出", "Exit ").get(language);
+        match power {
+            Some(power) => format!(
+                "{prefix}{exits}{}{}",
+                text("后", " then ").get(language),
+                power
+            ),
+            None => format!("{prefix}{exits}"),
+        }
     };
-    format!(
-        "{}: {} / {}",
-        text("结束后", "After").get(language),
-        exits,
-        after_power_label(config.powerAction, language)
-    )
+
+    format!("{summary} ({mode})")
 }
 
 fn after_exit_label(action: AfterExitAction, language: Language) -> &'static str {
@@ -2089,6 +2171,14 @@ fn after_exit_label(action: AfterExitAction, language: Language) -> &'static str
         AfterExitAction::ExitGame => text("退出游戏", "Exit Game").get(language),
         AfterExitAction::ExitEmulator => text("退出模拟器", "Exit Emulator").get(language),
         AfterExitAction::ExitAalc => text("退出 AALC", "Exit AALC").get(language),
+    }
+}
+
+fn after_exit_short_label(action: AfterExitAction, language: Language) -> &'static str {
+    match action {
+        AfterExitAction::ExitGame => text("游戏", "Game").get(language),
+        AfterExitAction::ExitEmulator => text("模拟器", "Emulator").get(language),
+        AfterExitAction::ExitAalc => text("AALC", "AALC").get(language),
     }
 }
 
@@ -2140,7 +2230,7 @@ fn splitter(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> gpui::Stateful<Div>
         .justify_center()
         .cursor(gpui::CursorStyle::ResizeColumn)
         .hover(|style| style.bg(rgba((ACCENT << 8) | 0x35)))
-        .child(div().w(px(2.0)).h(px(32.0)).rounded_full().bg(rgb(BORDER)))
+        .child(div().w(px(2.0)).h(px(32.0)).rounded_full().bg(rgba(0)))
         .on_drag(SplitterDragGhost, |_, _, _, cx| {
             cx.new(|_| SplitterDragGhost)
         });
@@ -2201,7 +2291,12 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .id("device-select")
         .h(px(30.0))
         .flex_1()
-        .min_w_0();
+        .min_w_0()
+        .px(px(10.0))
+        .gap(px(6.0))
+        .text_size(px(12.0))
+        .justify_between()
+        .child(action_icon(ICON_CHEVRON_DOWN, 14., TEXT_MUTED));
     if let Some(next_device) = next_device {
         device_select = device_select.on_click(cx.listener(move |view, _, _, cx| {
             view.home.select_device(next_device.clone());
@@ -2212,7 +2307,10 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
     let mut refresh = button("", ButtonVariant::Icon)
         .id("device-refresh")
+        .w(px(28.0))
         .h(px(30.0))
+        .p_0()
+        .gap_0()
         .child(action_icon(ICON_REFRESH, 14., TEXT_MUTED));
     if app.home.device_status != ConnectionStatus::Connecting {
         refresh = refresh.on_click(cx.listener(|view, _, _, cx| {
@@ -2232,7 +2330,10 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
     let mut disconnect = button("", ButtonVariant::Icon)
         .id("disconnect-device")
+        .w(px(28.0))
         .h(px(30.0))
+        .p_0()
+        .gap_0()
         .child(action_icon(ICON_X, 14., TEXT_MUTED));
     if app.home.device_status == ConnectionStatus::Connected {
         disconnect = disconnect.on_click(cx.listener(|view, _, _, cx| {
@@ -2249,10 +2350,10 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .items_center()
         .justify_between()
         .border_b_1()
-        .border_color(rgb(BORDER))
+        .border_color(rgba(0))
         .px_3()
         .child(panel_heading(
-            "MON",
+            ICON_MONITOR,
             text("设备连接", "Device Connection").get(language),
         ))
         .child(badge(connection_status.0, connection_status.1));
@@ -2289,7 +2390,7 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .items_center()
         .px(px(10.0))
         .child(panel_heading(
-            "SCR",
+            ICON_MONITOR_PLAY,
             text("实时画面", "Live Screen").get(language),
         ));
     let screenshot_body = div()
@@ -2302,11 +2403,16 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .gap_1()
         .rounded_md()
         .border_1()
+        .border_dashed()
         .border_color(rgb(SURFACE_HOVER))
         .bg(rgb(BACKGROUND))
         .text_size(px(11.0))
         .text_color(rgb(TEXT_MUTED))
-        .child("LIVE")
+        .child(
+            div()
+                .opacity(0.25)
+                .child(action_icon(ICON_MONITOR_PLAY, 32., TEXT_MUTED)),
+        )
         .child(screenshot_detail)
         .child(
             div()
@@ -2367,21 +2473,15 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 )
         })
         .collect();
-    let copy_payload = visible_logs
-        .iter()
-        .map(|entry| format!("[{}] {}", format_log_time(entry.ts), entry.message))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let mut copy_logs = button(text("复制", "Copy").get(language), ButtonVariant::Ghost)
-        .id("copy-logs")
-        .h(px(24.0));
-    copy_logs = copy_logs.on_click(cx.listener(move |_, _, _, cx| {
-        cx.write_to_clipboard(ClipboardItem::new_string(copy_payload.clone()));
-        cx.notify();
-    }));
-    let mut clear_logs = button(text("清空", "Clear").get(language), ButtonVariant::Ghost)
+    let mut clear_logs = button("", ButtonVariant::Ghost)
         .id("clear-logs")
-        .h(px(24.0));
+        .h(px(24.0))
+        .px(px(8.0))
+        .gap(px(4.0))
+        .text_size(px(12.0))
+        .text_color(rgb(TEXT_MUTED))
+        .child(action_icon(ICON_TRASH, 14., TEXT_MUTED))
+        .child(text("清空", "Clear").get(language));
     clear_logs = clear_logs.on_click(cx.listener(|view, _, _, cx| {
         view.home.clear_logs();
         cx.stop_propagation();
@@ -2400,7 +2500,7 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .items_center()
                 .gap_2()
                 .child(panel_heading(
-                    "LOG",
+                    ICON_SCROLL_TEXT,
                     text("运行日志", "Execution Logs").get(language),
                 ))
                 .child(badge(
@@ -2408,14 +2508,7 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     BadgeTone::Neutral,
                 )),
         )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_1()
-                .child(copy_logs)
-                .child(clear_logs),
-        );
+        .child(div().flex().items_center().gap_1().child(clear_logs));
     let logs_card = panel_card(
         div()
             .flex()
@@ -2466,25 +2559,19 @@ fn panel_card(child: impl IntoElement) -> Div {
         .overflow_hidden()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(rgba(0))
         .bg(rgb(SURFACE))
         .child(child)
 }
 
-fn panel_heading(icon: &'static str, title: &'static str) -> Div {
+fn panel_heading(icon_data: &'static [u8], title: &'static str) -> Div {
     div()
         .flex()
         .items_center()
         .gap_2()
         .text_size(px(12.0))
         .text_color(rgb(TEXT_MUTED))
-        .child(
-            div()
-                .w(px(20.0))
-                .text_size(px(8.0))
-                .text_color(rgb(ACCENT))
-                .child(icon),
-        )
+        .child(action_icon(icon_data, 14., TEXT_MUTED))
         .child(title)
 }
 
@@ -2574,8 +2661,13 @@ mod tests {
     use crate::model::Language;
 
     use super::{
+        ICON_ALERT_CIRCLE, ICON_ALERT_TRIANGLE, ICON_CALENDAR_CHECK, ICON_CHECK_SQUARE,
+        ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, ICON_COMPASS, ICON_GIFT, ICON_MONITOR,
+        ICON_MONITOR_PLAY, ICON_PAUSE, ICON_PLAY, ICON_RADIO, ICON_REFRESH, ICON_ROTATE,
+        ICON_SCROLL_TEXT, ICON_SETTINGS, ICON_SLIDERS, ICON_SQUARE, ICON_TRASH, ICON_X, ICON_ZAP,
         RIGHT_PANEL_DEFAULT_WIDTH, RIGHT_PANEL_MAX_WIDTH, RIGHT_PANEL_MIN_WIDTH,
-        SPLITTER_COLLAPSED_WIDTH, SPLITTER_WIDTH, bounded_right_panel_width, reward_mode_label,
+        SPLITTER_COLLAPSED_WIDTH, SPLITTER_WIDTH, after_completion_summary,
+        bounded_right_panel_width, reward_mode_label,
     };
 
     fn available_home_left_width(
@@ -2615,6 +2707,52 @@ mod tests {
         assert_eq!(reward_mode_label(0, Language::ZhCn), "全部");
         assert_eq!(reward_mode_label(1, Language::ZhCn), "狂气/通行证");
         assert_eq!(reward_mode_label(2, Language::ZhCn), "邮件");
+    }
+
+    #[test]
+    fn after_completion_summary_matches_web_toolbar_copy() {
+        let config = crate::model::AfterCompletionConfig::default();
+        assert_eq!(
+            after_completion_summary(&config, Language::ZhCn),
+            "退出游戏 (默认)"
+        );
+        assert_eq!(
+            after_completion_summary(&config, Language::EnUs),
+            "Exit Game (Default)"
+        );
+    }
+
+    #[test]
+    fn inline_svg_payloads_are_valid_unescaped_markup() {
+        let payloads = [
+            ICON_SLIDERS,
+            ICON_CALENDAR_CHECK,
+            ICON_GIFT,
+            ICON_ZAP,
+            ICON_COMPASS,
+            ICON_RADIO,
+            ICON_CHECK_SQUARE,
+            ICON_CHEVRON_DOWN,
+            ICON_CHEVRON_UP,
+            ICON_MONITOR,
+            ICON_MONITOR_PLAY,
+            ICON_SCROLL_TEXT,
+            ICON_ALERT_CIRCLE,
+            ICON_ALERT_TRIANGLE,
+            ICON_REFRESH,
+            ICON_ROTATE,
+            ICON_PAUSE,
+            ICON_PLAY,
+            ICON_SQUARE,
+            ICON_SETTINGS,
+            ICON_TRASH,
+            ICON_X,
+        ];
+        for payload in payloads {
+            let source = std::str::from_utf8(payload).unwrap();
+            assert!(source.starts_with("<svg "));
+            assert!(!source.contains(r#"\""#));
+        }
     }
 }
 

@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, relative, svg};
+use gpui::{Context, Div, Svg, div, prelude::*, px, relative, svg};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
@@ -171,16 +171,16 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .map(|group| resource_card(group, progress, language))
         .collect();
     let has_groups = !cards.is_empty();
-    let grid = container_query(move |size, _, _| {
-        let columns: u16 = if size.width >= px(1024.) { 2 } else { 1 };
-        div()
-            .w_full()
-            .max_w(px(768.))
-            .grid()
-            .grid_cols(columns)
-            .gap(px(12.))
-            .children(cards)
-    });
+    // The React page stays one column below the lg=1024 breakpoint. GPUI's
+    // minimum window is below that breakpoint, so a flex column keeps the
+    // same max-width and avoids an unmeasured grid during the first frame.
+    let grid = div()
+        .w_full()
+        .max_w(px(768.))
+        .flex()
+        .flex_col()
+        .gap(px(12.))
+        .children(cards);
 
     let body = if has_groups {
         div().w_full().child(grid)

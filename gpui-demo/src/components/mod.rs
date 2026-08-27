@@ -95,13 +95,9 @@ pub fn button_with_palette(
             palette.secondary_foreground,
             palette.accent_surface,
         ),
-        ButtonVariant::Ghost => (palette.background, palette.foreground, palette.muted),
+        ButtonVariant::Ghost => (palette.card, palette.foreground, palette.muted),
         ButtonVariant::Destructive => (palette.danger, palette.brand_foreground, palette.danger),
-        ButtonVariant::Icon => (
-            palette.secondary,
-            palette.foreground,
-            palette.accent_surface,
-        ),
+        ButtonVariant::Icon => (palette.card, palette.foreground, palette.secondary),
         ButtonVariant::Link => (palette.background, palette.brand, palette.brand_light),
     };
 
@@ -249,19 +245,44 @@ pub fn switch(checked: bool) -> Div {
     switch_with_palette(checked, &current_render_palette(), ControlState::default())
 }
 
+/// Accent-colored switch used by Home's task cards. The default switch keeps
+/// the shadcn/Radix primary color so Settings and Theme Packs match the web UI.
+pub fn switch_accent(checked: bool) -> Div {
+    let palette = current_render_palette();
+    switch_with_track(
+        checked,
+        &palette,
+        ControlState::default(),
+        palette.brand,
+        palette.brand_hover,
+    )
+}
+
 pub fn switch_with_palette(checked: bool, palette: &Palette, state: ControlState) -> Div {
+    switch_with_track(checked, palette, state, palette.primary, palette.primary)
+}
+
+fn switch_with_track(
+    checked: bool,
+    palette: &Palette,
+    state: ControlState,
+    checked_track: ColorToken,
+    checked_hover: ColorToken,
+) -> Div {
     let track = if checked {
-        palette.brand
+        checked_track
     } else {
         palette.input
     };
     let thumb = if checked {
-        palette.brand_foreground
+        palette.primary_foreground
+    } else if matches!(palette.scheme, style::ColorScheme::Dark) {
+        palette.foreground
     } else {
-        palette.card
+        palette.background
     };
     let hover_track = if checked {
-        palette.brand_hover
+        checked_hover
     } else {
         palette.accent_surface
     };
@@ -270,13 +291,13 @@ pub fn switch_with_palette(checked: bool, palette: &Palette, state: ControlState
     let mut control = div()
         .flex()
         .items_center()
-        .w(px(38.))
-        .h(px(22.))
-        .p(px(3.))
+        .w(px(32.))
+        .h(px(18.))
+        .p(px(1.))
         .rounded_lg()
         .tab_index(0)
         .border_1()
-        .border_color(paint_color(palette.input))
+        .border_color(paint_color(palette.border))
         .bg(paint_color(track))
         .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
     if checked {
@@ -475,34 +496,50 @@ pub fn slider_with_palette(
 ) -> Div {
     let normalized = normalize_slider(value, min, max);
     let width = 180.0;
-    let knob_left = (width * normalized - 5.0).clamp(0.0, width - 10.0);
+    let track_y = 5.0;
+    let knob_left = (width * normalized - 8.0).clamp(0.0, width - 16.0);
     let mut track = div()
         .relative()
         .w(px(width))
-        .h(px(6.))
+        .h(px(16.))
         .rounded_md()
         .tab_index(0)
-        .bg(paint_color(palette.input))
         .focus_visible({
             let ring = palette.ring;
             move |style| style.border_color(paint_color(ring))
         })
         .child(
             div()
+                .absolute()
+                .left_0()
+                .top(px(track_y))
+                .w_full()
                 .h(px(6.))
-                .w(px(width * normalized))
                 .rounded_md()
-                .bg(paint_color(palette.brand)),
+                .bg(paint_color(palette.muted)),
+        )
+        .child(
+            div()
+                .absolute()
+                .left_0()
+                .top(px(track_y))
+                .w(px(width * normalized))
+                .h(px(6.))
+                .rounded_md()
+                .bg(paint_color(palette.primary)),
         )
         .child(
             div()
                 .absolute()
                 .left(px(knob_left))
-                .top(px(-2.))
-                .w(px(10.))
-                .h(px(10.))
-                .rounded_lg()
-                .bg(paint_color(palette.brand)),
+                .top_0()
+                .w(px(16.))
+                .h(px(16.))
+                .rounded_full()
+                .border_1()
+                .border_color(paint_color(palette.primary))
+                .bg(paint_color(ColorToken::rgb(0xffffff)))
+                .shadow_sm(),
         );
     if state.focused {
         track = track.border_1().border_color(paint_color(palette.ring));
@@ -670,7 +707,6 @@ pub fn scroll_area_with_palette(
         .id(id)
         .min_w_0()
         .overflow_y_scroll()
-        .scrollbar_width(px(6.))
         .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
         .child(child);
     if state.disabled {

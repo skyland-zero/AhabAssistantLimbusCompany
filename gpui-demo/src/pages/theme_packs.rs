@@ -222,12 +222,16 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .gap_2()
                 .border_b_1()
                 .border_color(rgb(BORDER))
-                .bg(palette_rgb(current_render_palette().brand_light))
+                .bg(palette_rgb(current_render_palette().warning_light))
                 .px_6()
                 .py_2()
                 .text_size(px(12.))
-                .text_color(rgb(ACCENT))
-                .child(icon(ICON_ALERT, 14., ACCENT))
+                .text_color(palette_rgb(current_render_palette().warning))
+                .child(icon(
+                    ICON_ALERT,
+                    14.,
+                    current_render_palette().warning.rgb_hex(),
+                ))
                 .child(text(
                     "困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重",
                     "Hard Mirror Dungeon cycle active: recommend raising high-tier pack weights",

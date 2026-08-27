@@ -196,7 +196,7 @@ fn render_block(block: HelpBlock, cx: &mut Context<AhabApp>) -> Div {
             .text_size(px(14.))
             .line_height(px(22.))
             .text_color(rgb(TEXT))
-            .child(div().flex_none().text_color(rgb(ACCENT)).child("•"))
+            .child(div().flex_none().text_color(rgb(TEXT)).child("•"))
             .child(render_inline(&text, cx)),
         HelpBlock::Ordered(text) => div()
             .pl_5()
@@ -351,7 +351,7 @@ fn ordered_item(line: &str) -> Option<String> {
             .chars()
             .all(|character| character.is_ascii_digit())
     {
-        Some(format!("{}  {}", &line[..split], &line[split + 2..]))
+        Some(format!("{}.  {}", &line[..split], &line[split + 2..]))
     } else {
         None
     }
@@ -474,7 +474,7 @@ mod tests {
             text: "Section".into()
         }));
         assert!(blocks.contains(&HelpBlock::Bullet("**item**".into())));
-        assert!(blocks.contains(&HelpBlock::Ordered("1  step".into())));
+        assert!(blocks.contains(&HelpBlock::Ordered("1.  step".into())));
         assert!(blocks.contains(&HelpBlock::Code("code".into())));
     }
 
@@ -498,6 +498,6 @@ mod tests {
             "bold and link code"
         );
         assert_eq!(heading("### Details"), Some((3, "Details")));
-        assert_eq!(ordered_item("12. item"), Some("12  item".into()));
+        assert_eq!(ordered_item("12. item"), Some("12.  item".into()));
     }
 }

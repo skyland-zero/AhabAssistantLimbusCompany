@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use crate::{
-    app::{AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    app::{AhabApp, BACKGROUND, SURFACE, TEXT, TEXT_MUTED},
     components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette},
     components::{
         ButtonVariant, TextInput, button, card, palette_rgb, render_rgb as rgb,
@@ -828,7 +828,9 @@ fn settings_card(title: &'static str, body: Div) -> Div {
             )
             .child(body),
     )
-    .p_0()
+    .px_0()
+    .py(px(24.))
+    .gap(px(44.))
 }
 
 fn setting_row(label: &'static str, detail: &'static str, control: impl IntoElement) -> Div {
@@ -884,7 +886,10 @@ fn segmented_group() -> Div {
 }
 
 fn separator() -> Div {
-    div().h(px(1.)).w_full().bg(rgb(BORDER))
+    div()
+        .h(px(1.))
+        .w_full()
+        .bg(palette_rgb(current_render_palette().border))
 }
 
 fn setting_switch(

@@ -13,7 +13,7 @@
 - ✅ Shell：顶部 TabBar、无 Sidebar 根布局、无边框自绘标题栏、窗口尺寸约束。
 - ✅ 运行时主题基础：页面旧 token 通过 render snapshot 跟随 light/dark/accent，输入控件同步 Palette；页面遗留色值已集中映射，Teams 图标改为 currentColor；全局 Toast 骨架已接入。
 - ✅ Mock 边界：同一窗口内各页面共享一个 Mock backend，避免 Home/Teams/Settings 状态互相脱节。
-- ✅ Home 第一批：General/Advanced 选项 Tab、日常队伍名称绑定、数量加减、Lucide SVG 任务/执行图标、日志 payload/时间/级别/复制/自动滚动。
+- ✅ Home 第一批：General/Advanced 选项 Tab、日常队伍名称绑定、数量加减、Lucide SVG 任务/执行图标、日志 payload/时间/级别/自动滚动。
 - ✅ Home 第二批：窗口设置、奖励模式、日常队伍和结束后电源动作改用统一 Select；Select 支持点击选项、Enter/Space、方向键、Home/End、Esc 和外部点击关闭；数量控件支持键盘激活并严格限制边界。
 - ✅ Home 第二批：结束后操作改为草稿编辑，支持 Apply Once / Save as Default，关闭、遮罩点击和 Esc 放弃未确认修改。
 - ✅ Teams 第一批：编辑器用途、固定用途、商店策略、四级合成后行为、第二体系、起始楼层、防御回合和技能替换改用统一 Select；商店刷新上限改为实体数字输入，输入变化同步到编辑器状态。
@@ -21,7 +21,8 @@
 - ✅ 其他页面第一批：Theme Packs、Toolbox、Resources 的操作按钮支持 Enter/Space，资源时间/反馈和主题包/工具箱反馈支持中英文显示。
 - ✅ Settings/Help 第一批：主题、语言、强调色、热键捕获、检查更新、仓库链接、帮助目录、帮助语言和外部链接支持键盘激活与焦点状态；设置/更新反馈补齐英文显示。
 - ✅ 其他页面修正：Resources 同步终态保留可见窗口，Teams 在 900px 下保持单列并补齐列表/编辑器主要英文标签。
-- ⏳ P0/P8：参考截图、尺寸表、像素差异和内存回归尚未建立。
+- ✅ P0 基线第一批：Tauri/WebView2 与 GPUI 均已采集 7 个页面、4 种中英文/明暗组合和 `900×680` / `800×560` 两种逻辑 client viewport；新增启动覆盖变量、物理 client 截图工具和 JSON 像素差异报告，产物位于被忽略的 `artifacts/visual/reference-ui`、`artifacts/visual/gpui`。验证机 DPI 为 168（175%），GPUI/ Tauri 截图分别为 `1575×1190` / `1577×1190` 与 `1400×980` / `1402×980`。
+- ⏳ P0/P8：Home 展开/运行/暂停、Teams 编辑/删除、其他页面 loading/empty/success 等动态状态，以及 30 分钟内存回归仍未建立门禁。
 - ⏳ P2/P3/P4/P5/P6：全量 i18n、Home 描述/实际截图帧、Teams 剩余控件状态/资源细节、Settings/Help 剩余视觉回归仍需继续；设置与 Teams Select 已支持弹出菜单、键盘和 Mock 持久化，离散队伍选择支持方向键，主题包权重 Slider 支持鼠标拖拽。
 - ⏳ P7：真实 WebSocket、JPEG 帧、托盘、全局热键注册和 Windows 系统 API 尚未接入。
 

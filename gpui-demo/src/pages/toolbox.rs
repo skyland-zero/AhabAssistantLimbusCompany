@@ -5,13 +5,13 @@
 //! Tool actions continue to use `ToolboxState`, so this page stays on the
 //! canonical Mock IPC boundary.
 
-use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, svg};
+use gpui::{Context, Div, Svg, div, prelude::*, px, svg};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, TEXT, TEXT_MUTED},
-    components::style::{DANGER, GREEN},
+    components::style::{DANGER, GREEN, current_render_palette},
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state, render_rgb as rgb,
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, palette_rgb, render_rgb as rgb,
         scroll_area_with_id,
     },
     model::{Language, ToolId},
@@ -96,21 +96,15 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .collect();
     let has_tools = !cards.is_empty();
 
-    let grid = container_query(move |size, _, _| {
-        let columns: u16 = if size.width >= px(1024.) {
-            3
-        } else if size.width >= px(768.) {
-            2
-        } else {
-            1
-        };
-        div()
-            .w_full()
-            .grid()
-            .grid_cols(columns)
-            .gap(px(16.))
-            .children(cards)
-    });
+    // The minimum native window is 800px, where the React md breakpoint
+    // produces two columns. Keeping this explicit also avoids a container
+    // query treating the padded 752px content width as below md.
+    let grid = div()
+        .w_full()
+        .grid()
+        .grid_cols(2)
+        .gap(px(16.))
+        .children(cards);
 
     let body = if has_tools {
         div().w_full().child(grid)
@@ -182,7 +176,7 @@ fn tool_card(
         action_button(
             text("运行", "Run").get(language),
             ButtonVariant::Default,
-            icon(ICON_PLAY, 16., TEXT),
+            brand_icon(ICON_PLAY, 16.),
         )
     }
     .id(format!("tool-action-{:?}", tool.id))
@@ -290,6 +284,13 @@ fn icon(data: &'static str, size: f32, color: u32) -> Svg {
         .data(data.as_bytes())
         .size(px(size))
         .text_color(rgb(color))
+}
+
+fn brand_icon(data: &'static str, size: f32) -> Svg {
+    svg()
+        .data(data.as_bytes())
+        .size(px(size))
+        .text_color(palette_rgb(current_render_palette().brand_foreground))
 }
 
 fn tool_icon_path(icon: ToolIcon) -> &'static str {

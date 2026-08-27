@@ -31,6 +31,26 @@ cargo +nightly test --manifest-path gpui-demo/Cargo.toml
 
 `Cargo.lock` 会记录实际使用的 Git commit。当前 GitHub main 使用了尚未在 stable 中稳定的 `std::hint::cold_path`，因此 Demo 固定使用 nightly。Demo 会读取现有 `ui/public/sinners` 图片，不会复制资源。
 
+## 固定尺寸视觉回归
+
+截图产物写入被 Git 忽略的 `artifacts/visual/`，不污染 `ui/`：
+
+```powershell
+# GPUI release：每个组合会等待窗口、字体和资源完成加载后再截取 client area
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_visual.ps1
+
+# Tauri/WebView2 reference：首次启动可能需要编译，脚本会轮询 CDP 并额外等待 2 秒
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_tauri_reference.ps1
+
+# 对齐共同物理像素区域并生成 JSON 差异报告
+python gpui-demo/tools/visual_diff.py `
+  --reference artifacts/visual/reference-ui `
+  --gpui artifacts/visual/gpui `
+  --output artifacts/visual/pixel-diff.json
+```
+
+脚本通过 `AHAB_VISUAL_THEME`、`AHAB_VISUAL_LANGUAGE`、`AHAB_VISUAL_PAGE` 启动 GPUI 的确定性参考状态；不会修改用户配置。窗口使用逻辑 client viewport `900×680` / `800×560`，当前验证机 DPI 为 `168`（175%），因此 GPUI client 截图为 `1575×1190` / `1400×980` 物理像素，WebView2 截图因 CSS 像素取整可能多一列。截图工具依赖 Pillow、pywin32 和 agent-browser。
+
 ## 当前可操作范围
 
 - 点击顶部 TabBar 切换 7 个原生页面：主控台、队伍管理、主题包、工具箱、资源中心、帮助、设置。

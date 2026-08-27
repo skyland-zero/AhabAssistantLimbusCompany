@@ -119,8 +119,13 @@ pub fn tab_bar(
         7,
         palette,
     );
-    settings_button = settings_button
-        .child(icon(Icon::Settings, 14.).text_color(rgb(palette.muted_foreground.rgb_hex())));
+    settings_button = settings_button.child(icon(Icon::Settings, 14.).text_color(rgb(
+        if settings_active {
+            palette.brand.rgb_hex()
+        } else {
+            palette.muted_foreground.rgb_hex()
+        },
+    )));
     if settings_active {
         settings_button = settings_button
             .bg(rgb(palette.secondary.rgb_hex()))
