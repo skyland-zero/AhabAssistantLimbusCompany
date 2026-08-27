@@ -7,7 +7,7 @@
 
 use std::process::Command;
 
-use gpui::{Context, Div, FontWeight, div, prelude::*, px};
+use gpui::{Context, Div, FontWeight, KeyDownEvent, div, prelude::*, px};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
@@ -33,25 +33,6 @@ enum InlinePart {
     Strong(String),
     Code(String),
     Link { label: String, url: String },
-}
-
-#[derive(Clone, Copy)]
-struct Localized {
-    zh: &'static str,
-    en: &'static str,
-}
-
-impl Localized {
-    fn get(self, language: Language) -> &'static str {
-        match language {
-            Language::ZhCn => self.zh,
-            Language::EnUs => self.en,
-        }
-    }
-}
-
-const fn text(zh: &'static str, en: &'static str) -> Localized {
-    Localized { zh, en }
 }
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
@@ -82,10 +63,18 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .py_1p5()
             .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED));
-        link = link.on_click(cx.listener(move |view, _, _, cx| {
-            view.help_scroll.scroll_to_top_of_item(index);
-            cx.notify();
-        }));
+        link = link
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.help_scroll.scroll_to_top_of_item(index);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if help_activation_key(event) {
+                    window.prevent_default();
+                    view.help_scroll.scroll_to_top_of_item(index);
+                    cx.notify();
+                }
+            }));
         toc_view = toc_view.child(link);
     }
 
@@ -103,11 +92,20 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .px_2()
         .py_1()
         .text_size(px(11.));
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.set_language(candidate);
-            view.help_scroll = gpui::ScrollHandle::new();
-            cx.notify();
-        }));
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.set_language(candidate);
+                view.help_scroll = gpui::ScrollHandle::new();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if help_activation_key(event) {
+                    window.prevent_default();
+                    view.set_language(candidate);
+                    view.help_scroll = gpui::ScrollHandle::new();
+                    cx.notify();
+                }
+            }));
         language_switch = language_switch.child(control);
     }
 
@@ -246,6 +244,7 @@ fn render_inline(text: &str, cx: &mut Context<AhabApp>) -> Div {
                 )
             }
             InlinePart::Link { label, url } => {
+                let url_for_key = url.clone();
                 let mut link = button(label, ButtonVariant::Ghost)
                     .id(format!("help-link-{}", url))
                     .px_1()
@@ -253,9 +252,16 @@ fn render_inline(text: &str, cx: &mut Context<AhabApp>) -> Div {
                     .text_size(px(14.))
                     .text_color(rgb(ACCENT))
                     .underline();
-                link = link.on_click(cx.listener(move |_, _, _, _| {
-                    open_external_url(&url);
-                }));
+                link = link
+                    .on_click(cx.listener(move |_, _, _, _| {
+                        open_external_url(&url);
+                    }))
+                    .on_key_down(cx.listener(move |_, event: &KeyDownEvent, window, _| {
+                        if help_activation_key(event) {
+                            window.prevent_default();
+                            open_external_url(&url_for_key);
+                        }
+                    }));
                 view = view.child(link);
             }
         }
@@ -427,6 +433,13 @@ fn inline_text(text: impl AsRef<str>) -> String {
             InlinePart::Link { label, .. } => label,
         })
         .collect()
+}
+
+fn help_activation_key(event: &KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
 }
 
 fn open_external_url(url: &str) {

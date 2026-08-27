@@ -15,8 +15,8 @@ use crate::{
     app::{AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
     components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette},
     components::{
-        ButtonVariant, TextInput, button, card, render_rgb as rgb, scroll_area_with_id,
-        select_option, select_popup, select_trigger, switch,
+        ButtonVariant, TextInput, button, card, palette_rgb, render_rgb as rgb,
+        scroll_area_with_id, select_option, select_popup, select_trigger, switch,
     },
     model::{Language, ThemeMode, UpdateSource},
     state::{HotkeyTarget, SettingsSelect, SystemBool, SystemU16},
@@ -91,7 +91,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             div()
                 .text_size(px(12.))
                 .text_color(rgb(GREEN))
-                .child(feedback),
+                .child(localized_feedback(&feedback, language)),
         );
     }
 
@@ -140,11 +140,21 @@ fn appearance_card(
         .py_1()
         .text_size(px(12.));
         let message = label.get(language).to_owned();
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.set_theme_mode(candidate);
-            view.show_toast(crate::shell::ToastKind::Info, message.clone(), cx);
-            cx.notify();
-        }));
+        let key_message = message.clone();
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.set_theme_mode(candidate);
+                view.show_toast(crate::shell::ToastKind::Info, message.clone(), cx);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if settings_activation_key(event) {
+                    window.prevent_default();
+                    view.set_theme_mode(candidate);
+                    view.show_toast(crate::shell::ToastKind::Info, key_message.clone(), cx);
+                    cx.notify();
+                }
+            }));
         modes = modes.child(control);
     }
 
@@ -162,7 +172,9 @@ fn appearance_card(
             .w(px(24.))
             .h(px(24.))
             .rounded_full()
+            .tab_index(0)
             .cursor_pointer()
+            .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
             .bg(gpui_rgb(color));
         if selected {
             control = control.border_2().border_color(rgb(TEXT)).opacity(1.);
@@ -170,11 +182,20 @@ fn appearance_card(
             control = control.opacity(0.7);
         }
         let id = preset.id;
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.set_accent(id);
-            view.show_toast(crate::shell::ToastKind::Info, format!("Accent: {id}"), cx);
-            cx.notify();
-        }));
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.set_accent(id);
+                view.show_toast(crate::shell::ToastKind::Info, format!("Accent: {id}"), cx);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if settings_activation_key(event) {
+                    window.prevent_default();
+                    view.set_accent(id);
+                    view.show_toast(crate::shell::ToastKind::Info, format!("Accent: {id}"), cx);
+                    cx.notify();
+                }
+            }));
         accents = accents.child(control);
     }
 
@@ -192,11 +213,20 @@ fn appearance_card(
         .px_3()
         .py_1()
         .text_size(px(12.));
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.set_language(candidate);
-            view.show_toast(crate::shell::ToastKind::Info, label, cx);
-            cx.notify();
-        }));
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.set_language(candidate);
+                view.show_toast(crate::shell::ToastKind::Info, label, cx);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if settings_activation_key(event) {
+                    window.prevent_default();
+                    view.set_language(candidate);
+                    view.show_toast(crate::shell::ToastKind::Info, label, cx);
+                    cx.notify();
+                }
+            }));
         languages = languages.child(control);
     }
 
@@ -235,6 +265,13 @@ fn hotkey_card(
         .on_click(cx.listener(move |view, _, _, cx| {
             view.settings_page.set_hotkeys_enabled(!enabled);
             cx.notify();
+        }))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if settings_activation_key(event) {
+                window.prevent_default();
+                view.settings_page.set_hotkeys_enabled(!enabled);
+                cx.notify();
+            }
         }));
     let body = div()
         .flex()
@@ -292,18 +329,24 @@ fn hotkey_capture(
         .py_1()
         .font_family("Consolas")
         .text_size(px(12.));
-    capture = capture.on_click(cx.listener(move |view, _, _, cx| {
-        view.settings_page.capture(target);
-        cx.notify();
-    }));
-    capture = capture.on_key_down(cx.listener(move |view, event: &KeyDownEvent, _, cx| {
-        if view.settings_page.capturing == Some(target) {
-            if let Some(combo) = combo_from_keystroke(&event.keystroke) {
-                view.settings_page.finish_capture(Some(combo));
+    capture = capture
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.settings_page.capture(target);
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if view.settings_page.capturing == Some(target) {
+                if let Some(combo) = combo_from_keystroke(&event.keystroke) {
+                    window.prevent_default();
+                    view.settings_page.finish_capture(Some(combo));
+                    cx.notify();
+                }
+            } else if settings_activation_key(event) {
+                window.prevent_default();
+                view.settings_page.capture(target);
                 cx.notify();
             }
-        }
-    }));
+        }));
 
     let mut clear = button(text("清除", "Clear").get(language), ButtonVariant::Ghost)
         .id(format!("settings-hotkey-clear-{target:?}"))
@@ -313,10 +356,18 @@ fn hotkey_capture(
     if value.is_empty() {
         clear = clear.opacity(0.45).cursor_not_allowed();
     } else {
-        clear = clear.on_click(cx.listener(move |view, _, _, cx| {
-            view.settings_page.set_hotkey(target, None);
-            cx.notify();
-        }));
+        clear = clear
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.settings_page.set_hotkey(target, None);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if settings_activation_key(event) {
+                    window.prevent_default();
+                    view.settings_page.set_hotkey(target, None);
+                    cx.notify();
+                }
+            }));
     }
     div()
         .flex()
@@ -538,7 +589,8 @@ fn update_card(
     cdk_input: Option<gpui::Entity<TextInput>>,
     language: Language,
 ) -> Div {
-    let source_label = match system.update_source {
+    let source_value = system.update_source;
+    let source_label = match source_value {
         UpdateSource::GitHub => "GitHub",
         UpdateSource::MirrorChyan => "Mirror 酱",
     };
@@ -562,6 +614,22 @@ fn update_card(
         source_trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
             let key = event.keystroke.key.to_ascii_lowercase();
             match key.as_str() {
+                "left" | "arrowleft" => {
+                    window.prevent_default();
+                    view.settings_page.set_update_source(match source_value {
+                        UpdateSource::GitHub => UpdateSource::MirrorChyan,
+                        UpdateSource::MirrorChyan => UpdateSource::GitHub,
+                    });
+                    cx.notify();
+                }
+                "right" | "arrowright" => {
+                    window.prevent_default();
+                    view.settings_page.set_update_source(match source_value {
+                        UpdateSource::GitHub => UpdateSource::MirrorChyan,
+                        UpdateSource::MirrorChyan => UpdateSource::GitHub,
+                    });
+                    cx.notify();
+                }
                 "enter" | "space" | "arrowdown" => {
                     window.prevent_default();
                     view.settings_page
@@ -612,10 +680,18 @@ fn update_card(
         icon(ICON_SEARCH_CHECK, 14., TEXT),
     )
     .id("settings-check-update");
-    check = check.on_click(cx.listener(|view, _, _, cx| {
-        view.settings_page.check_update();
-        cx.notify();
-    }));
+    check = check
+        .on_click(cx.listener(|view, _, _, cx| {
+            view.settings_page.check_update();
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+            if settings_activation_key(event) {
+                window.prevent_default();
+                view.settings_page.check_update();
+                cx.notify();
+            }
+        }));
 
     let mut save_cdk = button(
         text("保存 CDK", "Save CDK").get(language),
@@ -625,7 +701,14 @@ fn update_card(
     .px_3()
     .py_1()
     .text_size(px(12.));
-    save_cdk = save_cdk.on_click(cx.listener(|view, _, _, cx| view.save_settings_cdk(cx)));
+    save_cdk = save_cdk
+        .on_click(cx.listener(|view, _, _, cx| view.save_settings_cdk(cx)))
+        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+            if settings_activation_key(event) {
+                window.prevent_default();
+                view.save_settings_cdk(cx);
+            }
+        }));
 
     let mut body = div()
         .flex()
@@ -691,11 +774,20 @@ fn about_card(_app: &mut AhabApp, cx: &mut Context<AhabApp>, language: Language)
         icon(ICON_EXTERNAL_LINK, 12., TEXT_MUTED),
     )
     .id("settings-open-repo");
-    repo = repo.on_click(cx.listener(|view, _, _, cx| {
-        open_repo();
-        view.settings_page.feedback = Some("已请求打开 GitHub 仓库".to_owned());
-        cx.notify();
-    }));
+    repo = repo
+        .on_click(cx.listener(|view, _, _, cx| {
+            open_repo();
+            view.settings_page.feedback = Some("已请求打开 GitHub 仓库".to_owned());
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+            if settings_activation_key(event) {
+                window.prevent_default();
+                open_repo();
+                view.settings_page.feedback = Some("已请求打开 GitHub 仓库".to_owned());
+                cx.notify();
+            }
+        }));
 
     let body = div()
         .flex()
@@ -943,6 +1035,31 @@ fn icon(data: &'static str, size: f32, color: u32) -> Svg {
         .text_color(rgb(color))
 }
 
+fn settings_activation_key(event: &KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
+}
+
+fn localized_feedback(feedback: &str, language: Language) -> String {
+    if matches!(language, Language::ZhCn) {
+        return feedback.to_owned();
+    }
+    if let Some(version) = feedback.strip_prefix("当前已是最新版本：") {
+        return format!("You are on the latest version ({version})");
+    }
+    if let Some(version) = feedback.strip_prefix("发现新版本：") {
+        return format!("Update available: {version}");
+    }
+    match feedback {
+        "设置已保存" => "Settings saved".to_owned(),
+        "已请求打开 GitHub 仓库" => "GitHub repository opened".to_owned(),
+        "未知" => "Unknown".to_owned(),
+        _ => feedback.to_owned(),
+    }
+}
+
 fn language_code(language: Language) -> &'static str {
     match language {
         Language::ZhCn => "zh-CN",
@@ -1030,5 +1147,17 @@ mod tests {
         assert_eq!(cycle_value(&options, 16384, -1), 62001);
         assert_eq!(cycle_value(&options, 62001, 1), 16384);
         assert_eq!(cycle_value(&options, 9999, 1), 5555);
+    }
+
+    #[test]
+    fn settings_feedback_is_localized_for_update_states() {
+        assert_eq!(
+            localized_feedback("当前已是最新版本：v1.0.0", Language::EnUs),
+            "You are on the latest version (v1.0.0)"
+        );
+        assert_eq!(
+            localized_feedback("发现新版本：v1.1.0", Language::EnUs),
+            "Update available: v1.1.0"
+        );
     }
 }

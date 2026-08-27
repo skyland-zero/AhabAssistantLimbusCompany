@@ -487,16 +487,20 @@ impl SettingsPageState {
         if let Some(error) = response.error {
             self.feedback = Some(error.message);
         } else {
-            let latest = response
-                .result
-                .and_then(|value| {
-                    value
-                        .get("latest")
-                        .and_then(|value| value.as_str())
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| "未知".to_owned());
-            self.feedback = Some(format!("当前已是最新版本：{latest}"));
+            let result = response.result.unwrap_or_default();
+            let latest = result
+                .get("latest")
+                .and_then(|value| value.as_str())
+                .unwrap_or("未知");
+            let update_available = result
+                .get("updateAvailable")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false);
+            self.feedback = Some(if update_available {
+                format!("发现新版本：{latest}")
+            } else {
+                format!("当前已是最新版本：{latest}")
+            });
         }
     }
 
