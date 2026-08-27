@@ -17,6 +17,9 @@ use std::{
 #[derive(Clone)]
 pub struct MockClient {
     inner: Arc<Mutex<MockState>>,
+    /// Device calls can be routed to the real Python sidecar while all other
+    /// pages continue to use the deterministic mock during migration.
+    remote: Option<Arc<super::websocket::WebSocketClient>>,
 }
 
 struct MockState {
@@ -232,12 +235,12 @@ impl Default for MockState {
             system_settings: SystemSettingsConfig::default(),
             devices: vec![
                 DeviceInfo {
-                    id: "win-limbus".into(),
+                    id: "pc:limbus".into(),
                     name: "Limbus Company".into(),
                     detail: Some("1920×1080 · 窗口化".into()),
                 },
                 DeviceInfo {
-                    id: "mumu-instance".into(),
+                    id: "mumu:0".into(),
                     name: "MuMu 模拟器".into(),
                     detail: Some("1280×720 · 端口 16384".into()),
                 },
@@ -520,17 +523,35 @@ impl Default for MockClient {
     fn default() -> Self {
         Self {
             inner: Arc::new(Mutex::new(MockState::default())),
+            remote: None,
         }
     }
 }
 
 impl MockClient {
-    /// Return another handle to the same deterministic backend state.
+    /// Create a hybrid client: real Python device IPC, deterministic mock for
+    /// the remaining pages that have not migrated yet.
+    pub fn try_sidecar() -> Result<Self, String> {
+        let mut client = Self::default();
+        client.remote = Some(Arc::new(super::websocket::WebSocketClient::try_new()?));
+        Ok(client)
+    }
+
+    pub fn is_sidecar(&self) -> bool {
+        self.remote.is_some()
+    }
+
+    /// Return another handle to the same backend state.
     pub fn shared(&self) -> Self {
         self.clone()
     }
 
     pub fn call(&mut self, method_name: &str, params: Option<Value>) -> RpcResponse {
+        if is_remote_device_method(method_name) {
+            if let Some(remote) = self.remote.as_ref() {
+                return remote.request(method_name, params);
+            }
+        }
         self.inner
             .lock()
             .expect("mock backend lock poisoned")
@@ -538,10 +559,15 @@ impl MockClient {
     }
 
     pub fn take_events(&mut self) -> Vec<EventEnvelope> {
-        self.inner
+        let mut events = self
+            .inner
             .lock()
             .expect("mock backend lock poisoned")
-            .take_events()
+            .take_events();
+        if let Some(remote) = self.remote.as_ref() {
+            events.extend(remote.take_events());
+        }
+        events
     }
 
     pub fn device_status(&self) -> ConnectionStatus {
@@ -554,11 +580,23 @@ impl MockClient {
 
 impl RpcClient for MockClient {
     fn send(&mut self, request: RpcRequest) -> RpcResponse {
+        if is_remote_device_method(&request.method) {
+            if let Some(remote) = self.remote.as_ref() {
+                return remote.send_request(request);
+            }
+        }
         self.inner
             .lock()
             .expect("mock backend lock poisoned")
             .handle(request)
     }
+}
+
+fn is_remote_device_method(method_name: &str) -> bool {
+    matches!(
+        method_name,
+        method::DEVICE_LIST | method::DEVICE_CONNECT | method::DEVICE_DISCONNECT
+    )
 }
 
 #[cfg(test)]
@@ -629,11 +667,11 @@ mod tests {
         assert_eq!(client.device_status(), ConnectionStatus::Disconnected);
         let devices = client.call(method::DEVICE_LIST, None).result.unwrap();
         assert_eq!(devices.as_array().unwrap().len(), 2);
-        assert_eq!(devices[1]["id"], "mumu-instance");
+        assert_eq!(devices[1]["id"], "mumu:0");
         assert_eq!(devices[1]["name"], "MuMu 模拟器");
         assert!(
             !client
-                .call(method::DEVICE_CONNECT, Some(json!({ "id": "win-limbus" })))
+                .call(method::DEVICE_CONNECT, Some(json!({ "id": "pc:limbus" })))
                 .is_error()
         );
         let device_event = client.take_events().pop().unwrap();

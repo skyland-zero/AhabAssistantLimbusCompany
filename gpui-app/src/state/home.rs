@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use serde_json::json;
 
 use crate::{
-    ipc::{EventEnvelope, MockClient},
+    ipc::{EventEnvelope, MockClient, RpcResponse},
     model::{
         AfterExitAction, AfterPowerAction, ConnectionStatus, DeviceInfo, DeviceStatusPayload,
         ExecutionState, ExecutionStatusPayload, FixedTaskId, LogEntryPayload, LogLevel,
@@ -543,6 +543,24 @@ impl HomeState {
         self.send(crate::ipc::contract::method::DEVICE_DISCONNECT, None);
     }
 
+    pub fn apply_device_list_response(&mut self, response: RpcResponse) {
+        if let Some(error) = response.error {
+            self.log_level(LogLevel::Error, &format!("IPC 错误：{}", error.message));
+        } else if let Some(value) = response.result
+            && let Ok(devices) = serde_json::from_value(value)
+        {
+            self.devices = devices;
+        }
+        self.poll_events();
+    }
+
+    pub fn apply_rpc_response(&mut self, response: RpcResponse) {
+        if let Some(error) = response.error {
+            self.log_level(LogLevel::Error, &format!("IPC 错误：{}", error.message));
+        }
+        self.poll_events();
+    }
+
     fn save_tasks(&mut self) {
         let value = serde_json::to_value(&self.tasks).expect("TasksConfig is serializable");
         self.send(crate::ipc::contract::method::TASKS_SET_CONFIG, Some(value));
@@ -550,16 +568,18 @@ impl HomeState {
 
     fn send(&mut self, method: &str, params: Option<serde_json::Value>) {
         let response = self.client.call(method, params);
-        if response.is_error() {
-            let message = response
-                .error
-                .map(|error| format!("IPC 错误：{}", error.message))
-                .unwrap_or_else(|| "IPC 错误".to_owned());
-            self.log_level(LogLevel::Error, &message);
-            return;
-        }
+        self.apply_rpc_response(response);
+    }
+
+    /// Drain events from either the shared Mock backend or the sidecar.
+    /// Returns whether the caller should request a repaint.
+    pub fn poll_events(&mut self) -> bool {
         let events = self.client.take_events();
+        if events.is_empty() {
+            return false;
+        }
         self.apply_events(events);
+        true
     }
 
     fn apply_events(&mut self, events: Vec<EventEnvelope>) {
@@ -593,6 +613,20 @@ impl HomeState {
                 crate::ipc::contract::event::LOG_ENTRY => {
                     if let Ok(entry) = serde_json::from_value::<LogEntryPayload>(event.payload) {
                         self.push_log(entry);
+                    }
+                }
+                crate::ipc::contract::event::APP_NOTICE => {
+                    let level = match event.payload.get("level").and_then(|value| value.as_str()) {
+                        Some("error") => LogLevel::Error,
+                        Some("warn") => LogLevel::Warn,
+                        _ => LogLevel::Info,
+                    };
+                    if let Some(message) = event
+                        .payload
+                        .get("message")
+                        .and_then(|value| value.as_str())
+                    {
+                        self.log_level(level, message);
                     }
                 }
                 _ => {}
@@ -735,7 +769,7 @@ mod tests {
         let mut home = HomeState::default();
         assert_eq!(home.device_status, ConnectionStatus::Disconnected);
         assert_eq!(home.client.take_events().len(), 0);
-        home.select_device("win-limbus".into());
+        home.select_device("pc:limbus".into());
         assert_eq!(home.device_status, ConnectionStatus::Connected);
     }
 

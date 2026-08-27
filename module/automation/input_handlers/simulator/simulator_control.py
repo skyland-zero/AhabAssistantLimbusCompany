@@ -85,14 +85,17 @@ class SimulatorControl(AbstractInput):
             log.debug(f"断开ADB连接失败: {e}")
         SimulatorControl.connection_device = None
 
-    def __init__(self) -> None:
+    def __init__(self, endpoint: str | None = None) -> None:
         self.is_pause = False
         self.restore_time = None
         self.simulator_device = None
         # self.simulator_control = None
         self.simulator_max_x = None
         self.simulator_max_y = None
-        self.simulator_port = None
+        # A selected GPUI ADB target is explicit and must not be replaced by
+        # the persisted default port during reconnects.
+        self._configured_endpoint = endpoint
+        self.simulator_port = endpoint
         self.simulator_bluestacks = False
 
         self.game_package_name = "com.ProjectMoon.LimbusCompany"
@@ -135,7 +138,7 @@ class SimulatorControl(AbstractInput):
 
         self.simulator_device = None
         self.simulator_control = None
-        self.simulator_port = None
+        self.simulator_port = self._configured_endpoint
         SimulatorControl.connection_device = None
         sleep(1)
         self.get_simulator()
@@ -170,23 +173,34 @@ class SimulatorControl(AbstractInput):
             self._call_with_reconnect("启动游戏", _start_game)
 
     def adb_connect(self):
-        # Try to connect
-        port = int(cfg.simulator_port)
-        if port <= 0:
-            raise RuntimeError("其他模拟器需要填写 ADB 端口，例如蓝叠/雷电常见为 5555")
+        # A selected serial that is already known to the ADB server does not
+        # need adb connect.  Network endpoints still need the explicit connect
+        # step used by the legacy configuration path.
+        if self._configured_endpoint:
+            self.simulator_port = self._configured_endpoint
+            if ":" not in self._configured_endpoint:
+                return
+            endpoint = self._configured_endpoint
+        else:
+            port = int(cfg.simulator_port)
+            if port <= 0:
+                raise RuntimeError("其他模拟器需要填写 ADB 端口，例如蓝叠/雷电常见为 5555")
+            endpoint = f"127.0.0.1:{port}"
+            self.simulator_port = endpoint
         for _ in range(3):
-            self.simulator_port = f"127.0.0.1:{port}"
-            msg = adb.connect(self.simulator_port)
+            msg = adb.connect(endpoint)
             # Connected to 127.0.0.1:59865
             # Already connected to 127.0.0.1:59865
             if "connected" in msg:
-                log.debug(f"成功连接至:{self.simulator_port},连接信息: {msg}")
+                log.debug(f"成功连接至:{endpoint},连接信息: {msg}")
                 break
             # bad port number '598265' in '127.0.0.1:598265'
             elif "bad port" in msg:
-                log.error(f"连接失败，端口号{self.simulator_port}不正确，可能是拼写错误或不规范")
+                log.error(f"连接失败，端口号{endpoint}不正确，可能是拼写错误或不规范")
 
     def adb_disconnect(self):
+        if not self.simulator_port or ":" not in str(self.simulator_port):
+            return
         try:
             for _ in range(3):
                 msg = adb.disconnect(self.simulator_port)
@@ -208,7 +222,7 @@ class SimulatorControl(AbstractInput):
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                if self.simulator_port is None:
+                if self.simulator_port is None or self._configured_endpoint is not None:
                     self.adb_connect()
 
                 self.simulator_device = adb.device(self.simulator_port)

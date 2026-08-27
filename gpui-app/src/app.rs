@@ -123,6 +123,28 @@ pub struct AhabApp {
     home_log_revision_seen: u64,
 }
 
+fn runtime_client() -> MockClient {
+    let mode = std::env::var("AHAB_BACKEND")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let visual_run = std::env::var_os("AHAB_VISUAL_PAGE").is_some()
+        || std::env::var_os("AHAB_VISUAL_STATE").is_some();
+    let use_sidecar = match mode.as_str() {
+        "mock" => false,
+        "sidecar" | "real" => true,
+        _ => !visual_run,
+    };
+    if use_sidecar {
+        match MockClient::try_sidecar() {
+            Ok(client) => return client,
+            Err(error) => {
+                eprintln!("Python sidecar unavailable, falling back to MockClient: {error}")
+            }
+        }
+    }
+    MockClient::default()
+}
+
 fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
     if let Ok(theme) = std::env::var("AHAB_VISUAL_THEME") {
         settings.themeMode = match theme.to_ascii_lowercase().as_str() {
@@ -214,7 +236,7 @@ impl AhabApp {
         let visual_state = std::env::var("AHAB_VISUAL_STATE")
             .ok()
             .and_then(|state| VisualState::parse(&state));
-        let client = MockClient::default();
+        let client = runtime_client();
         let home = HomeState::with_client(
             client.shared(),
             state.settings.rightPanelWidth,
@@ -248,6 +270,32 @@ impl AhabApp {
             toast_generation: 0,
             home_log_revision_seen: 0,
         }
+    }
+
+    /// Start a lightweight GPUI-side event pump for unsolicited sidecar
+    /// events. Visual/mock runs do not need a timer.
+    pub fn start_event_pump(&mut self, cx: &mut Context<Self>) {
+        if !self.home.client.is_sidecar() {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(50))
+                    .await;
+                if this
+                    .update(cx, |view, cx| {
+                        if view.home.poll_events() {
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     pub fn palette(&self) -> Palette {
@@ -338,6 +386,66 @@ impl AhabApp {
         self.home.set_after_completion_open(false);
         self.current_page = page;
         cx.notify();
+    }
+
+    pub fn select_device(&mut self, id: String, cx: &mut Context<Self>) {
+        if !self.home.client.is_sidecar() {
+            self.home.select_device(id);
+            cx.notify();
+            return;
+        }
+        self.spawn_device_request(
+            crate::ipc::contract::method::DEVICE_CONNECT,
+            Some(serde_json::json!({ "id": id })),
+            cx,
+        );
+    }
+
+    pub fn disconnect_device(&mut self, cx: &mut Context<Self>) {
+        if !self.home.client.is_sidecar() {
+            self.home.disconnect_device();
+            cx.notify();
+            return;
+        }
+        self.spawn_device_request(crate::ipc::contract::method::DEVICE_DISCONNECT, None, cx);
+    }
+
+    pub fn refresh_devices(&mut self, cx: &mut Context<Self>) {
+        if !self.home.client.is_sidecar() {
+            let response = self
+                .home
+                .client
+                .call(crate::ipc::contract::method::DEVICE_LIST, None);
+            self.home.apply_device_list_response(response);
+            cx.notify();
+            return;
+        }
+        let mut client = self.home.client.clone();
+        cx.spawn(async move |this, cx| {
+            let response = client.call(crate::ipc::contract::method::DEVICE_LIST, None);
+            let _ = this.update(cx, |view, cx| {
+                view.home.apply_device_list_response(response);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn spawn_device_request(
+        &mut self,
+        method: &'static str,
+        params: Option<serde_json::Value>,
+        cx: &mut Context<Self>,
+    ) {
+        let mut client = self.home.client.clone();
+        cx.spawn(async move |this, cx| {
+            let response = client.call(method, params);
+            let _ = this.update(cx, |view, cx| {
+                view.home.apply_rpc_response(response);
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub fn ensure_settings_input(&mut self, cx: &mut Context<Self>) {

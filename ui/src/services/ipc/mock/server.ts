@@ -225,8 +225,8 @@ export function createMockClient(): RpcClient {
   };
 
   const devices: DeviceInfo[] = [
-    { id: "win-limbus", name: "Limbus Company", detail: "1920×1080 · 窗口化" },
-    { id: "mumu-instance", name: "MuMu 模拟器", detail: "1280×720 · 端口 16384" },
+    { id: "pc:limbus", name: "Limbus Company", detail: "Windows 游戏窗口" },
+    { id: "mumu:0", name: "MuMu 模拟器 #0", detail: "实例 0 · ADB 16384" },
   ];
   let deviceStatus: ConnectionStatus = "connected";
 

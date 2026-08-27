@@ -4,8 +4,8 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, Context, Div, FontWeight, KeyDownEvent, Render, Svg, Window, div,
-    prelude::*, px, svg,
+    Animation, AnimationExt, Context, Div, FontWeight, KeyDownEvent, Render, Svg, Window, deferred,
+    div, prelude::*, px, svg,
 };
 
 use crate::{
@@ -1488,7 +1488,10 @@ fn home_select(
 
     let mut root = div().relative().w(px(width)).child(trigger);
     if open {
-        root = root.child(select_popup(option_list, &palette).shadow_sm());
+        // Home Selects live inside the scrolling task list. Defer the popup so
+        // later control rows cannot paint over it, matching the floating menu
+        // behavior of the React SelectContent component.
+        root = root.child(deferred(select_popup(option_list, &palette).shadow_sm()).priority(10));
     }
     root
 }
@@ -2352,9 +2355,11 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .text_size(px(12.0))
         .justify_between()
         .child(action_icon(ICON_CHEVRON_DOWN, 14., TEXT_MUTED));
-    if let Some(next_device) = next_device {
+    if app.home.device_status != ConnectionStatus::Connecting
+        && let Some(next_device) = next_device
+    {
         device_select = device_select.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.select_device(next_device.clone());
+            view.select_device(next_device.clone(), cx);
             cx.stop_propagation();
             cx.notify();
         }));
@@ -2369,15 +2374,7 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(action_icon(ICON_REFRESH, 14., TEXT_MUTED));
     if app.home.device_status != ConnectionStatus::Connecting {
         refresh = refresh.on_click(cx.listener(|view, _, _, cx| {
-            let response = view
-                .home
-                .client
-                .call(crate::ipc::contract::method::DEVICE_LIST, None);
-            if let Some(value) = response.result
-                && let Ok(devices) = serde_json::from_value(value)
-            {
-                view.home.devices = devices;
-            }
+            view.refresh_devices(cx);
             cx.stop_propagation();
             cx.notify();
         }));
@@ -2392,7 +2389,7 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(action_icon(ICON_X, 14., TEXT_MUTED));
     if app.home.device_status == ConnectionStatus::Connected {
         disconnect = disconnect.on_click(cx.listener(|view, _, _, cx| {
-            view.home.disconnect_device();
+            view.disconnect_device(cx);
             cx.stop_propagation();
             cx.notify();
         }));

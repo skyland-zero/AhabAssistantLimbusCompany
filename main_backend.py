@@ -1,0 +1,113 @@
+"""Headless Python sidecar entry point for the GPUI application.
+
+This is intentionally separate from ``main.py``.  The latter creates the
+legacy Qt window; this process only owns automation services and local RPC.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import signal
+import sys
+from pathlib import Path
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Ahab Assistant GPUI sidecar")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--token", required=True)
+    parser.add_argument("--parent-pid", type=int, default=0)
+    return parser.parse_args()
+
+
+async def _run(args: argparse.Namespace) -> None:
+    from module.logger import log
+    from module.logger.my_log import Logger
+
+    Logger()
+    from module.device_manager import get_device_manager
+    from module.rpc_dispatcher import RpcDispatcher
+    from module.websocket_server import WebSocketServer
+    stop_event = asyncio.Event()
+
+    def request_stop(_signal: int | None = None, _frame: object | None = None) -> None:
+        try:
+            asyncio.get_running_loop().call_soon_threadsafe(stop_event.set)
+        except RuntimeError:
+            # The interpreter is already shutting down.
+            pass
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(signum, request_stop)
+        except (AttributeError, OSError, ValueError):
+            pass
+
+    manager = get_device_manager()
+    dispatcher = RpcDispatcher(
+        manager,
+        version=_version(),
+        shutdown=stop_event.set,
+    )
+    server = WebSocketServer(dispatcher, manager, token=args.token)
+    port = await server.start(args.host, args.port)
+    sys.stdout.write(
+        json.dumps(
+            {"ready": True, "host": args.host, "port": port, "pid": os.getpid()},
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    sys.stdout.flush()
+    log.info("GPUI sidecar 已启动：%s:%s", args.host, port)
+
+    parent_task: asyncio.Task[None] | None = None
+    if args.parent_pid > 0:
+        parent_task = asyncio.create_task(_watch_parent(args.parent_pid, stop_event))
+    try:
+        await stop_event.wait()
+    finally:
+        if parent_task is not None:
+            parent_task.cancel()
+        await server.stop()
+        manager.close()
+
+
+async def _watch_parent(parent_pid: int, stop_event: asyncio.Event) -> None:
+    try:
+        import psutil
+    except ImportError:
+        return
+    while not stop_event.is_set():
+        if not psutil.pid_exists(parent_pid):
+            stop_event.set()
+            return
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            continue
+
+
+def _version() -> str:
+    version_file = Path(__file__).resolve().parent / "assets" / "config" / "version.txt"
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+
+
+def main() -> None:
+    args = _parse_args()
+    os.chdir(Path(__file__).resolve().parent)
+    try:
+        asyncio.run(_run(args))
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

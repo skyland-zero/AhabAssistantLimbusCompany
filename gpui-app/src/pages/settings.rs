@@ -8,7 +8,8 @@
 use std::process::Command;
 
 use gpui::{
-    Context, Div, FontWeight, KeyDownEvent, Svg, div, prelude::*, px, rgb as gpui_rgb, svg,
+    Context, Div, FontWeight, KeyDownEvent, Svg, deferred, div, prelude::*, px, rgb as gpui_rgb,
+    svg,
 };
 
 use crate::{
@@ -671,7 +672,9 @@ fn update_card(
     }
     let mut source = div().relative().w(px(180.)).child(source_trigger);
     if source_open {
-        source = source.child(select_popup(source_options, &palette));
+        // This card is inside settings-scroll. Defer the popup so the
+        // following settings rows cannot cover the floating menu.
+        source = source.child(deferred(select_popup(source_options, &palette)).priority(10));
     }
 
     let mut check = action_button(
@@ -1008,7 +1011,9 @@ fn select_system_u16(
 
     let mut root = div().relative().w(px(180.)).child(trigger);
     if open {
-        root = root.child(select_popup(option_list, &palette));
+        // Simulator Selects also sit inside settings-scroll; keep the menu on
+        // the floating layer instead of letting later rows paint over it.
+        root = root.child(deferred(select_popup(option_list, &palette)).priority(10));
     }
     root
 }

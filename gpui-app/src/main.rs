@@ -46,7 +46,13 @@ fn main() {
                 window_decorations: Some(WindowDecorations::Client),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| AhabApp::new()),
+            |_, cx| {
+                cx.new(|cx| {
+                    let mut app = AhabApp::new();
+                    app.start_event_pump(cx);
+                    app
+                })
+            },
         ) {
             Ok(_) => {}
             Err(error) => {

@@ -23,6 +23,23 @@ class Handle:
     def __init__(self):
         self._enum_windows_list = []
 
+    def bind(self, hwnd: int) -> int:
+        """绑定外部选择的游戏窗口句柄。
+
+        GPUI 选择设备时只传递稳定的 ``pc:limbus`` ID；真正的 HWND 由
+        device manager 在 Python 进程内发现并绑定。绑定前验证句柄，避免
+        后续截图/输入误操作已经销毁的窗口。
+        """
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            raise ValueError(f"无效的游戏窗口句柄: {hwnd}")
+        self._hwnd = int(hwnd)
+        return self._hwnd
+
+    def clear(self) -> None:
+        """清除当前绑定的游戏窗口句柄。"""
+        self._hwnd = 0
+        self._transparent = False
+
     def init_handle(self, title: str = "LimbusCompany", class_name: str = "UnityWndClass") -> int:
         """获取窗口句柄"""
         hwnd = win32gui.FindWindow(class_name, title)
