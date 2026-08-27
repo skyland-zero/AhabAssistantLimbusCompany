@@ -22,7 +22,9 @@
 - ✅ Settings/Help 第一批：主题、语言、强调色、热键捕获、检查更新、仓库链接、帮助目录、帮助语言和外部链接支持键盘激活与焦点状态；设置/更新反馈补齐英文显示。
 - ✅ 其他页面修正：Resources 同步终态保留可见窗口，Teams 在 900px 下保持单列并补齐列表/编辑器主要英文标签。
 - ✅ P0 基线第一批：Tauri/WebView2 与 GPUI 均已采集 7 个页面、4 种中英文/明暗组合和 `900×680` / `800×560` 两种逻辑 client viewport；新增启动覆盖变量、物理 client 截图工具和 JSON 像素差异报告，产物位于被忽略的 `artifacts/visual/reference-ui`、`artifacts/visual/gpui`。验证机 DPI 为 168（175%），GPUI/ Tauri 截图分别为 `1575×1190` / `1577×1190` 与 `1400×980` / `1402×980`。
-- ⏳ P0/P8：Home 展开/运行/暂停、Teams 编辑/删除、其他页面 loading/empty/success 等动态状态，以及 30 分钟内存回归仍未建立门禁。
+- ✅ P0 动态基线第一批：通过 `AHAB_VISUAL_STATE` 和真实 Tauri DOM 操作覆盖 Home 展开/Select/运行/暂停/Dialog、Teams 编辑/删除/Select、Settings 热键/Select/最新版本、Toolbox 运行中、Resources 同步中和 Help 滚动；两端已采集 `14 状态 × 4 语言/主题组合 × 2 尺寸 = 112` 对截图，报告为 `artifacts/visual/pixel-diff-states.json`。
+- ⚠️ 动态参考发现现有 `ui` Mock 的 Resources 页面请求名仍为旧的 `resource.list`/`resource.sync`，而页面使用 `resource.status`/`resource.sync.start`，因此 Tauri Resources 参考目前是空状态；遵守“不修改现有 ui”约束，暂不把该对比视为 GPUI 资源布局验收。
+- ⏳ P8：30 分钟内存回归尚未建立门禁。
 - ⏳ P2/P3/P4/P5/P6：全量 i18n、Home 描述/实际截图帧、Teams 剩余控件状态/资源细节、Settings/Help 剩余视觉回归仍需继续；设置与 Teams Select 已支持弹出菜单、键盘和 Mock 持久化，离散队伍选择支持方向键，主题包权重 Slider 支持鼠标拖拽。
 - ⏳ P7：真实 WebSocket、JPEG 帧、托盘、全局热键注册和 Windows 系统 API 尚未接入。
 

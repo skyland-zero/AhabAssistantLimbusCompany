@@ -115,6 +115,7 @@ pub struct AhabApp {
     pub settings_port_input: Option<Entity<TextInput>>,
     pub settings_timeout_input: Option<Entity<TextInput>>,
     pub settings_input_subscriptions: Vec<Subscription>,
+    visual_state: Option<VisualState>,
     pub help_scroll: ScrollHandle,
     pub home_log_scroll: ScrollHandle,
     pub toast: Option<shell::Toast>,
@@ -145,6 +146,63 @@ fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
     }
 }
 
+/// Deterministic transient states used by the visual-regression harness. These
+/// never enter persisted settings or the production IPC contract.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VisualState {
+    HomeExpanded,
+    HomeSelect,
+    HomeRunning,
+    HomePaused,
+    HomeAfterCompletion,
+    TeamsEditor,
+    TeamsDelete,
+    TeamsSelect,
+    SettingsHotkey,
+    SettingsSelect,
+    SettingsLatest,
+    ToolboxRunning,
+    ResourcesSyncing,
+    HelpScrolled,
+}
+
+impl VisualState {
+    fn parse(value: &str) -> Option<Self> {
+        Some(match value.to_ascii_lowercase().as_str() {
+            "home-expanded" => Self::HomeExpanded,
+            "home-select" => Self::HomeSelect,
+            "home-running" => Self::HomeRunning,
+            "home-paused" => Self::HomePaused,
+            "home-after-completion" => Self::HomeAfterCompletion,
+            "teams-editor" => Self::TeamsEditor,
+            "teams-delete" => Self::TeamsDelete,
+            "teams-select" => Self::TeamsSelect,
+            "settings-hotkey" => Self::SettingsHotkey,
+            "settings-select" => Self::SettingsSelect,
+            "settings-latest" => Self::SettingsLatest,
+            "toolbox-running" => Self::ToolboxRunning,
+            "resources-syncing" => Self::ResourcesSyncing,
+            "help-scrolled" => Self::HelpScrolled,
+            _ => return None,
+        })
+    }
+
+    const fn page(self) -> Page {
+        match self {
+            Self::HomeExpanded
+            | Self::HomeSelect
+            | Self::HomeRunning
+            | Self::HomePaused
+            | Self::HomeAfterCompletion => Page::Home,
+            Self::TeamsEditor | Self::TeamsDelete | Self::TeamsSelect => Page::Teams,
+            Self::SettingsHotkey | Self::SettingsSelect | Self::SettingsLatest => Page::Settings,
+            Self::ToolboxRunning => Page::Toolbox,
+            Self::ResourcesSyncing => Page::Resources,
+            Self::HelpScrolled => Page::Help,
+        }
+    }
+}
+
 impl AhabApp {
     pub fn new() -> Self {
         let mut state = AppState::load();
@@ -153,6 +211,9 @@ impl AhabApp {
             .ok()
             .and_then(|page| Page::parse(&page))
             .unwrap_or(Page::Home);
+        let visual_state = std::env::var("AHAB_VISUAL_STATE")
+            .ok()
+            .and_then(|state| VisualState::parse(&state));
         let client = MockClient::default();
         let home = HomeState::with_client(
             client.shared(),
@@ -180,6 +241,7 @@ impl AhabApp {
             settings_port_input: None,
             settings_timeout_input: None,
             settings_input_subscriptions: Vec::new(),
+            visual_state,
             help_scroll: ScrollHandle::new(),
             home_log_scroll: ScrollHandle::new(),
             toast: None,
@@ -198,6 +260,75 @@ impl AhabApp {
             WindowAppearance::Dark | WindowAppearance::VibrantDark
         );
         crate::theme::palette_for_settings(&self.state.settings, system_is_dark)
+    }
+
+    fn apply_visual_state(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self.visual_state.take() else {
+            return;
+        };
+        self.current_page = state.page();
+        match state {
+            VisualState::HomeExpanded => {
+                self.home
+                    .expanded_tasks
+                    .insert(crate::model::FixedTaskId::DailyTask);
+            }
+            VisualState::HomeSelect => {
+                self.home
+                    .expanded_tasks
+                    .insert(crate::model::FixedTaskId::GetReward);
+                self.home.open_select = Some(crate::state::HomeSelect::RewardMode);
+            }
+            VisualState::HomeRunning => {
+                self.home.start();
+            }
+            VisualState::HomePaused => {
+                self.home.start();
+                self.home.pause_or_resume();
+            }
+            VisualState::HomeAfterCompletion => {
+                self.home.set_after_completion_open(true);
+            }
+            VisualState::TeamsEditor => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(cx);
+                }
+            }
+            VisualState::TeamsDelete => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.request_delete(team);
+                }
+            }
+            VisualState::TeamsSelect => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(cx);
+                    self.teams.open_select = Some(crate::state::TeamSelect::Purpose);
+                }
+            }
+            VisualState::SettingsHotkey => {
+                self.settings_page.capturing = Some(crate::state::HotkeyTarget::StartStop);
+            }
+            VisualState::SettingsSelect => {
+                self.settings_page.open_select = Some(crate::state::SettingsSelect::UpdateSource);
+            }
+            VisualState::SettingsLatest => {
+                self.settings_page.check_update();
+            }
+            VisualState::ToolboxRunning => {
+                self.toolbox.toggle(crate::model::ToolId::InfiniteBattle);
+            }
+            VisualState::ResourcesSyncing => {
+                self.resources.sync_progress = Some(42);
+                self.resources.sync_finish_scheduled = false;
+            }
+            VisualState::HelpScrolled => {
+                // The handle applies this request during the first prepaint,
+                // after the document's children have measurable bounds.
+                self.help_scroll.scroll_to_top_of_item(6);
+            }
+        }
     }
 
     pub fn select_page(&mut self, page: Page, cx: &mut Context<Self>) {
@@ -568,6 +699,7 @@ impl Render for AhabApp {
         let language = self.state.settings.language;
         let palette = self.palette_for_window(window);
         crate::components::style::set_current_render_palette(palette);
+        self.apply_visual_state(cx);
         self.sync_input_palettes(palette, cx);
         if self.home.log_revision != self.home_log_revision_seen {
             self.home_log_scroll.scroll_to_bottom();

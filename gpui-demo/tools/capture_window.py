@@ -17,6 +17,7 @@ from pathlib import Path
 import pyautogui
 import win32con
 import win32gui
+import win32process
 
 
 def make_process_dpi_aware() -> None:
@@ -33,14 +34,33 @@ def make_process_dpi_aware() -> None:
             pass
 
 
-def wait_for_window(title: str, timeout: float) -> int:
+def wait_for_window(title: str, timeout: float, pid: int | None = None) -> int:
+    def matching_window() -> int:
+        if pid is None:
+            hwnd = win32gui.FindWindow(None, title)
+            return hwnd if hwnd and win32gui.IsWindowVisible(hwnd) else 0
+
+        found = 0
+
+        def visit(hwnd: int, _extra: object) -> None:
+            nonlocal found
+            if found or not win32gui.IsWindowVisible(hwnd):
+                return
+            _thread_id, window_pid = win32process.GetWindowThreadProcessId(hwnd)
+            if window_pid == pid and win32gui.GetWindowText(hwnd) == title:
+                found = hwnd
+
+        win32gui.EnumWindows(visit, None)
+        return found
+
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        hwnd = win32gui.FindWindow(None, title)
-        if hwnd and win32gui.IsWindowVisible(hwnd):
+        hwnd = matching_window()
+        if hwnd:
             return hwnd
         time.sleep(0.1)
-    raise TimeoutError(f"window not found within {timeout:.1f}s: {title!r}")
+    suffix = f" for pid {pid}" if pid is not None else ""
+    raise TimeoutError(f"window not found within {timeout:.1f}s{suffix}: {title!r}")
 
 
 def client_size(hwnd: int) -> tuple[int, int]:
@@ -76,6 +96,60 @@ def resize_client(hwnd: int, logical_width: int, logical_height: int) -> tuple[i
     return physical_client_width, physical_client_height
 
 
+def focus_window(hwnd: int) -> None:
+    """Bring a target window to the foreground even when launched by a child process."""
+
+    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    foreground = win32gui.GetForegroundWindow()
+    current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
+    foreground_thread, _ = win32process.GetWindowThreadProcessId(foreground)
+    target_thread, target_pid = win32process.GetWindowThreadProcessId(hwnd)
+    attached_threads: list[int] = []
+    for thread_id in (foreground_thread, target_thread):
+        if thread_id and thread_id != current_thread and thread_id not in attached_threads:
+            if ctypes.windll.user32.AttachThreadInput(current_thread, thread_id, True):
+                attached_threads.append(thread_id)
+    try:
+        # The Win32 calls are best-effort individually. Some Python/Windows
+        # combinations raise from SetForegroundWindow even when the ctypes
+        # call below succeeds.
+        ctypes.windll.user32.AllowSetForegroundWindow(target_pid)
+        win32gui.BringWindowToTop(hwnd)
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+        except win32gui.error:
+            pass
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        try:
+            win32gui.SetActiveWindow(hwnd)
+        except win32gui.error:
+            pass
+    finally:
+        for thread_id in attached_threads:
+            ctypes.windll.user32.AttachThreadInput(current_thread, thread_id, False)
+
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline:
+        if win32gui.GetForegroundWindow() == hwnd:
+            return
+        time.sleep(0.05)
+
+    # A synthetic click is the reliable fallback when Windows' foreground-lock
+    # policy rejects programmatic activation. Click the inert custom title-bar
+    # area, never the client controls, then verify the foreground HWND again.
+    left, top, right, _bottom = win32gui.GetWindowRect(hwnd)
+    pyautogui.click((left + right) // 2, top + 10)
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline:
+        if win32gui.GetForegroundWindow() == hwnd:
+            return
+        time.sleep(0.05)
+    raise RuntimeError(
+        f"could not activate window {win32gui.GetWindowText(hwnd)!r}; "
+        "refusing to capture pixels from another foreground window"
+    )
+
+
 def capture_client(hwnd: int, output: Path) -> dict[str, object]:
     left, top = win32gui.ClientToScreen(hwnd, (0, 0))
     width, height = client_size(hwnd)
@@ -96,6 +170,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--title", default="Ahab Assistant · Limbus Company")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--pid", type=int, help="restrict lookup to a specific process")
     parser.add_argument("--logical-width", type=int, required=True)
     parser.add_argument("--logical-height", type=int, required=True)
     parser.add_argument("--timeout", type=float, default=30.0)
@@ -108,8 +183,8 @@ def main() -> None:
     args = parser.parse_args()
 
     make_process_dpi_aware()
-    hwnd = wait_for_window(args.title, args.timeout)
-    win32gui.SetForegroundWindow(hwnd)
+    hwnd = wait_for_window(args.title, args.timeout, args.pid)
+    focus_window(hwnd)
     expected_width, expected_height = resize_client(
         hwnd, args.logical_width, args.logical_height
     )

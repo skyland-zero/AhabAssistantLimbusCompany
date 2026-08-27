@@ -6,7 +6,9 @@
 
 use std::rc::Rc;
 
-use gpui::{Context, Div, ImageSource, KeyDownEvent, div, img, prelude::*, px, relative, svg};
+use gpui::{
+    Context, Div, ImageSource, KeyDownEvent, deferred, div, img, prelude::*, px, relative, svg,
+};
 
 use crate::{
     app::{AhabApp, BORDER, SURFACE, TEXT, TEXT_MUTED},
@@ -480,7 +482,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .items_center()
             .justify_center()
             .p_4()
-            .bg(rgba(0x080c14d9));
+            .bg(rgba(0x00000080));
         surface = surface.on_click(cx.listener(|view, _, _, cx| {
             view.teams.cancel_delete();
             cx.notify();
@@ -644,10 +646,10 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let dialog_body =
         div()
             .id("team-editor-dialog")
-            .w(px(768.))
-            .h(px(620.))
+            .w(px(512.))
+            .h(px(600.))
             .max_w_full()
-            .max_h(relative(0.88))
+            .max_h(relative(0.96))
             .min_h_0()
             .overflow_hidden()
             .flex()
@@ -759,7 +761,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .items_center()
         .justify_center()
         .p_4()
-        .bg(rgba(0x080c14d9));
+        .bg(rgba(0x00000080));
     surface = surface.on_click(cx.listener(|view, _, _, cx| {
         if view.teams.delete_target.is_some() {
             view.teams.cancel_delete();
@@ -794,7 +796,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .items_center()
             .justify_center()
             .p_4()
-            .bg(rgba(0x080c14d9))
+            .bg(rgba(0x00000080))
             .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
         surface = surface.child(delete_layer.child(delete_confirmation(app, cx, language)));
     }
@@ -896,8 +898,8 @@ fn basic_editor(
         let palette = current_render_palette();
         let mut control = div()
             .id(format!("team-sinner-{id}"))
-            .w(px(100.))
-            .h(px(104.))
+            .w(px(64.))
+            .h(px(96.))
             .flex()
             .flex_col()
             .items_center()
@@ -1103,8 +1105,8 @@ fn basic_editor(
                 .flex()
                 .flex_wrap()
                 .gap_3()
-                .child(name_field.flex_basis(px(300.)).flex_grow(1.))
-                .child(purpose_field.flex_basis(px(220.)).flex_grow(1.)),
+                .child(name_field.flex_basis(px(220.)).flex_grow(1.))
+                .child(purpose_field.flex_basis(px(140.)).flex_grow(1.)),
         )
         .child(field_block(
             text("饰品体系", "Gift System").get(language),
@@ -2419,7 +2421,11 @@ fn team_select(
 
     let mut root = div().relative().w(px(width)).child(trigger);
     if open {
-        root = root.child(select_popup(option_list, &palette).shadow_sm());
+        // The editor content lives inside a scrolling element. Defer the menu
+        // paint so the popup is composited above the following form sections
+        // instead of being covered by them (and by the scroll area's paint
+        // order), matching the floating SelectContent used by the React UI.
+        root = root.child(deferred(select_popup(option_list, &palette).shadow_sm()).priority(10));
     }
     root
 }
@@ -2501,9 +2507,9 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
         .items_center()
         .gap_2()
         .h(px(34.))
-        .flex_basis(px(120.))
+        .flex_basis(px(78.))
         .flex_grow(1.)
-        .min_w(px(108.))
+        .min_w(px(68.))
         .px_2()
         .rounded_md()
         .border_1()

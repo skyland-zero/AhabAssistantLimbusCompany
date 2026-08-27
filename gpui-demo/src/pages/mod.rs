@@ -24,6 +24,7 @@ pub fn render(page: Page, app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
 pub fn render_overlay(page: Page, app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     match page {
+        Page::Home => home::render_overlay(app, cx),
         Page::Teams => teams::render_overlay(app, cx),
         _ => gpui::div(),
     }

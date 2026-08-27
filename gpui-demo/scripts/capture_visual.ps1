@@ -9,7 +9,8 @@ param(
     [ValidateSet("light", "dark")]
     [string[]]$Themes = @("light", "dark"),
     [ValidateSet("home", "teams", "themes", "toolbox", "resources", "help", "settings")]
-    [string[]]$Pages = @("home", "teams", "themes", "toolbox", "resources", "help", "settings")
+    [string[]]$Pages = @("home", "teams", "themes", "toolbox", "resources", "help", "settings"),
+    [string[]]$States = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +28,39 @@ $capture = (Resolve-Path (Join-Path $PSScriptRoot "../tools/capture_window.py"))
 $profile = Join-Path $OutputDirectory ".profile"
 $settingsDirectory = Join-Path $profile "AhabAssistant"
 New-Item -ItemType Directory -Force -Path $OutputDirectory, $settingsDirectory | Out-Null
+
+$statePages = @{
+    "home-expanded" = "home"
+    "home-select" = "home"
+    "home-running" = "home"
+    "home-paused" = "home"
+    "home-after-completion" = "home"
+    "teams-editor" = "teams"
+    "teams-delete" = "teams"
+    "teams-select" = "teams"
+    "settings-hotkey" = "settings"
+    "settings-select" = "settings"
+    "settings-latest" = "settings"
+    "toolbox-running" = "toolbox"
+    "resources-syncing" = "resources"
+    "help-scrolled" = "help"
+}
+$States = @($States | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$unknownStates = @($States | Where-Object { -not $statePages.ContainsKey($_) })
+if ($unknownStates.Count -gt 0) {
+    throw "unknown visual state(s): $($unknownStates -join ', ')"
+}
+
+$cases = @()
+if ($States.Count -gt 0) {
+    foreach ($state in $States) {
+        $cases += [pscustomobject]@{ Page = $statePages[$state]; State = $state; Suffix = $state }
+    }
+} else {
+    foreach ($page in $Pages) {
+        $cases += [pscustomobject]@{ Page = $page; State = ""; Suffix = $page }
+    }
+}
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw "python is required for physical-pixel window capture"
@@ -59,19 +93,24 @@ try {
         foreach ($language in $Languages) {
             $languageShort = if ($language -eq "zh-CN") { "zh" } else { "en" }
             foreach ($theme in $Themes) {
-                foreach ($page in $Pages) {
+                foreach ($case in $cases) {
                     $env:APPDATA = $profile
                     $env:AHAB_VISUAL_THEME = $theme
                     $env:AHAB_VISUAL_LANGUAGE = $language
                     $env:AHAB_VISUAL_ACCENT = "crimson"
-                    $env:AHAB_VISUAL_PAGE = $page
+                    $env:AHAB_VISUAL_PAGE = $case.Page
+                    if ([string]::IsNullOrWhiteSpace($case.State)) {
+                        Remove-Item Env:AHAB_VISUAL_STATE -ErrorAction SilentlyContinue
+                    } else {
+                        $env:AHAB_VISUAL_STATE = $case.State
+                    }
                     $process = Start-Process -FilePath $Executable -WorkingDirectory (Split-Path $Executable) -PassThru
                     try {
                         # GPUI loads fonts and assets during the first frame. Keep
                         # this delay explicit so captures are not startup frames.
                         Start-Sleep -Seconds 2
-                        $output = Join-Path $OutputDirectory "gpui-$languageShort-$theme-$page-$size.png"
-                        & python $capture --output $output --logical-width $logicalWidth --logical-height $logicalHeight --settle-ms 800
+                        $output = Join-Path $OutputDirectory "gpui-$languageShort-$theme-$($case.Suffix)-$size.png"
+                        & python $capture --pid $($process.Id) --output $output --logical-width $logicalWidth --logical-height $logicalHeight --settle-ms 800
                         if ($LASTEXITCODE -ne 0) {
                             throw "capture failed with exit code ${LASTEXITCODE}: $output"
                         }
@@ -92,4 +131,5 @@ try {
     Remove-Item Env:AHAB_VISUAL_LANGUAGE -ErrorAction SilentlyContinue
     Remove-Item Env:AHAB_VISUAL_ACCENT -ErrorAction SilentlyContinue
     Remove-Item Env:AHAB_VISUAL_PAGE -ErrorAction SilentlyContinue
+    Remove-Item Env:AHAB_VISUAL_STATE -ErrorAction SilentlyContinue
 }

@@ -47,9 +47,21 @@ python gpui-demo/tools/visual_diff.py `
   --reference artifacts/visual/reference-ui `
   --gpui artifacts/visual/gpui `
   --output artifacts/visual/pixel-diff.json
+
+# 动态交互状态：GPUI 通过 AHAB_VISUAL_STATE 覆盖，Tauri 通过真实 DOM 操作
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_visual.ps1 `
+  -OutputDirectory artifacts/visual/gpui-states `
+  -States home-expanded,home-select,home-running,home-paused,home-after-completion,teams-editor,teams-delete,teams-select,settings-hotkey,settings-select,settings-latest,toolbox-running,resources-syncing,help-scrolled
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_tauri_states.ps1 `
+  -OutputDirectory artifacts/visual/reference-ui-states `
+  -States home-expanded,home-select,home-running,home-paused,home-after-completion,teams-editor,teams-delete,teams-select,settings-hotkey,settings-select,settings-latest,toolbox-running,resources-syncing,help-scrolled
+python gpui-demo/tools/visual_diff.py `
+  --reference artifacts/visual/reference-ui-states `
+  --gpui artifacts/visual/gpui-states `
+  --output artifacts/visual/pixel-diff-states.json
 ```
 
-脚本通过 `AHAB_VISUAL_THEME`、`AHAB_VISUAL_LANGUAGE`、`AHAB_VISUAL_PAGE` 启动 GPUI 的确定性参考状态；不会修改用户配置。窗口使用逻辑 client viewport `900×680` / `800×560`，当前验证机 DPI 为 `168`（175%），因此 GPUI client 截图为 `1575×1190` / `1400×980` 物理像素，WebView2 截图因 CSS 像素取整可能多一列。截图工具依赖 Pillow、pywin32 和 agent-browser。
+脚本通过 `AHAB_VISUAL_THEME`、`AHAB_VISUAL_LANGUAGE`、`AHAB_VISUAL_PAGE` 和 `AHAB_VISUAL_STATE` 启动 GPUI 的确定性参考状态；不会修改用户配置。窗口使用逻辑 client viewport `900×680` / `800×560`，当前验证机 DPI 为 `168`（175%），因此 GPUI client 截图为 `1575×1190` / `1400×980` 物理像素，WebView2 截图因 CSS 像素取整可能多一列。动态脚本会先轮询 Tauri WebView2 CDP，再等待页面与 Mock IPC 稳定后操作和截图。截图工具依赖 Pillow、pywin32 和 agent-browser。当前 `ui` Mock 的 Resources 请求名仍未与页面契约统一，故该动态参考的 Tauri 资源页为空，详见迁移计划。
 
 ## 当前可操作范围
 

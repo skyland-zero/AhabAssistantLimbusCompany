@@ -14,7 +14,7 @@
 - **已完成：M3 队伍页面第一版**：列表筛选、数量、Mock 队伍/人格、创建/编辑/删除确认、5 个编辑 Tab、12 人格顺序、互斥选项、星光计算、JSON 导入/复制。
 - **已完成：M4/M5 的页面骨架**：主题包、工具箱、资源中心、设置、帮助已接入导航；主题包批量/权重操作、工具状态、资源检查/同步、设置保存、热键捕获、原生 Markdown 子集和目录跳转均已有 Mock 行为。
 - **进行中：M2/M5/M6**：本轮已补上 render-snapshot 主题传递、全局 Toast 骨架、共享 Mock backend、Home 选项 Tab/计数器/结构化日志、Resources 可见同步状态和 Teams 900px 单列约束；真实 WebSocket、全量 i18n、截图帧、托盘/Windows 电源与全局热键后端仍待完成。
-- **验证结果**：`cargo fmt --manifest-path gpui-demo/Cargo.toml -- --check`、`cargo +nightly test --manifest-path gpui-demo/Cargo.toml` 和 `cargo +nightly build --release --manifest-path gpui-demo/Cargo.toml` 当前通过；已建立 Tauri/GPUI 固定尺寸默认状态参考截图和像素差异流程，动态状态截图、真实后端、托盘和 30 分钟内存回归仍待完成。
+- **验证结果**：`cargo fmt --manifest-path gpui-demo/Cargo.toml -- --check`、`cargo +nightly test --manifest-path gpui-demo/Cargo.toml` 和 `cargo +nightly build --release --manifest-path gpui-demo/Cargo.toml` 当前通过；已建立 Tauri/GPUI 固定尺寸默认状态和 14 类动态状态参考截图/像素差异流程，真实后端、托盘和 30 分钟内存回归仍待完成。
 
 ## 1. 当前状态与边界
 
