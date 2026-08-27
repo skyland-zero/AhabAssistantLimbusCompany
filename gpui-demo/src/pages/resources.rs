@@ -74,11 +74,31 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         icon(ICON_SEARCH_CHECK, 14., TEXT),
     )
     .id("resources-check");
-    check = check.on_click(cx.listener(|view, _, _, cx| {
-        view.resources.check_update();
-        view.show_toast(crate::shell::ToastKind::Success, "资源更新状态已刷新", cx);
-        cx.notify();
-    }));
+    check = check
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.resources.check_update();
+            view.show_toast(
+                crate::shell::ToastKind::Success,
+                text("资源更新状态已刷新", "Resource update status refreshed").get(language),
+                cx,
+            );
+            cx.notify();
+        }))
+        .on_key_down(
+            cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
+                if resources_activation_key(event) {
+                    window.prevent_default();
+                    view.resources.check_update();
+                    view.show_toast(
+                        crate::shell::ToastKind::Success,
+                        text("资源更新状态已刷新", "Resource update status refreshed")
+                            .get(language),
+                        cx,
+                    );
+                    cx.notify();
+                }
+            }),
+        );
 
     let mut sync = action_button(
         text("立即同步", "Sync Now").get(language),
@@ -87,11 +107,30 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     )
     .id("resources-sync");
     if progress.is_none() {
-        sync = sync.on_click(cx.listener(|view, _, _, cx| {
-            view.resources.sync_now();
-            view.show_toast(crate::shell::ToastKind::Loading, "资源同步中…", cx);
-            cx.notify();
-        }));
+        sync = sync
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.resources.sync_now();
+                view.show_toast(
+                    crate::shell::ToastKind::Loading,
+                    text("资源同步中…", "Syncing resources…").get(language),
+                    cx,
+                );
+                cx.notify();
+            }))
+            .on_key_down(
+                cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
+                    if resources_activation_key(event) {
+                        window.prevent_default();
+                        view.resources.sync_now();
+                        view.show_toast(
+                            crate::shell::ToastKind::Loading,
+                            text("资源同步中…", "Syncing resources…").get(language),
+                            cx,
+                        );
+                        cx.notify();
+                    }
+                }),
+            );
     } else {
         sync = sync.opacity(0.5).cursor_not_allowed();
     }
@@ -167,7 +206,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .mt_4()
                 .text_size(px(12.))
                 .text_color(rgb(GREEN))
-                .child(feedback),
+                .child(localized_feedback(&feedback, language)),
         );
     }
 
@@ -241,7 +280,7 @@ fn resource_card(group: ResourceGroup, progress: Option<u8>, language: Language)
         ))
         .child(version_row(
             text("上次同步", "Last Synced").get(language),
-            format_sync_time(group.lastSyncAt),
+            format_sync_time(group.lastSyncAt, language),
         ));
 
     if let Some(value) = progress {
@@ -281,10 +320,32 @@ fn version_row(label: &'static str, value: String) -> Div {
         )
 }
 
-fn format_sync_time(timestamp: Option<i64>) -> String {
+fn format_sync_time(timestamp: Option<i64>, language: Language) -> String {
     match timestamp {
-        None | Some(0) => "从未同步".to_owned(),
-        Some(timestamp) => format!("时间戳 {timestamp}"),
+        None | Some(0) => text("从未同步", "Never").get(language).to_owned(),
+        Some(timestamp) => match language {
+            Language::ZhCn => format!("时间戳 {timestamp}"),
+            Language::EnUs => format!("Timestamp {timestamp}"),
+        },
+    }
+}
+
+fn resources_activation_key(event: &gpui::KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
+}
+
+fn localized_feedback(feedback: &str, language: Language) -> String {
+    if matches!(language, Language::ZhCn) {
+        return feedback.to_owned();
+    }
+    match feedback {
+        "发现资源更新" => "Resource updates found".to_owned(),
+        "资源已是最新版本" => "Resources are up to date".to_owned(),
+        "资源同步完成" => "Resource sync completed".to_owned(),
+        _ => feedback.to_owned(),
     }
 }
 
@@ -308,10 +369,12 @@ fn icon(data: &'static str, size: f32, color: u32) -> Svg {
 #[cfg(test)]
 mod tests {
     use super::format_sync_time;
+    use crate::model::Language;
 
     #[test]
     fn zero_timestamp_is_not_reported_as_a_real_sync() {
-        assert_eq!(format_sync_time(None), "从未同步");
-        assert_eq!(format_sync_time(Some(0)), "从未同步");
+        assert_eq!(format_sync_time(None, Language::ZhCn), "从未同步");
+        assert_eq!(format_sync_time(Some(0), Language::ZhCn), "从未同步");
+        assert_eq!(format_sync_time(None, Language::EnUs), "Never");
     }
 }

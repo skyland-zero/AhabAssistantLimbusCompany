@@ -140,7 +140,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .mt_2()
                 .text_size(px(12.))
                 .text_color(rgb(GREEN))
-                .child(feedback),
+                .child(localized_feedback(&feedback, language)),
         );
     }
 
@@ -188,16 +188,35 @@ fn tool_card(
     .id(format!("tool-action-{:?}", tool.id))
     .w_full();
     if is_screenshot {
-        action = action.on_click(cx.listener(|view, _, _, cx| {
-            view.toolbox.screenshot();
-            cx.notify();
-        }));
+        action = action
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.toolbox.screenshot();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &gpui::KeyDownEvent, window, cx| {
+                if toolbox_activation_key(event) {
+                    window.prevent_default();
+                    view.toolbox.screenshot();
+                    cx.notify();
+                }
+            }));
     } else {
         let tool_id = tool.id;
-        action = action.on_click(cx.listener(move |view, _, _, cx| {
-            view.toolbox.toggle(tool_id);
-            cx.notify();
-        }));
+        let tool_id_for_key = tool_id;
+        action = action
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.toolbox.toggle(tool_id);
+                cx.notify();
+            }))
+            .on_key_down(
+                cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
+                    if toolbox_activation_key(event) {
+                        window.prevent_default();
+                        view.toolbox.toggle(tool_id_for_key);
+                        cx.notify();
+                    }
+                }),
+            );
     }
 
     let status = if running {
@@ -279,6 +298,23 @@ fn tool_icon_path(icon: ToolIcon) -> &'static str {
         ToolIcon::Pill => ICON_PILL,
         ToolIcon::Camera => ICON_CAMERA,
     }
+}
+
+fn toolbox_activation_key(event: &gpui::KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
+}
+
+fn localized_feedback(feedback: &str, language: Language) -> String {
+    if matches!(language, Language::ZhCn) {
+        return feedback.to_owned();
+    }
+    if let Some(path) = feedback.strip_prefix("截图完成：") {
+        return format!("Screenshot saved: {path}");
+    }
+    feedback.to_owned()
 }
 
 #[cfg(test)]

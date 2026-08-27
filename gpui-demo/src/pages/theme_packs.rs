@@ -64,11 +64,28 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         Some(icon(ICON_SORT, 14., ACCENT)),
     )
     .id("theme-sort");
-    sort = sort.on_click(cx.listener(move |view, _, _, cx| {
-        view.theme_packs.set_sort_by_weight(!sort_by_weight);
-        view.show_toast(crate::shell::ToastKind::Info, "主题包排序已更新", cx);
-        cx.notify();
-    }));
+    sort = sort
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.theme_packs.set_sort_by_weight(!sort_by_weight);
+            view.show_toast(
+                crate::shell::ToastKind::Info,
+                text("主题包排序已更新", "Theme-pack sorting updated").get(language),
+                cx,
+            );
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if theme_activation_key(event) {
+                window.prevent_default();
+                view.theme_packs.set_sort_by_weight(!sort_by_weight);
+                view.show_toast(
+                    crate::shell::ToastKind::Info,
+                    text("主题包排序已更新", "Theme-pack sorting updated").get(language),
+                    cx,
+                );
+                cx.notify();
+            }
+        }));
 
     let mut enable_all = action_button(
         text("全部启用", "Enable All").get(language),
@@ -76,11 +93,28 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         None,
     )
     .id("theme-enable-all");
-    enable_all = enable_all.on_click(cx.listener(|view, _, _, cx| {
-        view.theme_packs.set_all_enabled(true);
-        view.show_toast(crate::shell::ToastKind::Success, "主题包已全部启用", cx);
-        cx.notify();
-    }));
+    enable_all = enable_all
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.theme_packs.set_all_enabled(true);
+            view.show_toast(
+                crate::shell::ToastKind::Success,
+                text("主题包已全部启用", "All theme packs enabled").get(language),
+                cx,
+            );
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if theme_activation_key(event) {
+                window.prevent_default();
+                view.theme_packs.set_all_enabled(true);
+                view.show_toast(
+                    crate::shell::ToastKind::Success,
+                    text("主题包已全部启用", "All theme packs enabled").get(language),
+                    cx,
+                );
+                cx.notify();
+            }
+        }));
 
     let mut disable_all = action_button(
         text("全部停用", "Disable All").get(language),
@@ -88,11 +122,28 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         None,
     )
     .id("theme-disable-all");
-    disable_all = disable_all.on_click(cx.listener(|view, _, _, cx| {
-        view.theme_packs.set_all_enabled(false);
-        view.show_toast(crate::shell::ToastKind::Info, "主题包已全部停用", cx);
-        cx.notify();
-    }));
+    disable_all = disable_all
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.theme_packs.set_all_enabled(false);
+            view.show_toast(
+                crate::shell::ToastKind::Info,
+                text("主题包已全部停用", "All theme packs disabled").get(language),
+                cx,
+            );
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if theme_activation_key(event) {
+                window.prevent_default();
+                view.theme_packs.set_all_enabled(false);
+                view.show_toast(
+                    crate::shell::ToastKind::Info,
+                    text("主题包已全部停用", "All theme packs disabled").get(language),
+                    cx,
+                );
+                cx.notify();
+            }
+        }));
 
     let mut reset = action_button(
         text("恢复默认权重", "Reset Weights").get(language),
@@ -100,11 +151,28 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         Some(icon(ICON_RESET, 14., TEXT_MUTED)),
     )
     .id("theme-reset");
-    reset = reset.on_click(cx.listener(|view, _, _, cx| {
-        view.theme_packs.reset_weights();
-        view.show_toast(crate::shell::ToastKind::Success, "主题包权重已恢复", cx);
-        cx.notify();
-    }));
+    reset = reset
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.theme_packs.reset_weights();
+            view.show_toast(
+                crate::shell::ToastKind::Success,
+                text("主题包权重已恢复", "Theme-pack weights reset").get(language),
+                cx,
+            );
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if theme_activation_key(event) {
+                window.prevent_default();
+                view.theme_packs.reset_weights();
+                view.show_toast(
+                    crate::shell::ToastKind::Success,
+                    text("主题包权重已恢复", "Theme-pack weights reset").get(language),
+                    cx,
+                );
+                cx.notify();
+            }
+        }));
 
     let mut actions = div()
         .flex()
@@ -203,7 +271,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .py_2()
                 .text_size(px(12.))
                 .text_color(palette_rgb(current_render_palette().success))
-                .child(feedback),
+                .child(localized_feedback(&feedback, language)),
         );
     }
     root.child(
@@ -363,6 +431,24 @@ fn icon(data: &'static str, size: f32, color: u32) -> Svg {
         .data(data.as_bytes())
         .size(px(size))
         .text_color(rgb(color))
+}
+
+fn theme_activation_key(event: &KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
+}
+
+fn localized_feedback(feedback: &str, language: Language) -> String {
+    if matches!(language, Language::ZhCn) {
+        return feedback.to_owned();
+    }
+    match feedback {
+        "已恢复默认权重" => "Default weights restored".to_owned(),
+        "主题包设置已保存" => "Theme-pack settings saved".to_owned(),
+        _ => feedback.to_owned(),
+    }
 }
 
 #[cfg(test)]
