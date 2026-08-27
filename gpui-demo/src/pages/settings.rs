@@ -15,10 +15,11 @@ use crate::{
     app::{AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
     components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette},
     components::{
-        ButtonVariant, TextInput, button, card, render_rgb as rgb, scroll_area_with_id, switch,
+        ButtonVariant, TextInput, button, card, render_rgb as rgb, scroll_area_with_id,
+        select_option, select_popup, select_trigger, switch,
     },
     model::{Language, ThemeMode, UpdateSource},
-    state::{HotkeyTarget, SystemBool, SystemU16},
+    state::{HotkeyTarget, SettingsSelect, SystemBool, SystemU16},
 };
 
 const REPO_URL: &str = "https://github.com/KIYI671/AhabAssistantLimbusCompany";
@@ -94,7 +95,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         );
     }
 
-    div()
+    let mut root = div()
         .size_full()
         .flex()
         .flex_col()
@@ -103,7 +104,14 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             scroll_area_with_id("settings-scroll", div().w_full().p_4().child(stack))
                 .size_full()
                 .min_h_0(),
-        )
+        );
+    root = root.on_any_mouse_down(cx.listener(|view, _, _, cx| {
+        if view.settings_page.open_select.is_some() {
+            view.settings_page.close_select();
+            cx.notify();
+        }
+    }));
+    root
 }
 
 fn appearance_card(
@@ -319,7 +327,7 @@ fn hotkey_capture(
 }
 
 fn simulator_card(
-    _app: &mut AhabApp,
+    app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
     system: &crate::model::SystemSettingsConfig,
     language: Language,
@@ -330,7 +338,8 @@ fn simulator_card(
         system.simulator,
         "settings-simulator",
     );
-    let simulator_type = cycle_system_u16(
+    let simulator_type = select_system_u16(
+        app,
         cx,
         SystemU16::SimulatorType,
         u16::from(system.simulator_type),
@@ -339,16 +348,37 @@ fn simulator_card(
         } else {
             text("其他模拟器", "Other Emulators").get(language)
         },
+        vec![
+            (
+                0,
+                text("MuMu 模拟器（推荐）", "MuMu Player (Recommended)")
+                    .get(language)
+                    .to_owned(),
+            ),
+            (
+                10,
+                text("其他模拟器", "Other Emulators")
+                    .get(language)
+                    .to_owned(),
+            ),
+        ],
         "settings-simulator-type",
     );
-    let port = cycle_system_u16(
+    let port = select_system_u16(
+        app,
         cx,
         SystemU16::SimulatorPort,
         system.simulator_port,
         system.simulator_port.to_string(),
+        vec![
+            (16384, "16384".to_owned()),
+            (5555, "5555".to_owned()),
+            (62001, "62001".to_owned()),
+        ],
         "settings-simulator-port",
     );
-    let timeout = cycle_system_u16(
+    let timeout = select_system_u16(
+        app,
         cx,
         SystemU16::StartTimeout,
         system.start_emulator_timeout,
@@ -357,6 +387,11 @@ fn simulator_card(
             system.start_emulator_timeout,
             text("秒", "sec").get(language)
         ),
+        vec![
+            (30, format!("30 {}", text("秒", "sec").get(language))),
+            (60, format!("60 {}", text("秒", "sec").get(language))),
+            (120, format!("120 {}", text("秒", "sec").get(language))),
+        ],
         "settings-emulator-timeout",
     );
 
@@ -517,7 +552,7 @@ fn experimental_card(
 }
 
 fn update_card(
-    _app: &mut AhabApp,
+    app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
     system: &crate::model::SystemSettingsConfig,
     cdk_input: Option<gpui::Entity<TextInput>>,
@@ -527,15 +562,65 @@ fn update_card(
         UpdateSource::GitHub => "GitHub",
         UpdateSource::MirrorChyan => "Mirror 酱",
     };
-    let mut source = button(source_label, ButtonVariant::Outline)
+    let source_open = app
+        .settings_page
+        .is_select_open(SettingsSelect::UpdateSource);
+    let palette = current_render_palette();
+    let mut source_trigger = select_trigger(source_label, source_open, &palette)
         .id("settings-update-source")
-        .px_3()
-        .py_1()
-        .text_size(px(12.));
-    source = source.on_click(cx.listener(|view, _, _, cx| {
-        view.settings_page.toggle_update_source();
-        cx.notify();
-    }));
+        .on_click(cx.listener(|view, _, _, cx| {
+            view.settings_page
+                .toggle_select(SettingsSelect::UpdateSource);
+            cx.stop_propagation();
+            cx.notify();
+        }));
+    source_trigger =
+        source_trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            let key = event.keystroke.key.to_ascii_lowercase();
+            match key.as_str() {
+                "enter" | "space" | "arrowdown" => {
+                    window.prevent_default();
+                    view.settings_page
+                        .toggle_select(SettingsSelect::UpdateSource);
+                    cx.notify();
+                }
+                "escape" => {
+                    window.prevent_default();
+                    view.settings_page.close_select();
+                    cx.notify();
+                }
+                _ => {}
+            }
+        }));
+    let mut source_options = div().flex().flex_col().gap_1();
+    for (candidate, label) in [
+        (UpdateSource::GitHub, "GitHub"),
+        (UpdateSource::MirrorChyan, "Mirror 酱"),
+    ] {
+        let selected = candidate == system.update_source;
+        let mut option = select_option(label, selected, &palette)
+            .id(format!("settings-update-source-option-{candidate:?}"))
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.settings_page.set_update_source(candidate);
+                cx.stop_propagation();
+                cx.notify();
+            }));
+        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if matches!(
+                event.keystroke.key.to_ascii_lowercase().as_str(),
+                "enter" | "space"
+            ) {
+                window.prevent_default();
+                view.settings_page.set_update_source(candidate);
+                cx.notify();
+            }
+        }));
+        source_options = source_options.child(option);
+    }
+    let mut source = div().relative().w(px(180.)).child(source_trigger);
+    if source_open {
+        source = source.child(select_popup(source_options, &palette));
+    }
 
     let mut check = action_button(
         text("检查更新", "Check for Updates").get(language),
@@ -749,38 +834,106 @@ fn setting_switch(
     }))
 }
 
-fn cycle_system_u16(
+fn select_system_u16(
+    app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
     field: SystemU16,
     value: u16,
     label: impl Into<String>,
+    options: Vec<(u16, String)>,
     id: &'static str,
-) -> gpui::Stateful<Div> {
-    let options = system_u16_options(field);
-    let next = cycle_value(options, value, 1);
-    let mut control = button(label, ButtonVariant::Outline)
+) -> Div {
+    let select = settings_select_for(field);
+    let open = app.settings_page.is_select_open(select);
+    let palette = current_render_palette();
+    let values: Vec<u16> = options.iter().map(|(candidate, _)| *candidate).collect();
+    let next = cycle_value(&values, value, 1);
+    let mut trigger = select_trigger(label, open, &palette)
         .id(id)
-        .px_3()
-        .py_1()
-        .text_size(px(12.))
         .on_click(cx.listener(move |view, _, _, cx| {
-            view.settings_page.set_system_u16(field, next);
+            view.settings_page.toggle_select(select);
+            cx.stop_propagation();
             cx.notify();
         }));
-    control = control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+    let values_for_key = values.clone();
+    trigger = trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
         let key = event.keystroke.key.to_ascii_lowercase();
-        let selected = match key.as_str() {
-            "left" | "arrowleft" => cycle_value(options, value, -1),
-            "right" | "arrowright" | "enter" | "space" => next,
-            "home" => options[0],
-            "end" => *options.last().unwrap_or(&value),
-            _ => return,
-        };
-        window.prevent_default();
-        view.settings_page.set_system_u16(field, selected);
-        cx.notify();
+        match key.as_str() {
+            "left" | "arrowleft" => {
+                window.prevent_default();
+                view.settings_page
+                    .set_system_u16(field, cycle_value(&values_for_key, value, -1));
+                cx.notify();
+            }
+            "right" | "arrowright" => {
+                window.prevent_default();
+                view.settings_page.set_system_u16(field, next);
+                cx.notify();
+            }
+            "home" => {
+                window.prevent_default();
+                if let Some(first) = values_for_key.first() {
+                    view.settings_page.set_system_u16(field, *first);
+                }
+                cx.notify();
+            }
+            "end" => {
+                window.prevent_default();
+                if let Some(last) = values_for_key.last() {
+                    view.settings_page.set_system_u16(field, *last);
+                }
+                cx.notify();
+            }
+            "enter" | "space" | "arrowdown" => {
+                window.prevent_default();
+                view.settings_page.toggle_select(select);
+                cx.notify();
+            }
+            "escape" => {
+                window.prevent_default();
+                view.settings_page.close_select();
+                cx.notify();
+            }
+            _ => {}
+        }
     }));
-    control
+
+    let mut option_list = div().flex().flex_col().gap_1();
+    for (candidate, option_label) in options {
+        let selected = candidate == value;
+        let mut option = select_option(option_label, selected, &palette)
+            .id(format!("{id}-option-{candidate}"))
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.settings_page.set_system_u16(field, candidate);
+                cx.stop_propagation();
+                cx.notify();
+            }));
+        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if matches!(
+                event.keystroke.key.to_ascii_lowercase().as_str(),
+                "enter" | "space"
+            ) {
+                window.prevent_default();
+                view.settings_page.set_system_u16(field, candidate);
+                cx.notify();
+            }
+        }));
+        option_list = option_list.child(option);
+    }
+
+    let mut root = div().relative().w(px(180.)).child(trigger);
+    if open {
+        root = root.child(select_popup(option_list, &palette));
+    }
+    root
+}
+
+fn settings_select_for(field: SystemU16) -> SettingsSelect {
+    match field {
+        SystemU16::SimulatorType => SettingsSelect::SimulatorType,
+        SystemU16::SimulatorPort => SettingsSelect::SimulatorPort,
+        SystemU16::StartTimeout => SettingsSelect::StartTimeout,
+    }
 }
 
 fn system_u16_options(field: SystemU16) -> &'static [u16] {

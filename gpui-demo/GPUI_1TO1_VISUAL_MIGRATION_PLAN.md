@@ -16,7 +16,7 @@
 - ✅ Home 第一批：General/Advanced 选项 Tab、日常队伍名称绑定、数量加减、Lucide SVG 任务/执行图标、日志 payload/时间/级别/复制/自动滚动。
 - ✅ 其他页面修正：Resources 同步终态保留可见窗口，Teams 在 900px 下保持单列并补齐列表/编辑器主要英文标签。
 - ⏳ P0/P8：参考截图、尺寸表、像素差异和内存回归尚未建立。
-- ⏳ P2/P3/P4/P5/P6：下拉 Select/对话框语义、全量 i18n、Home 全部 Select/描述、Teams 全量主题/英文仍需继续；离散设置/队伍选择已支持方向键，主题包权重 Slider 已支持鼠标拖拽。
+- ⏳ P2/P3/P4/P5/P6：全量 i18n、Home 全部 Select/描述、Teams 全量主题/英文仍需继续；设置 Select 已支持弹出菜单、键盘和 Mock 持久化，离散队伍选择支持方向键，主题包权重 Slider 支持鼠标拖拽。
 - ⏳ P7：真实 WebSocket、JPEG 帧、托盘、全局热键注册和 Windows 系统 API 尚未接入。
 
 因此以下通过条件仍然是后续门禁，不把当前 Mock/骨架状态误报为完成。

@@ -364,7 +364,16 @@ pub struct SettingsPageState {
     pub hotkey: HotkeyConfig,
     pub system: SystemSettingsConfig,
     pub capturing: Option<HotkeyTarget>,
+    pub open_select: Option<SettingsSelect>,
     pub feedback: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingsSelect {
+    UpdateSource,
+    SimulatorType,
+    SimulatorPort,
+    StartTimeout,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -390,6 +399,7 @@ impl SettingsPageState {
             hotkey: HotkeyConfig::default(),
             system: SystemSettingsConfig::default(),
             capturing: None,
+            open_select: None,
             feedback: None,
         };
         state.reload();
@@ -436,6 +446,7 @@ impl SettingsPageState {
     }
 
     pub fn set_system_u16(&mut self, field: SystemU16, value: u16) {
+        self.open_select = None;
         match field {
             SystemU16::SimulatorType => {
                 self.system.simulator_type = value.min(u16::from(u8::MAX)) as u8
@@ -446,12 +457,26 @@ impl SettingsPageState {
         self.persist_system();
     }
 
-    pub fn toggle_update_source(&mut self) {
-        self.system.update_source = match self.system.update_source {
-            crate::model::UpdateSource::GitHub => crate::model::UpdateSource::MirrorChyan,
-            crate::model::UpdateSource::MirrorChyan => crate::model::UpdateSource::GitHub,
-        };
+    pub fn set_update_source(&mut self, source: crate::model::UpdateSource) {
+        self.system.update_source = source;
+        self.open_select = None;
         self.persist_system();
+    }
+
+    pub fn toggle_select(&mut self, select: SettingsSelect) {
+        self.open_select = if self.open_select == Some(select) {
+            None
+        } else {
+            Some(select)
+        };
+    }
+
+    pub fn close_select(&mut self) {
+        self.open_select = None;
+    }
+
+    pub fn is_select_open(&self, select: SettingsSelect) -> bool {
+        self.open_select == Some(select)
     }
 
     pub fn set_cdk(&mut self, cdk: String) {

@@ -6,8 +6,8 @@ pub mod teams;
 pub use app_state::AppState;
 pub use home::{DailyCounter, HomeState, MirrorOption, TaskOptionsTab};
 pub use other::{
-    HotkeyTarget, ResourcesState, SettingsPageState, SystemBool, SystemU16, ThemePacksState,
-    ToolboxState,
+    HotkeyTarget, ResourcesState, SettingsPageState, SettingsSelect, SystemBool, SystemU16,
+    ThemePacksState, ToolboxState,
 };
 pub use teams::{
     MirrorBool, MirrorU8, SYSTEM_LABELS, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamsState,

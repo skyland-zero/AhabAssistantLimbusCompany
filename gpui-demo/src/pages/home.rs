@@ -1587,9 +1587,13 @@ fn execution_toolbar(
         .child(command_group)
 }
 
-fn after_completion_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -> Div {
+fn after_completion_editor(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    busy: bool,
+) -> gpui::AnyElement {
     if !app.home.after_completion_open {
-        return div();
+        return div().into_any_element();
     }
     let config = app.home.tasks.afterCompletion.clone();
     let language = app.state.settings.language;
@@ -1614,6 +1618,17 @@ fn after_completion_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
                 view.home.toggle_after_exit_action(action);
                 cx.notify();
             }));
+            control =
+                control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                    if matches!(
+                        event.keystroke.key.to_ascii_lowercase().as_str(),
+                        "enter" | "space"
+                    ) {
+                        window.prevent_default();
+                        view.home.toggle_after_exit_action(action);
+                        cx.notify();
+                    }
+                }));
         }
         exits = exits.child(control);
     }
@@ -1641,6 +1656,17 @@ fn after_completion_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
                 view.home.set_after_power_action(action);
                 cx.notify();
             }));
+            control =
+                control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                    if matches!(
+                        event.keystroke.key.to_ascii_lowercase().as_str(),
+                        "enter" | "space"
+                    ) {
+                        window.prevent_default();
+                        view.home.set_after_power_action(action);
+                        cx.notify();
+                    }
+                }));
         }
         power = power.child(control);
     }
@@ -1652,6 +1678,17 @@ fn after_completion_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
             view.home.set_keep_after_completion(keep);
             cx.notify();
         }));
+        keep = keep.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if matches!(
+                event.keystroke.key.to_ascii_lowercase().as_str(),
+                "enter" | "space"
+            ) {
+                window.prevent_default();
+                let keep = !view.home.tasks.afterCompletion.keepAfterCompletion;
+                view.home.set_keep_after_completion(keep);
+                cx.notify();
+            }
+        }));
     }
     let mut close = button(text("完成", "Done").get(language), ButtonVariant::Default)
         .id("after-completion-close");
@@ -1660,7 +1697,43 @@ fn after_completion_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
         cx.notify();
     }));
 
-    div()
+    let dialog = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(15.))
+                            .text_color(rgb(TEXT))
+                            .child(text("结束后操作", "After Completion Actions").get(language)),
+                    )
+                    .child(close),
+            )
+            .child(control_row(
+                text("退出动作（可多选）", "Exit Actions (Multi-select)").get(language),
+                exits,
+            ))
+            .child(control_row(
+                text("最终电源动作", "Power Action").get(language),
+                power,
+            ))
+            .child(control_row(
+                text("保存为默认配置", "Save as Default").get(language),
+                keep,
+            )),
+    )
+    .w(px(460.0))
+    .max_w_full()
+    .id("after-completion-dialog")
+    .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
+
+    let mut overlay = div()
         .absolute()
         .top_0()
         .left_0()
@@ -1671,38 +1744,21 @@ fn after_completion_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
         .justify_center()
         .p_4()
         .bg(rgba(0x080c14d9))
-        .child(
-            card(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .child(div().text_size(px(15.)).text_color(rgb(TEXT)).child(
-                                text("结束后操作", "After Completion Actions").get(language),
-                            ))
-                            .child(close),
-                    )
-                    .child(control_row(
-                        text("退出动作（可多选）", "Exit Actions (Multi-select)").get(language),
-                        exits,
-                    ))
-                    .child(control_row(
-                        text("最终电源动作", "Power Action").get(language),
-                        power,
-                    ))
-                    .child(control_row(
-                        text("保存为默认配置", "Save as Default").get(language),
-                        keep,
-                    )),
-            )
-            .w(px(460.0))
-            .max_w_full(),
-        )
+        .id("after-completion-overlay")
+        .child(dialog)
+        .on_click(cx.listener(|view, _, _, cx| {
+            view.home.set_after_completion_open(false);
+            cx.notify();
+        }));
+    overlay = overlay.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if event.keystroke.key.eq_ignore_ascii_case("escape") {
+            window.prevent_default();
+            cx.stop_propagation();
+            view.home.set_after_completion_open(false);
+            cx.notify();
+        }
+    }));
+    overlay.into_any_element()
 }
 
 fn after_completion_summary(
