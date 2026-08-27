@@ -1,0 +1,290 @@
+//! Resource status and synchronization page backed by the shared Mock IPC state.
+//!
+//! This follows `ui/src/pages/ResourcesPage.tsx`: a compact update toolbar,
+//! a responsive resource-card grid, and explicit synchronization progress,
+//! success, warning, loading, and empty states.
+
+use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, relative, rgb, svg};
+
+use crate::{
+    app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    components::style::GREEN,
+    components::{
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, loading, scroll_area_with_id,
+    },
+    model::{Language, ResourceGroup},
+};
+
+const ICON_REFRESH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>"#;
+const ICON_SEARCH_CHECK: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 2 2 4-4"/></svg>"#;
+
+#[derive(Clone, Copy)]
+struct Localized {
+    zh: &'static str,
+    en: &'static str,
+}
+
+impl Localized {
+    fn get(self, language: Language) -> &'static str {
+        match language {
+            Language::ZhCn => self.zh,
+            Language::EnUs => self.en,
+        }
+    }
+}
+
+const fn text(zh: &'static str, en: &'static str) -> Localized {
+    Localized { zh, en }
+}
+
+pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    let language = app.state.settings.language;
+    let progress = app.resources.sync_progress;
+    let feedback = app.resources.feedback.clone();
+    let groups = app.resources.groups.clone();
+
+    let mut check = action_button(
+        text("检查更新", "Check for Updates").get(language),
+        ButtonVariant::Outline,
+        icon(ICON_SEARCH_CHECK, 14., TEXT),
+    )
+    .id("resources-check");
+    check = check.on_click(cx.listener(|view, _, _, cx| {
+        view.resources.check_update();
+        cx.notify();
+    }));
+
+    let mut sync = action_button(
+        text("立即同步", "Sync Now").get(language),
+        ButtonVariant::Default,
+        icon(ICON_REFRESH, 14., TEXT),
+    )
+    .id("resources-sync");
+    if progress.is_none() {
+        sync = sync.on_click(cx.listener(|view, _, _, cx| {
+            view.resources.sync_now();
+            cx.notify();
+        }));
+    } else {
+        sync = sync.opacity(0.5).cursor_not_allowed();
+    }
+
+    let progress_badge = progress.map(|value| {
+        let mut status = badge("", BadgeTone::Accent);
+        status = status.child(icon(ICON_REFRESH, 12., ACCENT)).child(format!(
+            "{} {}%",
+            text("同步中…", "Syncing…").get(language),
+            value
+        ));
+        status
+    });
+    let toolbar_status = progress_badge.unwrap_or_else(|| div().w(px(1.)).h(px(1.)));
+
+    let toolbar = div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .border_b_1()
+        .border_color(rgb(BORDER))
+        .bg(rgb(SURFACE))
+        .px_5()
+        .py(px(10.))
+        .child(toolbar_status)
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1p5()
+                .child(check)
+                .child(sync),
+        );
+
+    let cards: Vec<Div> = groups
+        .into_iter()
+        .map(|group| resource_card(group, progress, language))
+        .collect();
+    let has_groups = !cards.is_empty();
+    let grid = container_query(move |size, _, _| {
+        let columns: u16 = if size.width >= px(1024.) { 2 } else { 1 };
+        div()
+            .w_full()
+            .max_w(px(768.))
+            .grid()
+            .grid_cols(columns)
+            .gap(px(12.))
+            .children(cards)
+    });
+
+    let body = if has_groups {
+        div().w_full().child(grid)
+    } else if progress.is_some() {
+        div().w_full().child(loading(
+            text("正在加载资源状态…", "Loading resource status…").get(language),
+        ))
+    } else {
+        div().w_full().child(empty_state(
+            text("暂无资源", "No resources").get(language),
+            text(
+                "资源状态将在后端接入后显示。",
+                "Resource status will appear when the backend is connected.",
+            )
+            .get(language),
+        ))
+    };
+
+    let mut content = div().w_full().p_6().child(body);
+    if let Some(feedback) = feedback {
+        content = content.child(
+            div()
+                .mt_4()
+                .text_size(px(12.))
+                .text_color(rgb(GREEN))
+                .child(feedback),
+        );
+    }
+
+    div()
+        .size_full()
+        .flex()
+        .flex_col()
+        .bg(rgb(BACKGROUND))
+        .child(toolbar)
+        .child(
+            scroll_area_with_id("resources-scroll", content)
+                .flex_1()
+                .min_h_0(),
+        )
+}
+
+fn resource_card(group: ResourceGroup, progress: Option<u8>, language: Language) -> Div {
+    let has_update = group
+        .remoteVersion
+        .as_ref()
+        .is_some_and(|version| version != &group.localVersion);
+    let status = if let Some(value) = progress {
+        badge(
+            format!("{} {}%", text("同步中…", "Syncing…").get(language), value),
+            BadgeTone::Accent,
+        )
+    } else if has_update {
+        badge(
+            format!(
+                "{} {}",
+                text("可更新到", "Update available:").get(language),
+                group.remoteVersion.clone().unwrap_or_default()
+            ),
+            BadgeTone::Accent,
+        )
+    } else {
+        badge(
+            text("已是最新", "Up to date").get(language),
+            BadgeTone::Success,
+        )
+    };
+
+    let mut body = div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .px_5()
+        .py_4()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .min_w_0()
+                        .text_size(px(14.))
+                        .text_color(rgb(TEXT))
+                        .child(group.name),
+                )
+                .child(status),
+        )
+        .child(version_row(
+            text("本地版本", "Local Version").get(language),
+            group.localVersion,
+        ))
+        .child(version_row(
+            text("远端版本", "Remote Version").get(language),
+            group.remoteVersion.unwrap_or_else(|| "—".to_owned()),
+        ))
+        .child(version_row(
+            text("上次同步", "Last Synced").get(language),
+            format_sync_time(group.lastSyncAt),
+        ));
+
+    if let Some(value) = progress {
+        let fraction = f32::from(value.min(100)) / 100.;
+        body = body.child(
+            div()
+                .h(px(4.))
+                .w_full()
+                .rounded_full()
+                .bg(rgb(BORDER))
+                .child(
+                    div()
+                        .h_full()
+                        .w(relative(fraction))
+                        .rounded_full()
+                        .bg(rgb(ACCENT)),
+                ),
+        );
+    }
+
+    card(body).p_0().w_full()
+}
+
+fn version_row(label: &'static str, value: String) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .text_size(px(12.))
+        .child(div().text_color(rgb(TEXT_MUTED)).child(label))
+        .child(
+            div()
+                .font_family("Consolas")
+                .text_color(rgb(TEXT))
+                .child(value),
+        )
+}
+
+fn format_sync_time(timestamp: Option<i64>) -> String {
+    match timestamp {
+        None | Some(0) => "从未同步".to_owned(),
+        Some(timestamp) => format!("时间戳 {timestamp}"),
+    }
+}
+
+fn action_button(label: &'static str, variant: ButtonVariant, icon: Svg) -> Div {
+    button("", variant)
+        .h(px(28.))
+        .px_3()
+        .py_0()
+        .text_size(px(12.))
+        .child(icon)
+        .child(label)
+}
+
+fn icon(data: &'static str, size: f32, color: u32) -> Svg {
+    svg()
+        .data(data.as_bytes())
+        .size(px(size))
+        .text_color(rgb(color))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_sync_time;
+
+    #[test]
+    fn zero_timestamp_is_not_reported_as_a_real_sync() {
+        assert_eq!(format_sync_time(None), "从未同步");
+        assert_eq!(format_sync_time(Some(0)), "从未同步");
+    }
+}

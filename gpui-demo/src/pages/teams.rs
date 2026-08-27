@@ -1,0 +1,2009 @@
+//! Teams list and the five-section native team editor (P5).
+//!
+//! The React page used a modal with a large form.  GPUI has no browser dialog
+//! dependency here, so the same interaction is rendered as an application
+//! overlay.  All changes are kept in `TeamsState` until Save is pressed.
+
+use gpui::{
+    Context, Div, ImageSource, KeyDownEvent, div, img, prelude::*, px, relative, rgb, rgba, svg,
+};
+
+use crate::{
+    app::{AhabApp, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
+    assets::{self, Asset, SinnerAsset, StatusEffectAsset},
+    components::{
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, scroll_area_with_id, switch,
+    },
+    model::{TeamDetail, TeamMirrorConfig, TeamPurpose},
+    state::{MirrorBool, MirrorU8, SYSTEM_LABELS, SYSTEM_NAMES, TeamEditorTab, TeamFilter},
+};
+
+const STARLIGHT_NAMES: [&str; 10] = [
+    "初始之星",
+    "积聚的星云",
+    "星际漫游",
+    "流星",
+    "双星商店",
+    "卫星商店",
+    "星云的宠爱",
+    "星芒的引导",
+    "偶然的彗星",
+    "全面的可能性",
+];
+const STARLIGHT_COSTS: [u32; 10] = [10, 10, 20, 20, 30, 30, 40, 40, 50, 60];
+const STARLIGHT_DESCRIPTIONS: [&str; 10] = [
+    "初始经费增加，卡包/饰品展出+1，免费普通刷新",
+    "进阶经费利息+10%~30%，售卖饰品经费加成",
+    "卡包出现+1，卡包刷新+2~4，未记录卡包等级提升",
+    "初始经费+400~700，初始饰品可选择数+1",
+    "展出饰品+1，战斗经费+20%~40%，高阶饰品概率提升",
+    "免费关键词刷新，进入第1层送1~3件1级饰品",
+    "进入第1层人格等级+3，通关阶段人格等级提升",
+    "最大速度+2~3，拼点威力、伤害强化和守护提升",
+    "进商店赠送合成/售卖专用饰品，赠送对应关键词饰品",
+    "开局自选3级饰品，获得残影饰品",
+];
+
+// Small inline vectors keep the controls recognisable without substituting
+// text glyphs for the Lucide actions used by the React page.
+const ICON_PLUS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#17120a" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
+const ICON_EDIT: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#b9c4d3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>"##;
+const ICON_TRASH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#df7784" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14H5V6"/><path d="M10 11v5M14 11v5"/></svg>"##;
+const ICON_COPY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d9a441" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>"##;
+const ICON_PASTE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d9a441" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>"##;
+const ICON_CLOSE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#b9c4d3" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>"##;
+const ICON_SPARKLES: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d9a441" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.3 5.7L5 10l5.7 1.3L12 17l1.3-5.7L19 10l-5.7-1.3Z"/><path d="m19 16-.7 3.3L15 20l3.3.7L19 24l.7-3.3L23 20l-3.3-.7Z"/></svg>"##;
+const ICON_USERS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#8d9aae" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>"##;
+
+fn icon(data: &'static [u8], size: f32) -> impl IntoElement {
+    svg().data(data).w(px(size)).h(px(size))
+}
+
+pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    let filter = app.teams.filter;
+    let teams: Vec<TeamDetail> = app.teams.filtered_teams().cloned().collect();
+
+    // The React TabsList is a compact, muted strip. Keeping the count as a
+    // separate pill makes zero-count purpose tabs match the source behavior.
+    let mut filter_bar = div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .flex_wrap()
+        .p(px(2.))
+        .rounded_md()
+        .bg(rgb(0x202936));
+    for candidate in TeamFilter::ALL {
+        let active = candidate == filter;
+        let count = app.teams.count_for(candidate);
+        let mut control = div()
+            .id(format!("team-filter-{candidate:?}"))
+            .flex()
+            .items_center()
+            .gap_1()
+            .h(px(28.))
+            .px_3()
+            .rounded_md()
+            .cursor_pointer()
+            .text_size(px(12.))
+            .text_color(rgb(if active { TEXT } else { TEXT_MUTED }))
+            .bg(rgb(if active { SURFACE } else { 0x202936 }));
+        control = control.child(candidate.label());
+        if candidate == TeamFilter::All || count > 0 {
+            control = control.child(
+                div()
+                    .px_1()
+                    .rounded_md()
+                    .bg(rgb(0x354152))
+                    .text_size(px(10.))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child(count.to_string()),
+            );
+        }
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.set_filter(candidate);
+            cx.notify();
+        }));
+        filter_bar = filter_bar.child(control);
+    }
+
+    let new_team = div()
+        .id("new-team")
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1()
+        .h(px(32.))
+        .px_3()
+        .rounded_md()
+        .cursor_pointer()
+        .bg(rgb(crate::app::ACCENT))
+        .text_size(px(12.))
+        .text_color(rgb(0x17120a))
+        .child(icon(ICON_PLUS, 14.))
+        .child("新建队伍")
+        .on_click(cx.listener(|view, _, _, cx| view.open_new_team(cx)));
+
+    let mut cards = div().flex().flex_wrap().gap_3().items_stretch();
+    if app.teams.teams.is_empty() {
+        cards = cards.child(
+            empty_state("还没有队伍", "创建一支队伍开始配置镜牢策略。")
+                .w_full()
+                .min_h(px(240.)),
+        );
+    } else if teams.is_empty() {
+        cards = cards.child(
+            empty_state("该分类没有队伍", "切换分类或创建一支新队伍。")
+                .w_full()
+                .min_h(px(240.)),
+        );
+    } else {
+        // A flex basis gives us the same one-column/sufficient-width-two-column
+        // behavior as xl:grid-cols-2 without requiring a second render API
+        // that exposes the window size.
+        for team in teams {
+            cards = cards.child(
+                team_card(app, cx, team)
+                    .flex_basis(px(360.))
+                    .flex_grow(1.)
+                    .flex_shrink(1.),
+            );
+        }
+    }
+
+    let mut root = div().flex().flex_col().flex_1().min_h_0();
+    root = root.child(
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .flex_wrap()
+            .flex_none()
+            .px_4()
+            .py_2()
+            .bg(rgb(0x1b222d))
+            .child(filter_bar)
+            .child(new_team),
+    );
+    if let Some(feedback) = app.teams.feedback.clone() {
+        root = root.child(
+            div()
+                .flex_none()
+                .mx_4()
+                .mt_2()
+                .px_3()
+                .py_2()
+                .rounded_md()
+                .bg(rgb(0x1d513b))
+                .text_size(px(11.))
+                .text_color(rgb(0x8de3b2))
+                .child(feedback),
+        );
+    }
+    root.child(
+        scroll_area_with_id("teams-list-scroll", div().p_4().child(cards))
+            .flex_1()
+            .min_h_0(),
+    )
+}
+
+fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> Div {
+    let config = team.mirrorConfig.clone().unwrap_or_default();
+    let discarded = discard_count(&config);
+    let has_starlight = config.opening_bonus.iter().any(|level| *level > 0);
+    let team_id = team.id.clone();
+    let edit_team = team.clone();
+    let delete_team = team.clone();
+
+    let edit = div()
+        .id(format!("edit-team-{team_id}"))
+        .flex()
+        .items_center()
+        .justify_center()
+        .size(px(32.))
+        .rounded_md()
+        .cursor_pointer()
+        .child(icon(ICON_EDIT, 16.))
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.open_existing_team(&edit_team, cx);
+        }));
+    let delete = div()
+        .id(format!("delete-team-{team_id}"))
+        .flex()
+        .items_center()
+        .justify_center()
+        .size(px(32.))
+        .rounded_md()
+        .cursor_pointer()
+        .child(icon(ICON_TRASH, 16.))
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.request_delete(delete_team.clone());
+            cx.notify();
+        }));
+
+    let mut sinner_badges = div().flex().flex_wrap().gap_1();
+    for (index, sinner) in team.sinners.iter().enumerate() {
+        sinner_badges = sinner_badges.child(badge(
+            format!("#{} {}", index + 1, app.teams.sinner_name(sinner)),
+            BadgeTone::Neutral,
+        ));
+    }
+
+    let scheme = normalized_scheme(&team.accessoryScheme);
+    let header = div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .flex_wrap()
+        .child(
+            div()
+                .min_w_0()
+                .text_size(px(14.))
+                .text_color(rgb(TEXT))
+                .child(team.name.clone()),
+        )
+        .child(badge(purpose_label(team.purpose), BadgeTone::Neutral))
+        .child(scheme_badge(scheme));
+    let header = if team.enabled {
+        header
+    } else {
+        header.child(badge("已停用", BadgeTone::Neutral))
+    };
+
+    let mut details = div()
+        .flex()
+        .items_center()
+        .flex_wrap()
+        .gap_2()
+        .text_size(px(11.))
+        .text_color(rgb(TEXT_MUTED))
+        .child(format!("{} 人", team.sinners.len()));
+    if has_starlight {
+        details = details.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .text_color(rgb(crate::app::ACCENT))
+                .child(icon(ICON_SPARKLES, 13.))
+                .child("已配星光"),
+        );
+    }
+    if config.second_system {
+        details = details.child(badge("第二体系", BadgeTone::Neutral));
+    }
+    if discarded > 0 {
+        details = details.child(badge(format!("舍弃 {} 项", discarded), BadgeTone::Danger));
+    }
+    if config.defense_for_solo {
+        details = details.child(badge("良秀单通", BadgeTone::Accent));
+    }
+    if config.use_team_code {
+        details = details.child(badge("编队码", BadgeTone::Neutral));
+    }
+
+    card(
+        div()
+            .flex()
+            .items_start()
+            .gap_3()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(header)
+                    .child(details)
+                    .child(sinner_badges),
+            )
+            .child(div().flex().flex_none().gap_1().child(edit).child(delete)),
+    )
+    .p_3()
+    .opacity(if team.enabled { 1. } else { 0.6 })
+    .hover(|style| style.bg(rgb(0x232c39)))
+}
+
+pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    let Some(editor) = app.teams.editor.as_ref() else {
+        if app.teams.delete_target.is_none() {
+            return div();
+        }
+
+        let mut surface = div()
+            .id("team-delete-overlay")
+            .relative()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_4()
+            .bg(rgba(0x080c14d9));
+        surface = surface.on_click(cx.listener(|view, _, _, cx| {
+            view.teams.cancel_delete();
+            cx.notify();
+        }));
+        surface =
+            surface.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    view.teams.cancel_delete();
+                    cx.notify();
+                }
+            }));
+        return div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .child(surface.child(delete_confirmation(app, cx)));
+    };
+
+    let team = editor.team.clone();
+    let tab = editor.tab;
+    let config = editor.mirror_config();
+    let feedback = app.teams.feedback.clone();
+    let starlight_cost = app.teams.starlight_cost();
+
+    let mut tabs = div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .flex_wrap()
+        .p(px(2.))
+        .rounded_md()
+        .bg(rgb(0x202936));
+    for candidate in TeamEditorTab::ALL {
+        let active = candidate == tab;
+        let mut control = div()
+            .id(format!("team-editor-tab-{candidate:?}"))
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap_1()
+            .h(px(28.))
+            .px_3()
+            .rounded_md()
+            .cursor_pointer()
+            .text_size(px(12.))
+            .text_color(rgb(if active { TEXT } else { TEXT_MUTED }))
+            .bg(rgb(if active { SURFACE } else { 0x202936 }));
+        control = control.child(candidate.label());
+        if candidate == TeamEditorTab::Starlight && starlight_cost > 0 {
+            control = control.child(
+                div()
+                    .px_1()
+                    .rounded_md()
+                    .bg(rgb(0x5d4820))
+                    .text_size(px(10.))
+                    .text_color(rgb(crate::app::ACCENT))
+                    .child(starlight_cost.to_string()),
+            );
+        }
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.set_editor_tab(candidate);
+            cx.notify();
+        }));
+        tabs = tabs.child(control);
+    }
+
+    let copy = div()
+        .id("team-copy-json")
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1()
+        .h(px(28.))
+        .px_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(BORDER))
+        .cursor_pointer()
+        .text_size(px(11.))
+        .text_color(rgb(crate::app::ACCENT))
+        .child(icon(ICON_COPY, 14.))
+        .child("复制 JSON")
+        .on_click(cx.listener(|view, _, _, cx| view.copy_team_json(cx)));
+
+    let close = button("取消", ButtonVariant::Ghost)
+        .id("team-editor-cancel")
+        .h(px(32.))
+        .px_3()
+        .py_0()
+        .on_click(cx.listener(|view, _, _, cx| view.close_team_editor(cx)));
+    let current_name = app
+        .team_name_input
+        .as_ref()
+        .map(|input| input.read(cx).text())
+        .unwrap_or_else(|| team.name.clone());
+    let can_save = !current_name.trim().is_empty();
+    let mut save = button("保存队伍", ButtonVariant::Default)
+        .id("team-editor-save")
+        .h(px(32.))
+        .px_3()
+        .py_0();
+    if can_save {
+        save = save.on_click(cx.listener(|view, _, _, cx| view.save_team_editor(cx)));
+    } else {
+        save = save.opacity(0.45).cursor_default();
+    }
+
+    let content = match tab {
+        TeamEditorTab::Basic => basic_editor(app, cx, &team, &config),
+        TeamEditorTab::Shop => shop_editor(app, cx, &config),
+        TeamEditorTab::Combat => combat_editor(app, cx, &config),
+        TeamEditorTab::Starlight => starlight_editor(app, cx, &config),
+        TeamEditorTab::Advanced => advanced_editor(app, cx, &config),
+    };
+
+    let dialog_body = div()
+        .id("team-editor-dialog")
+        .w(px(768.))
+        .h(px(620.))
+        .max_w_full()
+        .max_h(relative(0.88))
+        .min_h_0()
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .rounded_lg()
+        .border_1()
+        .border_color(rgb(BORDER))
+        .bg(rgb(SURFACE))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .px_6()
+                .py_3()
+                .border_b_1()
+                .border_color(rgb(BORDER))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(div().text_size(px(16.)).text_color(rgb(TEXT)).child(
+                            if team.id.is_empty() {
+                                "新建队伍"
+                            } else {
+                                "编辑队伍"
+                            },
+                        ))
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(TEXT_MUTED))
+                                .child("保存前所有修改只存在于当前编辑器"),
+                        ),
+                )
+                .child(copy),
+        )
+        .child(
+            div()
+                .flex_none()
+                .px_6()
+                .py_2()
+                .border_b_1()
+                .border_color(rgb(BORDER))
+                .child(tabs),
+        )
+        .child(
+            scroll_area_with_id("team-editor-scroll", content)
+                .flex_1()
+                .min_h_0()
+                .px_6()
+                .py_4(),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .flex_none()
+                .px_6()
+                .py_3()
+                .border_t_1()
+                .border_color(rgb(BORDER))
+                .bg(rgb(0x1b222d))
+                .child(
+                    feedback
+                        .map(|message| {
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(11.))
+                                .text_color(rgb(0xf0c36a))
+                                .child(message)
+                        })
+                        .unwrap_or_else(|| {
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(11.))
+                                .text_color(rgb(TEXT_MUTED))
+                                .child("支持中文输入、剪贴板和 JSON 导入")
+                        }),
+                )
+                .child(div().flex().flex_none().gap_2().child(close).child(save)),
+        )
+        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
+
+    let mut surface = div()
+        .id("team-editor-overlay")
+        .relative()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_4()
+        .bg(rgba(0x080c14d9));
+    surface = surface.on_click(cx.listener(|view, _, _, cx| {
+        if view.teams.delete_target.is_some() {
+            view.teams.cancel_delete();
+            cx.notify();
+        } else {
+            view.close_team_editor(cx);
+        }
+    }));
+    surface = surface.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if event.keystroke.key.eq_ignore_ascii_case("escape") {
+            window.prevent_default();
+            cx.stop_propagation();
+            if view.teams.delete_target.is_some() {
+                view.teams.cancel_delete();
+            } else {
+                view.close_team_editor(cx);
+            }
+            cx.notify();
+        }
+    }));
+    surface = surface.child(dialog_body);
+
+    if app.teams.delete_target.is_some() {
+        let delete_layer = div()
+            .id("team-delete-layer")
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_4()
+            .bg(rgba(0x080c14d9))
+            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
+        surface = surface.child(delete_layer.child(delete_confirmation(app, cx)));
+    }
+
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .child(surface)
+}
+
+fn basic_editor(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    team: &TeamDetail,
+    config: &TeamMirrorConfig,
+) -> Div {
+    let name_input = app.team_name_input.clone();
+    let code_input = app.team_code_input.clone();
+
+    let name_field = if let Some(input) = name_input {
+        labeled_field("队伍名称", div().child(input))
+    } else {
+        labeled_field("队伍名称", div().child("编辑器初始化中"))
+    };
+
+    let mut purpose = div().flex().gap_1().flex_wrap();
+    for candidate in [
+        TeamPurpose::Mirror,
+        TeamPurpose::Luxcavation,
+        TeamPurpose::General,
+    ] {
+        let mut control = button(
+            purpose_label(candidate),
+            if team.purpose == candidate {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Outline
+            },
+        )
+        .id(format!("team-purpose-{candidate:?}"))
+        .h(px(32.))
+        .px_3()
+        .py_0();
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.set_editor_purpose(candidate);
+            cx.notify();
+        }));
+        purpose = purpose.child(control);
+    }
+    let purpose_field = labeled_field("用途", purpose);
+
+    let mut systems = div().flex().flex_wrap().gap_2();
+    for (index, name) in SYSTEM_NAMES.iter().enumerate() {
+        let selected = team.accessoryScheme == *name;
+        let mut control = system_choice(index, selected, false).id(format!("team-system-{name}"));
+        let system_name = (*name).to_owned();
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams
+                .set_editor_scheme(system_name.clone(), index as u8);
+            cx.notify();
+        }));
+        systems = systems.child(control);
+    }
+
+    let mut sinners = div().flex().flex_wrap().gap_2();
+    for sinner in app.teams.sinners.clone() {
+        let selected = team.sinners.iter().position(|id| id == &sinner.id);
+        let id = sinner.id.clone();
+        let path = sinner_path(&id);
+        let mut control = div()
+            .id(format!("team-sinner-{id}"))
+            .w(px(100.))
+            .h(px(104.))
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(rgb(if selected.is_some() { 0xd9a441 } else { BORDER }))
+            .bg(rgb(if selected.is_some() {
+                0x3d301b
+            } else {
+                SURFACE_HOVER
+            }))
+            .cursor_pointer()
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.teams.toggle_sinner(&id);
+                cx.notify();
+            }));
+        control = control.child(
+            div()
+                .relative()
+                .w(px(48.))
+                .h(px(48.))
+                .child(img(path).size_full())
+                .child(
+                    selected
+                        .map(|index| {
+                            div()
+                                .absolute()
+                                .top_0()
+                                .right_0()
+                                .px_1()
+                                .rounded_md()
+                                .bg(rgb(0xd9a441))
+                                .text_size(px(9.))
+                                .text_color(rgb(0x17120a))
+                                .child(format!("#{}", index + 1))
+                        })
+                        .unwrap_or_else(div),
+                ),
+        );
+        control = control.child(
+            div()
+                .w_full()
+                .px_1()
+                .truncate()
+                .text_center()
+                .text_size(px(10.))
+                .text_color(rgb(TEXT))
+                .child(sinner.name),
+        );
+        sinners = sinners.child(control);
+    }
+
+    let code_field = if config.use_team_code {
+        code_input
+            .map(|input| labeled_field("编队码", div().child(input)))
+            .unwrap_or_else(|| labeled_field("编队码", div().child("编辑器初始化中")))
+    } else {
+        div()
+    };
+
+    let team_code_switch = mirror_switch(
+        app,
+        cx,
+        MirrorBool::UseTeamCode,
+        config.use_team_code,
+        "basic-use-team-code",
+    );
+    let fixed_switch = mirror_switch(
+        app,
+        cx,
+        MirrorBool::FixedTeamUse,
+        config.fixed_team_use,
+        "basic-fixed-team",
+    );
+    let enabled_switch = switch(team.enabled)
+        .id("team-enabled")
+        .on_click(cx.listener(|view, _, _, cx| {
+            let enabled = view
+                .teams
+                .editor
+                .as_ref()
+                .map(|editor| !editor.team.enabled)
+                .unwrap_or(true);
+            view.teams.set_editor_enabled(enabled);
+            cx.notify();
+        }));
+
+    let mut clear_sinners = button("清空人格", ButtonVariant::Ghost).id("team-clear-sinners");
+    clear_sinners = clear_sinners.on_click(cx.listener(|view, _, _, cx| {
+        view.teams.clear_sinners();
+        cx.notify();
+    }));
+
+    let team_code_card = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(control_row("启用编队码", team_code_switch))
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child("启用后保存编队码，运行时由后端解析。"),
+            )
+            .child(code_field),
+    )
+    .p_3()
+    .flex_basis(px(300.))
+    .flex_grow(1.);
+    let fixed_card = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(control_row("固定队伍用途", fixed_switch))
+            .child(if config.fixed_team_use {
+                cycle_control(
+                    "固定范围",
+                    fixed_team_use_label(config.fixed_team_use_select),
+                    MirrorU8::FixedTeamUseSelect,
+                    config.fixed_team_use_select,
+                    2,
+                    app,
+                    cx,
+                    "basic-fixed-team-range",
+                )
+            } else {
+                div().into_any_element()
+            }),
+    )
+    .p_3()
+    .flex_basis(px(300.))
+    .flex_grow(1.);
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_3()
+                .child(name_field.flex_basis(px(300.)).flex_grow(1.))
+                .child(purpose_field.flex_basis(px(220.)).flex_grow(1.)),
+        )
+        .child(field_block("饰品体系", systems))
+        .child(field_block(
+            format!("人格顺序（{} / 12）", team.sinners.len()),
+            div().flex().flex_col().gap_2().child(sinners).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(10.))
+                            .text_color(rgb(TEXT_MUTED))
+                            .child("按点击顺序分配 #1~#12；再次点击可移除。"),
+                    )
+                    .child(clear_sinners),
+            ),
+        ))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_3()
+                .child(team_code_card)
+                .child(fixed_card),
+        )
+        .child(control_row("队伍启用", enabled_switch))
+}
+
+fn shop_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirrorConfig) -> Div {
+    let mut discard = div().flex().flex_wrap().gap_2();
+    for (index, name) in SYSTEM_NAMES.iter().enumerate() {
+        let selected = discard_value(&config.discard_systems, index);
+        let mut control = system_choice(index, selected, true).id(format!("discard-system-{name}"));
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.toggle_discard_system(index);
+            cx.notify();
+        }));
+        discard = discard.child(control);
+    }
+
+    let restrictions = [
+        ("不治疗", MirrorBool::DoNotHeal, config.do_not_heal),
+        ("不购买", MirrorBool::DoNotBuy, config.do_not_buy),
+        ("不合成", MirrorBool::DoNotFuse, config.do_not_fuse),
+        ("不出售", MirrorBool::DoNotSell, config.do_not_sell),
+        ("不升级", MirrorBool::DoNotEnhance, config.do_not_enhance),
+    ];
+    let mut restriction_rows = div().flex().flex_wrap().gap_3();
+    for (label, field, value) in restrictions {
+        restriction_rows = restriction_rows.child(control_row(
+            label,
+            mirror_switch(app, cx, field, value, format!("shop-{label}")),
+        ));
+    }
+
+    let fusions = [
+        (
+            "仅激进合成",
+            MirrorBool::OnlyAggressiveFuse,
+            config.only_aggressive_fuse,
+        ),
+        (
+            "不合成体系饰品",
+            MirrorBool::DoNotSystemFuse,
+            config.do_not_system_fuse,
+        ),
+        (
+            "仅合成体系饰品",
+            MirrorBool::OnlySystemFuse,
+            config.only_system_fuse,
+        ),
+        (
+            "激进模式也升级",
+            MirrorBool::AggressiveAlsoEnhance,
+            config.aggressive_also_enhance,
+        ),
+        (
+            "激进模式保留体系",
+            MirrorBool::AggressiveSaveSystems,
+            config.aggressive_save_systems,
+        ),
+    ];
+    let mut fusion_rows = div().flex().flex_col().gap_2();
+    for (label, field, value) in fusions {
+        fusion_rows = fusion_rows.child(control_row(
+            label,
+            mirror_switch(app, cx, field, value, format!("fusion-{label}")),
+        ));
+    }
+
+    let after_level = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(control_row(
+                "四级饰品后执行策略",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::AfterLevelIv,
+                    config.after_level_IV,
+                    "shop-after-level-iv",
+                ),
+            ))
+            .child(if config.after_level_IV {
+                cycle_control(
+                    "行为",
+                    after_level_label(config.after_level_IV_select),
+                    MirrorU8::AfterLevelIvSelect,
+                    config.after_level_IV_select,
+                    2,
+                    app,
+                    cx,
+                    "shop-after-level-iv-action",
+                )
+            } else {
+                div().into_any_element()
+            }),
+    );
+
+    let refresh = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(rgb(TEXT))
+                    .child("商店刷新上限"),
+            )
+            .child(cycle_control(
+                "关键词刷新",
+                config.max_keyword_refresh.to_string(),
+                MirrorU8::MaxKeywordRefresh,
+                config.max_keyword_refresh,
+                10,
+                app,
+                cx,
+                "shop-keyword-refresh",
+            ))
+            .child(cycle_control(
+                "普通刷新",
+                config.max_normal_refresh.to_string(),
+                MirrorU8::MaxNormalRefresh,
+                config.max_normal_refresh,
+                10,
+                app,
+                cx,
+                "shop-normal-refresh",
+            )),
+    );
+
+    let mut floors = div().flex().flex_wrap().gap_2();
+    for floor in 0..5 {
+        let ignored = config.ignore_shop.get(floor).copied().unwrap_or(false);
+        let mut control = button(
+            if ignored {
+                format!("已忽略 {}F", floor + 1)
+            } else {
+                format!("{}F", floor + 1)
+            },
+            if ignored {
+                ButtonVariant::Destructive
+            } else {
+                ButtonVariant::Outline
+            },
+        )
+        .id(format!("ignore-shop-floor-{}", floor + 1))
+        .h(px(32.))
+        .px_3()
+        .py_0();
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.toggle_ignore_shop(floor);
+            cx.notify();
+        }));
+        floors = floors.child(control);
+    }
+    let ignore = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(rgb(TEXT))
+                    .child("忽略商店楼层"),
+            )
+            .child(floors),
+    );
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(field_block(
+            "商店策略",
+            cycle_control(
+                "策略",
+                shop_strategy_label(config.shop_strategy),
+                MirrorU8::ShopStrategy,
+                config.shop_strategy,
+                2,
+                app,
+                cx,
+                "shop-strategy",
+            ),
+        ))
+        .child(field_block(
+            "舍弃饰品体系",
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(10.))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child("选择不参与商店购买、合成与保留的体系。"),
+                )
+                .child(discard),
+        ))
+        .child(field_block(
+            "基础操作限制",
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(10.))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child("限制会在镜牢商店阶段按队伍配置执行。"),
+                )
+                .child(restriction_rows),
+        ))
+        .child(field_block("合成策略", fusion_rows))
+        .child(
+            div()
+                .flex()
+                .gap_3()
+                .flex_wrap()
+                .child(after_level)
+                .child(refresh)
+                .child(ignore),
+        )
+}
+
+fn combat_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirrorConfig) -> Div {
+    let second_system = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(control_row(
+                "启用第二体系",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::SecondSystem,
+                    config.second_system,
+                    "combat-second-system",
+                ),
+            ))
+            .child(if config.second_system {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(cycle_control(
+                        "第二体系",
+                        SYSTEM_LABELS[config.second_system_select.min(9) as usize],
+                        MirrorU8::SecondSystemSelect,
+                        config.second_system_select,
+                        9,
+                        app,
+                        cx,
+                        "combat-second-system-select",
+                    ))
+                    .child(cycle_control(
+                        "起始楼层",
+                        format!("第 {} 层", config.second_system_setting.clamp(2, 5)),
+                        MirrorU8::SecondSystemStartFloor,
+                        config.second_system_setting,
+                        5,
+                        app,
+                        cx,
+                        "combat-second-system-floor",
+                    ))
+                    .child(control_row(
+                        "四级合成",
+                        mirror_switch(
+                            app,
+                            cx,
+                            MirrorBool::SecondSystemFuseIv,
+                            config.second_system_fuse_IV,
+                            "combat-fuse-iv",
+                        ),
+                    ))
+                    .child(control_row(
+                        "购买饰品",
+                        mirror_switch(
+                            app,
+                            cx,
+                            MirrorBool::SecondSystemBuy,
+                            config.second_system_buy,
+                            "combat-buy",
+                        ),
+                    ))
+                    .child(control_row(
+                        "选择奖励",
+                        mirror_switch(
+                            app,
+                            cx,
+                            MirrorBool::SecondSystemSelectReward,
+                            config.second_system_select_reward,
+                            "combat-reward",
+                        ),
+                    ))
+                    .child(control_row(
+                        "升级饰品",
+                        mirror_switch(
+                            app,
+                            cx,
+                            MirrorBool::SecondSystemPowerUp,
+                            config.second_system_power_up,
+                            "combat-power-up",
+                        ),
+                    ))
+            } else {
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child("开启后可配置第二体系和起始楼层。")
+            }),
+    );
+
+    let preferences = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(rgb(TEXT))
+                    .child("战斗与技能偏好"),
+            )
+            .child(control_row(
+                "避免三技能",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::AvoidSkill3,
+                    config.avoid_skill_3,
+                    "combat-avoid-skill-3",
+                ),
+            ))
+            .child(control_row(
+                "优先三技能",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::PrioritizeSkill3,
+                    config.prioritize_skill_3,
+                    "combat-prioritize-skill-3",
+                ),
+            ))
+            .child(control_row(
+                "每层重新编队",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::ReformationEachFloor,
+                    config.re_formation_each_floor,
+                    "combat-reformation",
+                ),
+            )),
+    );
+
+    let defense = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(rgb(TEXT))
+                    .child("防御策略（互斥）"),
+            )
+            .child(control_row(
+                "首回合防御",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::DefenseFirstRound,
+                    config.defense_first_round,
+                    "combat-defense-first",
+                ),
+            ))
+            .child(control_row(
+                "良秀单通防御",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::DefenseForSolo,
+                    config.defense_for_solo,
+                    "combat-defense-solo",
+                ),
+            ))
+            .child(if config.defense_for_solo {
+                cycle_control(
+                    "防御回合",
+                    format!("{} 回合", config.defense_for_solo_turns.clamp(1, 5)),
+                    MirrorU8::DefenseTurns,
+                    config.defense_for_solo_turns,
+                    5,
+                    app,
+                    cx,
+                    "combat-defense-turns",
+                )
+            } else {
+                div().into_any_element()
+            }),
+    );
+
+    let replacement = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(control_row(
+                "启用技能替换",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::SkillReplacement,
+                    config.skill_replacement,
+                    "combat-skill-replacement",
+                ),
+            ))
+            .child(if config.skill_replacement {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(cycle_control(
+                        "替换模式",
+                        if config.skill_replacement_mode == 0 {
+                            "1 → 2"
+                        } else {
+                            "1 → 3"
+                        },
+                        MirrorU8::SkillReplacementMode,
+                        config.skill_replacement_mode,
+                        1,
+                        app,
+                        cx,
+                        "combat-skill-replacement-mode",
+                    ))
+                    .child(cycle_control(
+                        "替换选项",
+                        config.skill_replacement_select.to_string(),
+                        MirrorU8::SkillReplacementSelect,
+                        config.skill_replacement_select,
+                        9,
+                        app,
+                        cx,
+                        "combat-skill-replacement-select",
+                    ))
+            } else {
+                div()
+            }),
+    );
+
+    div().flex().flex_col().gap_4().child(second_system).child(
+        div()
+            .flex()
+            .gap_3()
+            .flex_wrap()
+            .child(preferences)
+            .child(defense)
+            .child(replacement),
+    )
+}
+
+fn starlight_editor(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    config: &TeamMirrorConfig,
+) -> Div {
+    let use_starlight = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(control_row(
+                "使用开局星光",
+                mirror_switch(
+                    app,
+                    cx,
+                    MirrorBool::UseStarlight,
+                    config.use_starlight,
+                    "starlight-enabled",
+                ),
+            ))
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child("开局时按下方等级消耗星光点数。"),
+            ),
+    )
+    .p_3()
+    .flex_none();
+
+    let mut quick = div().flex().items_center().gap_1().flex_wrap();
+    for level in 0..=3_u8 {
+        let mut control = button(starlight_level_label(level), ButtonVariant::Outline)
+            .id(format!("starlight-all-{level}"))
+            .h(px(26.))
+            .px_2()
+            .py_0();
+        control = control.on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.set_all_starlight(level);
+            cx.notify();
+        }));
+        quick = quick.child(control);
+    }
+
+    let cost_badge = div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .bg(rgb(0x5d4820))
+        .text_size(px(11.))
+        .text_color(rgb(crate::app::ACCENT))
+        .child(icon(ICON_SPARKLES, 13.))
+        .child(format!("总消耗 {} 点", app.teams.starlight_cost()));
+    let quick_card = card(
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .flex_wrap()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(TEXT_MUTED))
+                            .child("一键设置等级"),
+                    )
+                    .child(quick),
+            )
+            .child(cost_badge),
+    )
+    .p_3()
+    .flex_none();
+
+    let mut items = div().flex().flex_wrap().gap_2();
+    for index in 0..10 {
+        let level = config.opening_bonus.get(index).copied().unwrap_or(0).min(3);
+        let mut levels = div().flex().gap_1();
+        for candidate in 0..=3_u8 {
+            let mut control = button(
+                starlight_short_level(candidate),
+                if candidate == level {
+                    ButtonVariant::Secondary
+                } else {
+                    ButtonVariant::Ghost
+                },
+            )
+            .id(format!("starlight-{index}-{candidate}"))
+            .h(px(24.))
+            .px_2()
+            .py_0();
+            control = control.on_click(cx.listener(move |view, _, _, cx| {
+                view.teams.set_starlight_level(index, candidate);
+                cx.notify();
+            }));
+            levels = levels.child(control);
+        }
+        let cost = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .text_size(px(10.))
+            .text_color(rgb(TEXT_MUTED))
+            .child(icon(ICON_SPARKLES, 11.))
+            .child(format!("{} 点", STARLIGHT_COSTS[index]));
+        items = items.child(
+            card(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .min_w_0()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(TEXT))
+                                    .child(STARLIGHT_NAMES[index]),
+                            )
+                            .child(cost),
+                    )
+                    .child(levels)
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(TEXT_MUTED))
+                            .child(STARLIGHT_DESCRIPTIONS[index]),
+                    ),
+            )
+            .p_3()
+            .flex_basis(px(320.))
+            .flex_grow(1.),
+        );
+    }
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(use_starlight)
+        .child(quick_card)
+        .child(items)
+}
+
+fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirrorConfig) -> Div {
+    let observe_input = app.team_observe_input.clone();
+    let json_input = app.team_json_input.clone();
+    let observe_switch = mirror_switch(
+        app,
+        cx,
+        MirrorBool::ObserveEgoGift,
+        config.observe_ego_gift,
+        "advanced-observe-ego",
+    );
+    let custom_weight = mirror_switch(
+        app,
+        cx,
+        MirrorBool::UseCustomThemeWeight,
+        config.use_custom_theme_pack_weight,
+        "advanced-theme-weight",
+    );
+
+    let mut gifts = div().flex().flex_wrap().gap_1();
+    for gift in &config.observe_ego_gift_selected {
+        let gift_for_remove = gift.clone();
+        let remove = div()
+            .id(format!("remove-gift-{gift}"))
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(22.))
+            .rounded_md()
+            .cursor_pointer()
+            .child(icon(ICON_CLOSE, 12.))
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.teams.remove_observe_gift(&gift_for_remove);
+                cx.notify();
+            }));
+        gifts = gifts.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .px_2()
+                .py_1()
+                .rounded_md()
+                .bg(rgb(0x273345))
+                .text_size(px(11.))
+                .text_color(rgb(TEXT))
+                .child(gift.clone())
+                .child(remove),
+        );
+    }
+
+    let add_observe = button("添加", ButtonVariant::Default)
+        .id("advanced-add-observe")
+        .h(px(34.))
+        .px_3()
+        .py_0()
+        .on_click(cx.listener(|view, _, _, cx| view.add_team_observe_gift(cx)));
+    let observe_field = observe_input
+        .map(|input| {
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(input)
+                .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                    if event.keystroke.key.eq_ignore_ascii_case("enter") {
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        view.add_team_observe_gift(cx);
+                    }
+                }))
+                .into_any_element()
+        })
+        .unwrap_or_else(|| div().into_any_element());
+    let observe_content = if config.observe_ego_gift {
+        card(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(observe_field)
+                        .child(add_observe),
+                )
+                .child(gifts),
+        )
+        .p_3()
+    } else {
+        div()
+    };
+
+    let mut import_toggle = div()
+        .id("advanced-json-toggle")
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1()
+        .h(px(28.))
+        .px_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(BORDER))
+        .cursor_pointer()
+        .text_size(px(11.))
+        .text_color(rgb(crate::app::ACCENT))
+        .child(icon(ICON_PASTE, 14.))
+        .child("粘贴 / 导入 JSON");
+    import_toggle = import_toggle.on_click(cx.listener(|view, _, _, cx| {
+        if let Some(editor) = view.teams.editor.as_mut() {
+            editor.json_import_open = !editor.json_import_open;
+        }
+        cx.notify();
+    }));
+    let json_panel = if app
+        .teams
+        .editor
+        .as_ref()
+        .map(|editor| editor.json_import_open)
+        .unwrap_or(false)
+    {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                json_input
+                    .map(|input| input.into_any_element())
+                    .unwrap_or_else(|| div().into_any_element()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
+                    .child(
+                        button("关闭", ButtonVariant::Ghost)
+                            .id("advanced-json-close")
+                            .h(px(28.))
+                            .px_3()
+                            .py_0()
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                if let Some(editor) = view.teams.editor.as_mut() {
+                                    editor.json_import_open = false;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        button("校验并覆盖", ButtonVariant::Default)
+                            .id("advanced-json-import")
+                            .h(px(28.))
+                            .px_3()
+                            .py_0()
+                            .on_click(cx.listener(|view, _, _, cx| view.import_team_json(cx))),
+                    ),
+            )
+    } else {
+        div()
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(
+            card(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(control_row("观测 E.G.O 饰品", observe_switch))
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(TEXT_MUTED))
+                            .child("输入名称后点击添加；重复名称不会重复加入。"),
+                    )
+                    .child(observe_content),
+            )
+            .p_3()
+            .flex_none(),
+        )
+        .child(
+            card(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(control_row("使用队伍专属主题包权重", custom_weight))
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(TEXT_MUTED))
+                            .child("保存后由镜牢执行器读取该队伍的主题包权重。"),
+                    ),
+            )
+            .p_3()
+            .flex_none(),
+        )
+        .child(
+            card(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .text_color(rgb(TEXT))
+                                    .child("配置导入导出"),
+                            )
+                            .child(import_toggle),
+                    )
+                    .child(json_panel),
+            )
+            .p_3()
+            .flex_none(),
+        )
+}
+
+fn delete_confirmation(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl IntoElement {
+    let Some(team) = app.teams.delete_target.as_ref() else {
+        return div().into_any_element();
+    };
+    let name = team.name.clone();
+    div()
+        .id("delete-confirmation")
+        .w(px(400.))
+        .max_w_full()
+        .p_4()
+        .rounded_lg()
+        .border_1()
+        .border_color(rgb(0xc45b68))
+        .bg(rgb(0x24151b))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(
+                    div()
+                        .text_size(px(15.))
+                        .text_color(rgb(TEXT))
+                        .child("确认删除队伍？"),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(name),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .justify_end()
+                        .gap_2()
+                        .child(
+                            button("取消", ButtonVariant::Ghost)
+                                .id("delete-cancel")
+                                .h(px(32.))
+                                .px_3()
+                                .py_0()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.teams.cancel_delete();
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            button("删除", ButtonVariant::Destructive)
+                                .id("delete-confirm")
+                                .h(px(32.))
+                                .px_3()
+                                .py_0()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    if let Err(error) = view.teams.confirm_delete() {
+                                        view.teams.feedback = Some(error);
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                ),
+        )
+        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+        .into_any_element()
+}
+
+fn mirror_switch(
+    _app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    field: MirrorBool,
+    value: bool,
+    id: impl Into<String>,
+) -> gpui::Stateful<Div> {
+    switch(value)
+        .id(id.into())
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.teams.set_mirror_bool(field, !value);
+            cx.notify();
+        }))
+}
+
+fn cycle_control(
+    label: impl Into<String>,
+    value: impl Into<String>,
+    field: MirrorU8,
+    current: u8,
+    max: u8,
+    cx_app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    id: impl Into<String>,
+) -> gpui::AnyElement {
+    let mut control = button(
+        format!("{}：{}", label.into(), value.into()),
+        ButtonVariant::Outline,
+    )
+    .id(id.into());
+    let next = if current >= max { 0 } else { current + 1 };
+    let _ = cx_app;
+    control = control.on_click(cx.listener(move |view, _, _, cx| {
+        view.teams.set_mirror_u8(field, next);
+        cx.notify();
+    }));
+    control.into_any_element()
+}
+
+fn field_block(title: impl Into<String>, body: impl IntoElement) -> Div {
+    card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(rgb(TEXT))
+                    .child(title.into()),
+            )
+            .child(body),
+    )
+}
+
+fn labeled_field(title: impl Into<String>, input: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(TEXT_MUTED))
+                .child(title.into()),
+        )
+        .child(input)
+}
+
+fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .py_1()
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(TEXT_MUTED))
+                .child(label.into()),
+        )
+        .child(control)
+}
+
+fn system_choice(index: usize, selected: bool, destructive: bool) -> Div {
+    let index = index.min(SYSTEM_NAMES.len() - 1);
+    let (border, background, foreground) = if destructive && selected {
+        (0xc45b68, 0x542b34, TEXT)
+    } else if selected {
+        (0xd9a441, 0x3d301b, TEXT)
+    } else {
+        (BORDER, SURFACE, TEXT_MUTED)
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .h(px(34.))
+        .flex_basis(px(120.))
+        .flex_grow(1.)
+        .min_w(px(108.))
+        .px_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(border))
+        .bg(rgb(background))
+        .cursor_pointer()
+        .text_size(px(11.))
+        .text_color(rgb(foreground))
+        .child(
+            img(status_effect_path(SYSTEM_NAMES[index]))
+                .w(px(18.))
+                .h(px(18.)),
+        )
+        .child(div().min_w_0().truncate().child(SYSTEM_LABELS[index]))
+}
+
+fn scheme_badge(scheme: &str) -> Div {
+    let scheme = normalized_scheme(scheme);
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .h(px(20.))
+        .px_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(BORDER))
+        .text_size(px(11.))
+        .text_color(rgb(TEXT_MUTED))
+        .child(img(status_effect_path(scheme)).w(px(14.)).h(px(14.)))
+        .child(scheme_label(scheme))
+}
+
+fn normalized_scheme(scheme: &str) -> &str {
+    SYSTEM_NAMES
+        .iter()
+        .copied()
+        .find(|name| *name == scheme)
+        .unwrap_or(SYSTEM_NAMES[0])
+}
+
+fn purpose_label(purpose: TeamPurpose) -> &'static str {
+    match purpose {
+        TeamPurpose::Mirror => "镜牢",
+        TeamPurpose::Luxcavation => "经验本",
+        TeamPurpose::General => "通用",
+    }
+}
+
+fn scheme_label(scheme: &str) -> &'static str {
+    SYSTEM_NAMES
+        .iter()
+        .position(|name| *name == scheme)
+        .map(|index| SYSTEM_LABELS[index])
+        .unwrap_or("燃烧")
+}
+
+fn discard_value(systems: &crate::model::DiscardSystems, index: usize) -> bool {
+    match index {
+        0 => systems.burn,
+        1 => systems.bleed,
+        2 => systems.tremor,
+        3 => systems.rupture,
+        4 => systems.sinking,
+        5 => systems.poise,
+        6 => systems.charge,
+        7 => systems.slash,
+        8 => systems.pierce,
+        9 => systems.blunt,
+        _ => false,
+    }
+}
+
+fn discard_count(config: &TeamMirrorConfig) -> usize {
+    (0..10)
+        .filter(|index| discard_value(&config.discard_systems, *index))
+        .count()
+}
+
+fn shop_strategy_label(value: u8) -> &'static str {
+    match value {
+        0 => "默认",
+        1 => "保守",
+        2 => "激进",
+        _ => "默认",
+    }
+}
+
+fn after_level_label(value: u8) -> &'static str {
+    match value {
+        0 => "停止",
+        1 => "继续",
+        2 => "升级",
+        _ => "停止",
+    }
+}
+
+fn fixed_team_use_label(value: u8) -> &'static str {
+    match value {
+        0 => "困难专用",
+        1 => "普通专用",
+        2 => "全部通用",
+        _ => "困难专用",
+    }
+}
+
+fn starlight_level_label(level: u8) -> &'static str {
+    match level {
+        0 => "全部关闭",
+        1 => "全部基础",
+        2 => "全部 2+",
+        3 => "全部 3++",
+        _ => "全部关闭",
+    }
+}
+
+fn starlight_short_level(level: u8) -> &'static str {
+    match level {
+        0 => "0",
+        1 => "1",
+        2 => "2+",
+        3 => "3++",
+        _ => "0",
+    }
+}
+
+fn sinner_path(id: &str) -> ImageSource {
+    let asset = SinnerAsset::from_id(id).unwrap_or(SinnerAsset::DonQuixote);
+    assets::image_source(Asset::Sinner(asset))
+}
+
+fn status_effect_path(scheme: &str) -> ImageSource {
+    let asset = StatusEffectAsset::from_id(scheme).unwrap_or(StatusEffectAsset::General);
+    assets::image_source(Asset::StatusEffect(asset))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_labels_cover_contract_values() {
+        assert_eq!(purpose_label(TeamPurpose::Mirror), "镜牢");
+        assert_eq!(scheme_label("poise"), "呼吸");
+        assert_eq!(shop_strategy_label(2), "激进");
+        assert_eq!(after_level_label(1), "继续");
+        assert_eq!(fixed_team_use_label(2), "全部通用");
+    }
+
+    #[test]
+    fn unknown_scheme_falls_back_to_burn() {
+        assert_eq!(scheme_label("unknown"), "燃烧");
+        assert_eq!(discard_count(&TeamMirrorConfig::default()), 0);
+    }
+}

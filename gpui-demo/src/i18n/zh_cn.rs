@@ -1,0 +1,25 @@
+use super::Catalog;
+
+pub const CATALOG: Catalog = Catalog {
+    app_name: "Ahab Assistant · Limbus Company",
+    titlebar_title: "Ahab Assistant",
+    nav_home: "主控台",
+    nav_teams: "队伍管理",
+    nav_themes: "主题包",
+    nav_toolbox: "工具箱",
+    nav_resources: "资源中心",
+    nav_help: "帮助",
+    nav_settings: "设置",
+    titlebar_minimize: "最小化",
+    titlebar_maximize: "最大化",
+    titlebar_restore: "还原",
+    titlebar_close: "关闭",
+    theme_light: "浅色",
+    theme_dark: "深色",
+    theme_system: "跟随系统",
+    contents: "目录",
+    home_title: "自动化工作流",
+    home_idle: "待机中",
+    home_paused: "执行已暂停",
+    home_running: "运行中",
+};
