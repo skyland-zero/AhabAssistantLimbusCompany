@@ -1371,7 +1371,11 @@ fn home_select(
         trigger = trigger.opacity(0.5).cursor_not_allowed();
     } else {
         trigger = trigger.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.toggle_select(select);
+            if open {
+                view.home.close_select();
+            } else {
+                view.home.toggle_select(select);
+            }
             cx.stop_propagation();
             cx.notify();
         }));

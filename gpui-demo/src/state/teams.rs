@@ -46,6 +46,18 @@ pub enum TeamFilter {
     General,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TeamSelect {
+    Purpose,
+    FixedTeamUse,
+    ShopStrategy,
+    AfterLevelIv,
+    SecondSystem,
+    SecondSystemFloor,
+    DefenseTurns,
+    SkillReplacementMode,
+}
+
 impl TeamFilter {
     pub const ALL: [Self; 4] = [Self::All, Self::Mirror, Self::Luxcavation, Self::General];
 
@@ -97,6 +109,7 @@ pub struct TeamsState {
     pub filter: TeamFilter,
     pub editor: Option<TeamEditorState>,
     pub delete_target: Option<TeamDetail>,
+    pub open_select: Option<TeamSelect>,
     pub feedback: Option<String>,
 }
 
@@ -119,6 +132,7 @@ impl TeamsState {
             filter: TeamFilter::All,
             editor: None,
             delete_target: None,
+            open_select: None,
             feedback: None,
         };
         state.reload();
@@ -163,6 +177,7 @@ impl TeamsState {
     }
 
     pub fn open_new(&mut self) {
+        self.close_select();
         let purpose = self.filter.purpose().unwrap_or(TeamPurpose::General);
         self.editor = Some(TeamEditorState::new(TeamDetail {
             id: String::new(),
@@ -177,18 +192,37 @@ impl TeamsState {
     }
 
     pub fn open_edit(&mut self, team: &TeamDetail) {
+        self.close_select();
         self.editor = Some(TeamEditorState::new(team.clone()));
         self.feedback = None;
     }
 
     pub fn close_editor(&mut self) {
         self.editor = None;
+        self.close_select();
     }
 
     pub fn set_editor_tab(&mut self, tab: TeamEditorTab) {
         if let Some(editor) = self.editor.as_mut() {
             editor.tab = tab;
         }
+        self.close_select();
+    }
+
+    pub fn toggle_select(&mut self, select: TeamSelect) {
+        self.open_select = if self.open_select == Some(select) {
+            None
+        } else {
+            Some(select)
+        };
+    }
+
+    pub fn close_select(&mut self) {
+        self.open_select = None;
+    }
+
+    pub fn is_select_open(&self, select: TeamSelect) -> bool {
+        self.open_select == Some(select)
     }
 
     pub fn set_filter(&mut self, filter: TeamFilter) {
@@ -331,7 +365,6 @@ impl TeamsState {
             MirrorU8::SecondSystemSelect => config.second_system_select = value.min(9),
             MirrorU8::SecondSystemStartFloor => config.second_system_setting = value.clamp(2, 5),
             MirrorU8::DefenseTurns => config.defense_for_solo_turns = value.clamp(1, 5),
-            MirrorU8::SkillReplacementSelect => config.skill_replacement_select = value,
             MirrorU8::SkillReplacementMode => config.skill_replacement_mode = value.min(1),
             MirrorU8::FixedTeamUseSelect => config.fixed_team_use_select = value.min(2),
         });
@@ -514,6 +547,7 @@ impl TeamsState {
     }
 
     pub fn request_delete(&mut self, team: TeamDetail) {
+        self.close_select();
         self.delete_target = Some(team);
     }
 
@@ -600,7 +634,6 @@ pub enum MirrorU8 {
     SecondSystemSelect,
     SecondSystemStartFloor,
     DefenseTurns,
-    SkillReplacementSelect,
     SkillReplacementMode,
     FixedTeamUseSelect,
 }
@@ -628,6 +661,19 @@ mod tests {
             state.editor.as_ref().unwrap().team.purpose,
             TeamPurpose::Luxcavation
         );
+    }
+
+    #[test]
+    fn editor_selects_are_exclusive_and_reset_on_tab_change() {
+        let mut state = TeamsState::default();
+        state.open_new();
+        state.toggle_select(TeamSelect::ShopStrategy);
+        assert!(state.is_select_open(TeamSelect::ShopStrategy));
+        state.toggle_select(TeamSelect::SecondSystem);
+        assert!(!state.is_select_open(TeamSelect::ShopStrategy));
+        assert!(state.is_select_open(TeamSelect::SecondSystem));
+        state.set_editor_tab(TeamEditorTab::Combat);
+        assert!(state.open_select.is_none());
     }
 
     #[test]

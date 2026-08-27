@@ -548,9 +548,13 @@ fn update_card(
     let palette = current_render_palette();
     let mut source_trigger = select_trigger(source_label, source_open, &palette)
         .id("settings-update-source")
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.settings_page
-                .toggle_select(SettingsSelect::UpdateSource);
+        .on_click(cx.listener(move |view, _, _, cx| {
+            if source_open {
+                view.settings_page.close_select();
+            } else {
+                view.settings_page
+                    .toggle_select(SettingsSelect::UpdateSource);
+            }
             cx.stop_propagation();
             cx.notify();
         }));
@@ -831,7 +835,11 @@ fn select_system_u16(
     let mut trigger = select_trigger(label, open, &palette)
         .id(id)
         .on_click(cx.listener(move |view, _, _, cx| {
-            view.settings_page.toggle_select(select);
+            if open {
+                view.settings_page.close_select();
+            } else {
+                view.settings_page.toggle_select(select);
+            }
             cx.stop_propagation();
             cx.notify();
         }));

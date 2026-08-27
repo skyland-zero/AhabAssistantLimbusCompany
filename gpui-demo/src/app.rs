@@ -95,6 +95,9 @@ pub struct AhabApp {
     pub team_code_input: Option<Entity<TextInput>>,
     pub team_observe_input: Option<Entity<TextInput>>,
     pub team_json_input: Option<Entity<TextInput>>,
+    pub team_keyword_refresh_input: Option<Entity<TextInput>>,
+    pub team_normal_refresh_input: Option<Entity<TextInput>>,
+    pub team_input_subscriptions: Vec<Subscription>,
     pub settings_cdk_input: Option<Entity<TextInput>>,
     pub settings_port_input: Option<Entity<TextInput>>,
     pub settings_timeout_input: Option<Entity<TextInput>>,
@@ -129,6 +132,9 @@ impl AhabApp {
             team_code_input: None,
             team_observe_input: None,
             team_json_input: None,
+            team_keyword_refresh_input: None,
+            team_normal_refresh_input: None,
+            team_input_subscriptions: Vec::new(),
             settings_cdk_input: None,
             settings_port_input: None,
             settings_timeout_input: None,
@@ -155,6 +161,7 @@ impl AhabApp {
 
     pub fn select_page(&mut self, page: Page, cx: &mut Context<Self>) {
         self.home.close_select();
+        self.teams.close_select();
         self.settings_page.close_select();
         self.home.set_after_completion_open(false);
         self.current_page = page;
@@ -334,11 +341,15 @@ impl AhabApp {
     }
 
     fn create_team_inputs(&mut self, cx: &mut Context<Self>) {
+        self.team_input_subscriptions.clear();
         let palette = crate::components::style::current_render_palette();
         let language = self.state.settings.language;
         let editor = self.teams.editor.as_ref().expect("editor just opened");
         let name = editor.team.name.clone();
-        let code = editor.mirror_config().team_code;
+        let mirror_config = editor.mirror_config();
+        let code = mirror_config.team_code.clone();
+        let keyword_refresh = mirror_config.max_keyword_refresh.to_string();
+        let normal_refresh = mirror_config.max_normal_refresh.to_string();
         let name_placeholder = match language {
             crate::model::Language::ZhCn => "队伍名称",
             crate::model::Language::EnUs => "Team name",
@@ -366,13 +377,43 @@ impl AhabApp {
         );
         self.team_json_input =
             Some(cx.new(move |cx| TextInput::new_with_palette("", json_placeholder, palette, cx)));
+        let keyword_input =
+            cx.new(move |cx| TextInput::new_with_palette(keyword_refresh, "0-10", palette, cx));
+        let keyword_subscription = cx.observe(&keyword_input, |view, input, cx| {
+            if let Ok(value) = input.read(cx).text().parse::<u8>() {
+                let value = value.min(10);
+                view.teams
+                    .set_mirror_u8(crate::state::MirrorU8::MaxKeywordRefresh, value);
+                input.update(cx, |input, _| input.set_text(value.to_string()));
+                cx.notify();
+            }
+        });
+        self.team_keyword_refresh_input = Some(keyword_input);
+        self.team_input_subscriptions.push(keyword_subscription);
+
+        let normal_input =
+            cx.new(move |cx| TextInput::new_with_palette(normal_refresh, "0-10", palette, cx));
+        let normal_subscription = cx.observe(&normal_input, |view, input, cx| {
+            if let Ok(value) = input.read(cx).text().parse::<u8>() {
+                let value = value.min(10);
+                view.teams
+                    .set_mirror_u8(crate::state::MirrorU8::MaxNormalRefresh, value);
+                input.update(cx, |input, _| input.set_text(value.to_string()));
+                cx.notify();
+            }
+        });
+        self.team_normal_refresh_input = Some(normal_input);
+        self.team_input_subscriptions.push(normal_subscription);
     }
 
     fn clear_team_inputs(&mut self) {
+        self.team_input_subscriptions.clear();
         self.team_name_input = None;
         self.team_code_input = None;
         self.team_observe_input = None;
         self.team_json_input = None;
+        self.team_keyword_refresh_input = None;
+        self.team_normal_refresh_input = None;
     }
 
     fn sync_team_inputs_to_state(&mut self, cx: &mut Context<Self>) {
@@ -384,6 +425,14 @@ impl AhabApp {
             .team_code_input
             .as_ref()
             .map(|input| input.read(cx).text());
+        let keyword_refresh = self
+            .team_keyword_refresh_input
+            .as_ref()
+            .and_then(|input| input.read(cx).text().parse::<u8>().ok());
+        let normal_refresh = self
+            .team_normal_refresh_input
+            .as_ref()
+            .and_then(|input| input.read(cx).text().parse::<u8>().ok());
         if let Some(editor) = self.teams.editor.as_mut() {
             if let Some(name) = name {
                 editor.team.name = name;
@@ -395,6 +444,20 @@ impl AhabApp {
                     .get_or_insert_with(Default::default)
                     .team_code = code;
             }
+            if let Some(value) = keyword_refresh {
+                editor
+                    .team
+                    .mirrorConfig
+                    .get_or_insert_with(Default::default)
+                    .max_keyword_refresh = value.min(10);
+            }
+            if let Some(value) = normal_refresh {
+                editor
+                    .team
+                    .mirrorConfig
+                    .get_or_insert_with(Default::default)
+                    .max_normal_refresh = value.min(10);
+            }
         }
     }
 
@@ -403,12 +466,21 @@ impl AhabApp {
             return;
         };
         let name = editor.team.name.clone();
-        let code = editor.mirror_config().team_code;
+        let mirror_config = editor.mirror_config();
+        let code = mirror_config.team_code;
+        let keyword_refresh = mirror_config.max_keyword_refresh.to_string();
+        let normal_refresh = mirror_config.max_normal_refresh.to_string();
         if let Some(input) = self.team_name_input.as_ref() {
             input.update(cx, |input, _| input.set_text(name));
         }
         if let Some(input) = self.team_code_input.as_ref() {
             input.update(cx, |input, _| input.set_text(code));
+        }
+        if let Some(input) = self.team_keyword_refresh_input.as_ref() {
+            input.update(cx, |input, _| input.set_text(keyword_refresh));
+        }
+        if let Some(input) = self.team_normal_refresh_input.as_ref() {
+            input.update(cx, |input, _| input.set_text(normal_refresh));
         }
     }
 
@@ -418,6 +490,8 @@ impl AhabApp {
             self.team_code_input.as_ref(),
             self.team_observe_input.as_ref(),
             self.team_json_input.as_ref(),
+            self.team_keyword_refresh_input.as_ref(),
+            self.team_normal_refresh_input.as_ref(),
             self.settings_cdk_input.as_ref(),
             self.settings_port_input.as_ref(),
             self.settings_timeout_input.as_ref(),

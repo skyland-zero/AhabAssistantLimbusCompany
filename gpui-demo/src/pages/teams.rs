@@ -4,18 +4,23 @@
 //! dependency here, so the same interaction is rendered as an application
 //! overlay.  All changes are kept in `TeamsState` until Save is pressed.
 
+use std::rc::Rc;
+
 use gpui::{Context, Div, ImageSource, KeyDownEvent, div, img, prelude::*, px, relative, svg};
 
 use crate::{
-    app::{AhabApp, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
+    app::{AhabApp, BORDER, SURFACE, TEXT, TEXT_MUTED},
     assets::{self, Asset, SinnerAsset, StatusEffectAsset},
     components::style::{ColorToken, current_render_palette},
     components::{
         BadgeTone, ButtonVariant, badge, button, card, empty_state, palette_rgb, render_rgb as rgb,
-        render_rgba as rgba, scroll_area_with_id, switch,
+        render_rgba as rgba, scroll_area_with_id, select_option, select_popup, select_trigger,
+        switch,
     },
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose},
-    state::{MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter},
+    state::{
+        MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamSelect, TeamsState,
+    },
 };
 
 const STARLIGHT_NAMES: [&str; 10] = [
@@ -258,11 +263,17 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .child(feedback),
         );
     }
-    root.child(
+    root = root.child(
         scroll_area_with_id("teams-list-scroll", div().p_4().child(cards))
             .flex_1()
             .min_h_0(),
-    )
+    );
+    root.on_any_mouse_down(cx.listener(|view, _, _, cx| {
+        if view.teams.open_select.is_some() {
+            view.teams.close_select();
+            cx.notify();
+        }
+    }))
 }
 
 fn team_card(
@@ -481,6 +492,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .h(px(28.))
             .px_3()
             .rounded_md()
+            .tab_index(0)
             .cursor_pointer()
             .text_size(px(12.))
             .text_color(palette_rgb(if active {
@@ -509,6 +521,14 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             view.teams.set_editor_tab(candidate);
             cx.notify();
         }));
+        control =
+            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.teams.set_editor_tab(candidate);
+                    cx.notify();
+                }
+            }));
         tabs = tabs.child(control);
     }
 
@@ -666,7 +686,13 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     )
                     .child(div().flex().flex_none().gap_2().child(close).child(save)),
             )
-            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
+            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+            .on_any_mouse_down(cx.listener(|view, _, _, cx| {
+                if view.teams.open_select.is_some() {
+                    view.teams.close_select();
+                    cx.notify();
+                }
+            }));
 
     let mut surface = div()
         .id("team-editor-overlay")
@@ -747,30 +773,37 @@ fn basic_editor(
         )
     };
 
-    let mut purpose = div().flex().gap_1().flex_wrap();
-    for candidate in [
-        TeamPurpose::Mirror,
-        TeamPurpose::Luxcavation,
-        TeamPurpose::General,
-    ] {
-        let mut control = button(
-            purpose_label(candidate, language),
-            if team.purpose == candidate {
-                ButtonVariant::Secondary
-            } else {
-                ButtonVariant::Outline
-            },
-        )
-        .id(format!("team-purpose-{candidate:?}"))
-        .h(px(32.))
-        .px_3()
-        .py_0();
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.teams.set_editor_purpose(candidate);
-            cx.notify();
-        }));
-        purpose = purpose.child(control);
-    }
+    let purpose = team_select(
+        app,
+        cx,
+        TeamSelect::Purpose,
+        purpose_key(team.purpose),
+        vec![
+            (
+                "mirror".to_owned(),
+                purpose_label(TeamPurpose::Mirror, language).to_owned(),
+            ),
+            (
+                "luxcavation".to_owned(),
+                purpose_label(TeamPurpose::Luxcavation, language).to_owned(),
+            ),
+            (
+                "general".to_owned(),
+                purpose_label(TeamPurpose::General, language).to_owned(),
+            ),
+        ],
+        "team-purpose",
+        180.,
+        Rc::new(|teams, value| {
+            let purpose = match value.as_str() {
+                "mirror" => TeamPurpose::Mirror,
+                "luxcavation" => TeamPurpose::Luxcavation,
+                "general" => TeamPurpose::General,
+                _ => return,
+            };
+            teams.set_editor_purpose(purpose);
+        }),
+    );
     let purpose_field = labeled_field(text("用途", "Purpose").get(language), purpose);
 
     let mut systems = div().flex().flex_wrap().gap_2();
@@ -792,6 +825,7 @@ fn basic_editor(
         let selected = team.sinners.iter().position(|id| id == &sinner.id);
         let id = sinner.id.clone();
         let path = sinner_path(&id);
+        let palette = current_render_palette();
         let mut control = div()
             .id(format!("team-sinner-{id}"))
             .w(px(100.))
@@ -803,11 +837,15 @@ fn basic_editor(
             .gap_1()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(if selected.is_some() { 0xd9a441 } else { BORDER }))
-            .bg(rgb(if selected.is_some() {
-                0x3d301b
+            .border_color(palette_rgb(if selected.is_some() {
+                palette.brand
             } else {
-                SURFACE_HOVER
+                palette.border
+            }))
+            .bg(palette_rgb(if selected.is_some() {
+                palette.brand_light
+            } else {
+                palette.secondary
             }))
             .cursor_pointer()
             .on_click(cx.listener(move |view, _, _, cx| {
@@ -893,6 +931,19 @@ fn basic_editor(
                 .unwrap_or(true);
             view.teams.set_editor_enabled(enabled);
             cx.notify();
+        }))
+        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                let enabled = view
+                    .teams
+                    .editor
+                    .as_ref()
+                    .map(|editor| !editor.team.enabled)
+                    .unwrap_or(true);
+                view.teams.set_editor_enabled(enabled);
+                cx.notify();
+            }
         }));
 
     let mut clear_sinners = button(
@@ -938,16 +989,25 @@ fn basic_editor(
                 fixed_switch,
             ))
             .child(if config.fixed_team_use {
-                cycle_control(
-                    text("固定范围", "Fixed scope").get(language),
-                    fixed_team_use_label(config.fixed_team_use_select, language),
-                    MirrorU8::FixedTeamUseSelect,
-                    config.fixed_team_use_select,
-                    2,
+                team_select(
                     app,
                     cx,
+                    TeamSelect::FixedTeamUse,
+                    config.fixed_team_use_select.to_string(),
+                    vec![
+                        ("0".to_owned(), fixed_team_use_label(0, language).to_owned()),
+                        ("1".to_owned(), fixed_team_use_label(1, language).to_owned()),
+                        ("2".to_owned(), fixed_team_use_label(2, language).to_owned()),
+                    ],
                     "basic-fixed-team-range",
+                    180.,
+                    Rc::new(|teams, value| {
+                        if let Ok(value) = value.parse::<u8>() {
+                            teams.set_mirror_u8(MirrorU8::FixedTeamUseSelect, value);
+                        }
+                    }),
                 )
+                .into_any_element()
             } else {
                 div().into_any_element()
             }),
@@ -1034,52 +1094,72 @@ fn shop_editor(
     }
 
     let restrictions = [
-        ("不治疗", MirrorBool::DoNotHeal, config.do_not_heal),
-        ("不购买", MirrorBool::DoNotBuy, config.do_not_buy),
-        ("不合成", MirrorBool::DoNotFuse, config.do_not_fuse),
-        ("不出售", MirrorBool::DoNotSell, config.do_not_sell),
-        ("不升级", MirrorBool::DoNotEnhance, config.do_not_enhance),
+        (
+            text("不治疗", "Do Not Heal"),
+            MirrorBool::DoNotHeal,
+            config.do_not_heal,
+        ),
+        (
+            text("不购买", "Do Not Buy"),
+            MirrorBool::DoNotBuy,
+            config.do_not_buy,
+        ),
+        (
+            text("不合成", "Do Not Fuse"),
+            MirrorBool::DoNotFuse,
+            config.do_not_fuse,
+        ),
+        (
+            text("不出售", "Do Not Sell"),
+            MirrorBool::DoNotSell,
+            config.do_not_sell,
+        ),
+        (
+            text("不升级", "Do Not Enhance"),
+            MirrorBool::DoNotEnhance,
+            config.do_not_enhance,
+        ),
     ];
     let mut restriction_rows = div().flex().flex_wrap().gap_3();
-    for (label, field, value) in restrictions {
+    for (index, (label, field, value)) in restrictions.into_iter().enumerate() {
         restriction_rows = restriction_rows.child(control_row(
-            label,
-            mirror_switch(app, cx, field, value, format!("shop-{label}")),
+            label.get(language),
+            mirror_switch(app, cx, field, value, format!("shop-restriction-{index}")),
         ));
     }
 
     let fusions = [
         (
-            "仅激进合成",
+            text("仅激进合成", "Aggressive Fusion Only"),
             MirrorBool::OnlyAggressiveFuse,
             config.only_aggressive_fuse,
         ),
         (
-            "不合成体系饰品",
+            text("不合成体系饰品", "Do Not Fuse System Gifts"),
             MirrorBool::DoNotSystemFuse,
             config.do_not_system_fuse,
         ),
         (
-            "仅合成体系饰品",
+            text("仅合成体系饰品", "System Gifts Only"),
             MirrorBool::OnlySystemFuse,
             config.only_system_fuse,
         ),
         (
-            "激进模式也升级",
+            text("激进模式也升级", "Enhance in Aggressive Mode"),
             MirrorBool::AggressiveAlsoEnhance,
             config.aggressive_also_enhance,
         ),
         (
-            "激进模式保留体系",
+            text("激进模式保留体系", "Keep System Gifts in Aggressive Mode"),
             MirrorBool::AggressiveSaveSystems,
             config.aggressive_save_systems,
         ),
     ];
     let mut fusion_rows = div().flex().flex_col().gap_2();
-    for (label, field, value) in fusions {
+    for (index, (label, field, value)) in fusions.into_iter().enumerate() {
         fusion_rows = fusion_rows.child(control_row(
-            label,
-            mirror_switch(app, cx, field, value, format!("fusion-{label}")),
+            label.get(language),
+            mirror_switch(app, cx, field, value, format!("fusion-{index}")),
         ));
     }
 
@@ -1089,7 +1169,7 @@ fn shop_editor(
             .flex_col()
             .gap_2()
             .child(control_row(
-                "四级饰品后执行策略",
+                text("四级饰品后执行策略", "After Tier 4 Fusion").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1099,21 +1179,40 @@ fn shop_editor(
                 ),
             ))
             .child(if config.after_level_IV {
-                cycle_control(
-                    "行为",
-                    after_level_label(config.after_level_IV_select, language),
-                    MirrorU8::AfterLevelIvSelect,
-                    config.after_level_IV_select,
-                    2,
+                team_select(
                     app,
                     cx,
+                    TeamSelect::AfterLevelIv,
+                    config.after_level_IV_select.to_string(),
+                    vec![
+                        ("0".to_owned(), after_level_label(0, language).to_owned()),
+                        ("1".to_owned(), after_level_label(1, language).to_owned()),
+                        ("2".to_owned(), after_level_label(2, language).to_owned()),
+                    ],
                     "shop-after-level-iv-action",
+                    180.,
+                    Rc::new(|teams, value| {
+                        if let Ok(value) = value.parse::<u8>() {
+                            teams.set_mirror_u8(MirrorU8::AfterLevelIvSelect, value);
+                        }
+                    }),
                 )
+                .into_any_element()
             } else {
                 div().into_any_element()
             }),
     );
 
+    let keyword_refresh = app
+        .team_keyword_refresh_input
+        .clone()
+        .map(|input| div().w(px(80.)).child(input))
+        .unwrap_or_else(|| div().child(text("初始化中", "Initializing").get(language)));
+    let normal_refresh = app
+        .team_normal_refresh_input
+        .clone()
+        .map(|input| div().w(px(80.)).child(input))
+        .unwrap_or_else(|| div().child(text("初始化中", "Initializing").get(language)));
     let refresh = card(
         div()
             .flex()
@@ -1123,27 +1222,15 @@ fn shop_editor(
                 div()
                     .text_size(px(13.))
                     .text_color(rgb(TEXT))
-                    .child("商店刷新上限"),
+                    .child(text("商店刷新上限", "Shop Refresh Limits").get(language)),
             )
-            .child(cycle_control(
-                "关键词刷新",
-                config.max_keyword_refresh.to_string(),
-                MirrorU8::MaxKeywordRefresh,
-                config.max_keyword_refresh,
-                10,
-                app,
-                cx,
-                "shop-keyword-refresh",
+            .child(control_row(
+                text("关键词刷新", "Keyword Refreshes").get(language),
+                keyword_refresh,
             ))
-            .child(cycle_control(
-                "普通刷新",
-                config.max_normal_refresh.to_string(),
-                MirrorU8::MaxNormalRefresh,
-                config.max_normal_refresh,
-                10,
-                app,
-                cx,
-                "shop-normal-refresh",
+            .child(control_row(
+                text("普通刷新", "Normal Refreshes").get(language),
+                normal_refresh,
             )),
     );
 
@@ -1152,7 +1239,7 @@ fn shop_editor(
         let ignored = config.ignore_shop.get(floor).copied().unwrap_or(false);
         let mut control = button(
             if ignored {
-                format!("已忽略 {}F", floor + 1)
+                format!("{} {}F", text("已忽略", "Ignored").get(language), floor + 1)
             } else {
                 format!("{}F", floor + 1)
             },
@@ -1181,7 +1268,7 @@ fn shop_editor(
                 div()
                     .text_size(px(13.))
                     .text_color(rgb(TEXT))
-                    .child("忽略商店楼层"),
+                    .child(text("忽略商店楼层", "Ignore Shop Floors").get(language)),
             )
             .child(floors),
     );
@@ -1191,47 +1278,64 @@ fn shop_editor(
         .flex_col()
         .gap_4()
         .child(field_block(
-            "商店策略",
-            cycle_control(
-                "策略",
-                shop_strategy_label(config.shop_strategy, language),
-                MirrorU8::ShopStrategy,
-                config.shop_strategy,
-                2,
+            text("商店策略", "Shop Strategy").get(language),
+            team_select(
                 app,
                 cx,
+                TeamSelect::ShopStrategy,
+                config.shop_strategy.to_string(),
+                vec![
+                    ("0".to_owned(), shop_strategy_label(0, language).to_owned()),
+                    ("1".to_owned(), shop_strategy_label(1, language).to_owned()),
+                    ("2".to_owned(), shop_strategy_label(2, language).to_owned()),
+                ],
                 "shop-strategy",
+                180.,
+                Rc::new(|teams, value| {
+                    if let Ok(value) = value.parse::<u8>() {
+                        teams.set_mirror_u8(MirrorU8::ShopStrategy, value);
+                    }
+                }),
             ),
         ))
         .child(field_block(
-            "舍弃饰品体系",
+            text("舍弃饰品体系", "Discard Gift Systems").get(language),
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
                 .child(
-                    div()
-                        .text_size(px(10.))
-                        .text_color(rgb(TEXT_MUTED))
-                        .child("选择不参与商店购买、合成与保留的体系。"),
+                    div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                        text(
+                            "选择不参与商店购买、合成与保留的体系。",
+                            "Choose systems to avoid in shop purchases, fusion and retention.",
+                        )
+                        .get(language),
+                    ),
                 )
                 .child(discard),
         ))
         .child(field_block(
-            "基础操作限制",
+            text("基础操作限制", "Shop Action Restrictions").get(language),
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
                 .child(
-                    div()
-                        .text_size(px(10.))
-                        .text_color(rgb(TEXT_MUTED))
-                        .child("限制会在镜牢商店阶段按队伍配置执行。"),
+                    div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                        text(
+                            "限制会在镜牢商店阶段按队伍配置执行。",
+                            "Restrictions are applied during Mirror Dungeon shop phases.",
+                        )
+                        .get(language),
+                    ),
                 )
                 .child(restriction_rows),
         ))
-        .child(field_block("合成策略", fusion_rows))
+        .child(field_block(
+            text("合成策略", "Fusion Strategy").get(language),
+            fusion_rows,
+        ))
         .child(
             div()
                 .flex()
@@ -1269,25 +1373,47 @@ fn combat_editor(
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(cycle_control(
+                    .child(control_row(
                         "第二体系",
-                        system_label(config.second_system_select.min(9) as usize, language),
-                        MirrorU8::SecondSystemSelect,
-                        config.second_system_select,
-                        9,
-                        app,
-                        cx,
-                        "combat-second-system-select",
+                        team_select(
+                            app,
+                            cx,
+                            TeamSelect::SecondSystem,
+                            config.second_system_select.to_string(),
+                            SYSTEM_NAMES
+                                .iter()
+                                .enumerate()
+                                .map(|(index, _)| {
+                                    (index.to_string(), system_label(index, language).to_owned())
+                                })
+                                .collect(),
+                            "combat-second-system-select",
+                            180.,
+                            Rc::new(|teams, value| {
+                                if let Ok(value) = value.parse::<u8>() {
+                                    teams.set_mirror_u8(MirrorU8::SecondSystemSelect, value);
+                                }
+                            }),
+                        ),
                     ))
-                    .child(cycle_control(
+                    .child(control_row(
                         "起始楼层",
-                        format!("第 {} 层", config.second_system_setting.clamp(2, 5)),
-                        MirrorU8::SecondSystemStartFloor,
-                        config.second_system_setting,
-                        5,
-                        app,
-                        cx,
-                        "combat-second-system-floor",
+                        team_select(
+                            app,
+                            cx,
+                            TeamSelect::SecondSystemFloor,
+                            config.second_system_setting.to_string(),
+                            (2..=5)
+                                .map(|floor| (floor.to_string(), floor_label(floor, language)))
+                                .collect(),
+                            "combat-second-system-floor",
+                            180.,
+                            Rc::new(|teams, value| {
+                                if let Ok(value) = value.parse::<u8>() {
+                                    teams.set_mirror_u8(MirrorU8::SecondSystemStartFloor, value);
+                                }
+                            }),
+                        ),
                     ))
                     .child(control_row(
                         "四级合成",
@@ -1412,16 +1538,26 @@ fn combat_editor(
                 ),
             ))
             .child(if config.defense_for_solo {
-                cycle_control(
+                control_row(
                     "防御回合",
-                    format!("{} 回合", config.defense_for_solo_turns.clamp(1, 5)),
-                    MirrorU8::DefenseTurns,
-                    config.defense_for_solo_turns,
-                    5,
-                    app,
-                    cx,
-                    "combat-defense-turns",
+                    team_select(
+                        app,
+                        cx,
+                        TeamSelect::DefenseTurns,
+                        config.defense_for_solo_turns.to_string(),
+                        (1..=5)
+                            .map(|turns| (turns.to_string(), turns_label(turns, language)))
+                            .collect(),
+                        "combat-defense-turns",
+                        180.,
+                        Rc::new(|teams, value| {
+                            if let Ok(value) = value.parse::<u8>() {
+                                teams.set_mirror_u8(MirrorU8::DefenseTurns, value);
+                            }
+                        }),
+                    ),
                 )
+                .into_any_element()
             } else {
                 div().into_any_element()
             }),
@@ -1443,34 +1579,26 @@ fn combat_editor(
                 ),
             ))
             .child(if config.skill_replacement {
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(cycle_control(
-                        "替换模式",
-                        if config.skill_replacement_mode == 0 {
-                            "1 → 2"
-                        } else {
-                            "1 → 3"
-                        },
-                        MirrorU8::SkillReplacementMode,
-                        config.skill_replacement_mode,
-                        1,
+                div().flex().flex_col().gap_2().child(control_row(
+                    "替换模式",
+                    team_select(
                         app,
                         cx,
+                        TeamSelect::SkillReplacementMode,
+                        config.skill_replacement_mode.to_string(),
+                        vec![
+                            ("0".to_owned(), "1 → 2".to_owned()),
+                            ("1".to_owned(), "1 → 3".to_owned()),
+                        ],
                         "combat-skill-replacement-mode",
-                    ))
-                    .child(cycle_control(
-                        "替换选项",
-                        config.skill_replacement_select.to_string(),
-                        MirrorU8::SkillReplacementSelect,
-                        config.skill_replacement_select,
-                        9,
-                        app,
-                        cx,
-                        "combat-skill-replacement-select",
-                    ))
+                        180.,
+                        Rc::new(|teams, value| {
+                            if let Ok(value) = value.parse::<u8>() {
+                                teams.set_mirror_u8(MirrorU8::SkillReplacementMode, value);
+                            }
+                        }),
+                    ),
+                ))
             } else {
                 div()
             }),
@@ -1997,41 +2125,136 @@ fn mirror_switch(
     }))
 }
 
-fn cycle_control(
-    label: impl Into<String>,
-    value: impl Into<String>,
-    field: MirrorU8,
-    current: u8,
-    max: u8,
-    cx_app: &mut AhabApp,
+fn team_select(
+    app: &AhabApp,
     cx: &mut Context<AhabApp>,
+    select: TeamSelect,
+    current: impl Into<String>,
+    options: Vec<(String, String)>,
     id: impl Into<String>,
-) -> gpui::AnyElement {
-    let mut control = button(
-        format!("{}：{}", label.into(), value.into()),
-        ButtonVariant::Outline,
-    )
-    .id(id.into());
-    let next = cycle_u8_value(current, max, 1);
-    let _ = cx_app;
-    control = control.on_click(cx.listener(move |view, _, _, cx| {
-        view.teams.set_mirror_u8(field, next);
+    width: f32,
+    on_change: Rc<dyn Fn(&mut TeamsState, String)>,
+) -> Div {
+    let current = current.into();
+    let selected_index = options
+        .iter()
+        .position(|(value, _)| value == &current)
+        .unwrap_or(0);
+    let selected_label = options
+        .get(selected_index)
+        .map(|(_, label)| label.clone())
+        .unwrap_or_else(|| current.clone());
+    let values = options
+        .iter()
+        .map(|(value, _)| value.clone())
+        .collect::<Vec<_>>();
+    let open = app.teams.is_select_open(select);
+    let palette = current_render_palette();
+    let id = id.into();
+    let mut trigger = select_trigger(selected_label, open, &palette)
+        .id(id.clone())
+        .w(px(width));
+    trigger = trigger.on_click(cx.listener(move |view, _, _, cx| {
+        if open {
+            view.teams.close_select();
+        } else {
+            view.teams.toggle_select(select);
+        }
+        cx.stop_propagation();
         cx.notify();
     }));
-    control = control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+    let key_change = on_change.clone();
+    let key_values = values.clone();
+    let key_current = current.clone();
+    trigger = trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
         let key = event.keystroke.key.to_ascii_lowercase();
-        let selected = match key.as_str() {
-            "left" | "arrowleft" => cycle_u8_value(current, max, -1),
-            "right" | "arrowright" | "enter" | "space" => next,
-            "home" => 0,
-            "end" => max,
-            _ => return,
+        if key == "escape" {
+            window.prevent_default();
+            view.teams.close_select();
+            cx.notify();
+            return;
+        }
+        if matches!(key.as_str(), "enter" | "space") {
+            window.prevent_default();
+            view.teams.toggle_select(select);
+            cx.notify();
+            return;
+        }
+
+        let current_index = key_values
+            .iter()
+            .position(|candidate| candidate == &key_current)
+            .unwrap_or(0);
+        let next_index = match key.as_str() {
+            "left" | "arrowleft" | "up" | "arrowup" => Some(
+                (current_index as isize - 1).rem_euclid(key_values.len().max(1) as isize) as usize,
+            ),
+            "right" | "arrowright" => Some((current_index + 1) % key_values.len().max(1)),
+            "down" | "arrowdown" if open => Some((current_index + 1) % key_values.len().max(1)),
+            "down" | "arrowdown" => Some(current_index),
+            "home" => Some(0),
+            "end" => key_values.len().checked_sub(1),
+            _ => None,
         };
-        window.prevent_default();
-        view.teams.set_mirror_u8(field, selected);
-        cx.notify();
+        if let Some(next_index) = next_index
+            && let Some(value) = key_values.get(next_index)
+        {
+            window.prevent_default();
+            if matches!(key.as_str(), "down" | "arrowdown" | "up" | "arrowup") && !open {
+                view.teams.toggle_select(select);
+            } else {
+                key_change(&mut view.teams, value.clone());
+                if !open {
+                    view.teams.close_select();
+                }
+            }
+            cx.notify();
+        }
     }));
-    control.into_any_element()
+
+    let mut option_list = div().flex().flex_col().gap_1();
+    for (value, option_label) in options {
+        let selected = value == current;
+        let option_id = format!("{id}-option-{value}");
+        let click_change = on_change.clone();
+        let click_value = value.clone();
+        let mut option = select_option(option_label, selected, &palette)
+            .id(option_id)
+            .on_click(cx.listener(move |view, _, _, cx| {
+                click_change(&mut view.teams, click_value.clone());
+                view.teams.close_select();
+                cx.stop_propagation();
+                cx.notify();
+            }));
+        let key_change = on_change.clone();
+        let key_value = value;
+        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                key_change(&mut view.teams, key_value.clone());
+                view.teams.close_select();
+                cx.notify();
+            } else if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                window.prevent_default();
+                view.teams.close_select();
+                cx.notify();
+            }
+        }));
+        option_list = option_list.child(option);
+    }
+
+    let mut root = div().relative().w(px(width)).child(trigger);
+    if open {
+        root = root.child(select_popup(option_list, &palette).shadow_sm());
+    }
+    root
+}
+
+fn team_activation_key(event: &KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
 }
 
 fn cycle_u8_value(current: u8, max: u8, direction: i8) -> u8 {
@@ -2091,12 +2314,13 @@ fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
 
 fn system_choice(index: usize, selected: bool, destructive: bool, language: Language) -> Div {
     let index = index.min(SYSTEM_NAMES.len() - 1);
+    let palette = current_render_palette();
     let (border, background, foreground) = if destructive && selected {
-        (0xc45b68, 0x542b34, TEXT)
+        (palette.danger, palette.danger_light, palette.danger)
     } else if selected {
-        (0xd9a441, 0x3d301b, TEXT)
+        (palette.brand, palette.brand_light, palette.brand)
     } else {
-        (BORDER, SURFACE, TEXT_MUTED)
+        (palette.border, palette.card, palette.muted_foreground)
     };
     div()
         .flex()
@@ -2109,11 +2333,11 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
         .px_2()
         .rounded_md()
         .border_1()
-        .border_color(rgb(border))
-        .bg(rgb(background))
+        .border_color(palette_rgb(border))
+        .bg(palette_rgb(background))
         .cursor_pointer()
         .text_size(px(11.))
-        .text_color(rgb(foreground))
+        .text_color(palette_rgb(foreground))
         .child(
             img(status_effect_path(SYSTEM_NAMES[index]))
                 .w(px(18.))
@@ -2166,6 +2390,14 @@ fn purpose_label(purpose: TeamPurpose, language: Language) -> &'static str {
         TeamPurpose::Mirror => text("镜牢", "Mirror").get(language),
         TeamPurpose::Luxcavation => text("经验本", "EXP Dungeon").get(language),
         TeamPurpose::General => text("通用", "General").get(language),
+    }
+}
+
+fn purpose_key(purpose: TeamPurpose) -> &'static str {
+    match purpose {
+        TeamPurpose::Mirror => "mirror",
+        TeamPurpose::Luxcavation => "luxcavation",
+        TeamPurpose::General => "general",
     }
 }
 
@@ -2270,6 +2502,20 @@ fn fixed_team_use_label(value: u8, language: Language) -> &'static str {
         1 => text("普通专用", "Normal only").get(language),
         2 => text("全部通用", "All modes").get(language),
         _ => text("困难专用", "Hard only").get(language),
+    }
+}
+
+fn floor_label(floor: u8, language: Language) -> String {
+    match language {
+        Language::ZhCn => format!("第 {floor} 层"),
+        Language::EnUs => format!("Floor {floor}"),
+    }
+}
+
+fn turns_label(turns: u8, language: Language) -> String {
+    match language {
+        Language::ZhCn => format!("{turns} 回合"),
+        Language::EnUs => format!("{turns} turns"),
     }
 }
 
