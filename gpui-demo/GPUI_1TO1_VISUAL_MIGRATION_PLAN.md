@@ -6,6 +6,21 @@
 >
 > 本文只规划 GPUI 迁移，不修改现有 `ui`。
 
+## 当前实现进度
+
+本轮已在 `gpui-demo` 落地一批阻塞项，但尚未达到完整 1:1 验收：
+
+- ✅ Shell：顶部 TabBar、无 Sidebar 根布局、无边框自绘标题栏、窗口尺寸约束。
+- ✅ 运行时主题基础：页面旧 token 通过 render snapshot 跟随 light/dark/accent，输入控件同步 Palette；页面遗留色值已集中映射，Teams 图标改为 currentColor；全局 Toast 骨架已接入。
+- ✅ Mock 边界：同一窗口内各页面共享一个 Mock backend，避免 Home/Teams/Settings 状态互相脱节。
+- ✅ Home 第一批：General/Advanced 选项 Tab、日常队伍名称绑定、数量加减、Lucide SVG 任务/执行图标、日志 payload/时间/级别/复制/自动滚动。
+- ✅ 其他页面修正：Resources 同步终态保留可见窗口，Teams 在 900px 下保持单列并补齐列表/编辑器主要英文标签。
+- ⏳ P0/P8：参考截图、尺寸表、像素差异和内存回归尚未建立。
+- ⏳ P2/P3/P4/P5/P6：下拉 Select/对话框语义、全量 i18n、Home 全部 Select/描述、Teams 全量主题/英文仍需继续；离散设置/队伍选择已支持方向键，主题包权重 Slider 已支持鼠标拖拽。
+- ⏳ P7：真实 WebSocket、JPEG 帧、托盘、全局热键注册和 Windows 系统 API 尚未接入。
+
+因此以下通过条件仍然是后续门禁，不把当前 Mock/骨架状态误报为完成。
+
 ## 0. 审查结论和原则
 
 原有迁移方向可行，但必须先修正以下问题：

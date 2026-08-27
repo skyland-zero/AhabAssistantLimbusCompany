@@ -4,18 +4,18 @@
 //! dependency here, so the same interaction is rendered as an application
 //! overlay.  All changes are kept in `TeamsState` until Save is pressed.
 
-use gpui::{
-    Context, Div, ImageSource, KeyDownEvent, div, img, prelude::*, px, relative, rgb, rgba, svg,
-};
+use gpui::{Context, Div, ImageSource, KeyDownEvent, div, img, prelude::*, px, relative, svg};
 
 use crate::{
     app::{AhabApp, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
     assets::{self, Asset, SinnerAsset, StatusEffectAsset},
+    components::style::{ColorToken, current_render_palette},
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state, scroll_area_with_id, switch,
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, palette_rgb, render_rgb as rgb,
+        render_rgba as rgba, scroll_area_with_id, switch,
     },
-    model::{TeamDetail, TeamMirrorConfig, TeamPurpose},
-    state::{MirrorBool, MirrorU8, SYSTEM_LABELS, SYSTEM_NAMES, TeamEditorTab, TeamFilter},
+    model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose},
+    state::{MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter},
 };
 
 const STARLIGHT_NAMES: [&str; 10] = [
@@ -43,23 +43,74 @@ const STARLIGHT_DESCRIPTIONS: [&str; 10] = [
     "进商店赠送合成/售卖专用饰品，赠送对应关键词饰品",
     "开局自选3级饰品，获得残影饰品",
 ];
+const STARLIGHT_NAMES_EN: [&str; 10] = [
+    "Initial Star",
+    "Gathered Nebula",
+    "Star Wanderer",
+    "Meteor",
+    "Binary Star Shop",
+    "Satellite Shop",
+    "Nebula's Favor",
+    "Starlight Guide",
+    "Chance Comet",
+    "All Possibilities",
+];
+const STARLIGHT_DESCRIPTIONS_EN: [&str; 10] = [
+    "Increase starting cost, gift displays by 1, and grant a free normal refresh",
+    "Increase advanced-cost interest and gift sale cost bonus",
+    "Add one gift pack, refreshes, and unrecorded pack upgrades",
+    "Increase starting cost and the number of starting gifts to choose",
+    "Add one displayed gift and improve battle cost and high-tier odds",
+    "Grant a free keyword refresh and 1-3 level-1 gifts on floor 1",
+    "Raise sinner levels on floor 1 and after clearing stages",
+    "Improve maximum speed, clash power, damage and protection",
+    "Grant shop gifts for fusion/sales and matching keywords",
+    "Choose a level-3 gift at start and receive a remnant gift",
+];
+const SYSTEM_LABELS_EN: [&str; 10] = [
+    "Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt",
+];
 
 // Small inline vectors keep the controls recognisable without substituting
 // text glyphs for the Lucide actions used by the React page.
-const ICON_PLUS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#17120a" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
-const ICON_EDIT: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#b9c4d3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>"##;
-const ICON_TRASH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#df7784" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14H5V6"/><path d="M10 11v5M14 11v5"/></svg>"##;
-const ICON_COPY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d9a441" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>"##;
-const ICON_PASTE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d9a441" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>"##;
-const ICON_CLOSE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#b9c4d3" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>"##;
-const ICON_SPARKLES: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d9a441" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.3 5.7L5 10l5.7 1.3L12 17l1.3-5.7L19 10l-5.7-1.3Z"/><path d="m19 16-.7 3.3L15 20l3.3.7L19 24l.7-3.3L23 20l-3.3-.7Z"/></svg>"##;
-const ICON_USERS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#8d9aae" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>"##;
+const ICON_PLUS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
+const ICON_EDIT: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>"##;
+const ICON_TRASH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14H5V6"/><path d="M10 11v5M14 11v5"/></svg>"##;
+const ICON_COPY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>"##;
+const ICON_PASTE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>"##;
+const ICON_CLOSE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>"##;
+const ICON_SPARKLES: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.3 5.7L5 10l5.7 1.3L12 17l1.3-5.7L19 10l-5.7-1.3Z"/><path d="m19 16-.7 3.3L15 20l3.3.7L19 24l.7-3.3L23 20l-3.3-.7Z"/></svg>"##;
+const ICON_USERS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>"##;
 
-fn icon(data: &'static [u8], size: f32) -> impl IntoElement {
-    svg().data(data).w(px(size)).h(px(size))
+#[derive(Clone, Copy)]
+struct Localized {
+    zh: &'static str,
+    en: &'static str,
+}
+
+impl Localized {
+    fn get(self, language: Language) -> &'static str {
+        match language {
+            Language::ZhCn => self.zh,
+            Language::EnUs => self.en,
+        }
+    }
+}
+
+const fn text(zh: &'static str, en: &'static str) -> Localized {
+    Localized { zh, en }
+}
+
+fn icon(data: &'static [u8], size: f32, color: ColorToken) -> impl IntoElement {
+    svg()
+        .data(data)
+        .w(px(size))
+        .h(px(size))
+        .text_color(palette_rgb(color))
 }
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    let language = app.state.settings.language;
     let filter = app.teams.filter;
     let teams: Vec<TeamDetail> = app.teams.filtered_teams().cloned().collect();
 
@@ -72,7 +123,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_wrap()
         .p(px(2.))
         .rounded_md()
-        .bg(rgb(0x202936));
+        .bg(palette_rgb(current_render_palette().muted));
     for candidate in TeamFilter::ALL {
         let active = candidate == filter;
         let count = app.teams.count_for(candidate);
@@ -86,17 +137,25 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .rounded_md()
             .cursor_pointer()
             .text_size(px(12.))
-            .text_color(rgb(if active { TEXT } else { TEXT_MUTED }))
-            .bg(rgb(if active { SURFACE } else { 0x202936 }));
-        control = control.child(candidate.label());
+            .text_color(palette_rgb(if active {
+                current_render_palette().foreground
+            } else {
+                current_render_palette().muted_foreground
+            }))
+            .bg(palette_rgb(if active {
+                current_render_palette().card
+            } else {
+                current_render_palette().muted
+            }));
+        control = control.child(filter_label(candidate, language));
         if candidate == TeamFilter::All || count > 0 {
             control = control.child(
                 div()
                     .px_1()
                     .rounded_md()
-                    .bg(rgb(0x354152))
+                    .bg(palette_rgb(current_render_palette().secondary))
                     .text_size(px(10.))
-                    .text_color(rgb(TEXT_MUTED))
+                    .text_color(palette_rgb(current_render_palette().muted_foreground))
                     .child(count.to_string()),
             );
         }
@@ -119,23 +178,41 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .cursor_pointer()
         .bg(rgb(crate::app::ACCENT))
         .text_size(px(12.))
-        .text_color(rgb(0x17120a))
-        .child(icon(ICON_PLUS, 14.))
-        .child("新建队伍")
+        .text_color(palette_rgb(current_render_palette().brand_foreground))
+        .child(icon(
+            ICON_PLUS,
+            14.,
+            current_render_palette().brand_foreground,
+        ))
+        .child(text("新建队伍", "New Team").get(language))
         .on_click(cx.listener(|view, _, _, cx| view.open_new_team(cx)));
 
     let mut cards = div().flex().flex_wrap().gap_3().items_stretch();
     if app.teams.teams.is_empty() {
         cards = cards.child(
-            empty_state("还没有队伍", "创建一支队伍开始配置镜牢策略。")
-                .w_full()
-                .min_h(px(240.)),
+            empty_state(
+                text("还没有队伍", "No teams yet").get(language),
+                text(
+                    "创建一支队伍开始配置镜牢策略。",
+                    "Create a team to configure Mirror Dungeon strategies.",
+                )
+                .get(language),
+            )
+            .w_full()
+            .min_h(px(240.)),
         );
     } else if teams.is_empty() {
         cards = cards.child(
-            empty_state("该分类没有队伍", "切换分类或创建一支新队伍。")
-                .w_full()
-                .min_h(px(240.)),
+            empty_state(
+                text("该分类没有队伍", "No teams in this category").get(language),
+                text(
+                    "切换分类或创建一支新队伍。",
+                    "Switch category or create a new team.",
+                )
+                .get(language),
+            )
+            .w_full()
+            .min_h(px(240.)),
         );
     } else {
         // A flex basis gives us the same one-column/sufficient-width-two-column
@@ -143,8 +220,8 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         // that exposes the window size.
         for team in teams {
             cards = cards.child(
-                team_card(app, cx, team)
-                    .flex_basis(px(360.))
+                team_card(app, cx, team, language)
+                    .flex_basis(px(600.))
                     .flex_grow(1.)
                     .flex_shrink(1.),
             );
@@ -162,7 +239,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .flex_none()
             .px_4()
             .py_2()
-            .bg(rgb(0x1b222d))
+            .bg(palette_rgb(current_render_palette().card))
             .child(filter_bar)
             .child(new_team),
     );
@@ -175,9 +252,9 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .px_3()
                 .py_2()
                 .rounded_md()
-                .bg(rgb(0x1d513b))
+                .bg(palette_rgb(current_render_palette().success_light))
                 .text_size(px(11.))
-                .text_color(rgb(0x8de3b2))
+                .text_color(palette_rgb(current_render_palette().success))
                 .child(feedback),
         );
     }
@@ -188,7 +265,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     )
 }
 
-fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> Div {
+fn team_card(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    team: TeamDetail,
+    language: Language,
+) -> Div {
     let config = team.mirrorConfig.clone().unwrap_or_default();
     let discarded = discard_count(&config);
     let has_starlight = config.opening_bonus.iter().any(|level| *level > 0);
@@ -204,7 +286,11 @@ fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> 
         .size(px(32.))
         .rounded_md()
         .cursor_pointer()
-        .child(icon(ICON_EDIT, 16.))
+        .child(icon(
+            ICON_EDIT,
+            16.,
+            current_render_palette().muted_foreground,
+        ))
         .on_click(cx.listener(move |view, _, _, cx| {
             view.open_existing_team(&edit_team, cx);
         }));
@@ -216,7 +302,7 @@ fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> 
         .size(px(32.))
         .rounded_md()
         .cursor_pointer()
-        .child(icon(ICON_TRASH, 16.))
+        .child(icon(ICON_TRASH, 16., current_render_palette().danger))
         .on_click(cx.listener(move |view, _, _, cx| {
             view.teams.request_delete(delete_team.clone());
             cx.notify();
@@ -243,12 +329,18 @@ fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> 
                 .text_color(rgb(TEXT))
                 .child(team.name.clone()),
         )
-        .child(badge(purpose_label(team.purpose), BadgeTone::Neutral))
-        .child(scheme_badge(scheme));
+        .child(badge(
+            purpose_label(team.purpose, language),
+            BadgeTone::Neutral,
+        ))
+        .child(scheme_badge(scheme, language));
     let header = if team.enabled {
         header
     } else {
-        header.child(badge("已停用", BadgeTone::Neutral))
+        header.child(badge(
+            text("已停用", "Disabled").get(language),
+            BadgeTone::Neutral,
+        ))
     };
 
     let mut details = div()
@@ -258,7 +350,11 @@ fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> 
         .gap_2()
         .text_size(px(11.))
         .text_color(rgb(TEXT_MUTED))
-        .child(format!("{} 人", team.sinners.len()));
+        .child(if matches!(language, Language::ZhCn) {
+            format!("{} 人格", team.sinners.len())
+        } else {
+            format!("{} sinners", team.sinners.len())
+        });
     if has_starlight {
         details = details.child(
             div()
@@ -266,21 +362,37 @@ fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> 
                 .items_center()
                 .gap_1()
                 .text_color(rgb(crate::app::ACCENT))
-                .child(icon(ICON_SPARKLES, 13.))
-                .child("已配星光"),
+                .child(icon(ICON_SPARKLES, 13., current_render_palette().brand))
+                .child(text("已配星光", "Starlight ready").get(language)),
         );
     }
     if config.second_system {
-        details = details.child(badge("第二体系", BadgeTone::Neutral));
+        details = details.child(badge(
+            text("第二体系", "2nd system").get(language),
+            BadgeTone::Neutral,
+        ));
     }
     if discarded > 0 {
-        details = details.child(badge(format!("舍弃 {} 项", discarded), BadgeTone::Danger));
+        details = details.child(badge(
+            if matches!(language, Language::ZhCn) {
+                format!("舍弃 {} 项", discarded)
+            } else {
+                format!("Discard ×{}", discarded)
+            },
+            BadgeTone::Danger,
+        ));
     }
     if config.defense_for_solo {
-        details = details.child(badge("良秀单通", BadgeTone::Accent));
+        details = details.child(badge(
+            text("良秀单通", "Solo pass").get(language),
+            BadgeTone::Accent,
+        ));
     }
     if config.use_team_code {
-        details = details.child(badge("编队码", BadgeTone::Neutral));
+        details = details.child(badge(
+            text("编队码", "Team code").get(language),
+            BadgeTone::Neutral,
+        ));
     }
 
     card(
@@ -303,10 +415,11 @@ fn team_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, team: TeamDetail) -> 
     )
     .p_3()
     .opacity(if team.enabled { 1. } else { 0.6 })
-    .hover(|style| style.bg(rgb(0x232c39)))
+    .hover(|style| style.bg(palette_rgb(current_render_palette().secondary)))
 }
 
 pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    let language = app.state.settings.language;
     let Some(editor) = app.teams.editor.as_ref() else {
         if app.teams.delete_target.is_none() {
             return div();
@@ -340,7 +453,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .left_0()
             .right_0()
             .bottom_0()
-            .child(surface.child(delete_confirmation(app, cx)));
+            .child(surface.child(delete_confirmation(app, cx, language)));
     };
 
     let team = editor.team.clone();
@@ -356,7 +469,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_wrap()
         .p(px(2.))
         .rounded_md()
-        .bg(rgb(0x202936));
+        .bg(palette_rgb(current_render_palette().muted));
     for candidate in TeamEditorTab::ALL {
         let active = candidate == tab;
         let mut control = div()
@@ -370,17 +483,25 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .rounded_md()
             .cursor_pointer()
             .text_size(px(12.))
-            .text_color(rgb(if active { TEXT } else { TEXT_MUTED }))
-            .bg(rgb(if active { SURFACE } else { 0x202936 }));
-        control = control.child(candidate.label());
+            .text_color(palette_rgb(if active {
+                current_render_palette().foreground
+            } else {
+                current_render_palette().muted_foreground
+            }))
+            .bg(palette_rgb(if active {
+                current_render_palette().card
+            } else {
+                current_render_palette().muted
+            }));
+        control = control.child(editor_tab_label(candidate, language));
         if candidate == TeamEditorTab::Starlight && starlight_cost > 0 {
             control = control.child(
                 div()
                     .px_1()
                     .rounded_md()
-                    .bg(rgb(0x5d4820))
+                    .bg(palette_rgb(current_render_palette().brand_light))
                     .text_size(px(10.))
-                    .text_color(rgb(crate::app::ACCENT))
+                    .text_color(palette_rgb(current_render_palette().brand))
                     .child(starlight_cost.to_string()),
             );
         }
@@ -405,11 +526,11 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .cursor_pointer()
         .text_size(px(11.))
         .text_color(rgb(crate::app::ACCENT))
-        .child(icon(ICON_COPY, 14.))
-        .child("复制 JSON")
+        .child(icon(ICON_COPY, 14., current_render_palette().brand))
+        .child(text("复制 JSON", "Copy JSON").get(language))
         .on_click(cx.listener(|view, _, _, cx| view.copy_team_json(cx)));
 
-    let close = button("取消", ButtonVariant::Ghost)
+    let close = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
         .id("team-editor-cancel")
         .h(px(32.))
         .px_3()
@@ -421,11 +542,14 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .map(|input| input.read(cx).text())
         .unwrap_or_else(|| team.name.clone());
     let can_save = !current_name.trim().is_empty();
-    let mut save = button("保存队伍", ButtonVariant::Default)
-        .id("team-editor-save")
-        .h(px(32.))
-        .px_3()
-        .py_0();
+    let mut save = button(
+        text("保存队伍", "Save Team").get(language),
+        ButtonVariant::Default,
+    )
+    .id("team-editor-save")
+    .h(px(32.))
+    .px_3()
+    .py_0();
     if can_save {
         save = save.on_click(cx.listener(|view, _, _, cx| view.save_team_editor(cx)));
     } else {
@@ -433,108 +557,116 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     }
 
     let content = match tab {
-        TeamEditorTab::Basic => basic_editor(app, cx, &team, &config),
-        TeamEditorTab::Shop => shop_editor(app, cx, &config),
-        TeamEditorTab::Combat => combat_editor(app, cx, &config),
-        TeamEditorTab::Starlight => starlight_editor(app, cx, &config),
-        TeamEditorTab::Advanced => advanced_editor(app, cx, &config),
+        TeamEditorTab::Basic => basic_editor(app, cx, &team, &config, language),
+        TeamEditorTab::Shop => shop_editor(app, cx, &config, language),
+        TeamEditorTab::Combat => combat_editor(app, cx, &config, language),
+        TeamEditorTab::Starlight => starlight_editor(app, cx, &config, language),
+        TeamEditorTab::Advanced => advanced_editor(app, cx, &config, language),
     };
 
-    let dialog_body = div()
-        .id("team-editor-dialog")
-        .w(px(768.))
-        .h(px(620.))
-        .max_w_full()
-        .max_h(relative(0.88))
-        .min_h_0()
-        .overflow_hidden()
-        .flex()
-        .flex_col()
-        .rounded_lg()
-        .border_1()
-        .border_color(rgb(BORDER))
-        .bg(rgb(SURFACE))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .px_6()
-                .py_3()
-                .border_b_1()
-                .border_color(rgb(BORDER))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(div().text_size(px(16.)).text_color(rgb(TEXT)).child(
-                            if team.id.is_empty() {
-                                "新建队伍"
-                            } else {
-                                "编辑队伍"
-                            },
-                        ))
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(TEXT_MUTED))
-                                .child("保存前所有修改只存在于当前编辑器"),
-                        ),
-                )
-                .child(copy),
-        )
-        .child(
-            div()
-                .flex_none()
-                .px_6()
-                .py_2()
-                .border_b_1()
-                .border_color(rgb(BORDER))
-                .child(tabs),
-        )
-        .child(
-            scroll_area_with_id("team-editor-scroll", content)
-                .flex_1()
-                .min_h_0()
-                .px_6()
-                .py_4(),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .flex_none()
-                .px_6()
-                .py_3()
-                .border_t_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(0x1b222d))
-                .child(
-                    feedback
-                        .map(|message| {
-                            div()
+    let dialog_body =
+        div()
+            .id("team-editor-dialog")
+            .w(px(768.))
+            .h(px(620.))
+            .max_w_full()
+            .max_h(relative(0.88))
+            .min_h_0()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .rounded_lg()
+            .border_1()
+            .border_color(rgb(BORDER))
+            .bg(rgb(SURFACE))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .px_6()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(BORDER))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().text_size(px(16.)).text_color(rgb(TEXT)).child(
+                                if team.id.is_empty() {
+                                    "新建队伍"
+                                } else {
+                                    "编辑队伍"
+                                },
+                            ))
+                            .child(
+                                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                                    text(
+                                        "保存前所有修改只存在于当前编辑器",
+                                        "Changes stay in this editor until Save",
+                                    )
+                                    .get(language),
+                                ),
+                            ),
+                    )
+                    .child(copy),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .px_6()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(rgb(BORDER))
+                    .child(tabs),
+            )
+            .child(
+                scroll_area_with_id("team-editor-scroll", content)
+                    .flex_1()
+                    .min_h_0()
+                    .px_6()
+                    .py_4(),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .flex_none()
+                    .px_6()
+                    .py_3()
+                    .border_t_1()
+                    .border_color(rgb(BORDER))
+                    .bg(palette_rgb(current_render_palette().card))
+                    .child(
+                        feedback
+                            .map(|message| {
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .text_size(px(11.))
+                                    .text_color(palette_rgb(current_render_palette().warning))
+                                    .child(message)
+                            })
+                            .unwrap_or_else(|| {
+                                div()
                                 .flex_1()
                                 .min_w_0()
                                 .text_size(px(11.))
-                                .text_color(rgb(0xf0c36a))
-                                .child(message)
-                        })
-                        .unwrap_or_else(|| {
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(11.))
                                 .text_color(rgb(TEXT_MUTED))
-                                .child("支持中文输入、剪贴板和 JSON 导入")
-                        }),
-                )
-                .child(div().flex().flex_none().gap_2().child(close).child(save)),
-        )
-        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
+                                .child(text(
+                                    "支持中文输入、剪贴板和 JSON 导入",
+                                    "Chinese input, clipboard and JSON import are supported",
+                                )
+                                .get(language))
+                            }),
+                    )
+                    .child(div().flex().flex_none().gap_2().child(close).child(save)),
+            )
+            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
 
     let mut surface = div()
         .id("team-editor-overlay")
@@ -581,7 +713,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .p_4()
             .bg(rgba(0x080c14d9))
             .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
-        surface = surface.child(delete_layer.child(delete_confirmation(app, cx)));
+        surface = surface.child(delete_layer.child(delete_confirmation(app, cx, language)));
     }
 
     div()
@@ -598,14 +730,21 @@ fn basic_editor(
     cx: &mut Context<AhabApp>,
     team: &TeamDetail,
     config: &TeamMirrorConfig,
+    language: Language,
 ) -> Div {
     let name_input = app.team_name_input.clone();
     let code_input = app.team_code_input.clone();
 
     let name_field = if let Some(input) = name_input {
-        labeled_field("队伍名称", div().child(input))
+        labeled_field(
+            text("队伍名称", "Team name").get(language),
+            div().child(input),
+        )
     } else {
-        labeled_field("队伍名称", div().child("编辑器初始化中"))
+        labeled_field(
+            text("队伍名称", "Team name").get(language),
+            div().child(text("编辑器初始化中", "Initializing").get(language)),
+        )
     };
 
     let mut purpose = div().flex().gap_1().flex_wrap();
@@ -615,7 +754,7 @@ fn basic_editor(
         TeamPurpose::General,
     ] {
         let mut control = button(
-            purpose_label(candidate),
+            purpose_label(candidate, language),
             if team.purpose == candidate {
                 ButtonVariant::Secondary
             } else {
@@ -632,12 +771,13 @@ fn basic_editor(
         }));
         purpose = purpose.child(control);
     }
-    let purpose_field = labeled_field("用途", purpose);
+    let purpose_field = labeled_field(text("用途", "Purpose").get(language), purpose);
 
     let mut systems = div().flex().flex_wrap().gap_2();
     for (index, name) in SYSTEM_NAMES.iter().enumerate() {
         let selected = team.accessoryScheme == *name;
-        let mut control = system_choice(index, selected, false).id(format!("team-system-{name}"));
+        let mut control =
+            system_choice(index, selected, false, language).id(format!("team-system-{name}"));
         let system_name = (*name).to_owned();
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.teams
@@ -689,9 +829,9 @@ fn basic_editor(
                                 .right_0()
                                 .px_1()
                                 .rounded_md()
-                                .bg(rgb(0xd9a441))
+                                .bg(palette_rgb(current_render_palette().brand))
                                 .text_size(px(9.))
-                                .text_color(rgb(0x17120a))
+                                .text_color(palette_rgb(current_render_palette().brand_foreground))
                                 .child(format!("#{}", index + 1))
                         })
                         .unwrap_or_else(div),
@@ -712,8 +852,18 @@ fn basic_editor(
 
     let code_field = if config.use_team_code {
         code_input
-            .map(|input| labeled_field("编队码", div().child(input)))
-            .unwrap_or_else(|| labeled_field("编队码", div().child("编辑器初始化中")))
+            .map(|input| {
+                labeled_field(
+                    text("编队码", "Team code").get(language),
+                    div().child(input),
+                )
+            })
+            .unwrap_or_else(|| {
+                labeled_field(
+                    text("编队码", "Team code").get(language),
+                    div().child(text("编辑器初始化中", "Initializing").get(language)),
+                )
+            })
     } else {
         div()
     };
@@ -745,7 +895,11 @@ fn basic_editor(
             cx.notify();
         }));
 
-    let mut clear_sinners = button("清空人格", ButtonVariant::Ghost).id("team-clear-sinners");
+    let mut clear_sinners = button(
+        text("清空人格", "Clear Sinners").get(language),
+        ButtonVariant::Ghost,
+    )
+    .id("team-clear-sinners");
     clear_sinners = clear_sinners.on_click(cx.listener(|view, _, _, cx| {
         view.teams.clear_sinners();
         cx.notify();
@@ -756,12 +910,18 @@ fn basic_editor(
             .flex()
             .flex_col()
             .gap_2()
-            .child(control_row("启用编队码", team_code_switch))
+            .child(control_row(
+                text("启用编队码", "Use Team Code").get(language),
+                team_code_switch,
+            ))
             .child(
-                div()
-                    .text_size(px(10.))
-                    .text_color(rgb(TEXT_MUTED))
-                    .child("启用后保存编队码，运行时由后端解析。"),
+                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                    text(
+                        "启用后保存编队码，运行时由后端解析。",
+                        "Save the team code and let the backend parse it at runtime.",
+                    )
+                    .get(language),
+                ),
             )
             .child(code_field),
     )
@@ -773,11 +933,14 @@ fn basic_editor(
             .flex()
             .flex_col()
             .gap_2()
-            .child(control_row("固定队伍用途", fixed_switch))
+            .child(control_row(
+                text("固定队伍用途", "Fixed Team Purpose").get(language),
+                fixed_switch,
+            ))
             .child(if config.fixed_team_use {
                 cycle_control(
-                    "固定范围",
-                    fixed_team_use_label(config.fixed_team_use_select),
+                    text("固定范围", "Fixed scope").get(language),
+                    fixed_team_use_label(config.fixed_team_use_select, language),
                     MirrorU8::FixedTeamUseSelect,
                     config.fixed_team_use_select,
                     2,
@@ -805,9 +968,16 @@ fn basic_editor(
                 .child(name_field.flex_basis(px(300.)).flex_grow(1.))
                 .child(purpose_field.flex_basis(px(220.)).flex_grow(1.)),
         )
-        .child(field_block("饰品体系", systems))
         .child(field_block(
-            format!("人格顺序（{} / 12）", team.sinners.len()),
+            text("饰品体系", "Gift System").get(language),
+            systems,
+        ))
+        .child(field_block(
+            if matches!(language, Language::ZhCn) {
+                format!("人格顺序（{} / 12）", team.sinners.len())
+            } else {
+                format!("Sinner order ({} / 12)", team.sinners.len())
+            },
             div().flex().flex_col().gap_2().child(sinners).child(
                 div()
                     .flex()
@@ -820,7 +990,13 @@ fn basic_editor(
                             .min_w_0()
                             .text_size(px(10.))
                             .text_color(rgb(TEXT_MUTED))
-                            .child("按点击顺序分配 #1~#12；再次点击可移除。"),
+                            .child(
+                                text(
+                                    "按点击顺序分配 #1~#12；再次点击可移除。",
+                                    "Click to assign slots #1-#12; click again to remove.",
+                                )
+                                .get(language),
+                            ),
                     )
                     .child(clear_sinners),
             ),
@@ -833,14 +1009,23 @@ fn basic_editor(
                 .child(team_code_card)
                 .child(fixed_card),
         )
-        .child(control_row("队伍启用", enabled_switch))
+        .child(control_row(
+            text("队伍启用", "Team Enabled").get(language),
+            enabled_switch,
+        ))
 }
 
-fn shop_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirrorConfig) -> Div {
+fn shop_editor(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    config: &TeamMirrorConfig,
+    language: Language,
+) -> Div {
     let mut discard = div().flex().flex_wrap().gap_2();
     for (index, name) in SYSTEM_NAMES.iter().enumerate() {
         let selected = discard_value(&config.discard_systems, index);
-        let mut control = system_choice(index, selected, true).id(format!("discard-system-{name}"));
+        let mut control =
+            system_choice(index, selected, true, language).id(format!("discard-system-{name}"));
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.teams.toggle_discard_system(index);
             cx.notify();
@@ -916,7 +1101,7 @@ fn shop_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirror
             .child(if config.after_level_IV {
                 cycle_control(
                     "行为",
-                    after_level_label(config.after_level_IV_select),
+                    after_level_label(config.after_level_IV_select, language),
                     MirrorU8::AfterLevelIvSelect,
                     config.after_level_IV_select,
                     2,
@@ -1009,7 +1194,7 @@ fn shop_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirror
             "商店策略",
             cycle_control(
                 "策略",
-                shop_strategy_label(config.shop_strategy),
+                shop_strategy_label(config.shop_strategy, language),
                 MirrorU8::ShopStrategy,
                 config.shop_strategy,
                 2,
@@ -1058,7 +1243,12 @@ fn shop_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirror
         )
 }
 
-fn combat_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirrorConfig) -> Div {
+fn combat_editor(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    config: &TeamMirrorConfig,
+    language: Language,
+) -> Div {
     let second_system = card(
         div()
             .flex()
@@ -1081,7 +1271,7 @@ fn combat_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirr
                     .gap_2()
                     .child(cycle_control(
                         "第二体系",
-                        SYSTEM_LABELS[config.second_system_select.min(9) as usize],
+                        system_label(config.second_system_select.min(9) as usize, language),
                         MirrorU8::SecondSystemSelect,
                         config.second_system_select,
                         9,
@@ -1301,6 +1491,7 @@ fn starlight_editor(
     app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
     config: &TeamMirrorConfig,
+    language: Language,
 ) -> Div {
     let use_starlight = card(
         div()
@@ -1329,11 +1520,14 @@ fn starlight_editor(
 
     let mut quick = div().flex().items_center().gap_1().flex_wrap();
     for level in 0..=3_u8 {
-        let mut control = button(starlight_level_label(level), ButtonVariant::Outline)
-            .id(format!("starlight-all-{level}"))
-            .h(px(26.))
-            .px_2()
-            .py_0();
+        let mut control = button(
+            starlight_level_label(level, language),
+            ButtonVariant::Outline,
+        )
+        .id(format!("starlight-all-{level}"))
+        .h(px(26.))
+        .px_2()
+        .py_0();
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.teams.set_all_starlight(level);
             cx.notify();
@@ -1348,10 +1542,10 @@ fn starlight_editor(
         .px_2()
         .py_1()
         .rounded_md()
-        .bg(rgb(0x5d4820))
+        .bg(palette_rgb(current_render_palette().brand_light))
         .text_size(px(11.))
-        .text_color(rgb(crate::app::ACCENT))
-        .child(icon(ICON_SPARKLES, 13.))
+        .text_color(palette_rgb(current_render_palette().brand))
+        .child(icon(ICON_SPARKLES, 13., current_render_palette().brand))
         .child(format!("总消耗 {} 点", app.teams.starlight_cost()));
     let quick_card = card(
         div()
@@ -1407,7 +1601,7 @@ fn starlight_editor(
             .gap_1()
             .text_size(px(10.))
             .text_color(rgb(TEXT_MUTED))
-            .child(icon(ICON_SPARKLES, 11.))
+            .child(icon(ICON_SPARKLES, 11., current_render_palette().brand))
             .child(format!("{} 点", STARLIGHT_COSTS[index]));
         items = items.child(
             card(
@@ -1429,7 +1623,7 @@ fn starlight_editor(
                                     .min_w_0()
                                     .text_size(px(12.))
                                     .text_color(rgb(TEXT))
-                                    .child(STARLIGHT_NAMES[index]),
+                                    .child(starlight_name(index, language)),
                             )
                             .child(cost),
                     )
@@ -1438,7 +1632,7 @@ fn starlight_editor(
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(TEXT_MUTED))
-                            .child(STARLIGHT_DESCRIPTIONS[index]),
+                            .child(starlight_description(index, language)),
                     ),
             )
             .p_3()
@@ -1456,7 +1650,12 @@ fn starlight_editor(
         .child(items)
 }
 
-fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMirrorConfig) -> Div {
+fn advanced_editor(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    config: &TeamMirrorConfig,
+    language: Language,
+) -> Div {
     let observe_input = app.team_observe_input.clone();
     let json_input = app.team_json_input.clone();
     let observe_switch = mirror_switch(
@@ -1485,7 +1684,11 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
             .size(px(22.))
             .rounded_md()
             .cursor_pointer()
-            .child(icon(ICON_CLOSE, 12.))
+            .child(icon(
+                ICON_CLOSE,
+                12.,
+                current_render_palette().muted_foreground,
+            ))
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.teams.remove_observe_gift(&gift_for_remove);
                 cx.notify();
@@ -1498,9 +1701,9 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
                 .px_2()
                 .py_1()
                 .rounded_md()
-                .bg(rgb(0x273345))
+                .bg(palette_rgb(current_render_palette().secondary))
                 .text_size(px(11.))
-                .text_color(rgb(TEXT))
+                .text_color(palette_rgb(current_render_palette().foreground))
                 .child(gift.clone())
                 .child(remove),
         );
@@ -1563,8 +1766,8 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
         .cursor_pointer()
         .text_size(px(11.))
         .text_color(rgb(crate::app::ACCENT))
-        .child(icon(ICON_PASTE, 14.))
-        .child("粘贴 / 导入 JSON");
+        .child(icon(ICON_PASTE, 14., current_render_palette().brand))
+        .child(text("粘贴 / 导入 JSON", "Paste / Import JSON").get(language));
     import_toggle = import_toggle.on_click(cx.listener(|view, _, _, cx| {
         if let Some(editor) = view.teams.editor.as_mut() {
             editor.json_import_open = !editor.json_import_open;
@@ -1593,7 +1796,7 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
                     .justify_end()
                     .gap_2()
                     .child(
-                        button("关闭", ButtonVariant::Ghost)
+                        button(text("关闭", "Close").get(language), ButtonVariant::Ghost)
                             .id("advanced-json-close")
                             .h(px(28.))
                             .px_3()
@@ -1606,12 +1809,15 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
                             })),
                     )
                     .child(
-                        button("校验并覆盖", ButtonVariant::Default)
-                            .id("advanced-json-import")
-                            .h(px(28.))
-                            .px_3()
-                            .py_0()
-                            .on_click(cx.listener(|view, _, _, cx| view.import_team_json(cx))),
+                        button(
+                            text("校验并覆盖", "Validate & Apply").get(language),
+                            ButtonVariant::Default,
+                        )
+                        .id("advanced-json-import")
+                        .h(px(28.))
+                        .px_3()
+                        .py_0()
+                        .on_click(cx.listener(|view, _, _, cx| view.import_team_json(cx))),
                     ),
             )
     } else {
@@ -1628,12 +1834,18 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(control_row("观测 E.G.O 饰品", observe_switch))
+                    .child(control_row(
+                        text("观测 E.G.O 饰品", "Observe E.G.O Gifts").get(language),
+                        observe_switch,
+                    ))
                     .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(TEXT_MUTED))
-                            .child("输入名称后点击添加；重复名称不会重复加入。"),
+                        div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                            text(
+                                "输入名称后点击添加；重复名称不会重复加入。",
+                                "Enter a gift name and click Add; duplicates are ignored.",
+                            )
+                            .get(language),
+                        ),
                     )
                     .child(observe_content),
             )
@@ -1646,12 +1858,19 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(control_row("使用队伍专属主题包权重", custom_weight))
+                    .child(control_row(
+                        text("使用队伍专属主题包权重", "Use Custom Theme Pack Weight")
+                            .get(language),
+                        custom_weight,
+                    ))
                     .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(TEXT_MUTED))
-                            .child("保存后由镜牢执行器读取该队伍的主题包权重。"),
+                        div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                            text(
+                                "保存后由镜牢执行器读取该队伍的主题包权重。",
+                                "The Mirror executor reads this team's pack weights after Save.",
+                            )
+                            .get(language),
+                        ),
                     ),
             )
             .p_3()
@@ -1669,12 +1888,9 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
                             .items_center()
                             .justify_between()
                             .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .text_color(rgb(TEXT))
-                                    .child("配置导入导出"),
-                            )
+                            .child(div().text_size(px(13.)).text_color(rgb(TEXT)).child(
+                                text("配置导入导出", "Configuration Import / Export").get(language),
+                            ))
                             .child(import_toggle),
                     )
                     .child(json_panel),
@@ -1684,7 +1900,11 @@ fn advanced_editor(app: &mut AhabApp, cx: &mut Context<AhabApp>, config: &TeamMi
         )
 }
 
-fn delete_confirmation(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl IntoElement {
+fn delete_confirmation(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+    language: Language,
+) -> impl IntoElement {
     let Some(team) = app.teams.delete_target.as_ref() else {
         return div().into_any_element();
     };
@@ -1696,8 +1916,8 @@ fn delete_confirmation(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl Int
         .p_4()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(0xc45b68))
-        .bg(rgb(0x24151b))
+        .border_color(palette_rgb(current_render_palette().danger))
+        .bg(palette_rgb(current_render_palette().danger_light))
         .child(
             div()
                 .flex()
@@ -1707,7 +1927,7 @@ fn delete_confirmation(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl Int
                     div()
                         .text_size(px(15.))
                         .text_color(rgb(TEXT))
-                        .child("确认删除队伍？"),
+                        .child(text("确认删除队伍？", "Delete this team?").get(language)),
                 )
                 .child(
                     div()
@@ -1721,7 +1941,7 @@ fn delete_confirmation(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl Int
                         .justify_end()
                         .gap_2()
                         .child(
-                            button("取消", ButtonVariant::Ghost)
+                            button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
                                 .id("delete-cancel")
                                 .h(px(32.))
                                 .px_3()
@@ -1732,17 +1952,20 @@ fn delete_confirmation(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl Int
                                 })),
                         )
                         .child(
-                            button("删除", ButtonVariant::Destructive)
-                                .id("delete-confirm")
-                                .h(px(32.))
-                                .px_3()
-                                .py_0()
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    if let Err(error) = view.teams.confirm_delete() {
-                                        view.teams.feedback = Some(error);
-                                    }
-                                    cx.notify();
-                                })),
+                            button(
+                                text("删除", "Delete").get(language),
+                                ButtonVariant::Destructive,
+                            )
+                            .id("delete-confirm")
+                            .h(px(32.))
+                            .px_3()
+                            .py_0()
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                if let Err(error) = view.teams.confirm_delete() {
+                                    view.teams.feedback = Some(error);
+                                }
+                                cx.notify();
+                            })),
                         ),
                 ),
         )
@@ -1757,12 +1980,21 @@ fn mirror_switch(
     value: bool,
     id: impl Into<String>,
 ) -> gpui::Stateful<Div> {
-    switch(value)
-        .id(id.into())
-        .on_click(cx.listener(move |view, _, _, cx| {
+    let mut control = switch(value).id(id.into());
+    control = control.on_click(cx.listener(move |view, _, _, cx| {
+        view.teams.set_mirror_bool(field, !value);
+        cx.notify();
+    }));
+    control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        if matches!(
+            event.keystroke.key.to_ascii_lowercase().as_str(),
+            "enter" | "space"
+        ) {
+            window.prevent_default();
             view.teams.set_mirror_bool(field, !value);
             cx.notify();
-        }))
+        }
+    }))
 }
 
 fn cycle_control(
@@ -1780,13 +2012,35 @@ fn cycle_control(
         ButtonVariant::Outline,
     )
     .id(id.into());
-    let next = if current >= max { 0 } else { current + 1 };
+    let next = cycle_u8_value(current, max, 1);
     let _ = cx_app;
     control = control.on_click(cx.listener(move |view, _, _, cx| {
         view.teams.set_mirror_u8(field, next);
         cx.notify();
     }));
+    control = control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        let key = event.keystroke.key.to_ascii_lowercase();
+        let selected = match key.as_str() {
+            "left" | "arrowleft" => cycle_u8_value(current, max, -1),
+            "right" | "arrowright" | "enter" | "space" => next,
+            "home" => 0,
+            "end" => max,
+            _ => return,
+        };
+        window.prevent_default();
+        view.teams.set_mirror_u8(field, selected);
+        cx.notify();
+    }));
     control.into_any_element()
+}
+
+fn cycle_u8_value(current: u8, max: u8, direction: i8) -> u8 {
+    if max == 0 {
+        return 0;
+    }
+    let current = current.min(max) as i16;
+    let max = i16::from(max);
+    (current + i16::from(direction)).rem_euclid(max + 1) as u8
 }
 
 fn field_block(title: impl Into<String>, body: impl IntoElement) -> Div {
@@ -1835,7 +2089,7 @@ fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
         .child(control)
 }
 
-fn system_choice(index: usize, selected: bool, destructive: bool) -> Div {
+fn system_choice(index: usize, selected: bool, destructive: bool, language: Language) -> Div {
     let index = index.min(SYSTEM_NAMES.len() - 1);
     let (border, background, foreground) = if destructive && selected {
         (0xc45b68, 0x542b34, TEXT)
@@ -1865,10 +2119,15 @@ fn system_choice(index: usize, selected: bool, destructive: bool) -> Div {
                 .w(px(18.))
                 .h(px(18.)),
         )
-        .child(div().min_w_0().truncate().child(SYSTEM_LABELS[index]))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .child(system_label(index, language)),
+        )
 }
 
-fn scheme_badge(scheme: &str) -> Div {
+fn scheme_badge(scheme: &str, language: Language) -> Div {
     let scheme = normalized_scheme(scheme);
     div()
         .flex()
@@ -1882,7 +2141,7 @@ fn scheme_badge(scheme: &str) -> Div {
         .text_size(px(11.))
         .text_color(rgb(TEXT_MUTED))
         .child(img(status_effect_path(scheme)).w(px(14.)).h(px(14.)))
-        .child(scheme_label(scheme))
+        .child(scheme_label(scheme, language))
 }
 
 fn normalized_scheme(scheme: &str) -> &str {
@@ -1893,20 +2152,76 @@ fn normalized_scheme(scheme: &str) -> &str {
         .unwrap_or(SYSTEM_NAMES[0])
 }
 
-fn purpose_label(purpose: TeamPurpose) -> &'static str {
-    match purpose {
-        TeamPurpose::Mirror => "镜牢",
-        TeamPurpose::Luxcavation => "经验本",
-        TeamPurpose::General => "通用",
+fn filter_label(filter: TeamFilter, language: Language) -> &'static str {
+    match filter {
+        TeamFilter::All => text("全部", "All").get(language),
+        TeamFilter::Mirror => text("镜牢", "Mirror").get(language),
+        TeamFilter::Luxcavation => text("经验本", "EXP Dungeon").get(language),
+        TeamFilter::General => text("通用", "General").get(language),
     }
 }
 
-fn scheme_label(scheme: &str) -> &'static str {
-    SYSTEM_NAMES
+fn purpose_label(purpose: TeamPurpose, language: Language) -> &'static str {
+    match purpose {
+        TeamPurpose::Mirror => text("镜牢", "Mirror").get(language),
+        TeamPurpose::Luxcavation => text("经验本", "EXP Dungeon").get(language),
+        TeamPurpose::General => text("通用", "General").get(language),
+    }
+}
+
+fn editor_tab_label(tab: TeamEditorTab, language: Language) -> &'static str {
+    match tab {
+        TeamEditorTab::Basic => text("基础编成", "Basic & Formation").get(language),
+        TeamEditorTab::Shop => text("商店与合成", "Shop & Fusion").get(language),
+        TeamEditorTab::Combat => text("二体系与战斗", "Second System & Combat").get(language),
+        TeamEditorTab::Starlight => text("开局星光", "Starlight Bonus").get(language),
+        TeamEditorTab::Advanced => text("观测与高级", "Observe & Advanced").get(language),
+    }
+}
+
+fn system_label(index: usize, language: Language) -> &'static str {
+    let index = index.min(SYSTEM_NAMES.len().saturating_sub(1));
+    if matches!(language, Language::EnUs) {
+        SYSTEM_LABELS_EN[index]
+    } else {
+        crate::state::SYSTEM_LABELS[index]
+    }
+}
+
+fn starlight_name(index: usize, language: Language) -> &'static str {
+    if matches!(language, Language::EnUs) {
+        STARLIGHT_NAMES_EN[index]
+    } else {
+        STARLIGHT_NAMES[index]
+    }
+}
+
+fn starlight_description(index: usize, language: Language) -> &'static str {
+    if matches!(language, Language::EnUs) {
+        STARLIGHT_DESCRIPTIONS_EN[index]
+    } else {
+        STARLIGHT_DESCRIPTIONS[index]
+    }
+}
+
+fn scheme_label(scheme: &str, language: Language) -> &'static str {
+    let labels = [
+        ("burn", text("燃烧", "Burn")),
+        ("bleed", text("流血", "Bleed")),
+        ("tremor", text("震颤", "Tremor")),
+        ("rupture", text("破裂", "Rupture")),
+        ("sinking", text("沉沦", "Sinking")),
+        ("poise", text("呼吸", "Poise")),
+        ("charge", text("充能", "Charge")),
+        ("slash", text("斩击", "Slash")),
+        ("pierce", text("突刺", "Pierce")),
+        ("blunt", text("打击", "Blunt")),
+    ];
+    labels
         .iter()
-        .position(|name| *name == scheme)
-        .map(|index| SYSTEM_LABELS[index])
-        .unwrap_or("燃烧")
+        .find(|(id, _)| *id == scheme)
+        .map(|(_, label)| label.get(language))
+        .unwrap_or_else(|| text("燃烧", "Burn").get(language))
 }
 
 fn discard_value(systems: &crate::model::DiscardSystems, index: usize) -> bool {
@@ -1931,40 +2246,40 @@ fn discard_count(config: &TeamMirrorConfig) -> usize {
         .count()
 }
 
-fn shop_strategy_label(value: u8) -> &'static str {
+fn shop_strategy_label(value: u8, language: Language) -> &'static str {
     match value {
-        0 => "默认",
-        1 => "保守",
-        2 => "激进",
-        _ => "默认",
+        0 => text("默认", "Default").get(language),
+        1 => text("保守", "Conservative").get(language),
+        2 => text("激进", "Aggressive").get(language),
+        _ => text("默认", "Default").get(language),
     }
 }
 
-fn after_level_label(value: u8) -> &'static str {
+fn after_level_label(value: u8, language: Language) -> &'static str {
     match value {
-        0 => "停止",
-        1 => "继续",
-        2 => "升级",
-        _ => "停止",
+        0 => text("停止", "Stop").get(language),
+        1 => text("继续", "Continue").get(language),
+        2 => text("升级", "Enhance").get(language),
+        _ => text("停止", "Stop").get(language),
     }
 }
 
-fn fixed_team_use_label(value: u8) -> &'static str {
+fn fixed_team_use_label(value: u8, language: Language) -> &'static str {
     match value {
-        0 => "困难专用",
-        1 => "普通专用",
-        2 => "全部通用",
-        _ => "困难专用",
+        0 => text("困难专用", "Hard only").get(language),
+        1 => text("普通专用", "Normal only").get(language),
+        2 => text("全部通用", "All modes").get(language),
+        _ => text("困难专用", "Hard only").get(language),
     }
 }
 
-fn starlight_level_label(level: u8) -> &'static str {
+fn starlight_level_label(level: u8, language: Language) -> &'static str {
     match level {
-        0 => "全部关闭",
-        1 => "全部基础",
-        2 => "全部 2+",
-        3 => "全部 3++",
-        _ => "全部关闭",
+        0 => text("全部关闭", "All off").get(language),
+        1 => text("全部基础", "All base").get(language),
+        2 => text("全部 2+", "All 2+").get(language),
+        3 => text("全部 3++", "All 3++").get(language),
+        _ => text("全部关闭", "All off").get(language),
     }
 }
 
@@ -1994,16 +2309,24 @@ mod tests {
 
     #[test]
     fn display_labels_cover_contract_values() {
-        assert_eq!(purpose_label(TeamPurpose::Mirror), "镜牢");
-        assert_eq!(scheme_label("poise"), "呼吸");
-        assert_eq!(shop_strategy_label(2), "激进");
-        assert_eq!(after_level_label(1), "继续");
-        assert_eq!(fixed_team_use_label(2), "全部通用");
+        assert_eq!(purpose_label(TeamPurpose::Mirror, Language::ZhCn), "镜牢");
+        assert_eq!(scheme_label("poise", Language::ZhCn), "呼吸");
+        assert_eq!(shop_strategy_label(2, Language::ZhCn), "激进");
+        assert_eq!(after_level_label(1, Language::ZhCn), "继续");
+        assert_eq!(fixed_team_use_label(2, Language::ZhCn), "全部通用");
     }
 
     #[test]
     fn unknown_scheme_falls_back_to_burn() {
-        assert_eq!(scheme_label("unknown"), "燃烧");
+        assert_eq!(scheme_label("unknown", Language::ZhCn), "燃烧");
         assert_eq!(discard_count(&TeamMirrorConfig::default()), 0);
+    }
+
+    #[test]
+    fn cycle_control_wraps_and_clamps_keyboard_values() {
+        assert_eq!(cycle_u8_value(0, 2, -1), 2);
+        assert_eq!(cycle_u8_value(2, 2, 1), 0);
+        assert_eq!(cycle_u8_value(9, 2, -1), 1);
+        assert_eq!(cycle_u8_value(1, 0, 1), 0);
     }
 }

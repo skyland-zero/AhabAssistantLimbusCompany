@@ -1,4 +1,4 @@
-use gpui::{Div, Window, WindowControlArea, div, img, prelude::*, px, rgb};
+use gpui::{Div, Window, WindowControlArea, div, img, prelude::*, px, rgb, rgba};
 
 use super::tab_bar::{Icon, icon};
 use crate::{
@@ -98,7 +98,7 @@ pub fn title_bar(window: &Window, language: Language, palette: Palette) -> Div {
         .flex()
         .items_center()
         .border_b_1()
-        .border_color(rgb(palette.input.rgb_hex()))
+        .border_color(rgba(palette.input.rgba_hex()))
         .bg(rgb(palette.card.rgb_hex()))
         .child(drag_region)
         .child(controls)
@@ -168,5 +168,9 @@ fn window_button(
         }
     }
 
-    button.child(icon(icon_kind, 16.))
+    button.child(icon(icon_kind, 16.).text_color(rgb(if enabled {
+        palette.muted_foreground.rgb_hex()
+    } else {
+        palette.input.rgb_hex()
+    })))
 }

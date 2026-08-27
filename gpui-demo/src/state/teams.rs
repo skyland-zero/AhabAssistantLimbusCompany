@@ -108,8 +108,12 @@ impl Default for TeamsState {
 
 impl TeamsState {
     pub fn new() -> Self {
+        Self::with_client(MockClient::default())
+    }
+
+    pub fn with_client(client: MockClient) -> Self {
         let mut state = Self {
-            client: MockClient::default(),
+            client,
             teams: Vec::new(),
             sinners: Vec::new(),
             filter: TeamFilter::All,

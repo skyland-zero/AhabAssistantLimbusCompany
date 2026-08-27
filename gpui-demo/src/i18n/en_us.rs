@@ -18,7 +18,7 @@ pub const CATALOG: Catalog = Catalog {
     theme_dark: "Dark",
     theme_system: "System",
     contents: "Contents",
-    home_title: "Automated Workflow",
+    home_title: "Workflow Tasks",
     home_idle: "Idle",
     home_paused: "Paused",
     home_running: "Running",

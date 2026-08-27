@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde_json::json;
 
@@ -6,8 +6,8 @@ use crate::{
     ipc::{EventEnvelope, MockClient},
     model::{
         AfterExitAction, AfterPowerAction, ConnectionStatus, DeviceInfo, DeviceStatusPayload,
-        ExecutionState, ExecutionStatusPayload, FixedTaskId, MirrorProgressPayload,
-        ScreenshotFrame, TasksConfig,
+        ExecutionState, ExecutionStatusPayload, FixedTaskId, LogEntryPayload, LogLevel,
+        MirrorProgressPayload, ScreenshotFrame, TasksConfig,
     },
 };
 
@@ -29,17 +29,33 @@ pub enum MirrorOption {
     SimplePathfinding,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TaskOptionsTab {
+    #[default]
+    General,
+    Advanced,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DailyCounter {
+    Exp,
+    Thread,
+    Continuous,
+}
+
 pub struct HomeState {
     pub client: MockClient,
     pub tasks: TasksConfig,
     pub execution: ExecutionStatusPayload,
-    pub logs: VecDeque<String>,
+    pub logs: VecDeque<LogEntryPayload>,
+    pub log_revision: u64,
     pub devices: Vec<DeviceInfo>,
     pub selected_device: Option<String>,
     pub device_status: ConnectionStatus,
     pub right_panel_width: f32,
     pub right_panel_collapsed: bool,
     pub expanded_tasks: HashSet<FixedTaskId>,
+    pub task_options_tabs: HashMap<FixedTaskId, TaskOptionsTab>,
     pub mirror_progress: Option<MirrorProgressPayload>,
     pub latest_screenshot: Option<ScreenshotFrame>,
     pub after_completion_open: bool,
@@ -53,7 +69,18 @@ impl Default for HomeState {
 
 impl HomeState {
     pub fn with_layout(right_panel_width: u32, right_panel_collapsed: bool) -> Self {
-        let mut client = MockClient::default();
+        Self::with_client(
+            MockClient::default(),
+            right_panel_width,
+            right_panel_collapsed,
+        )
+    }
+
+    pub fn with_client(
+        mut client: MockClient,
+        right_panel_width: u32,
+        right_panel_collapsed: bool,
+    ) -> Self {
         let tasks = client
             .call(crate::ipc::contract::method::TASKS_GET_CONFIG, None)
             .result
@@ -70,15 +97,25 @@ impl HomeState {
             tasks,
             execution: ExecutionStatusPayload::default(),
             logs: VecDeque::from([
-                "[12:00:01] GPUI 原生 Home 已启动".to_owned(),
-                "[12:00:02] 等待本地自动化服务".to_owned(),
+                LogEntryPayload {
+                    ts: 12 * 60 * 60 * 1000 + 1000,
+                    level: LogLevel::Info,
+                    message: "GPUI 原生 Home 已启动".to_owned(),
+                },
+                LogEntryPayload {
+                    ts: 12 * 60 * 60 * 1000 + 2000,
+                    level: LogLevel::Info,
+                    message: "等待本地自动化服务".to_owned(),
+                },
             ]),
+            log_revision: 2,
             devices,
             selected_device: None,
             device_status: ConnectionStatus::Disconnected,
             right_panel_width: right_panel_width as f32,
             right_panel_collapsed,
             expanded_tasks: HashSet::new(),
+            task_options_tabs: HashMap::new(),
             mirror_progress: None,
             latest_screenshot: None,
             after_completion_open: false,
@@ -104,6 +141,17 @@ impl HomeState {
 
     pub fn is_expanded(&self, task: FixedTaskId) -> bool {
         self.expanded_tasks.contains(&task)
+    }
+
+    pub fn options_tab(&self, task: FixedTaskId) -> TaskOptionsTab {
+        self.task_options_tabs
+            .get(&task)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn set_options_tab(&mut self, task: FixedTaskId, tab: TaskOptionsTab) {
+        self.task_options_tabs.insert(task, tab);
     }
 
     pub fn toggle_expanded(&mut self, task: FixedTaskId) {
@@ -255,6 +303,27 @@ impl HomeState {
         self.save_tasks();
     }
 
+    pub fn adjust_daily_counter(&mut self, counter: DailyCounter, delta: i8) {
+        if self.is_busy() {
+            return;
+        }
+        self.update_tasks(|tasks| {
+            let (value, min, max) = match counter {
+                DailyCounter::Exp => (&mut tasks.daily_task.set_EXP_count, 0, 99),
+                DailyCounter::Thread => (&mut tasks.daily_task.set_thread_count, 0, 99),
+                DailyCounter::Continuous => {
+                    (&mut tasks.daily_task.use_continuous_combat_select, 1, 10)
+                }
+            };
+            let next = if delta < 0 {
+                value.saturating_sub((-delta) as u8)
+            } else {
+                value.saturating_add(delta as u8)
+            };
+            *value = next.clamp(min, max);
+        });
+    }
+
     pub fn cycle_number(&mut self, task: FixedTaskId) {
         if self.is_busy() {
             return;
@@ -323,6 +392,7 @@ impl HomeState {
 
     pub fn clear_logs(&mut self) {
         self.logs.clear();
+        self.log_revision = self.log_revision.wrapping_add(1);
     }
 
     pub fn select_device(&mut self, id: String) {
@@ -344,7 +414,11 @@ impl HomeState {
     fn send(&mut self, method: &str, params: Option<serde_json::Value>) {
         let response = self.client.call(method, params);
         if response.is_error() {
-            self.log(&format!("IPC 错误：{}", response.error.unwrap().message));
+            let message = response
+                .error
+                .map(|error| format!("IPC 错误：{}", error.message))
+                .unwrap_or_else(|| "IPC 错误".to_owned());
+            self.log_level(LogLevel::Error, &message);
             return;
         }
         let events = self.client.take_events();
@@ -380,8 +454,8 @@ impl HomeState {
                     }
                 }
                 crate::ipc::contract::event::LOG_ENTRY => {
-                    if let Some(message) = event.payload.get("message").and_then(|v| v.as_str()) {
-                        self.log(message);
+                    if let Ok(entry) = serde_json::from_value::<LogEntryPayload>(event.payload) {
+                        self.push_log(entry);
                     }
                 }
                 _ => {}
@@ -390,12 +464,27 @@ impl HomeState {
     }
 
     fn log(&mut self, message: &str) {
-        let second = self.logs.len() + 3;
-        self.logs
-            .push_back(format!("[12:00:{second:02}] {message}"));
+        self.log_level(LogLevel::Info, message);
+    }
+
+    fn log_level(&mut self, level: LogLevel, message: &str) {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis().min(i64::MAX as u128) as i64)
+            .unwrap_or_default();
+        self.push_log(LogEntryPayload {
+            ts,
+            level,
+            message: message.to_owned(),
+        });
+    }
+
+    fn push_log(&mut self, entry: LogEntryPayload) {
+        self.logs.push_back(entry);
         while self.logs.len() > 300 {
             self.logs.pop_front();
         }
+        self.log_revision = self.log_revision.wrapping_add(1);
     }
 }
 
@@ -429,7 +518,7 @@ mod tests {
         let mut home = HomeState::default();
         home.set_all_tasks(false);
         home.start();
-        assert!(home.logs.back().unwrap().contains("没有选择任务"));
+        assert!(home.logs.back().unwrap().message.contains("没有选择任务"));
         for _ in 0..400 {
             home.log("bounded");
         }
@@ -475,6 +564,15 @@ mod tests {
         home.tasks.mirror.set_mirror_count = 1;
         home.cycle_number(FixedTaskId::Mirror);
         assert_eq!(home.tasks.mirror.set_mirror_count, 2);
+
+        home.tasks.daily_task.set_EXP_count = 0;
+        home.adjust_daily_counter(DailyCounter::Exp, -1);
+        assert_eq!(home.tasks.daily_task.set_EXP_count, 0);
+        home.adjust_daily_counter(DailyCounter::Exp, 99);
+        assert_eq!(home.tasks.daily_task.set_EXP_count, 99);
+        home.tasks.daily_task.use_continuous_combat_select = 10;
+        home.adjust_daily_counter(DailyCounter::Continuous, 1);
+        assert_eq!(home.tasks.daily_task.use_continuous_combat_select, 10);
     }
 
     #[test]
@@ -484,7 +582,7 @@ mod tests {
         home.tasks.enabledTasks.resonate_with_Ahab = true;
         home.start();
         assert_eq!(home.execution.state, ExecutionState::Idle);
-        assert!(home.logs.back().unwrap().contains("没有选择任务"));
+        assert!(home.logs.back().unwrap().message.contains("没有选择任务"));
     }
 
     #[test]

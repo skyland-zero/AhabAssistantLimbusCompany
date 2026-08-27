@@ -9,6 +9,7 @@ pub mod icon;
 pub mod style;
 pub mod text_input;
 
+pub use style::{current_render_palette, palette_rgb, render_rgb, render_rgba};
 pub use text_input::TextInput;
 
 use gpui::{Div, Rgba, Stateful, div, prelude::*, px};
@@ -72,7 +73,12 @@ pub enum ButtonVariant {
 /// A clickable button surface. Add `.on_click(...)` at the call site when the
 /// action is known; this keeps the primitive independent of application state.
 pub fn button(label: impl Into<String>, variant: ButtonVariant) -> Div {
-    button_with_palette(label, variant, &Palette::default(), ControlState::default())
+    button_with_palette(
+        label,
+        variant,
+        &current_render_palette(),
+        ControlState::default(),
+    )
 }
 
 pub fn button_with_palette(
@@ -108,6 +114,7 @@ pub fn button_with_palette(
         .px_4()
         .py_2()
         .rounded_md()
+        .tab_index(0)
         .border_1()
         .border_color(paint_color(if matches!(variant, ButtonVariant::Outline) {
             palette.input
@@ -153,7 +160,12 @@ pub enum BadgeTone {
 }
 
 pub fn badge(label: impl Into<String>, tone: BadgeTone) -> Div {
-    badge_with_palette(label, tone, &Palette::default(), ControlState::default())
+    badge_with_palette(
+        label,
+        tone,
+        &current_render_palette(),
+        ControlState::default(),
+    )
 }
 
 pub fn badge_with_palette(
@@ -196,7 +208,7 @@ pub struct CardState {
 
 /// A surface container with the shared radius and padding.
 pub fn card(child: impl IntoElement) -> Div {
-    card_with_palette(child, &Palette::default())
+    card_with_palette(child, &current_render_palette())
 }
 
 pub fn card_with_palette(child: impl IntoElement, palette: &Palette) -> Div {
@@ -234,7 +246,7 @@ pub fn card_with_state(child: impl IntoElement, palette: &Palette, state: CardSt
 /// A compact on/off control. State changes are supplied by the caller (usually
 /// an Entity); this helper only renders the current state.
 pub fn switch(checked: bool) -> Div {
-    switch_with_palette(checked, &Palette::default(), ControlState::default())
+    switch_with_palette(checked, &current_render_palette(), ControlState::default())
 }
 
 pub fn switch_with_palette(checked: bool, palette: &Palette, state: ControlState) -> Div {
@@ -262,6 +274,7 @@ pub fn switch_with_palette(checked: bool, palette: &Palette, state: ControlState
         .h(px(22.))
         .p(px(3.))
         .rounded_lg()
+        .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(track))
@@ -297,7 +310,7 @@ pub fn select(label: impl Into<String>, options: &[&str], selected: usize) -> Di
         label,
         options,
         selected,
-        &Palette::default(),
+        &current_render_palette(),
         ControlState::default(),
     )
 }
@@ -319,6 +332,7 @@ pub fn select_with_palette(
         .px_3()
         .py_2()
         .rounded_md()
+        .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.card))
@@ -365,7 +379,7 @@ pub fn slider(value: f32, min: f32, max: f32) -> Div {
         value,
         min,
         max,
-        &Palette::default(),
+        &current_render_palette(),
         ControlState::default(),
     )
 }
@@ -385,6 +399,7 @@ pub fn slider_with_palette(
         .w(px(width))
         .h(px(6.))
         .rounded_md()
+        .tab_index(0)
         .bg(paint_color(palette.input))
         .focus_visible({
             let ring = palette.ring;
@@ -424,7 +439,7 @@ pub fn normalize_slider(value: f32, min: f32, max: f32) -> f32 {
 }
 
 pub fn tabs(labels: &[&str], selected: usize) -> Div {
-    tabs_with_palette(labels, selected, &Palette::default(), &[])
+    tabs_with_palette(labels, selected, &current_render_palette(), &[])
 }
 
 /// Render tabs with per-tab disabled state. An empty `disabled` slice keeps
@@ -441,6 +456,8 @@ pub fn tabs_with_palette(
         let is_disabled = disabled.get(index).copied().unwrap_or(false);
         let focus_ring = palette.ring;
         let mut tab = div()
+            .id(format!("tab-{index}"))
+            .tab_index(index as isize)
             .px_3()
             .py_2()
             .rounded_md()
@@ -469,7 +486,7 @@ pub fn tabs_with_palette(
             tab = tab.cursor_pointer().hover(move |style| style.bg(hover));
         }
         tab = tab.child((*label).to_owned());
-        root = root.child(tab.id(format!("tab-{index}")));
+        root = root.child(tab);
     }
     root
 }
@@ -479,7 +496,7 @@ pub fn dialog(title: impl Into<String>, body: impl IntoElement, actions: impl In
         title,
         body,
         actions,
-        &Palette::default(),
+        &current_render_palette(),
         ControlState::default(),
     )
 }
@@ -543,7 +560,7 @@ pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
     scroll_area_with_palette(
         "scroll-area",
         child,
-        &Palette::default(),
+        &current_render_palette(),
         ControlState::default(),
     )
 }
@@ -552,7 +569,12 @@ pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
 /// GPUI owns wheel/trackpad behavior; the thin scrollbar is a platform paint
 /// concern, so callers should keep this as the single scroll boundary.
 pub fn scroll_area_with_id(id: &'static str, child: impl IntoElement) -> Stateful<Div> {
-    scroll_area_with_palette(id, child, &Palette::default(), ControlState::default())
+    scroll_area_with_palette(
+        id,
+        child,
+        &current_render_palette(),
+        ControlState::default(),
+    )
 }
 
 pub fn scroll_area_with_palette(
@@ -581,7 +603,7 @@ pub fn text_input(value: &str, placeholder: &str) -> Div {
     text_input_with_palette(
         value,
         placeholder,
-        &Palette::default(),
+        &current_render_palette(),
         ControlState::default(),
     )
 }
@@ -627,9 +649,9 @@ pub fn number_stepper(value: i32, min: i32, max: i32) -> Div {
         .py_1()
         .rounded_md()
         .border_1()
-        .border_color(paint_color(Palette::default().input))
-        .bg(paint_color(Palette::default().card))
-        .text_color(paint_color(Palette::default().foreground))
+        .border_color(paint_color(current_render_palette().input))
+        .bg(paint_color(current_render_palette().card))
+        .text_color(paint_color(current_render_palette().foreground))
         .child("-")
         .child(value.to_string())
         .child("+")
@@ -644,7 +666,7 @@ pub fn clamp_number(value: i32, min: i32, max: i32) -> i32 {
 }
 
 pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
-    let palette = Palette::default();
+    let palette = current_render_palette();
     div()
         .flex()
         .flex_col()
@@ -662,7 +684,7 @@ pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
 }
 
 pub fn loading(label: impl Into<String>) -> Div {
-    let palette = Palette::default();
+    let palette = current_render_palette();
     div()
         .flex()
         .items_center()
@@ -681,7 +703,7 @@ pub fn skeleton(width: gpui::Pixels, height: gpui::Pixels) -> Div {
         .w(width)
         .h(height)
         .rounded_md()
-        .bg(paint_color(Palette::default().muted))
+        .bg(paint_color(current_render_palette().muted))
 }
 
 /// The design-system lane intentionally keeps palette construction independent

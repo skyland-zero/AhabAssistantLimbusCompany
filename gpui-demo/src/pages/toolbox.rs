@@ -5,12 +5,15 @@
 //! Tool actions continue to use `ToolboxState`, so this page stays on the
 //! canonical Mock IPC boundary.
 
-use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, rgb, svg};
+use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, svg};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, TEXT, TEXT_MUTED},
     components::style::{DANGER, GREEN},
-    components::{BadgeTone, ButtonVariant, badge, button, card, empty_state, scroll_area_with_id},
+    components::{
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, render_rgb as rgb,
+        scroll_area_with_id,
+    },
     model::{Language, ToolId},
 };
 

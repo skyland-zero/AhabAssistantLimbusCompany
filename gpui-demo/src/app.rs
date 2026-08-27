@@ -6,6 +6,7 @@ use gpui::{
 use crate::{
     components::{TextInput, style::Palette},
     i18n::{self, Key as I18nKey},
+    ipc::MockClient,
     pages, shell,
     state::{
         AppState, HomeState, ResourcesState, SettingsPageState, TeamsState, ThemePacksState,
@@ -96,12 +97,18 @@ pub struct AhabApp {
     pub team_json_input: Option<Entity<TextInput>>,
     pub settings_cdk_input: Option<Entity<TextInput>>,
     pub help_scroll: ScrollHandle,
+    pub home_log_scroll: ScrollHandle,
+    pub toast: Option<shell::Toast>,
+    toast_generation: u64,
+    home_log_revision_seen: u64,
 }
 
 impl AhabApp {
     pub fn new() -> Self {
         let state = AppState::load();
-        let home = HomeState::with_layout(
+        let client = MockClient::default();
+        let home = HomeState::with_client(
+            client.shared(),
             state.settings.rightPanelWidth,
             state.settings.rightPanelCollapsed,
         );
@@ -110,17 +117,21 @@ impl AhabApp {
             current_page: Page::Home,
             state,
             home,
-            teams: TeamsState::new(),
-            theme_packs: ThemePacksState::new(),
-            toolbox: ToolboxState::new(),
-            resources: ResourcesState::new(),
-            settings_page: SettingsPageState::new(),
+            teams: TeamsState::with_client(client.shared()),
+            theme_packs: ThemePacksState::with_client(client.shared()),
+            toolbox: ToolboxState::with_client(client.shared()),
+            resources: ResourcesState::with_client(client.shared()),
+            settings_page: SettingsPageState::with_client(client),
             team_name_input: None,
             team_code_input: None,
             team_observe_input: None,
             team_json_input: None,
             settings_cdk_input: None,
             help_scroll: ScrollHandle::new(),
+            home_log_scroll: ScrollHandle::new(),
+            toast: None,
+            toast_generation: 0,
+            home_log_revision_seen: 0,
         }
     }
 
@@ -142,12 +153,15 @@ impl AhabApp {
     }
 
     pub fn ensure_settings_input(&mut self, cx: &mut Context<Self>) {
-        let palette = self.palette();
+        let palette = crate::components::style::current_render_palette();
         if self.settings_cdk_input.is_none() {
             let cdk = self.settings_page.system.mirrorchyan_cdk.clone();
-            self.settings_cdk_input = Some(cx.new(move |cx| {
-                TextInput::new_with_palette(cdk, "Mirror 酱 CDK（可选）", palette, cx)
-            }));
+            let placeholder = match self.state.settings.language {
+                crate::model::Language::ZhCn => "Mirror 酱 CDK（可选）",
+                crate::model::Language::EnUs => "Mirror-Chyan CDK (optional)",
+            };
+            self.settings_cdk_input =
+                Some(cx.new(move |cx| TextInput::new_with_palette(cdk, placeholder, palette, cx)));
         }
     }
 
@@ -163,6 +177,37 @@ impl AhabApp {
         if let Err(error) = self.state.save() {
             eprintln!("failed to persist theme mode: {error}");
         }
+    }
+
+    pub fn show_toast(
+        &mut self,
+        kind: shell::ToastKind,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.toast_generation = self.toast_generation.wrapping_add(1);
+        let generation = self.toast_generation;
+        self.toast = Some(shell::Toast {
+            id: generation,
+            kind,
+            message: message.into(),
+        });
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(2400))
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                if view
+                    .toast
+                    .as_ref()
+                    .is_some_and(|toast| toast.id == generation)
+                {
+                    view.toast = None;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     pub fn set_accent(&mut self, accent: &str) {
@@ -248,21 +293,38 @@ impl AhabApp {
     }
 
     fn create_team_inputs(&mut self, cx: &mut Context<Self>) {
-        let palette = self.palette();
+        let palette = crate::components::style::current_render_palette();
+        let language = self.state.settings.language;
         let editor = self.teams.editor.as_ref().expect("editor just opened");
         let name = editor.team.name.clone();
         let code = editor.mirror_config().team_code;
-        self.team_name_input =
-            Some(cx.new(move |cx| TextInput::new_with_palette(name, "队伍名称", palette, cx)));
-        self.team_code_input = Some(
-            cx.new(move |cx| TextInput::new_with_palette(code, "编队码（可选）", palette, cx)),
+        let name_placeholder = match language {
+            crate::model::Language::ZhCn => "队伍名称",
+            crate::model::Language::EnUs => "Team name",
+        };
+        let code_placeholder = match language {
+            crate::model::Language::ZhCn => "编队码（可选）",
+            crate::model::Language::EnUs => "Team code (optional)",
+        };
+        let observe_placeholder = match language {
+            crate::model::Language::ZhCn => "输入 E.G.O 饰品名称",
+            crate::model::Language::EnUs => "Enter E.G.O gift name",
+        };
+        let json_placeholder = match language {
+            crate::model::Language::ZhCn => "粘贴 Team JSON",
+            crate::model::Language::EnUs => "Paste Team JSON",
+        };
+        self.team_name_input = Some(
+            cx.new(move |cx| TextInput::new_with_palette(name, name_placeholder, palette, cx)),
         );
-        self.team_observe_input =
-            Some(cx.new(move |cx| {
-                TextInput::new_with_palette("", "输入 E.G.O 饰品名称", palette, cx)
-            }));
+        self.team_code_input = Some(
+            cx.new(move |cx| TextInput::new_with_palette(code, code_placeholder, palette, cx)),
+        );
+        self.team_observe_input = Some(
+            cx.new(move |cx| TextInput::new_with_palette("", observe_placeholder, palette, cx)),
+        );
         self.team_json_input =
-            Some(cx.new(move |cx| TextInput::new_with_palette("", "粘贴 Team JSON", palette, cx)));
+            Some(cx.new(move |cx| TextInput::new_with_palette("", json_placeholder, palette, cx)));
     }
 
     fn clear_team_inputs(&mut self) {
@@ -347,7 +409,12 @@ impl Render for AhabApp {
         let current_page = self.current_page;
         let language = self.state.settings.language;
         let palette = self.palette_for_window(window);
+        crate::components::style::set_current_render_palette(palette);
         self.sync_input_palettes(palette, cx);
+        if self.home.log_revision != self.home_log_revision_seen {
+            self.home_log_scroll.scroll_to_bottom();
+            self.home_log_revision_seen = self.home.log_revision;
+        }
 
         div()
             .relative()
@@ -375,5 +442,6 @@ impl Render for AhabApp {
                     ),
             )
             .child(pages::render_overlay(current_page, self, cx))
+            .child(shell::toast_layer(self.toast.as_ref(), palette))
     }
 }

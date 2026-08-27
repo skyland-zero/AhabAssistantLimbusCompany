@@ -18,7 +18,7 @@ pub const CATALOG: Catalog = Catalog {
     theme_dark: "深色",
     theme_system: "跟随系统",
     contents: "目录",
-    home_title: "自动化工作流",
+    home_title: "自动化任务",
     home_idle: "待机中",
     home_paused: "执行已暂停",
     home_running: "运行中",

@@ -7,12 +7,13 @@
 
 use std::process::Command;
 
-use gpui::{Context, Div, FontWeight, div, prelude::*, px, rgb};
+use gpui::{Context, Div, FontWeight, div, prelude::*, px};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
     assets,
-    components::{ButtonVariant, button},
+    components::style::current_render_palette,
+    components::{ButtonVariant, button, palette_rgb, render_rgb as rgb},
     i18n::{self, Key as I18nKey},
     model::Language,
 };
@@ -211,11 +212,11 @@ fn render_block(block: HelpBlock, cx: &mut Context<AhabApp>) -> Div {
             .my_2()
             .p_3()
             .rounded_md()
-            .bg(rgb(0x171e29))
+            .bg(palette_rgb(current_render_palette().popover))
             .font_family("Consolas")
             .text_size(px(12.))
             .line_height(px(19.))
-            .text_color(rgb(0xb8c8dd))
+            .text_color(palette_rgb(current_render_palette().foreground))
             .child(text),
     }
 }

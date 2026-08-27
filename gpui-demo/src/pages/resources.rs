@@ -4,13 +4,16 @@
 //! a responsive resource-card grid, and explicit synchronization progress,
 //! success, warning, loading, and empty states.
 
-use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, relative, rgb, svg};
+use std::time::Duration;
+
+use gpui::{Context, Div, Svg, container_query, div, prelude::*, px, relative, svg};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
     components::style::GREEN,
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state, loading, scroll_area_with_id,
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, loading, render_rgb as rgb,
+        scroll_area_with_id,
     },
     model::{Language, ResourceGroup},
 };
@@ -38,6 +41,28 @@ const fn text(zh: &'static str, en: &'static str) -> Localized {
 }
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    // The mock emits its terminal progress event synchronously. Keep that
+    // state alive for one visible frame so the native client shows the same
+    // progress feedback as the asynchronous React IPC path.
+    if app.resources.sync_progress == Some(100) && !app.resources.sync_finish_scheduled {
+        app.resources.sync_finish_scheduled = true;
+        let done_message = match app.state.settings.language {
+            Language::ZhCn => "资源同步完成",
+            Language::EnUs => "Resource sync completed",
+        };
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(300))
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.resources.finish_sync();
+                view.show_toast(crate::shell::ToastKind::Success, done_message, cx);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     let language = app.state.settings.language;
     let progress = app.resources.sync_progress;
     let feedback = app.resources.feedback.clone();
@@ -51,6 +76,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .id("resources-check");
     check = check.on_click(cx.listener(|view, _, _, cx| {
         view.resources.check_update();
+        view.show_toast(crate::shell::ToastKind::Success, "资源更新状态已刷新", cx);
         cx.notify();
     }));
 
@@ -63,6 +89,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     if progress.is_none() {
         sync = sync.on_click(cx.listener(|view, _, _, cx| {
             view.resources.sync_now();
+            view.show_toast(crate::shell::ToastKind::Loading, "资源同步中…", cx);
             cx.notify();
         }));
     } else {

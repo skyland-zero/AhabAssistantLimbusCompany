@@ -28,8 +28,12 @@ impl Default for ThemePacksState {
 
 impl ThemePacksState {
     pub fn new() -> Self {
+        Self::with_client(MockClient::default())
+    }
+
+    pub fn with_client(client: MockClient) -> Self {
         let mut state = Self {
-            client: MockClient::default(),
+            client,
             data: ThemePackState::default(),
             sort_by_weight: false,
             feedback: None,
@@ -91,8 +95,34 @@ impl ThemePacksState {
                 } else {
                     pack.weight + 1
                 };
-                self.patch_pack(id, |pack| pack.weight = weight);
+                self.set_weight(id, weight);
             }
+        }
+    }
+
+    pub fn adjust_weight(&mut self, id: &str, delta: i8) {
+        let Some(pack) = self.data.packs.iter().find(|pack| pack.id == id) else {
+            return;
+        };
+        if !pack.enabled {
+            return;
+        }
+        let weight = if delta < 0 {
+            pack.weight.saturating_sub((-delta) as u8)
+        } else {
+            pack.weight.saturating_add(delta as u8).min(10)
+        };
+        self.set_weight(id, weight);
+    }
+
+    pub fn set_weight(&mut self, id: &str, weight: u8) {
+        if self
+            .data
+            .packs
+            .iter()
+            .any(|pack| pack.id == id && pack.enabled)
+        {
+            self.patch_pack(id, |pack| pack.weight = weight.min(10));
         }
     }
 
@@ -158,8 +188,12 @@ impl Default for ToolboxState {
 
 impl ToolboxState {
     pub fn new() -> Self {
+        Self::with_client(MockClient::default())
+    }
+
+    pub fn with_client(client: MockClient) -> Self {
         Self {
-            client: MockClient::default(),
+            client,
             running: HashMap::new(),
             feedback: None,
         }
@@ -216,6 +250,7 @@ pub struct ResourcesState {
     pub client: MockClient,
     pub groups: Vec<ResourceGroup>,
     pub sync_progress: Option<u8>,
+    pub sync_finish_scheduled: bool,
     pub feedback: Option<String>,
 }
 
@@ -227,10 +262,15 @@ impl Default for ResourcesState {
 
 impl ResourcesState {
     pub fn new() -> Self {
+        Self::with_client(MockClient::default())
+    }
+
+    pub fn with_client(client: MockClient) -> Self {
         let mut state = Self {
-            client: MockClient::default(),
+            client,
             groups: Vec::new(),
             sync_progress: None,
+            sync_finish_scheduled: false,
             feedback: None,
         };
         state.reload();
@@ -273,6 +313,8 @@ impl ResourcesState {
         if self.sync_progress.is_some() {
             return;
         }
+        self.sync_progress = Some(0);
+        self.sync_finish_scheduled = false;
         let response = self.client.call(method::RESOURCE_SYNC_START, None);
         let events = self.client.take_events();
         self.apply_events(events);
@@ -282,8 +324,12 @@ impl ResourcesState {
             return;
         }
         self.reload();
-        self.sync_progress = None;
         self.feedback = Some("资源同步完成".to_owned());
+    }
+
+    pub fn finish_sync(&mut self) {
+        self.sync_progress = None;
+        self.sync_finish_scheduled = false;
     }
 
     fn apply_events(&mut self, events: Vec<EventEnvelope>) {
@@ -335,8 +381,12 @@ impl Default for SettingsPageState {
 
 impl SettingsPageState {
     pub fn new() -> Self {
+        Self::with_client(MockClient::default())
+    }
+
+    pub fn with_client(client: MockClient) -> Self {
         let mut state = Self {
-            client: MockClient::default(),
+            client,
             hotkey: HotkeyConfig::default(),
             system: SystemSettingsConfig::default(),
             capturing: None,
@@ -513,6 +563,28 @@ mod tests {
                 .weight,
             6
         );
+        state.adjust_weight("pk-1", -2);
+        assert_eq!(
+            state
+                .data
+                .packs
+                .iter()
+                .find(|pack| pack.id == "pk-1")
+                .unwrap()
+                .weight,
+            4
+        );
+        state.adjust_weight("pk-1", 99);
+        assert_eq!(
+            state
+                .data
+                .packs
+                .iter()
+                .find(|pack| pack.id == "pk-1")
+                .unwrap()
+                .weight,
+            10
+        );
         state.set_all_enabled(false);
         assert_eq!(state.total_weight(), 0);
     }
@@ -539,6 +611,8 @@ mod tests {
         );
         state.sync_now();
         assert!(state.groups.iter().all(|group| group.lastSyncAt == Some(0)));
+        assert_eq!(state.sync_progress, Some(100));
+        state.finish_sync();
         assert!(state.sync_progress.is_none());
     }
 

@@ -7,12 +7,16 @@
 
 use std::process::Command;
 
-use gpui::{Context, Div, FontWeight, KeyDownEvent, Svg, div, prelude::*, px, rgb, svg};
+use gpui::{
+    Context, Div, FontWeight, KeyDownEvent, Svg, div, prelude::*, px, rgb as gpui_rgb, svg,
+};
 
 use crate::{
     app::{AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
-    components::style::GREEN,
-    components::{ButtonVariant, TextInput, button, card, scroll_area_with_id, switch},
+    components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette},
+    components::{
+        ButtonVariant, TextInput, button, card, render_rgb as rgb, scroll_area_with_id, switch,
+    },
     model::{Language, ThemeMode, UpdateSource},
     state::{HotkeyTarget, SystemBool, SystemU16},
 };
@@ -39,41 +43,6 @@ impl Localized {
 const fn text(zh: &'static str, en: &'static str) -> Localized {
     Localized { zh, en }
 }
-
-#[derive(Clone, Copy)]
-struct AccentPreset {
-    id: &'static str,
-    light: u32,
-    dark: u32,
-}
-
-const ACCENTS: [AccentPreset; 5] = [
-    AccentPreset {
-        id: "crimson",
-        light: 0xc8354f,
-        dark: 0xe05a72,
-    },
-    AccentPreset {
-        id: "blue",
-        light: 0x2563eb,
-        dark: 0x60a5fa,
-    },
-    AccentPreset {
-        id: "amber",
-        light: 0xd97706,
-        dark: 0xfbbf24,
-    },
-    AccentPreset {
-        id: "emerald",
-        light: 0x059669,
-        dark: 0x34d399,
-    },
-    AccentPreset {
-        id: "violet",
-        light: 0x7c3aed,
-        dark: 0xa78bfa,
-    },
-];
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     app.ensure_settings_input(cx);
@@ -162,21 +131,23 @@ fn appearance_card(
         .px_3()
         .py_1()
         .text_size(px(12.));
+        let message = label.get(language).to_owned();
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.set_theme_mode(candidate);
+            view.show_toast(crate::shell::ToastKind::Info, message.clone(), cx);
             cx.notify();
         }));
         modes = modes.child(control);
     }
 
-    let dark_accent = matches!(theme, ThemeMode::Dark | ThemeMode::System);
+    let dark_accent = matches!(current_render_palette().scheme, ColorScheme::Dark);
     let mut accents = div().flex().items_center().gap_2();
-    for preset in ACCENTS {
+    for preset in ACCENT_PRESETS {
         let selected = accent == preset.id;
         let color = if dark_accent {
-            preset.dark
+            preset.dark.brand.rgb_hex()
         } else {
-            preset.light
+            preset.light.brand.rgb_hex()
         };
         let mut control = div()
             .id(format!("settings-accent-{}", preset.id))
@@ -184,7 +155,7 @@ fn appearance_card(
             .h(px(24.))
             .rounded_full()
             .cursor_pointer()
-            .bg(rgb(color));
+            .bg(gpui_rgb(color));
         if selected {
             control = control.border_2().border_color(rgb(TEXT)).opacity(1.);
         } else {
@@ -193,6 +164,7 @@ fn appearance_card(
         let id = preset.id;
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.set_accent(id);
+            view.show_toast(crate::shell::ToastKind::Info, format!("Accent: {id}"), cx);
             cx.notify();
         }));
         accents = accents.child(control);
@@ -214,6 +186,7 @@ fn appearance_card(
         .text_size(px(12.));
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.set_language(candidate);
+            view.show_toast(crate::shell::ToastKind::Info, label, cx);
             cx.notify();
         }));
         languages = languages.child(control);
@@ -759,12 +732,21 @@ fn setting_switch(
     value: bool,
     id: &'static str,
 ) -> gpui::Stateful<Div> {
-    switch(value)
-        .id(id)
-        .on_click(cx.listener(move |view, _, _, cx| {
+    let mut control = switch(value).id(id);
+    control = control.on_click(cx.listener(move |view, _, _, cx| {
+        view.settings_page.set_system_bool(field, !value);
+        cx.notify();
+    }));
+    control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        if matches!(
+            event.keystroke.key.to_ascii_lowercase().as_str(),
+            "enter" | "space"
+        ) {
+            window.prevent_default();
             view.settings_page.set_system_bool(field, !value);
             cx.notify();
-        }))
+        }
+    }))
 }
 
 fn cycle_system_u16(
@@ -774,26 +756,9 @@ fn cycle_system_u16(
     label: impl Into<String>,
     id: &'static str,
 ) -> gpui::Stateful<Div> {
-    let next = match field {
-        SystemU16::SimulatorType => {
-            if value == 0 {
-                10
-            } else {
-                0
-            }
-        }
-        SystemU16::SimulatorPort => match value {
-            16384 => 5555,
-            5555 => 62001,
-            _ => 16384,
-        },
-        SystemU16::StartTimeout => match value {
-            30 => 60,
-            60 => 120,
-            _ => 30,
-        },
-    };
-    button(label, ButtonVariant::Outline)
+    let options = system_u16_options(field);
+    let next = cycle_value(options, value, 1);
+    let mut control = button(label, ButtonVariant::Outline)
         .id(id)
         .px_3()
         .py_1()
@@ -801,7 +766,39 @@ fn cycle_system_u16(
         .on_click(cx.listener(move |view, _, _, cx| {
             view.settings_page.set_system_u16(field, next);
             cx.notify();
-        }))
+        }));
+    control = control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        let key = event.keystroke.key.to_ascii_lowercase();
+        let selected = match key.as_str() {
+            "left" | "arrowleft" => cycle_value(options, value, -1),
+            "right" | "arrowright" | "enter" | "space" => next,
+            "home" => options[0],
+            "end" => *options.last().unwrap_or(&value),
+            _ => return,
+        };
+        window.prevent_default();
+        view.settings_page.set_system_u16(field, selected);
+        cx.notify();
+    }));
+    control
+}
+
+fn system_u16_options(field: SystemU16) -> &'static [u16] {
+    match field {
+        SystemU16::SimulatorType => &[0, 10],
+        SystemU16::SimulatorPort => &[16384, 5555, 62001],
+        SystemU16::StartTimeout => &[30, 60, 120],
+    }
+}
+
+fn cycle_value(options: &[u16], current: u16, direction: i8) -> u16 {
+    if options.is_empty() {
+        return current;
+    }
+    let index = options.iter().position(|candidate| *candidate == current);
+    let index = index.unwrap_or(0) as isize;
+    let next = (index + isize::from(direction)).rem_euclid(options.len() as isize);
+    options[next as usize]
 }
 
 fn action_button(label: &'static str, variant: ButtonVariant, icon: Svg) -> Div {
@@ -874,7 +871,7 @@ fn open_repo() {
 
 #[cfg(test)]
 mod tests {
-    use super::combo_from_keystroke;
+    use super::*;
     use gpui::{Keystroke, Modifiers};
 
     #[test]
@@ -900,5 +897,13 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(combo.as_deref(), Some("Ctrl+Shift+F10"));
+    }
+
+    #[test]
+    fn discrete_settings_cycle_with_keyboard_boundaries() {
+        let options = system_u16_options(SystemU16::SimulatorPort);
+        assert_eq!(cycle_value(options, 16384, -1), 62001);
+        assert_eq!(cycle_value(options, 62001, 1), 16384);
+        assert_eq!(cycle_value(options, 9999, 1), 5555);
     }
 }

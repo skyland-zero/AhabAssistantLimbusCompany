@@ -4,13 +4,14 @@
 //! an optional hard-mirror warning, and a single independently scrolling list.
 //! The page deliberately keeps all mutations in `ThemePacksState`.
 
-use gpui::{Context, Div, Svg, div, prelude::*, px, rgb, svg};
+use gpui::{Context, Div, KeyDownEvent, Render, Svg, Window, div, prelude::*, px, svg};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    components::style::current_render_palette,
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state, scroll_area_with_id, slider,
-        switch,
+        BadgeTone, ButtonVariant, badge, button, card, empty_state, palette_rgb, render_rgb as rgb,
+        scroll_area_with_id, slider, switch,
     },
     model::{Language, ThemePack},
 };
@@ -38,6 +39,14 @@ const fn text(zh: &'static str, en: &'static str) -> Localized {
     Localized { zh, en }
 }
 
+struct ThemeWeightDragGhost;
+
+impl Render for ThemeWeightDragGhost {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div().w(px(1.)).h(px(1.))
+    }
+}
+
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let sort_by_weight = app.theme_packs.sort_by_weight;
@@ -57,6 +66,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .id("theme-sort");
     sort = sort.on_click(cx.listener(move |view, _, _, cx| {
         view.theme_packs.set_sort_by_weight(!sort_by_weight);
+        view.show_toast(crate::shell::ToastKind::Info, "主题包排序已更新", cx);
         cx.notify();
     }));
 
@@ -68,6 +78,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .id("theme-enable-all");
     enable_all = enable_all.on_click(cx.listener(|view, _, _, cx| {
         view.theme_packs.set_all_enabled(true);
+        view.show_toast(crate::shell::ToastKind::Success, "主题包已全部启用", cx);
         cx.notify();
     }));
 
@@ -79,6 +90,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .id("theme-disable-all");
     disable_all = disable_all.on_click(cx.listener(|view, _, _, cx| {
         view.theme_packs.set_all_enabled(false);
+        view.show_toast(crate::shell::ToastKind::Info, "主题包已全部停用", cx);
         cx.notify();
     }));
 
@@ -90,6 +102,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .id("theme-reset");
     reset = reset.on_click(cx.listener(|view, _, _, cx| {
         view.theme_packs.reset_weights();
+        view.show_toast(crate::shell::ToastKind::Success, "主题包权重已恢复", cx);
         cx.notify();
     }));
 
@@ -141,7 +154,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .gap_2()
                 .border_b_1()
                 .border_color(rgb(BORDER))
-                .bg(rgb(0x3d301b))
+                .bg(palette_rgb(current_render_palette().brand_light))
                 .px_6()
                 .py_2()
                 .text_size(px(12.))
@@ -189,7 +202,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .px_6()
                 .py_2()
                 .text_size(px(12.))
-                .text_color(rgb(0x4dcc89))
+                .text_color(palette_rgb(current_render_palette().success))
                 .child(feedback),
         );
     }
@@ -209,9 +222,21 @@ fn pack_row(
     let enabled = pack.enabled;
     let id = pack.id.clone();
     let mut toggle = switch(enabled).id(format!("theme-enabled-{id}"));
+    let id_for_click = id.clone();
     toggle = toggle.on_click(cx.listener(move |view, _, _, cx| {
-        view.theme_packs.toggle_enabled(&id);
+        view.theme_packs.toggle_enabled(&id_for_click);
         cx.notify();
+    }));
+    let id_for_key = id.clone();
+    toggle = toggle.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        if matches!(
+            event.keystroke.key.to_ascii_lowercase().as_str(),
+            "enter" | "space"
+        ) {
+            window.prevent_default();
+            view.theme_packs.toggle_enabled(&id_for_key);
+            cx.notify();
+        }
     }));
 
     let id_for_slider = pack.id.clone();
@@ -221,10 +246,39 @@ fn pack_row(
         .min_w(px(80.))
         .min_h(px(16.));
     if enabled {
-        weight_slider = weight_slider.on_click(cx.listener(move |view, _, _, cx| {
-            view.theme_packs.cycle_weight(&id_for_slider);
-            cx.notify();
-        }));
+        let id_for_key = id_for_slider.clone();
+        let id_for_drag = id_for_slider.clone();
+        weight_slider = weight_slider
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.theme_packs.cycle_weight(&id_for_slider);
+                cx.notify();
+            }))
+            .on_drag(ThemeWeightDragGhost, |_, _, _, cx| {
+                cx.new(|_| ThemeWeightDragGhost)
+            })
+            .on_drag_move(cx.listener(
+                move |view, event: &gpui::DragMoveEvent<ThemeWeightDragGhost>, _, cx| {
+                    let width = event.bounds.size.width.as_f32();
+                    let position = (event.event.position.x - event.bounds.left()).as_f32();
+                    let weight = slider_weight_from_position(position, width);
+                    view.theme_packs.set_weight(&id_for_drag, weight);
+                    cx.notify();
+                },
+            ))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                let delta = match event.keystroke.key.to_ascii_lowercase().as_str() {
+                    "left" | "arrowleft" => Some(-1),
+                    "right" | "arrowright" => Some(1),
+                    "home" => Some(-10),
+                    "end" => Some(10),
+                    _ => None,
+                };
+                if let Some(delta) = delta {
+                    window.prevent_default();
+                    view.theme_packs.adjust_weight(&id_for_key, delta);
+                    cx.notify();
+                }
+            }));
     } else {
         weight_slider = weight_slider.opacity(0.5).cursor_not_allowed();
     }
@@ -285,6 +339,13 @@ fn pack_row(
     row
 }
 
+fn slider_weight_from_position(position: f32, width: f32) -> u8 {
+    if !position.is_finite() || !width.is_finite() || width <= 0. {
+        return 0;
+    }
+    ((position / width).clamp(0., 1.) * 10.).round() as u8
+}
+
 fn action_button(label: &'static str, variant: ButtonVariant, icon: Option<Svg>) -> Div {
     let mut control = button("", variant)
         .h(px(28.))
@@ -306,10 +367,19 @@ fn icon(data: &'static str, size: f32, color: u32) -> Svg {
 
 #[cfg(test)]
 mod tests {
+    use super::slider_weight_from_position;
     use crate::state::ThemePacksState;
 
     #[test]
     fn mock_theme_pack_total_matches_page_baseline() {
         assert_eq!(ThemePacksState::default().total_weight(), 28);
+    }
+
+    #[test]
+    fn slider_mouse_position_is_bounded_to_weight_range() {
+        assert_eq!(slider_weight_from_position(-4., 180.), 0);
+        assert_eq!(slider_weight_from_position(90., 180.), 5);
+        assert_eq!(slider_weight_from_position(220., 180.), 10);
+        assert_eq!(slider_weight_from_position(20., 0.), 0);
     }
 }

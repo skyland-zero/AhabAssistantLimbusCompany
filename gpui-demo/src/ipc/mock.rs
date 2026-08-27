@@ -4,12 +4,22 @@ use super::{
 };
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
-// Keep this client synchronous and deterministic: it is suitable for UI work
-// without a Python sidecar, while its RpcClient boundary can later be backed by
-// websocket.rs without changing callers.
+// Keep the backend synchronous and deterministic: it is suitable for UI work
+// without a Python sidecar, while its RpcClient boundary can later be backed
+// by websocket.rs without changing callers. The public client is a cheap
+// handle so every page in one GPUI window observes the same mock backend,
+// just like the React app observes one IPC service.
+#[derive(Clone)]
 pub struct MockClient {
+    inner: Arc<Mutex<MockState>>,
+}
+
+struct MockState {
     next_team_id: u64,
     sequence: super::contract::RequestSequence,
     tasks: TasksConfig,
@@ -32,7 +42,7 @@ mod model_types {
 }
 use model_types::*;
 
-impl Default for MockClient {
+impl Default for MockState {
     fn default() -> Self {
         Self {
             next_team_id: 4,
@@ -239,7 +249,7 @@ impl Default for MockClient {
     }
 }
 
-impl MockClient {
+impl MockState {
     pub fn call(&mut self, method_name: &str, params: Option<Value>) -> RpcResponse {
         let request = RpcRequest::new(self.sequence.next(), method_name, params);
         self.handle(request)
@@ -506,9 +516,48 @@ fn merge_json<T: Serialize + serde::de::DeserializeOwned>(
         .map_err(|error| RpcError::invalid_params(format!("{label}: {error}")))
 }
 
+impl Default for MockClient {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(MockState::default())),
+        }
+    }
+}
+
+impl MockClient {
+    /// Return another handle to the same deterministic backend state.
+    pub fn shared(&self) -> Self {
+        self.clone()
+    }
+
+    pub fn call(&mut self, method_name: &str, params: Option<Value>) -> RpcResponse {
+        self.inner
+            .lock()
+            .expect("mock backend lock poisoned")
+            .call(method_name, params)
+    }
+
+    pub fn take_events(&mut self) -> Vec<EventEnvelope> {
+        self.inner
+            .lock()
+            .expect("mock backend lock poisoned")
+            .take_events()
+    }
+
+    pub fn device_status(&self) -> ConnectionStatus {
+        self.inner
+            .lock()
+            .expect("mock backend lock poisoned")
+            .device_status
+    }
+}
+
 impl RpcClient for MockClient {
     fn send(&mut self, request: RpcRequest) -> RpcResponse {
-        self.handle(request)
+        self.inner
+            .lock()
+            .expect("mock backend lock poisoned")
+            .handle(request)
     }
 }
 
@@ -577,7 +626,7 @@ mod tests {
     #[test]
     fn device_starts_disconnected_until_explicit_connect() {
         let mut client = MockClient::default();
-        assert_eq!(client.device_status, ConnectionStatus::Disconnected);
+        assert_eq!(client.device_status(), ConnectionStatus::Disconnected);
         let devices = client.call(method::DEVICE_LIST, None).result.unwrap();
         assert_eq!(devices.as_array().unwrap().len(), 2);
         assert_eq!(devices[1]["id"], "mumu-instance");
@@ -590,6 +639,24 @@ mod tests {
         let device_event = client.take_events().pop().unwrap();
         assert_eq!(device_event.event, event::DEVICE_STATUS);
         assert_eq!(device_event.payload["status"], "connected");
+    }
+
+    #[test]
+    fn cloned_clients_observe_one_backend_state() {
+        let mut writer = MockClient::default();
+        let mut reader = writer.shared();
+        let team = json!({
+            "id": "",
+            "name": "shared",
+            "sinners": [],
+            "purpose": "general",
+            "accessoryScheme": "burn",
+            "enabled": true,
+            "mirrorConfig": null
+        });
+        assert!(!writer.call(method::TEAM_SAVE, Some(team)).is_error());
+        let teams = reader.call(method::TEAM_LIST, None).result.unwrap();
+        assert_eq!(teams.as_array().unwrap().len(), 4);
     }
 
     #[test]

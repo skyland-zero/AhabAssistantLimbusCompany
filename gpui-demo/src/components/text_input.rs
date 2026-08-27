@@ -16,7 +16,7 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::style::{ColorToken, Palette};
+use super::style::{ColorToken, Palette, current_render_palette};
 
 fn paint_color(token: ColorToken) -> gpui::Rgba {
     gpui::rgba(token.rgba_hex())
@@ -63,7 +63,7 @@ impl TextInput {
         placeholder: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::new_with_palette(content, placeholder, Palette::default(), cx)
+        Self::new_with_palette(content, placeholder, current_render_palette(), cx)
     }
 
     /// Construct an input using the palette derived from the root settings.
