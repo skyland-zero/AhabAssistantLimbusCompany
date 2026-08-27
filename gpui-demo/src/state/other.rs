@@ -372,8 +372,6 @@ pub struct SettingsPageState {
 pub enum SettingsSelect {
     UpdateSource,
     SimulatorType,
-    SimulatorPort,
-    StartTimeout,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

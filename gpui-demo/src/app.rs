@@ -1,6 +1,6 @@
 use gpui::{
-    ClipboardItem, Context, Entity, Render, ScrollHandle, Window, WindowAppearance, div,
-    prelude::*, rgb,
+    ClipboardItem, Context, Entity, Render, ScrollHandle, Subscription, Window, WindowAppearance,
+    div, prelude::*, rgb,
 };
 
 use crate::{
@@ -96,6 +96,9 @@ pub struct AhabApp {
     pub team_observe_input: Option<Entity<TextInput>>,
     pub team_json_input: Option<Entity<TextInput>>,
     pub settings_cdk_input: Option<Entity<TextInput>>,
+    pub settings_port_input: Option<Entity<TextInput>>,
+    pub settings_timeout_input: Option<Entity<TextInput>>,
+    pub settings_input_subscriptions: Vec<Subscription>,
     pub help_scroll: ScrollHandle,
     pub home_log_scroll: ScrollHandle,
     pub toast: Option<shell::Toast>,
@@ -127,6 +130,9 @@ impl AhabApp {
             team_observe_input: None,
             team_json_input: None,
             settings_cdk_input: None,
+            settings_port_input: None,
+            settings_timeout_input: None,
+            settings_input_subscriptions: Vec::new(),
             help_scroll: ScrollHandle::new(),
             home_log_scroll: ScrollHandle::new(),
             toast: None,
@@ -162,6 +168,38 @@ impl AhabApp {
             };
             self.settings_cdk_input =
                 Some(cx.new(move |cx| TextInput::new_with_palette(cdk, placeholder, palette, cx)));
+        }
+        if self.settings_port_input.is_none() {
+            let value = self.settings_page.system.simulator_port.to_string();
+            let input =
+                cx.new(move |cx| TextInput::new_with_palette(value, "ADB port", palette, cx));
+            let subscription = cx.observe(&input, |view, input, cx| {
+                if let Ok(value) = input.read(cx).text().parse::<u16>()
+                    && value != view.settings_page.system.simulator_port
+                {
+                    view.settings_page
+                        .set_system_u16(crate::state::SystemU16::SimulatorPort, value);
+                    cx.notify();
+                }
+            });
+            self.settings_port_input = Some(input);
+            self.settings_input_subscriptions.push(subscription);
+        }
+        if self.settings_timeout_input.is_none() {
+            let value = self.settings_page.system.start_emulator_timeout.to_string();
+            let input =
+                cx.new(move |cx| TextInput::new_with_palette(value, "Timeout", palette, cx));
+            let subscription = cx.observe(&input, |view, input, cx| {
+                if let Ok(value) = input.read(cx).text().parse::<u16>()
+                    && value != view.settings_page.system.start_emulator_timeout
+                {
+                    view.settings_page
+                        .set_system_u16(crate::state::SystemU16::StartTimeout, value);
+                    cx.notify();
+                }
+            });
+            self.settings_timeout_input = Some(input);
+            self.settings_input_subscriptions.push(subscription);
         }
     }
 
@@ -378,6 +416,8 @@ impl AhabApp {
             self.team_observe_input.as_ref(),
             self.team_json_input.as_ref(),
             self.settings_cdk_input.as_ref(),
+            self.settings_port_input.as_ref(),
+            self.settings_timeout_input.as_ref(),
         ]
         .into_iter()
         .flatten()

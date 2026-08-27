@@ -364,36 +364,16 @@ fn simulator_card(
         ],
         "settings-simulator-type",
     );
-    let port = select_system_u16(
-        app,
-        cx,
-        SystemU16::SimulatorPort,
-        system.simulator_port,
-        system.simulator_port.to_string(),
-        vec![
-            (16384, "16384".to_owned()),
-            (5555, "5555".to_owned()),
-            (62001, "62001".to_owned()),
-        ],
-        "settings-simulator-port",
-    );
-    let timeout = select_system_u16(
-        app,
-        cx,
-        SystemU16::StartTimeout,
-        system.start_emulator_timeout,
-        format!(
-            "{} {}",
-            system.start_emulator_timeout,
-            text("秒", "sec").get(language)
-        ),
-        vec![
-            (30, format!("30 {}", text("秒", "sec").get(language))),
-            (60, format!("60 {}", text("秒", "sec").get(language))),
-            (120, format!("120 {}", text("秒", "sec").get(language))),
-        ],
-        "settings-emulator-timeout",
-    );
+    let port = app
+        .settings_port_input
+        .clone()
+        .map(|input| div().w(px(112.)).child(input))
+        .unwrap_or_else(|| div().child(text("初始化中", "Initializing…").get(language)));
+    let timeout = app
+        .settings_timeout_input
+        .clone()
+        .map(|input| div().w(px(112.)).child(input))
+        .unwrap_or_else(|| div().child(text("初始化中", "Initializing…").get(language)));
 
     let mut body = div()
         .flex()
@@ -843,7 +823,7 @@ fn select_system_u16(
     options: Vec<(u16, String)>,
     id: &'static str,
 ) -> Div {
-    let select = settings_select_for(field);
+    let select = SettingsSelect::SimulatorType;
     let open = app.settings_page.is_select_open(select);
     let palette = current_render_palette();
     let values: Vec<u16> = options.iter().map(|(candidate, _)| *candidate).collect();
@@ -926,22 +906,6 @@ fn select_system_u16(
         root = root.child(select_popup(option_list, &palette));
     }
     root
-}
-
-fn settings_select_for(field: SystemU16) -> SettingsSelect {
-    match field {
-        SystemU16::SimulatorType => SettingsSelect::SimulatorType,
-        SystemU16::SimulatorPort => SettingsSelect::SimulatorPort,
-        SystemU16::StartTimeout => SettingsSelect::StartTimeout,
-    }
-}
-
-fn system_u16_options(field: SystemU16) -> &'static [u16] {
-    match field {
-        SystemU16::SimulatorType => &[0, 10],
-        SystemU16::SimulatorPort => &[16384, 5555, 62001],
-        SystemU16::StartTimeout => &[30, 60, 120],
-    }
 }
 
 fn cycle_value(options: &[u16], current: u16, direction: i8) -> u16 {
@@ -1054,9 +1018,9 @@ mod tests {
 
     #[test]
     fn discrete_settings_cycle_with_keyboard_boundaries() {
-        let options = system_u16_options(SystemU16::SimulatorPort);
-        assert_eq!(cycle_value(options, 16384, -1), 62001);
-        assert_eq!(cycle_value(options, 62001, 1), 16384);
-        assert_eq!(cycle_value(options, 9999, 1), 5555);
+        let options = [16384, 5555, 62001];
+        assert_eq!(cycle_value(&options, 16384, -1), 62001);
+        assert_eq!(cycle_value(&options, 62001, 1), 16384);
+        assert_eq!(cycle_value(&options, 9999, 1), 5555);
     }
 }
