@@ -33,7 +33,7 @@
             <!-- 顶部标题栏状态 -->
                 <Border Grid.Row="0" Background="{DynamicResource TabBarBrush}" Padding="14,8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock Text="自动化任务" FontSize="13" Classes="section-title" VerticalAlignment="Center" />
+                    <TextBlock Text="自动化任务" FontSize="15" Classes="section-title" VerticalAlignment="Center" />
                     <Border Name="StatusBadge" Classes="badge" Padding="8,2" CornerRadius="10">
                         <Border.Transitions>
                             <Transitions>
@@ -69,7 +69,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                     <controls:AppIcon Icon="settings" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="窗口设置" FontSize="13" Classes="card-title" VerticalAlignment="Center"/>
+                                    <TextBlock Text="窗口设置" FontSize="14" Classes="card-title" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding WindowTags}"
                                               HorizontalAlignment="Right" Margin="0,0,8,0">
@@ -78,7 +78,7 @@
                                         <DataTemplate>
                                             <Border Classes="badge" Background="{Binding Highlight, Converter={StaticResource HlBg}}">
                                                 <TextBlock FontSize="11" Foreground="{Binding Highlight, Converter={StaticResource HlFg}}">
-                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="SemiBold"/>
+                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="Bold"/>
                                                 </TextBlock>
                                             </Border>
                                         </DataTemplate>
@@ -195,7 +195,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                     <controls:AppIcon Icon="calendar-days" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="日常任务" FontSize="13" Classes="card-title" VerticalAlignment="Center"/>
+                                    <TextBlock Text="日常任务" FontSize="14" Classes="card-title" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding DailyTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -203,7 +203,7 @@
                                         <DataTemplate>
                                             <Border Classes="badge" Background="{Binding Highlight, Converter={StaticResource HlBg}}">
                                                 <TextBlock FontSize="11" Foreground="{Binding Highlight, Converter={StaticResource HlFg}}">
-                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="SemiBold"/>
+                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="Bold"/>
                                                 </TextBlock>
                                             </Border>
                                         </DataTemplate>
@@ -399,7 +399,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                     <controls:AppIcon Icon="gift" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="领取奖励" FontSize="13" Classes="card-title" VerticalAlignment="Center"/>
+                                    <TextBlock Text="领取奖励" FontSize="14" Classes="card-title" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding RewardTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -407,7 +407,7 @@
                                         <DataTemplate>
                                             <Border Classes="badge" Background="{Binding Highlight, Converter={StaticResource HlBg}}">
                                                 <TextBlock FontSize="11" Foreground="{Binding Highlight, Converter={StaticResource HlFg}}">
-                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="SemiBold"/>
+                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="Bold"/>
                                                 </TextBlock>
                                             </Border>
                                         </DataTemplate>
@@ -455,7 +455,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                     <controls:AppIcon Icon="zap" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="狂气换体" FontSize="13" Classes="card-title" VerticalAlignment="Center"/>
+                                    <TextBlock Text="狂气换体" FontSize="14" Classes="card-title" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding EnkephalinTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -463,7 +463,7 @@
                                         <DataTemplate>
                                             <Border Classes="badge" Background="{Binding Highlight, Converter={StaticResource HlBg}}">
                                                 <TextBlock FontSize="11" Foreground="{Binding Highlight, Converter={StaticResource HlFg}}">
-                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="SemiBold"/>
+                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="Bold"/>
                                                 </TextBlock>
                                             </Border>
                                         </DataTemplate>
@@ -546,7 +546,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                     <controls:AppIcon Icon="compass" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="坐牢设置 (镜牢)" FontSize="13" Classes="card-title" VerticalAlignment="Center"/>
+                                    <TextBlock Text="坐牢设置 (镜牢)" FontSize="14" Classes="card-title" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ItemsControl Grid.Column="2" ItemsSource="{Binding MirrorTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -554,7 +554,7 @@
                                         <DataTemplate>
                                             <Border Classes="badge" Background="{Binding Highlight, Converter={StaticResource HlBg}}">
                                                 <TextBlock FontSize="11" Foreground="{Binding Highlight, Converter={StaticResource HlFg}}">
-                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="SemiBold"/>
+                                                    <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="Bold"/>
                                                 </TextBlock>
                                             </Border>
                                         </DataTemplate>
@@ -666,7 +666,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="不使用每周加成" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="保留每周加成次数，仅刷取基础点数" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="保留每周加成次数，仅刷取基础点数" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.NoWeeklyBonuses}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -675,7 +675,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="只打三层" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="探索至第 3 层后主动结算退出" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="探索至第 3 层后主动结算退出" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.Floor3Exit}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -684,7 +684,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="保存困牢奖励" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="通关困难镜牢后不立即领取奖励" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="通关困难镜牢后不立即领取奖励" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.SaveRewards}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -693,7 +693,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="困牢单次加成" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="困难镜牢每次结算仅消耗 1 次每周加成" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="困难镜牢每次结算仅消耗 1 次每周加成" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.HardMirrorSingleBonuses}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -702,7 +702,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="第5层选活动包" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="第 5 层优先进入最左侧活动卡包" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="第 5 层优先进入最左侧活动卡包" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.SelectEventPack}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -711,7 +711,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="第5层跳过活动包" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="第 5 层不选择活动卡包" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="第 5 层不选择活动卡包" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.SkipEventPack}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -720,7 +720,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="再次领取奖励" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="首次镜牢完成后再次触发一次领奖任务" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="首次镜牢完成后再次触发一次领奖任务" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.ReClaimRewards}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -729,7 +729,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="不跳过白棉花" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="遇到白棉花相关事件时不跳过" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="遇到白棉花相关事件时不跳过" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.NotSkipWhitegossypium}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -738,7 +738,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="战斗直到全灭" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="不主动逃跑，作战至最后一员倒下" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="不主动逃跑，作战至最后一员倒下" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.FightToLastMan}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -747,7 +747,7 @@
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <StackPanel Grid.Column="0" Spacing="0">
                                                     <TextBlock Text="键盘寻路导航" FontSize="12" Classes="field-label" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="使用键盘模拟按键进行镜牢节点选择与移动" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="使用键盘模拟按键进行镜牢节点选择与移动" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                                 <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding Config.Mirror.MirrorKeyboardNavigation}" IsCheckedChanged="ConfigSwitchToggled" />
                                             </Grid>
@@ -767,7 +767,7 @@
                             </Border>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                 <controls:AppIcon Icon="radio" Width="15" Height="15" Stroke="{DynamicResource MutedFgBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="亚哈共鸣" FontSize="13" Classes="card-title" VerticalAlignment="Center"/>
+                                <TextBlock Text="亚哈共鸣" FontSize="14" Classes="card-title" VerticalAlignment="Center"/>
                             </StackPanel>
                             <ItemsControl Grid.Column="2" ItemsSource="{Binding ResonateTags}" HorizontalAlignment="Right" Margin="0,0,8,0">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -775,7 +775,7 @@
                                     <DataTemplate>
                                         <Border Classes="badge" Background="{Binding Highlight, Converter={StaticResource HlBg}}">
                                             <TextBlock FontSize="11" Foreground="{Binding Highlight, Converter={StaticResource HlFg}}">
-                                                <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="SemiBold"/>
+                                                <Run Text="{Binding Label}"/><Run Text="{Binding Value}" FontWeight="Bold"/>
                                             </TextBlock>
                                         </Border>
                                     </DataTemplate>

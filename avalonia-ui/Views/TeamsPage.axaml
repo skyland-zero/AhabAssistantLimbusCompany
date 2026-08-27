@@ -74,7 +74,7 @@
                                 <StackPanel Grid.Column="0" Spacing="8" Margin="0,0,8,0">
                                     <!-- 名称 + 徽章行 -->
                                     <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                                        <TextBlock Text="{Binding Team.Name}" FontSize="13" Classes="card-title" Margin="0,0,8,4" />
+                                        <TextBlock Text="{Binding Team.Name}" FontSize="14" Classes="card-title" Margin="0,0,8,4" />
                                         <Border Classes="badge" Background="{DynamicResource SecondaryBrush}" Height="20" Margin="0,0,6,4">
                                             <TextBlock Text="{Binding Purpose}" FontSize="11" />
                                         </Border>

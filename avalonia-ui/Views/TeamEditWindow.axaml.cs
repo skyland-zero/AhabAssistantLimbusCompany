@@ -79,12 +79,12 @@ public partial class TeamEditWindow : MotionWindow
         => new() { Text = text, FontSize = size, Foreground = fg ?? (IBrush)global::Avalonia.Application.Current!.Resources["FgBrush"]!, FontWeight = weight };
 
     private static TextBlock FieldLabel(string text, double size = 12)
-        => Label(text, size, weight: FontWeight.Medium);
+        => Label(text, size, weight: FontWeight.Normal);
 
-    private static TextBlock SubsectionTitle(string text, double size = 12)
-        => Label(text, size, weight: FontWeight.SemiBold);
+    private static TextBlock SubsectionTitle(string text, double size = 14)
+        => Label(text, size, weight: FontWeight.Bold);
 
-    private static TextBlock Muted(string text, double size = 11)
+    private static TextBlock Muted(string text, double size = 12)
         => new() { Text = text, FontSize = size, Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!, TextWrapping = TextWrapping.Wrap };
 
     private static Border Section(params Control[] children)
@@ -309,7 +309,7 @@ public partial class TeamEditWindow : MotionWindow
             if (child is TextBlock tb)
             {
                 tb.Foreground = selected ? Brushes.White : (IBrush)res["MutedFgBrush"]!;
-                tb.FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal;
+                tb.FontWeight = selected ? FontWeight.Bold : FontWeight.Normal;
             }
         }
     }
@@ -334,7 +334,7 @@ public partial class TeamEditWindow : MotionWindow
             {
                 Text = info.Name,
                 FontSize = 11,
-                FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal,
+                FontWeight = selected ? FontWeight.Bold : FontWeight.Normal,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Foreground = selected ? (IBrush)global::Avalonia.Application.Current!.Resources["FgBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
             });
@@ -516,7 +516,7 @@ public partial class TeamEditWindow : MotionWindow
                 if (c is TextBlock tb)
                 {
                     tb.Foreground = discarded ? (IBrush)res["DestructiveBrush"]! : (IBrush)res["MutedFgBrush"]!;
-                    tb.FontWeight = discarded ? FontWeight.SemiBold : FontWeight.Normal;
+                    tb.FontWeight = discarded ? FontWeight.Bold : FontWeight.Normal;
                 }
     }
 
@@ -663,7 +663,7 @@ public partial class TeamEditWindow : MotionWindow
             var active = currentLvl > 0;
 
             var titleStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-            titleStack.Children.Add(Label(item.Zh, 12, weight: FontWeight.SemiBold));
+            titleStack.Children.Add(Label(item.Zh, 12, weight: FontWeight.Bold));
             var costText = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
             costText.Children.Add(new AppIcon
             {

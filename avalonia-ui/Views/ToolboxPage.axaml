@@ -51,7 +51,7 @@
                                 </Grid>
 
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding Title}" FontSize="13" Classes="card-title" />
+                                    <TextBlock Text="{Binding Title}" FontSize="14" Classes="card-title" />
                                     <TextBlock Text="{Binding Desc}" FontSize="12" Foreground="{DynamicResource MutedFgBrush}"
                                                TextWrapping="Wrap" LineHeight="17" />
                                 </StackPanel>

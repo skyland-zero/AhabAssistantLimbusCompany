@@ -20,7 +20,11 @@ class Program
             .With(new Win32PlatformOptions
             {
                 RenderingMode = [Win32RenderingMode.AngleEgl, Win32RenderingMode.Software],
-                CompositionMode = [Win32CompositionMode.WinUIComposition, Win32CompositionMode.DirectComposition]
+                CompositionMode = [
+                    Win32CompositionMode.WinUIComposition,
+                    Win32CompositionMode.DirectComposition,
+                    Win32CompositionMode.RedirectionSurface
+                ]
             })
             .LogToTrace();
 }

@@ -62,7 +62,7 @@ public partial class HelpPage : UserControl
                     BorderBrush = (IBrush)global::Avalonia.Application.Current!.Resources["SubtleBorderBrush"]!,
                     Margin = new Thickness(0, 28, 0, 8),
                     Padding = new Thickness(0, 0, 0, 4),
-                    Child = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold },
+                    Child = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.Bold },
                 };
                 content.Children.Add(heading);
                 _headings.Add(new Heading(title, heading));
@@ -75,8 +75,8 @@ public partial class HelpPage : UserControl
                 content.Children.Add(new TextBlock
                 {
                     Text = line[4..].Trim(),
-                    FontSize = 13,
-                    FontWeight = FontWeight.SemiBold,
+                    FontSize = 14,
+                    FontWeight = FontWeight.Bold,
                     Margin = new Thickness(0, 18, 0, 5),
                 });
                 continue;
@@ -109,14 +109,14 @@ public partial class HelpPage : UserControl
 
     private static TextBlock BuildParagraph(string text)
     {
-        var tb = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12.5, LineHeight = 21 };
+        var tb = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13, LineHeight = 21 };
         // 处理 **bold** 和 `inline code` 行内样式
         var parts = System.Text.RegularExpressions.Regex.Split(text, @"(\*\*[^*]+\*\*|`[^`]+`)");
         foreach (var part in parts)
         {
             if (part.Length == 0) continue;
             if (part.StartsWith("**") && part.EndsWith("**") && part.Length > 4)
-                tb.Inlines?.Add(new Run(part[2..^2]) { FontWeight = FontWeight.SemiBold });
+                tb.Inlines?.Add(new Run(part[2..^2]) { FontWeight = FontWeight.Bold });
             else if (part.StartsWith("`") && part.EndsWith("`") && part.Length > 2)
                 tb.Inlines?.Add(new Run(part[1..^1]) { FontFamily = new FontFamily("Consolas, Cascadia Mono, monospace") });
             else

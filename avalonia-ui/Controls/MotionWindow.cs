@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using AhabAssistant.Avalonia.Services;
 
@@ -43,6 +44,23 @@ public class MotionWindow : Window
     private bool _closeAnimationStarted;
     private bool _hasPendingDialogResult;
     private object? _pendingDialogResult;
+
+    public MotionWindow()
+    {
+        // Configure text rasterization for every application window, including
+        // dialogs. Use the Avalonia 12 helper methods rather than style setters:
+        // the latter cannot target these struct-backed attached properties in
+        // Avalonia 12.1.1.
+        global::Avalonia.Media.TextOptions.SetTextRenderingMode(
+            this,
+            OperatingSystem.IsWindows()
+                ? TextRenderingMode.SubpixelAntialias
+                : TextRenderingMode.Antialias);
+        global::Avalonia.Media.TextOptions.SetTextHintingMode(
+            this, TextHintingMode.Strong);
+        global::Avalonia.Media.TextOptions.SetBaselinePixelAlignment(
+            this, BaselinePixelAlignment.Aligned);
+    }
 
     /// <summary>Gets or sets whether an entrance animation is played.</summary>
     public bool AnimateOnOpen

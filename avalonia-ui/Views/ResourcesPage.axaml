@@ -64,7 +64,7 @@
                             </Border.Transitions>
                             <StackPanel Spacing="12">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" Classes="card-title" />
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="14" Classes="card-title" />
                                     <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11" Classes="status-label" Foreground="{DynamicResource FgBrush}" />
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
