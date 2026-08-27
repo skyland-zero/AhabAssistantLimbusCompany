@@ -1,10 +1,10 @@
 [package]
-name = "ahab-gpui-demo"
+name = "ahab-gpui-app"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
-# This demo intentionally follows the latest GPUI source on GitHub instead of a
+# This app intentionally follows the latest GPUI source on GitHub instead of a
 # crates.io release. Cargo.lock records the exact commit used for each build.
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed", package = "gpui", default-features = false }

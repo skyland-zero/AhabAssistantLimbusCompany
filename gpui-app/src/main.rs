@@ -17,7 +17,7 @@ use gpui_platform::application;
 
 use app::AhabApp;
 
-actions!(demo, [Quit]);
+actions!(app_actions, [Quit]);
 
 fn main() {
     application().run(|cx: &mut App| {

@@ -21,7 +21,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = (Resolve-Path $OutputDirectory -ErrorAction SilentlyContinue)?.Path ?? (Join-Path (Get-Location) $OutputDirectory)
 }
 if ([string]::IsNullOrWhiteSpace($Executable)) {
-    $Executable = Join-Path $repo "gpui-demo/target/release/ahab-gpui-demo.exe"
+    $Executable = Join-Path $repo "gpui-app/target/release/ahab-gpui-app.exe"
 }
 $Executable = (Resolve-Path $Executable).Path
 $capture = (Resolve-Path (Join-Path $PSScriptRoot "../tools/capture_window.py")).Path
@@ -67,7 +67,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 function Stop-GpuiProcess {
-    Get-Process -Name "ahab-gpui-demo" -ErrorAction SilentlyContinue |
+    Get-Process -Name "ahab-gpui-app" -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
 }

@@ -1,6 +1,6 @@
-# Ahab Assistant GPUI Demo
+# Ahab Assistant GPUI App
 
-这是一个与 `ui` 同级的独立 GPUI 原生界面 Demo，用于评估 Windows 下 GPUI 的视觉可行性和内存占用。
+这是一个与 `ui` 同级的独立 GPUI 原生应用，用于提供不依赖 WebView2 的 Windows 桌面界面。
 
 依赖直接指向 Zed 的最新 GitHub `main` 分支，而不是 crates.io 版本：
 
@@ -14,22 +14,22 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", package = "gpui
 在仓库根目录执行：
 
 ```powershell
-cargo +nightly run --manifest-path gpui-demo/Cargo.toml
+cargo +nightly run --manifest-path gpui-app/Cargo.toml
 ```
 
 发布版内存测试：
 
 ```powershell
-cargo +nightly run --release --manifest-path gpui-demo/Cargo.toml
+cargo +nightly run --release --manifest-path gpui-app/Cargo.toml
 ```
 
 验证模型、Mock IPC 和页面状态：
 
 ```powershell
-cargo +nightly test --manifest-path gpui-demo/Cargo.toml
+cargo +nightly test --manifest-path gpui-app/Cargo.toml
 ```
 
-`Cargo.lock` 会记录实际使用的 Git commit。当前 GitHub main 使用了尚未在 stable 中稳定的 `std::hint::cold_path`，因此 Demo 固定使用 nightly。Demo 会读取现有 `ui/public/sinners` 图片，不会复制资源。
+`Cargo.lock` 会记录实际使用的 Git commit。当前 GitHub main 使用了尚未在 stable 中稳定的 `std::hint::cold_path`，因此应用固定使用 nightly。应用会读取现有 `ui/public/sinners` 图片，不会复制资源。
 
 ## 固定尺寸视觉回归
 
@@ -37,25 +37,25 @@ cargo +nightly test --manifest-path gpui-demo/Cargo.toml
 
 ```powershell
 # GPUI release：每个组合会等待窗口、字体和资源完成加载后再截取 client area
-pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_visual.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps1
 
 # Tauri/WebView2 reference：首次启动可能需要编译，脚本会轮询 CDP 并额外等待 2 秒
-pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_tauri_reference.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_tauri_reference.ps1
 
 # 对齐共同物理像素区域并生成 JSON 差异报告
-python gpui-demo/tools/visual_diff.py `
+python gpui-app/tools/visual_diff.py `
   --reference artifacts/visual/reference-ui `
   --gpui artifacts/visual/gpui `
   --output artifacts/visual/pixel-diff.json
 
 # 动态交互状态：GPUI 通过 AHAB_VISUAL_STATE 覆盖，Tauri 通过真实 DOM 操作
-pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_visual.ps1 `
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps1 `
   -OutputDirectory artifacts/visual/gpui-states `
   -States home-expanded,home-select,home-running,home-paused,home-after-completion,teams-editor,teams-delete,teams-select,settings-hotkey,settings-select,settings-latest,toolbox-running,resources-syncing,help-scrolled
-pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-demo/scripts/capture_tauri_states.ps1 `
+pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_tauri_states.ps1 `
   -OutputDirectory artifacts/visual/reference-ui-states `
   -States home-expanded,home-select,home-running,home-paused,home-after-completion,teams-editor,teams-delete,teams-select,settings-hotkey,settings-select,settings-latest,toolbox-running,resources-syncing,help-scrolled
-python gpui-demo/tools/visual_diff.py `
+python gpui-app/tools/visual_diff.py `
   --reference artifacts/visual/reference-ui-states `
   --gpui artifacts/visual/gpui-states `
   --output artifacts/visual/pixel-diff-states.json
@@ -73,7 +73,7 @@ python gpui-demo/tools/visual_diff.py `
 - 页面旧 token 会通过 render-time Palette 跟随浅色/深色和强调色；全局 Toast、日志复制和自动滚动已接入。
 - 使用 `Ctrl-Q` 退出。
 
-当前仍未接入 Python sidecar、真实 JPEG 解码、托盘、全局热键注册和 Windows 电源 API；这些按 `GPUI_MIGRATION_PLAN.md` 的 M2/M5/M6 顺序继续。
+当前仍未接入 Python sidecar、真实 JPEG 解码、托盘、全局热键注册和 Windows 电源 API；这些能力将在后续原生客户端迭代中继续。
 
 ## 测量建议
 

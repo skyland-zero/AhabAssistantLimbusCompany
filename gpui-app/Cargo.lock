@@ -130,7 +130,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahab-gpui-demo"
+name = "ahab-gpui-app"
 version = "0.1.0"
 dependencies = [
  "gpui",
