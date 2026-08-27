@@ -4,7 +4,7 @@ pub mod other;
 pub mod teams;
 
 pub use app_state::AppState;
-pub use home::{DailyCounter, HomeState, MirrorOption, TaskOptionsTab};
+pub use home::{DailyCounter, HomeSelect, HomeState, MirrorOption, TaskOptionsTab};
 pub use other::{
     HotkeyTarget, ResourcesState, SettingsPageState, SettingsSelect, SystemBool, SystemU16,
     ThemePacksState, ToolboxState,

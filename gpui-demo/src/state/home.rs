@@ -37,6 +37,17 @@ pub enum TaskOptionsTab {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HomeSelect {
+    WindowResolution,
+    WindowPosition,
+    ScreenshotInterval,
+    MouseInterval,
+    DailyTeam(u8),
+    RewardMode,
+    AfterPowerAction,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DailyCounter {
     Exp,
     Thread,
@@ -56,9 +67,11 @@ pub struct HomeState {
     pub right_panel_collapsed: bool,
     pub expanded_tasks: HashSet<FixedTaskId>,
     pub task_options_tabs: HashMap<FixedTaskId, TaskOptionsTab>,
+    pub open_select: Option<HomeSelect>,
     pub mirror_progress: Option<MirrorProgressPayload>,
     pub latest_screenshot: Option<ScreenshotFrame>,
     pub after_completion_open: bool,
+    pub after_completion_draft: Option<crate::model::AfterCompletionConfig>,
 }
 
 impl Default for HomeState {
@@ -116,9 +129,11 @@ impl HomeState {
             right_panel_collapsed,
             expanded_tasks: HashSet::new(),
             task_options_tabs: HashMap::new(),
+            open_select: None,
             mirror_progress: None,
             latest_screenshot: None,
             after_completion_open: false,
+            after_completion_draft: None,
         }
     }
 
@@ -160,6 +175,22 @@ impl HomeState {
         }
     }
 
+    pub fn toggle_select(&mut self, select: HomeSelect) {
+        self.open_select = if self.open_select == Some(select) {
+            None
+        } else {
+            Some(select)
+        };
+    }
+
+    pub fn close_select(&mut self) {
+        self.open_select = None;
+    }
+
+    pub fn is_select_open(&self, select: HomeSelect) -> bool {
+        self.open_select == Some(select)
+    }
+
     /// Apply one complete task-config mutation and send the canonical config
     /// through IPC. This is the seam used by all Home controls, so no control
     /// can accidentally update the UI without updating the backend.
@@ -173,6 +204,44 @@ impl HomeState {
 
     pub fn set_after_completion_open(&mut self, open: bool) {
         self.after_completion_open = open;
+        self.after_completion_draft = open.then(|| self.tasks.afterCompletion.clone());
+        if open {
+            self.close_select();
+        }
+    }
+
+    pub fn toggle_after_completion_draft(&mut self, action: AfterExitAction) {
+        if self.is_busy() {
+            return;
+        }
+        if let Some(config) = self.after_completion_draft.as_mut() {
+            if let Some(index) = config.actions.iter().position(|item| *item == action) {
+                config.actions.remove(index);
+            } else {
+                config.actions.push(action);
+            }
+        }
+    }
+
+    pub fn set_after_completion_draft_power(&mut self, action: AfterPowerAction) {
+        if self.is_busy() {
+            return;
+        }
+        if let Some(config) = self.after_completion_draft.as_mut() {
+            config.powerAction = action;
+        }
+    }
+
+    pub fn apply_after_completion(&mut self, keep: bool) {
+        if self.is_busy() {
+            return;
+        }
+        let Some(mut draft) = self.after_completion_draft.take() else {
+            return;
+        };
+        draft.keepAfterCompletion = keep;
+        self.update_tasks(|tasks| tasks.afterCompletion = draft);
+        self.after_completion_open = false;
     }
 
     pub fn toggle_mirror_option(&mut self, field: MirrorOption) {
@@ -321,6 +390,85 @@ impl HomeState {
                 value.saturating_add(delta as u8)
             };
             *value = next.clamp(min, max);
+        });
+    }
+
+    pub fn adjust_enkephalin_count(&mut self, delta: i8) {
+        self.update_tasks(|tasks| {
+            let value = &mut tasks.buy_enkephalin.set_lunacy_to_enkephalin;
+            *value = adjust_u8(*value, delta, 0, 10);
+        });
+    }
+
+    pub fn adjust_mirror_count(&mut self, delta: i8) {
+        self.update_tasks(|tasks| {
+            let value = &mut tasks.mirror.set_mirror_count;
+            *value = adjust_u8(*value, delta, 1, 99);
+        });
+    }
+
+    pub fn set_window_size(&mut self, value: u16) {
+        self.update_tasks(|tasks| {
+            if matches!(value, 720 | 1080 | 1440) {
+                tasks.set_windows.set_win_size = value;
+            }
+        });
+    }
+
+    pub fn set_window_position(&mut self, value: impl Into<String>) {
+        let value = value.into();
+        self.update_tasks(|tasks| {
+            if matches!(value.as_str(), "0" | "1" | "2" | "3") {
+                tasks.set_windows.set_win_position = value;
+            }
+        });
+    }
+
+    pub fn set_screenshot_interval(&mut self, value: f32) {
+        self.update_tasks(|tasks| {
+            if [0.2, 0.5, 1.0]
+                .iter()
+                .any(|candidate| (*candidate - value).abs() < f32::EPSILON)
+            {
+                tasks.set_windows.screenshot_interval = value;
+            }
+        });
+    }
+
+    pub fn set_mouse_action_interval(&mut self, value: f32) {
+        self.update_tasks(|tasks| {
+            if [0.1, 0.3, 0.5]
+                .iter()
+                .any(|candidate| (*candidate - value).abs() < f32::EPSILON)
+            {
+                tasks.set_windows.mouse_action_interval = value;
+            }
+        });
+    }
+
+    pub fn set_daily_team(&mut self, index: u8, value: u8) {
+        self.update_tasks(|tasks| match index {
+            0 => tasks.daily_task.EXP_day_1_2 = value,
+            1 => tasks.daily_task.EXP_day_3_4 = value,
+            2 => tasks.daily_task.EXP_day_5_6 = value,
+            3 => tasks.daily_task.EXP_day_7 = value,
+            4 => tasks.daily_task.thread_day_1 = value,
+            5 => tasks.daily_task.thread_day_2 = value,
+            6 => tasks.daily_task.thread_day_3 = value,
+            7 => tasks.daily_task.thread_day_4 = value,
+            8 => tasks.daily_task.thread_day_5 = value,
+            9 => tasks.daily_task.thread_day_6 = value,
+            10 => tasks.daily_task.thread_day_7 = value,
+            11 => tasks.daily_task.daily_teams = value,
+            _ => {}
+        });
+    }
+
+    pub fn set_reward_mode(&mut self, value: u8) {
+        self.update_tasks(|tasks| {
+            if value <= 2 {
+                tasks.get_reward.set_get_prize = value;
+            }
         });
     }
 
@@ -488,6 +636,14 @@ impl HomeState {
     }
 }
 
+fn adjust_u8(value: u8, delta: i8, min: u8, max: u8) -> u8 {
+    if delta < 0 {
+        value.saturating_sub((-delta) as u8).max(min)
+    } else {
+        value.saturating_add(delta as u8).min(max)
+    }
+}
+
 fn cycle_inclusive(value: u8, min: u8, max: u8) -> u8 {
     if value < min || value >= max {
         min
@@ -615,5 +771,67 @@ mod tests {
             crate::model::AfterPowerAction::Lock
         );
         assert!(!home.tasks.afterCompletion.keepAfterCompletion);
+    }
+
+    #[test]
+    fn home_selects_are_exclusive_and_close_when_a_dialog_opens() {
+        let mut home = HomeState::default();
+        home.toggle_select(HomeSelect::RewardMode);
+        assert!(home.is_select_open(HomeSelect::RewardMode));
+        home.toggle_select(HomeSelect::WindowPosition);
+        assert!(!home.is_select_open(HomeSelect::RewardMode));
+        assert!(home.is_select_open(HomeSelect::WindowPosition));
+        home.set_after_completion_open(true);
+        assert!(home.after_completion_open);
+        assert!(home.after_completion_draft.is_some());
+        assert!(home.open_select.is_none());
+    }
+
+    #[test]
+    fn home_select_values_and_counters_stay_within_contract_bounds() {
+        let mut home = HomeState::default();
+        home.set_window_size(1440);
+        home.set_window_size(999);
+        assert_eq!(home.tasks.set_windows.set_win_size, 1440);
+        home.set_window_position("2");
+        assert_eq!(home.tasks.set_windows.set_win_position, "2");
+        home.set_screenshot_interval(1.0);
+        home.set_mouse_action_interval(0.1);
+        assert_eq!(home.tasks.set_windows.screenshot_interval, 1.0);
+        assert_eq!(home.tasks.set_windows.mouse_action_interval, 0.1);
+
+        home.tasks.buy_enkephalin.set_lunacy_to_enkephalin = 10;
+        home.adjust_enkephalin_count(1);
+        assert_eq!(home.tasks.buy_enkephalin.set_lunacy_to_enkephalin, 10);
+        home.adjust_enkephalin_count(-20);
+        assert_eq!(home.tasks.buy_enkephalin.set_lunacy_to_enkephalin, 0);
+        home.tasks.mirror.set_mirror_count = 1;
+        home.adjust_mirror_count(-1);
+        assert_eq!(home.tasks.mirror.set_mirror_count, 1);
+        home.adjust_mirror_count(127);
+        assert_eq!(home.tasks.mirror.set_mirror_count, 99);
+    }
+
+    #[test]
+    fn after_completion_draft_applies_only_when_confirmed() {
+        let mut home = HomeState::default();
+        let original = home.tasks.afterCompletion.clone();
+        home.set_after_completion_open(true);
+        home.toggle_after_completion_draft(crate::model::AfterExitAction::ExitEmulator);
+        home.set_after_completion_draft_power(crate::model::AfterPowerAction::Lock);
+        assert_eq!(home.tasks.afterCompletion, original);
+        home.apply_after_completion(false);
+        assert!(!home.after_completion_open);
+        assert!(!home.tasks.afterCompletion.keepAfterCompletion);
+        assert_eq!(
+            home.tasks.afterCompletion.powerAction,
+            crate::model::AfterPowerAction::Lock
+        );
+        assert!(
+            home.tasks
+                .afterCompletion
+                .actions
+                .contains(&crate::model::AfterExitAction::ExitEmulator)
+        );
     }
 }

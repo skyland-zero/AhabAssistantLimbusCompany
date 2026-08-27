@@ -154,6 +154,9 @@ impl AhabApp {
     }
 
     pub fn select_page(&mut self, page: Page, cx: &mut Context<Self>) {
+        self.home.close_select();
+        self.settings_page.close_select();
+        self.home.set_after_completion_open(false);
         self.current_page = page;
         cx.notify();
     }

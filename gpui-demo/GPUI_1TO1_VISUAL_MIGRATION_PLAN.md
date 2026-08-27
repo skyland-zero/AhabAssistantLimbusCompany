@@ -14,9 +14,11 @@
 - ✅ 运行时主题基础：页面旧 token 通过 render snapshot 跟随 light/dark/accent，输入控件同步 Palette；页面遗留色值已集中映射，Teams 图标改为 currentColor；全局 Toast 骨架已接入。
 - ✅ Mock 边界：同一窗口内各页面共享一个 Mock backend，避免 Home/Teams/Settings 状态互相脱节。
 - ✅ Home 第一批：General/Advanced 选项 Tab、日常队伍名称绑定、数量加减、Lucide SVG 任务/执行图标、日志 payload/时间/级别/复制/自动滚动。
+- ✅ Home 第二批：窗口设置、奖励模式、日常队伍和结束后电源动作改用统一 Select；Select 支持点击选项、Enter/Space、方向键、Home/End、Esc 和外部点击关闭；数量控件支持键盘激活并严格限制边界。
+- ✅ Home 第二批：结束后操作改为草稿编辑，支持 Apply Once / Save as Default，关闭、遮罩点击和 Esc 放弃未确认修改。
 - ✅ 其他页面修正：Resources 同步终态保留可见窗口，Teams 在 900px 下保持单列并补齐列表/编辑器主要英文标签。
 - ⏳ P0/P8：参考截图、尺寸表、像素差异和内存回归尚未建立。
-- ⏳ P2/P3/P4/P5/P6：全量 i18n、Home 全部 Select/描述、Teams 全量主题/英文仍需继续；设置 Select 已支持弹出菜单、键盘和 Mock 持久化，离散队伍选择支持方向键，主题包权重 Slider 支持鼠标拖拽。
+- ⏳ P2/P3/P4/P5/P6：全量 i18n、Home 描述/实际截图帧、Teams 全量主题/英文仍需继续；设置 Select 已支持弹出菜单、键盘和 Mock 持久化，离散队伍选择支持方向键，主题包权重 Slider 支持鼠标拖拽。
 - ⏳ P7：真实 WebSocket、JPEG 帧、托盘、全局热键注册和 Windows 系统 API 尚未接入。
 
 因此以下通过条件仍然是后续门禁，不把当前 Mock/骨架状态误报为完成。
@@ -516,5 +518,6 @@ cargo +nightly build --release --manifest-path gpui-demo/Cargo.toml
 6. 将当前深色固定色板替换为与 `index.css` 对应的 Palette。
 7. 建立统一图标、资源、字体和 i18n 层。
 8. 按 React JSX 结构重写 Home。
-9. 完成 Home 截图回归后，再迁移 Teams。
-10. 逐页迁移其余页面，最后接入真实平台能力。
+9. 完成 Home Select、计数器和结束后操作的 Mock 交互，再迁移 Teams。
+10. 为 Home 补齐描述文案、真实截图帧占位/解码边界，并建立固定尺寸截图回归。
+11. 逐页迁移其余页面，最后接入真实平台能力。

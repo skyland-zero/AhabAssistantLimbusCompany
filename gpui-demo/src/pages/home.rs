@@ -12,14 +12,14 @@ use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
     components::{
         BadgeTone, ButtonVariant, badge, button, card, render_rgb as rgb, render_rgba as rgba,
-        scroll_area_with_id, switch,
+        scroll_area_with_id, select_option, select_popup, select_trigger, switch,
     },
     i18n::{self, Key as I18nKey},
     model::{
         AfterExitAction, AfterPowerAction, ConnectionStatus, ExecutionState, FixedTaskId, Language,
         LogEntryPayload, LogLevel,
     },
-    state::{DailyCounter, HomeState, MirrorOption, TaskOptionsTab},
+    state::{DailyCounter, HomeSelect, HomeState, MirrorOption, TaskOptionsTab},
 };
 
 const RIGHT_PANEL_DEFAULT_WIDTH: f32 = 280.0;
@@ -162,7 +162,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         right_panel(app, cx)
     };
 
-    div()
+    let mut root = div()
         .relative()
         .w_full()
         .flex_1()
@@ -175,7 +175,14 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(left_panel)
         .child(splitter)
         .child(right)
-        .child(after_completion_editor(app, cx, busy))
+        .child(after_completion_editor(app, cx, busy));
+    root = root.on_any_mouse_down(cx.listener(|view, _, _, cx| {
+        if view.home.open_select.is_some() {
+            view.home.close_select();
+            cx.notify();
+        }
+    }));
+    root
 }
 
 fn task_header(
@@ -252,6 +259,14 @@ fn options_tabs(
             cx.stop_propagation();
             cx.notify();
         }));
+        control =
+            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.set_options_tab(task, tab);
+                    cx.notify();
+                }
+            }));
         tabs = tabs.child(control);
     }
     tabs
@@ -302,29 +317,117 @@ fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool)
     let config = &app.home.tasks.set_windows;
     let language = app.state.settings.language;
     let tab = app.home.options_tab(FixedTaskId::SetWindows);
-    let position = match config.set_win_position.as_str() {
-        "0" => text("屏幕居中", "Center").get(language),
-        "1" => text("靠左对齐", "Align Left").get(language),
-        "2" => text("靠右对齐", "Align Right").get(language),
-        _ => text("保持原位", "Keep Current").get(language),
-    };
-    let next_position = match config.set_win_position.as_str() {
-        "0" => "1",
-        "1" => "2",
-        "2" => "3",
-        _ => "0",
-    }
-    .to_owned();
-    let mut position_button = button(position, ButtonVariant::Outline).id("window-position");
-    let mut size_button =
-        button(format!("{0}P", config.set_win_size), ButtonVariant::Outline).id("window-size");
-    let mut restore_switch = switch(config.set_reduce_miscontact).id("reduce-miscontact");
-    let screenshot = config.screenshot_interval;
-    let mut screenshot_button =
-        button(format!("{screenshot:.1}s"), ButtonVariant::Outline).id("screenshot-interval");
-    let mouse = config.mouse_action_interval;
-    let mut mouse_button =
-        button(format!("{mouse:.1}s"), ButtonVariant::Outline).id("mouse-interval");
+    let position = home_select(
+        app,
+        cx,
+        HomeSelect::WindowPosition,
+        config.set_win_position.clone(),
+        vec![
+            (
+                "0".to_owned(),
+                text("屏幕居中", "Center").get(language).to_owned(),
+            ),
+            (
+                "1".to_owned(),
+                text("靠左对齐", "Align Left").get(language).to_owned(),
+            ),
+            (
+                "2".to_owned(),
+                text("靠右对齐", "Align Right").get(language).to_owned(),
+            ),
+            (
+                "3".to_owned(),
+                text("保持原位 (不移动)", "Keep Current (Do Not Move)")
+                    .get(language)
+                    .to_owned(),
+            ),
+        ],
+        "window-position",
+        144.,
+        busy,
+        Rc::new(|home, value| home.set_window_position(value)),
+    );
+    let size_button = home_select(
+        app,
+        cx,
+        HomeSelect::WindowResolution,
+        config.set_win_size.to_string(),
+        vec![
+            ("720".to_owned(), "1280 × 720".to_owned()),
+            ("1080".to_owned(), "1920 × 1080".to_owned()),
+            ("1440".to_owned(), "2560 × 1440".to_owned()),
+        ],
+        "window-size",
+        144.,
+        busy,
+        Rc::new(|home, value| {
+            if let Ok(value) = value.parse::<u16>() {
+                home.set_window_size(value);
+            }
+        }),
+    );
+    let restore_switch = task_option_switch(
+        "",
+        config.set_reduce_miscontact,
+        "reduce-miscontact",
+        busy,
+        cx,
+        |home| {
+            home.update_tasks(|tasks| {
+                tasks.set_windows.set_reduce_miscontact = !tasks.set_windows.set_reduce_miscontact
+            })
+        },
+    );
+    let screenshot_button = home_select(
+        app,
+        cx,
+        HomeSelect::ScreenshotInterval,
+        format!("{:.1}", config.screenshot_interval),
+        vec![
+            (
+                "0.2".to_owned(),
+                format!("0.2s ({})", text("极速", "Fast").get(language)),
+            ),
+            (
+                "0.5".to_owned(),
+                format!("0.5s ({})", text("默认", "Default").get(language)),
+            ),
+            (
+                "1.0".to_owned(),
+                format!("1.0s ({})", text("较慢", "Slow").get(language)),
+            ),
+        ],
+        "screenshot-interval",
+        144.,
+        busy,
+        Rc::new(|home, value| {
+            if let Ok(value) = value.parse::<f32>() {
+                home.set_screenshot_interval(value);
+            }
+        }),
+    );
+    let mouse_button = home_select(
+        app,
+        cx,
+        HomeSelect::MouseInterval,
+        format!("{:.1}", config.mouse_action_interval),
+        vec![
+            ("0.1".to_owned(), "0.1s".to_owned()),
+            (
+                "0.3".to_owned(),
+                format!("0.3s ({})", text("默认", "Default").get(language)),
+            ),
+            ("0.5".to_owned(), "0.5s".to_owned()),
+        ],
+        "mouse-interval",
+        144.,
+        busy,
+        Rc::new(|home, value| {
+            if let Ok(value) = value.parse::<f32>() {
+                home.set_mouse_action_interval(value);
+            }
+        }),
+    );
     let post_message = task_option_switch(
         "",
         config.use_post_message,
@@ -337,40 +440,6 @@ fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool)
             })
         },
     );
-    if !busy {
-        size_button = size_button.on_click(cx.listener(|view, _, _, cx| {
-            view.home.cycle_number(FixedTaskId::SetWindows);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-        position_button = position_button.on_click(cx.listener(move |view, _, _, cx| {
-            view.home
-                .update_tasks(|tasks| tasks.set_windows.set_win_position = next_position.clone());
-            cx.stop_propagation();
-            cx.notify();
-        }));
-        restore_switch = restore_switch.on_click(cx.listener(|view, _, _, cx| {
-            view.home.update_tasks(|tasks| {
-                tasks.set_windows.set_reduce_miscontact = !tasks.set_windows.set_reduce_miscontact
-            });
-            cx.stop_propagation();
-            cx.notify();
-        }));
-        let next_screenshot = next_interval(screenshot, &[0.2, 0.5, 1.0]);
-        screenshot_button = screenshot_button.on_click(cx.listener(move |view, _, _, cx| {
-            view.home
-                .update_tasks(|tasks| tasks.set_windows.screenshot_interval = next_screenshot);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-        let next_mouse = next_interval(mouse, &[0.1, 0.3, 0.5]);
-        mouse_button = mouse_button.on_click(cx.listener(move |view, _, _, cx| {
-            view.home
-                .update_tasks(|tasks| tasks.set_windows.mouse_action_interval = next_mouse);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-    }
 
     let content = match tab {
         TaskOptionsTab::General => div()
@@ -383,7 +452,7 @@ fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool)
             ))
             .child(control_row(
                 text("窗口位置", "Window Position").get(language),
-                position_button,
+                position,
             ))
             .child(control_row(
                 text("结束后恢复窗口", "Restore Window on Finish").get(language),
@@ -486,7 +555,7 @@ fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -> Di
         busy,
         cx,
     );
-    let daily_team = daily_team_cycle(
+    let daily_team = daily_team_select(
         app,
         text("默认日常编队", "Default Daily Team").get(language),
         11,
@@ -585,7 +654,7 @@ fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -> Di
                 (text("经验打击", "Fri/Sat (Blunt)"), 2),
                 (text("经验全属性", "Sun (All)"), 3),
             ] {
-                selectors = selectors.child(daily_team_cycle(
+                selectors = selectors.child(daily_team_select(
                     app,
                     label.get(language),
                     index,
@@ -605,7 +674,7 @@ fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -> Di
                 (text("周六", "Sat (Envy)"), 9),
                 (text("周日", "Sun (Wrath)"), 10),
             ] {
-                selectors = selectors.child(daily_team_cycle(
+                selectors = selectors.child(daily_team_select(
                     app,
                     label.get(language),
                     index,
@@ -629,14 +698,14 @@ fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -> Di
         })
 }
 
-fn daily_team_cycle(
+fn daily_team_select(
     app: &AhabApp,
     label: &'static str,
     index: u8,
     config: &crate::model::DailyTaskConfig,
     busy: bool,
     cx: &mut Context<AhabApp>,
-) -> gpui::Stateful<Div> {
+) -> Div {
     let value = match index {
         0 => config.EXP_day_1_2,
         1 => config.EXP_day_3_4,
@@ -651,39 +720,56 @@ fn daily_team_cycle(
         10 => config.thread_day_7,
         _ => config.daily_teams,
     };
-    let team_count = app.teams.teams.len().clamp(1, 99) as u8;
-    let team_name = app
+    let language = app.state.settings.language;
+    let mut options = app
         .teams
         .teams
-        .get(usize::from(value.saturating_sub(1)))
-        .map(|team| team.name.clone())
-        .unwrap_or_else(|| format!("队伍 {value}"));
-    action_button(
-        format!("{label} · {team_name}"),
-        format!("daily-team-{index}"),
-        ButtonVariant::Ghost,
-        busy,
+        .iter()
+        .take(99)
+        .enumerate()
+        .map(|(team_index, team)| ((team_index + 1).to_string(), team.name.clone()))
+        .collect::<Vec<_>>();
+    if options.is_empty() {
+        options.push((
+            "1".to_owned(),
+            text("编队 1", "Team 1").get(language).to_owned(),
+        ));
+    }
+    let on_change = Rc::new(move |home: &mut HomeState, value: String| {
+        if let Ok(value) = value.parse::<u8>() {
+            home.set_daily_team(index, value);
+        }
+    });
+    let select = home_select(
+        app,
         cx,
-        move |home| {
-            home.update_tasks(|tasks| {
-                let next = if value >= team_count { 1 } else { value + 1 };
-                match index {
-                    0 => tasks.daily_task.EXP_day_1_2 = next,
-                    1 => tasks.daily_task.EXP_day_3_4 = next,
-                    2 => tasks.daily_task.EXP_day_5_6 = next,
-                    3 => tasks.daily_task.EXP_day_7 = next,
-                    4 => tasks.daily_task.thread_day_1 = next,
-                    5 => tasks.daily_task.thread_day_2 = next,
-                    6 => tasks.daily_task.thread_day_3 = next,
-                    7 => tasks.daily_task.thread_day_4 = next,
-                    8 => tasks.daily_task.thread_day_5 = next,
-                    9 => tasks.daily_task.thread_day_6 = next,
-                    10 => tasks.daily_task.thread_day_7 = next,
-                    _ => tasks.daily_task.daily_teams = next,
-                }
-            });
-        },
-    )
+        HomeSelect::DailyTeam(index),
+        value.to_string(),
+        options,
+        format!("daily-team-{index}"),
+        if index == 11 { 144. } else { 120. },
+        busy,
+        on_change,
+    );
+    if index == 11 {
+        select
+    } else {
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_1()
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .truncate()
+                    .text_size(px(11.))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child(label),
+            )
+            .child(select)
+    }
 }
 
 fn reward_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool, executing: bool) -> Div {
@@ -691,15 +777,46 @@ fn reward_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool, executi
     let language = app.state.settings.language;
     let mode = app.home.tasks.get_reward.set_get_prize;
     let expanded = app.home.is_expanded(FixedTaskId::GetReward);
-    let number = number_button(
-        reward_mode_label(mode, language).to_owned(),
-        FixedTaskId::GetReward,
+    let mode_select = home_select(
+        app,
         cx,
+        HomeSelect::RewardMode,
+        mode.to_string(),
+        vec![
+            (
+                "0".to_owned(),
+                text(
+                    "全部领取 (狂气 + 通行证 + 邮件)",
+                    "Claim All (Lunacy + Pass + Mail)",
+                )
+                .get(language)
+                .to_owned(),
+            ),
+            (
+                "1".to_owned(),
+                text("狂气与通行证奖励", "Lunacy & Pass Rewards")
+                    .get(language)
+                    .to_owned(),
+            ),
+            (
+                "2".to_owned(),
+                text("仅领取邮件奖励", "Mail Rewards Only")
+                    .get(language)
+                    .to_owned(),
+            ),
+        ],
+        "reward-mode",
+        176.,
         busy,
+        Rc::new(|home, value| {
+            if let Ok(value) = value.parse::<u8>() {
+                home.set_reward_mode(value);
+            }
+        }),
     );
     let body = div().flex().flex_col().gap_2().child(control_row(
         text("领取模式", "Claim Mode").get(language),
-        number,
+        mode_select,
     ));
     task_card_with_toggle(
         cx,
@@ -763,11 +880,14 @@ fn enkephalin_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) 
     let config = &app.home.tasks.buy_enkephalin;
     let language = app.state.settings.language;
     let tab = app.home.options_tab(FixedTaskId::BuyEnkephalin);
-    let number = number_button(
-        format!("{} 次", config.set_lunacy_to_enkephalin),
-        FixedTaskId::BuyEnkephalin,
-        cx,
+    let number = task_counter(
+        config.set_lunacy_to_enkephalin,
+        0,
+        10,
+        "enkephalin-count",
         busy,
+        cx,
+        Rc::new(|home, delta| home.adjust_enkephalin_count(delta)),
     );
     let general = div().flex().flex_col().gap_2().child(control_row(
         text("换体次数（0~10）", "Refill Times (0-10)").get(language),
@@ -841,12 +961,22 @@ fn mirror_card(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool, executi
     let language = app.state.settings.language;
     let expanded = app.home.is_expanded(FixedTaskId::Mirror);
     let config = &app.home.tasks.mirror;
-    let number = number_button(
-        format!("{} 次", config.set_mirror_count),
-        FixedTaskId::Mirror,
-        cx,
-        busy,
-    );
+    let number = if config.infinite_dungeons {
+        badge(
+            text("∞ 无限", "∞ Infinite").get(language),
+            BadgeTone::Neutral,
+        )
+    } else {
+        task_counter(
+            config.set_mirror_count,
+            1,
+            99,
+            "mirror-count",
+            busy,
+            cx,
+            Rc::new(|home, delta| home.adjust_mirror_count(delta)),
+        )
+    };
     let infinite = task_option_switch(
         text("无限模式", "Infinite Mode").get(language),
         config.infinite_dungeons,
@@ -1080,6 +1210,26 @@ fn daily_counter(
     busy: bool,
     cx: &mut Context<AhabApp>,
 ) -> Div {
+    task_counter(
+        current,
+        min,
+        max,
+        id,
+        busy,
+        cx,
+        Rc::new(move |home, delta| home.adjust_daily_counter(field, delta)),
+    )
+}
+
+fn task_counter(
+    current: u8,
+    min: u8,
+    max: u8,
+    id: &'static str,
+    busy: bool,
+    cx: &mut Context<AhabApp>,
+    action: Rc<dyn Fn(&mut HomeState, i8)>,
+) -> Div {
     let mut decrement = button("", ButtonVariant::Outline)
         .id(format!("{id}-decrement"))
         .w(px(26.))
@@ -1087,11 +1237,21 @@ fn daily_counter(
         .p_0()
         .child(action_icon(ICON_MINUS, 13., TEXT));
     if !busy && current > min {
-        decrement = decrement.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.adjust_daily_counter(field, -1);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        let click_action = action.clone();
+        let key_action = action.clone();
+        decrement = decrement
+            .on_click(cx.listener(move |view, _, _, cx| {
+                click_action(&mut view.home, -1);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    key_action(&mut view.home, -1);
+                    cx.notify();
+                }
+            }));
     } else {
         decrement = decrement.opacity(0.45).cursor_not_allowed();
     }
@@ -1103,11 +1263,21 @@ fn daily_counter(
         .p_0()
         .child(action_icon(ICON_PLUS, 13., TEXT));
     if !busy && current < max {
-        increment = increment.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.adjust_daily_counter(field, 1);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        let click_action = action.clone();
+        let key_action = action.clone();
+        increment = increment
+            .on_click(cx.listener(move |view, _, _, cx| {
+                click_action(&mut view.home, 1);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    key_action(&mut view.home, 1);
+                    cx.notify();
+                }
+            }));
     } else {
         increment = increment.opacity(0.45).cursor_not_allowed();
     }
@@ -1127,28 +1297,6 @@ fn daily_counter(
                 .child(current.to_string()),
         )
         .child(increment)
-}
-
-fn action_button<F>(
-    label: impl Into<String>,
-    id: impl Into<String>,
-    variant: ButtonVariant,
-    busy: bool,
-    cx: &mut Context<AhabApp>,
-    action: F,
-) -> gpui::Stateful<Div>
-where
-    F: Fn(&mut HomeState) + 'static,
-{
-    let mut control = button(label, variant).id(id.into());
-    if !busy {
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            action(&mut view.home);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-    }
-    control
 }
 
 fn task_option_switch<F>(
@@ -1182,16 +1330,148 @@ where
                     cx.notify();
                 }
             }));
+    } else {
+        control = control.opacity(0.45).cursor_not_allowed();
     }
     control
 }
 
-fn next_interval(value: f32, values: &[f32]) -> f32 {
-    values
+fn home_select(
+    app: &AhabApp,
+    cx: &mut Context<AhabApp>,
+    select: HomeSelect,
+    current: impl Into<String>,
+    options: Vec<(String, String)>,
+    id: impl Into<String>,
+    width: f32,
+    disabled: bool,
+    on_change: Rc<dyn Fn(&mut HomeState, String)>,
+) -> Div {
+    let current = current.into();
+    let selected_index = options
         .iter()
-        .position(|candidate| (*candidate - value).abs() < f32::EPSILON)
-        .map(|index| values[(index + 1) % values.len()])
-        .unwrap_or(values[0])
+        .position(|(value, _)| value == &current)
+        .unwrap_or(0);
+    let selected_label = options
+        .get(selected_index)
+        .map(|(_, label)| label.clone())
+        .unwrap_or_else(|| current.clone());
+    let values = options
+        .iter()
+        .map(|(value, _)| value.clone())
+        .collect::<Vec<_>>();
+    let open = app.home.is_select_open(select);
+    let palette = crate::components::style::current_render_palette();
+    let id = id.into();
+    let mut trigger = select_trigger(selected_label, open, &palette)
+        .id(id.clone())
+        .w(px(width));
+
+    if disabled {
+        trigger = trigger.opacity(0.5).cursor_not_allowed();
+    } else {
+        trigger = trigger.on_click(cx.listener(move |view, _, _, cx| {
+            view.home.toggle_select(select);
+            cx.stop_propagation();
+            cx.notify();
+        }));
+        let key_change = on_change.clone();
+        let key_values = values.clone();
+        let key_current = current.clone();
+        trigger =
+            trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                let key = event.keystroke.key.to_ascii_lowercase();
+                if key == "escape" {
+                    window.prevent_default();
+                    view.home.close_select();
+                    cx.notify();
+                    return;
+                }
+                if matches!(key.as_str(), "enter" | "space") {
+                    window.prevent_default();
+                    view.home.toggle_select(select);
+                    cx.notify();
+                    return;
+                }
+
+                let current_index = key_values
+                    .iter()
+                    .position(|candidate| candidate == &key_current)
+                    .unwrap_or(0);
+                let next_index = match key.as_str() {
+                    "left" | "arrowleft" | "up" | "arrowup" => Some(
+                        (current_index as isize - 1).rem_euclid(key_values.len().max(1) as isize)
+                            as usize,
+                    ),
+                    "right" | "arrowright" => Some((current_index + 1) % key_values.len().max(1)),
+                    "down" | "arrowdown" if open => {
+                        Some((current_index + 1) % key_values.len().max(1))
+                    }
+                    "down" | "arrowdown" => Some(current_index),
+                    "home" => Some(0),
+                    "end" => key_values.len().checked_sub(1),
+                    _ => None,
+                };
+                if let Some(next_index) = next_index
+                    && let Some(value) = key_values.get(next_index)
+                {
+                    window.prevent_default();
+                    if matches!(key.as_str(), "down" | "arrowdown" | "up" | "arrowup") && !open {
+                        view.home.toggle_select(select);
+                    } else {
+                        key_change(&mut view.home, value.clone());
+                        if !open {
+                            view.home.close_select();
+                        }
+                    }
+                    cx.notify();
+                }
+            }));
+    }
+
+    let mut option_list = div().flex().flex_col().gap_1();
+    for (value, option_label) in options {
+        let selected = value == current;
+        let option_id = format!("{id}-option-{value}");
+        let click_change = on_change.clone();
+        let click_value = value.clone();
+        let mut option = select_option(option_label, selected, &palette)
+            .id(option_id)
+            .on_click(cx.listener(move |view, _, _, cx| {
+                click_change(&mut view.home, click_value.clone());
+                view.home.close_select();
+                cx.stop_propagation();
+                cx.notify();
+            }));
+        let key_change = on_change.clone();
+        let key_value = value;
+        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if is_activation_key(event) {
+                window.prevent_default();
+                key_change(&mut view.home, key_value.clone());
+                view.home.close_select();
+                cx.notify();
+            } else if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                window.prevent_default();
+                view.home.close_select();
+                cx.notify();
+            }
+        }));
+        option_list = option_list.child(option);
+    }
+
+    let mut root = div().relative().w(px(width)).child(trigger);
+    if open {
+        root = root.child(select_popup(option_list, &palette).shadow_sm());
+    }
+    root
+}
+
+fn is_activation_key(event: &KeyDownEvent) -> bool {
+    matches!(
+        event.keystroke.key.to_ascii_lowercase().as_str(),
+        "enter" | "space"
+    )
 }
 
 fn preview_tag(label: impl Into<String>, value: impl Into<String>, highlight: bool) -> Div {
@@ -1233,6 +1513,8 @@ fn task_card_with_toggle(
                 cx.notify();
             }
         }));
+    } else {
+        toggle = toggle.opacity(0.45).cursor_not_allowed();
     }
     task_card(
         cx,
@@ -1271,10 +1553,18 @@ fn task_card(
     if has_options {
         header = header
             .cursor_pointer()
+            .tab_index(0)
             .hover(|style| style.bg(rgba((SURFACE_HOVER << 8) | 0x35)))
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.home.toggle_expanded(task);
                 cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.toggle_expanded(task);
+                    cx.notify();
+                }
             }));
     }
 
@@ -1340,7 +1630,6 @@ fn task_card(
     let mut root = div()
         .relative()
         .min_w_0()
-        .overflow_hidden()
         .rounded_lg()
         .border_1()
         .border_color(rgb(if executing { ACCENT } else { BORDER }))
@@ -1403,23 +1692,6 @@ fn running_sweep() -> Div {
                     |element, progress| element.top(px(-28.0 + progress * 120.0)),
                 ),
         )
-}
-
-fn number_button(
-    label: String,
-    task: FixedTaskId,
-    cx: &mut Context<AhabApp>,
-    busy: bool,
-) -> gpui::Stateful<Div> {
-    let mut control = button(label, ButtonVariant::Outline).id(format!("number-{}", task_id(task)));
-    if !busy {
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.cycle_number(task);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-    }
-    control
 }
 
 fn detail_switch(
@@ -1595,107 +1867,123 @@ fn after_completion_editor(
     if !app.home.after_completion_open {
         return div().into_any_element();
     }
-    let config = app.home.tasks.afterCompletion.clone();
+    let config = app
+        .home
+        .after_completion_draft
+        .clone()
+        .unwrap_or_else(|| app.home.tasks.afterCompletion.clone());
     let language = app.state.settings.language;
-    let mut exits = div().flex().flex_wrap().gap_2();
+    let mut exits = div().flex().flex_col().gap_1();
     for action in [
         AfterExitAction::ExitGame,
         AfterExitAction::ExitEmulator,
         AfterExitAction::ExitAalc,
     ] {
-        let selected = config.actions.contains(&action);
-        let mut control = button(
-            after_exit_label(action, language),
-            if selected {
-                ButtonVariant::Secondary
-            } else {
-                ButtonVariant::Outline
+        let control = task_option_switch(
+            "",
+            config.actions.contains(&action),
+            match action {
+                AfterExitAction::ExitGame => "after-exit-game",
+                AfterExitAction::ExitEmulator => "after-exit-emulator",
+                AfterExitAction::ExitAalc => "after-exit-aalc",
             },
-        )
-        .id(format!("after-exit-{action:?}"));
-        if !busy {
-            control = control.on_click(cx.listener(move |view, _, _, cx| {
-                view.home.toggle_after_exit_action(action);
-                cx.notify();
-            }));
-            control =
-                control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                    if matches!(
-                        event.keystroke.key.to_ascii_lowercase().as_str(),
-                        "enter" | "space"
-                    ) {
-                        window.prevent_default();
-                        view.home.toggle_after_exit_action(action);
-                        cx.notify();
-                    }
-                }));
-        }
-        exits = exits.child(control);
+            busy,
+            cx,
+            move |home| home.toggle_after_completion_draft(action),
+        );
+        exits = exits.child(control_row(after_exit_label(action, language), control));
     }
 
-    let mut power = div().flex().flex_wrap().gap_2();
-    for action in [
-        AfterPowerAction::None,
-        AfterPowerAction::Sleep,
-        AfterPowerAction::Hibernate,
-        AfterPowerAction::Lock,
-        AfterPowerAction::Shutdown,
-    ] {
-        let selected = config.powerAction == action;
-        let mut control = button(
-            after_power_label(action, language),
-            if selected {
-                ButtonVariant::Secondary
-            } else {
-                ButtonVariant::Outline
-            },
-        )
-        .id(format!("after-power-{action:?}"));
-        if !busy {
-            control = control.on_click(cx.listener(move |view, _, _, cx| {
-                view.home.set_after_power_action(action);
-                cx.notify();
-            }));
-            control =
-                control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                    if matches!(
-                        event.keystroke.key.to_ascii_lowercase().as_str(),
-                        "enter" | "space"
-                    ) {
-                        window.prevent_default();
-                        view.home.set_after_power_action(action);
-                        cx.notify();
-                    }
-                }));
-        }
-        power = power.child(control);
-    }
-
-    let mut keep = switch(config.keepAfterCompletion).id("after-keep-default");
-    if !busy {
-        keep = keep.on_click(cx.listener(move |view, _, _, cx| {
-            let keep = !view.home.tasks.afterCompletion.keepAfterCompletion;
-            view.home.set_keep_after_completion(keep);
-            cx.notify();
-        }));
-        keep = keep.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-            if matches!(
-                event.keystroke.key.to_ascii_lowercase().as_str(),
-                "enter" | "space"
-            ) {
-                window.prevent_default();
-                let keep = !view.home.tasks.afterCompletion.keepAfterCompletion;
-                view.home.set_keep_after_completion(keep);
-                cx.notify();
+    let power = home_select(
+        app,
+        cx,
+        HomeSelect::AfterPowerAction,
+        after_power_key(config.powerAction),
+        vec![
+            (
+                "none".to_owned(),
+                after_power_label(AfterPowerAction::None, language).to_owned(),
+            ),
+            (
+                "sleep".to_owned(),
+                after_power_label(AfterPowerAction::Sleep, language).to_owned(),
+            ),
+            (
+                "hibernate".to_owned(),
+                after_power_label(AfterPowerAction::Hibernate, language).to_owned(),
+            ),
+            (
+                "lock".to_owned(),
+                after_power_label(AfterPowerAction::Lock, language).to_owned(),
+            ),
+            (
+                "shutdown".to_owned(),
+                after_power_label(AfterPowerAction::Shutdown, language).to_owned(),
+            ),
+        ],
+        "after-power-action",
+        190.,
+        busy,
+        Rc::new(|home, value| {
+            if let Some(action) = parse_after_power_action(&value) {
+                home.set_after_completion_draft_power(action);
             }
-        }));
-    }
-    let mut close = button(text("完成", "Done").get(language), ButtonVariant::Default)
+        }),
+    );
+
+    let mut close = button(text("关闭", "Close").get(language), ButtonVariant::Ghost)
         .id("after-completion-close");
     close = close.on_click(cx.listener(|view, _, _, cx| {
         view.home.set_after_completion_open(false);
         cx.notify();
     }));
+    close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if is_activation_key(event) {
+            window.prevent_default();
+            view.home.set_after_completion_open(false);
+            cx.notify();
+        }
+    }));
+
+    let mut apply_once = button(
+        text("仅本次生效", "Apply Once").get(language),
+        ButtonVariant::Outline,
+    )
+    .id("after-completion-apply-once");
+    let mut save_default = button(
+        text("保存为默认", "Save as Default").get(language),
+        ButtonVariant::Default,
+    )
+    .id("after-completion-save-default");
+    if !busy {
+        apply_once = apply_once.on_click(cx.listener(|view, _, _, cx| {
+            view.home.apply_after_completion(false);
+            cx.notify();
+        }));
+        apply_once =
+            apply_once.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.apply_after_completion(false);
+                    cx.notify();
+                }
+            }));
+        save_default = save_default.on_click(cx.listener(|view, _, _, cx| {
+            view.home.apply_after_completion(true);
+            cx.notify();
+        }));
+        save_default =
+            save_default.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.apply_after_completion(true);
+                    cx.notify();
+                }
+            }));
+    } else {
+        apply_once = apply_once.opacity(0.45).cursor_not_allowed();
+        save_default = save_default.opacity(0.45).cursor_not_allowed();
+    }
 
     let dialog = card(
         div()
@@ -1723,10 +2011,15 @@ fn after_completion_editor(
                 text("最终电源动作", "Power Action").get(language),
                 power,
             ))
-            .child(control_row(
-                text("保存为默认配置", "Save as Default").get(language),
-                keep,
-            )),
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
+                    .pt_1()
+                    .child(apply_once)
+                    .child(save_default),
+            ),
     )
     .w(px(460.0))
     .max_w_full()
@@ -1803,6 +2096,27 @@ fn after_power_label(action: AfterPowerAction, language: Language) -> &'static s
         AfterPowerAction::Lock => text("锁屏", "Lock Screen").get(language),
         AfterPowerAction::Shutdown => text("关机", "Shut Down").get(language),
     }
+}
+
+fn after_power_key(action: AfterPowerAction) -> &'static str {
+    match action {
+        AfterPowerAction::None => "none",
+        AfterPowerAction::Sleep => "sleep",
+        AfterPowerAction::Hibernate => "hibernate",
+        AfterPowerAction::Lock => "lock",
+        AfterPowerAction::Shutdown => "shutdown",
+    }
+}
+
+fn parse_after_power_action(value: &str) -> Option<AfterPowerAction> {
+    Some(match value {
+        "none" => AfterPowerAction::None,
+        "sleep" => AfterPowerAction::Sleep,
+        "hibernate" => AfterPowerAction::Hibernate,
+        "lock" => AfterPowerAction::Lock,
+        "shutdown" => AfterPowerAction::Shutdown,
+        _ => return None,
+    })
 }
 
 fn splitter(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> gpui::Stateful<Div> {
