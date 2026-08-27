@@ -140,6 +140,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .h(px(28.))
             .px_3()
             .rounded_md()
+            .tab_index(0)
             .cursor_pointer()
             .text_size(px(12.))
             .text_color(palette_rgb(if active {
@@ -164,14 +165,22 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     .child(count.to_string()),
             );
         }
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.teams.set_filter(candidate);
-            cx.notify();
-        }));
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.teams.set_filter(candidate);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.teams.set_filter(candidate);
+                    cx.notify();
+                }
+            }));
         filter_bar = filter_bar.child(control);
     }
 
-    let new_team = div()
+    let mut new_team = div()
         .id("new-team")
         .flex()
         .items_center()
@@ -180,10 +189,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .h(px(32.))
         .px_3()
         .rounded_md()
+        .tab_index(0)
         .cursor_pointer()
         .bg(rgb(crate::app::ACCENT))
         .text_size(px(12.))
         .text_color(palette_rgb(current_render_palette().brand_foreground))
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(
             ICON_PLUS,
             14.,
@@ -191,6 +202,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         ))
         .child(text("新建队伍", "New Team").get(language))
         .on_click(cx.listener(|view, _, _, cx| view.open_new_team(cx)));
+    new_team = new_team.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if team_activation_key(event) {
+            window.prevent_default();
+            view.open_new_team(cx);
+        }
+    }));
 
     let mut cards = div().flex().flex_wrap().gap_3().items_stretch();
     if app.teams.teams.is_empty() {
@@ -260,7 +277,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .bg(palette_rgb(current_render_palette().success_light))
                 .text_size(px(11.))
                 .text_color(palette_rgb(current_render_palette().success))
-                .child(feedback),
+                .child(localized_feedback(&feedback, language)),
         );
     }
     root = root.child(
@@ -287,16 +304,20 @@ fn team_card(
     let has_starlight = config.opening_bonus.iter().any(|level| *level > 0);
     let team_id = team.id.clone();
     let edit_team = team.clone();
+    let edit_team_for_key = edit_team.clone();
     let delete_team = team.clone();
+    let delete_team_for_key = delete_team.clone();
 
-    let edit = div()
+    let mut edit = div()
         .id(format!("edit-team-{team_id}"))
         .flex()
         .items_center()
         .justify_center()
         .size(px(32.))
         .rounded_md()
+        .tab_index(0)
         .cursor_pointer()
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(
             ICON_EDIT,
             16.,
@@ -305,19 +326,34 @@ fn team_card(
         .on_click(cx.listener(move |view, _, _, cx| {
             view.open_existing_team(&edit_team, cx);
         }));
-    let delete = div()
+    edit = edit.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        if team_activation_key(event) {
+            window.prevent_default();
+            view.open_existing_team(&edit_team_for_key, cx);
+        }
+    }));
+    let mut delete = div()
         .id(format!("delete-team-{team_id}"))
         .flex()
         .items_center()
         .justify_center()
         .size(px(32.))
         .rounded_md()
+        .tab_index(0)
         .cursor_pointer()
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(ICON_TRASH, 16., current_render_palette().danger))
         .on_click(cx.listener(move |view, _, _, cx| {
             view.teams.request_delete(delete_team.clone());
             cx.notify();
         }));
+    delete = delete.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        if team_activation_key(event) {
+            window.prevent_default();
+            view.teams.request_delete(delete_team_for_key.clone());
+            cx.notify();
+        }
+    }));
 
     let mut sinner_badges = div().flex().flex_wrap().gap_1();
     for (index, sinner) in team.sinners.iter().enumerate() {
@@ -532,7 +568,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         tabs = tabs.child(control);
     }
 
-    let copy = div()
+    let mut copy = div()
         .id("team-copy-json")
         .flex()
         .items_center()
@@ -541,21 +577,35 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .h(px(28.))
         .px_2()
         .rounded_md()
+        .tab_index(0)
         .border_1()
         .border_color(rgb(BORDER))
         .cursor_pointer()
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .text_size(px(11.))
         .text_color(rgb(crate::app::ACCENT))
         .child(icon(ICON_COPY, 14., current_render_palette().brand))
         .child(text("复制 JSON", "Copy JSON").get(language))
         .on_click(cx.listener(|view, _, _, cx| view.copy_team_json(cx)));
+    copy = copy.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if team_activation_key(event) {
+            window.prevent_default();
+            view.copy_team_json(cx);
+        }
+    }));
 
-    let close = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
+    let mut close = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
         .id("team-editor-cancel")
         .h(px(32.))
         .px_3()
         .py_0()
         .on_click(cx.listener(|view, _, _, cx| view.close_team_editor(cx)));
+    close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if team_activation_key(event) {
+            window.prevent_default();
+            view.close_team_editor(cx);
+        }
+    }));
     let current_name = app
         .team_name_input
         .as_ref()
@@ -571,7 +621,14 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .px_3()
     .py_0();
     if can_save {
-        save = save.on_click(cx.listener(|view, _, _, cx| view.save_team_editor(cx)));
+        save = save
+            .on_click(cx.listener(|view, _, _, cx| view.save_team_editor(cx)))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.save_team_editor(cx);
+                }
+            }));
     } else {
         save = save.opacity(0.45).cursor_default();
     }
@@ -616,9 +673,9 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                             .gap_1()
                             .child(div().text_size(px(16.)).text_color(rgb(TEXT)).child(
                                 if team.id.is_empty() {
-                                    "新建队伍"
+                                    text("新建队伍", "New Team").get(language)
                                 } else {
-                                    "编辑队伍"
+                                    text("编辑队伍", "Edit Team").get(language)
                                 },
                             ))
                             .child(
@@ -669,7 +726,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                                     .min_w_0()
                                     .text_size(px(11.))
                                     .text_color(palette_rgb(current_render_palette().warning))
-                                    .child(message)
+                                    .child(localized_feedback(&message, language))
                             })
                             .unwrap_or_else(|| {
                                 div()
@@ -812,11 +869,21 @@ fn basic_editor(
         let mut control =
             system_choice(index, selected, false, language).id(format!("team-system-{name}"));
         let system_name = (*name).to_owned();
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.teams
-                .set_editor_scheme(system_name.clone(), index as u8);
-            cx.notify();
-        }));
+        let system_name_for_key = system_name.clone();
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.teams
+                    .set_editor_scheme(system_name.clone(), index as u8);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.teams
+                        .set_editor_scheme(system_name_for_key.clone(), index as u8);
+                    cx.notify();
+                }
+            }));
         systems = systems.child(control);
     }
 
@@ -825,6 +892,7 @@ fn basic_editor(
         let selected = team.sinners.iter().position(|id| id == &sinner.id);
         let id = sinner.id.clone();
         let path = sinner_path(&id);
+        let key_id = id.clone();
         let palette = current_render_palette();
         let mut control = div()
             .id(format!("team-sinner-{id}"))
@@ -836,6 +904,7 @@ fn basic_editor(
             .justify_center()
             .gap_1()
             .rounded_lg()
+            .tab_index(0)
             .border_1()
             .border_color(palette_rgb(if selected.is_some() {
                 palette.brand
@@ -848,9 +917,18 @@ fn basic_editor(
                 palette.secondary
             }))
             .cursor_pointer()
+            .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.teams.toggle_sinner(&id);
                 cx.notify();
+            }));
+        control =
+            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.teams.toggle_sinner(&key_id);
+                    cx.notify();
+                }
             }));
         control = control.child(
             div()
@@ -1253,10 +1331,18 @@ fn shop_editor(
         .h(px(32.))
         .px_3()
         .py_0();
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.teams.toggle_ignore_shop(floor);
-            cx.notify();
-        }));
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.teams.toggle_ignore_shop(floor);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.teams.toggle_ignore_shop(floor);
+                    cx.notify();
+                }
+            }));
         floors = floors.child(control);
     }
     let ignore = card(
@@ -1359,7 +1445,7 @@ fn combat_editor(
             .flex_col()
             .gap_3()
             .child(control_row(
-                "启用第二体系",
+                text("启用第二体系", "Enable Second System").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1374,7 +1460,7 @@ fn combat_editor(
                     .flex_col()
                     .gap_2()
                     .child(control_row(
-                        "第二体系",
+                        text("第二体系", "Secondary System").get(language),
                         team_select(
                             app,
                             cx,
@@ -1397,7 +1483,7 @@ fn combat_editor(
                         ),
                     ))
                     .child(control_row(
-                        "起始楼层",
+                        text("起始楼层", "Start Floor").get(language),
                         team_select(
                             app,
                             cx,
@@ -1416,7 +1502,7 @@ fn combat_editor(
                         ),
                     ))
                     .child(control_row(
-                        "四级合成",
+                        text("四级合成", "Fuse Tier 4").get(language),
                         mirror_switch(
                             app,
                             cx,
@@ -1426,7 +1512,7 @@ fn combat_editor(
                         ),
                     ))
                     .child(control_row(
-                        "购买饰品",
+                        text("购买饰品", "Buy Gifts").get(language),
                         mirror_switch(
                             app,
                             cx,
@@ -1436,7 +1522,7 @@ fn combat_editor(
                         ),
                     ))
                     .child(control_row(
-                        "选择奖励",
+                        text("选择奖励", "Select Rewards").get(language),
                         mirror_switch(
                             app,
                             cx,
@@ -1446,7 +1532,7 @@ fn combat_editor(
                         ),
                     ))
                     .child(control_row(
-                        "升级饰品",
+                        text("升级饰品", "Upgrade Gifts").get(language),
                         mirror_switch(
                             app,
                             cx,
@@ -1456,10 +1542,13 @@ fn combat_editor(
                         ),
                     ))
             } else {
-                div()
-                    .text_size(px(11.))
-                    .text_color(rgb(TEXT_MUTED))
-                    .child("开启后可配置第二体系和起始楼层。")
+                div().text_size(px(11.)).text_color(rgb(TEXT_MUTED)).child(
+                    text(
+                        "开启后可配置第二体系和起始楼层。",
+                        "Enable this to configure the secondary system and start floor.",
+                    )
+                    .get(language),
+                )
             }),
     );
 
@@ -1472,10 +1561,10 @@ fn combat_editor(
                 div()
                     .text_size(px(13.))
                     .text_color(rgb(TEXT))
-                    .child("战斗与技能偏好"),
+                    .child(text("战斗与技能偏好", "Combat & Skill Preferences").get(language)),
             )
             .child(control_row(
-                "避免三技能",
+                text("避免三技能", "Avoid Skill 3").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1485,7 +1574,7 @@ fn combat_editor(
                 ),
             ))
             .child(control_row(
-                "优先三技能",
+                text("优先三技能", "Prioritize Skill 3").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1495,7 +1584,7 @@ fn combat_editor(
                 ),
             ))
             .child(control_row(
-                "每层重新编队",
+                text("每层重新编队", "Re-form Team Each Floor").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1512,13 +1601,16 @@ fn combat_editor(
             .flex_col()
             .gap_2()
             .child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(rgb(TEXT))
-                    .child("防御策略（互斥）"),
+                div().text_size(px(13.)).text_color(rgb(TEXT)).child(
+                    text(
+                        "防御策略（互斥）",
+                        "Defense Strategies (Mutually Exclusive)",
+                    )
+                    .get(language),
+                ),
             )
             .child(control_row(
-                "首回合防御",
+                text("首回合防御", "Defend in Round 1").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1528,7 +1620,7 @@ fn combat_editor(
                 ),
             ))
             .child(control_row(
-                "良秀单通防御",
+                text("良秀单通防御", "Solo Ryoshu Defense").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1539,7 +1631,7 @@ fn combat_editor(
             ))
             .child(if config.defense_for_solo {
                 control_row(
-                    "防御回合",
+                    text("防御回合", "Defense Turns").get(language),
                     team_select(
                         app,
                         cx,
@@ -1569,7 +1661,7 @@ fn combat_editor(
             .flex_col()
             .gap_2()
             .child(control_row(
-                "启用技能替换",
+                text("启用技能替换", "Enable Skill Replacement").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1580,7 +1672,7 @@ fn combat_editor(
             ))
             .child(if config.skill_replacement {
                 div().flex().flex_col().gap_2().child(control_row(
-                    "替换模式",
+                    text("替换模式", "Replacement Mode").get(language),
                     team_select(
                         app,
                         cx,
@@ -1627,7 +1719,7 @@ fn starlight_editor(
             .flex_col()
             .gap_1()
             .child(control_row(
-                "使用开局星光",
+                text("使用开局星光", "Use Starting Starlight").get(language),
                 mirror_switch(
                     app,
                     cx,
@@ -1637,10 +1729,13 @@ fn starlight_editor(
                 ),
             ))
             .child(
-                div()
-                    .text_size(px(10.))
-                    .text_color(rgb(TEXT_MUTED))
-                    .child("开局时按下方等级消耗星光点数。"),
+                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                    text(
+                        "开局时按下方等级消耗星光点数。",
+                        "Spend starlight at the start according to the levels below.",
+                    )
+                    .get(language),
+                ),
             ),
     )
     .p_3()
@@ -1656,10 +1751,18 @@ fn starlight_editor(
         .h(px(26.))
         .px_2()
         .py_0();
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.teams.set_all_starlight(level);
-            cx.notify();
-        }));
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.teams.set_all_starlight(level);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    view.teams.set_all_starlight(level);
+                    cx.notify();
+                }
+            }));
         quick = quick.child(control);
     }
 
@@ -1674,7 +1777,7 @@ fn starlight_editor(
         .text_size(px(11.))
         .text_color(palette_rgb(current_render_palette().brand))
         .child(icon(ICON_SPARKLES, 13., current_render_palette().brand))
-        .child(format!("总消耗 {} 点", app.teams.starlight_cost()));
+        .child(starlight_cost_label(app.teams.starlight_cost(), language));
     let quick_card = card(
         div()
             .flex()
@@ -1691,7 +1794,7 @@ fn starlight_editor(
                         div()
                             .text_size(px(11.))
                             .text_color(rgb(TEXT_MUTED))
-                            .child("一键设置等级"),
+                            .child(text("一键设置等级", "Set All Levels").get(language)),
                     )
                     .child(quick),
             )
@@ -1717,10 +1820,18 @@ fn starlight_editor(
             .h(px(24.))
             .px_2()
             .py_0();
-            control = control.on_click(cx.listener(move |view, _, _, cx| {
-                view.teams.set_starlight_level(index, candidate);
-                cx.notify();
-            }));
+            control = control
+                .on_click(cx.listener(move |view, _, _, cx| {
+                    view.teams.set_starlight_level(index, candidate);
+                    cx.notify();
+                }))
+                .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                    if team_activation_key(event) {
+                        window.prevent_default();
+                        view.teams.set_starlight_level(index, candidate);
+                        cx.notify();
+                    }
+                }));
             levels = levels.child(control);
         }
         let cost = div()
@@ -1730,7 +1841,7 @@ fn starlight_editor(
             .text_size(px(10.))
             .text_color(rgb(TEXT_MUTED))
             .child(icon(ICON_SPARKLES, 11., current_render_palette().brand))
-            .child(format!("{} 点", STARLIGHT_COSTS[index]));
+            .child(starlight_points_label(STARLIGHT_COSTS[index], language));
         items = items.child(
             card(
                 div()
@@ -1837,12 +1948,18 @@ fn advanced_editor(
         );
     }
 
-    let add_observe = button("添加", ButtonVariant::Default)
+    let mut add_observe = button(text("添加", "Add").get(language), ButtonVariant::Default)
         .id("advanced-add-observe")
         .h(px(34.))
         .px_3()
         .py_0()
         .on_click(cx.listener(|view, _, _, cx| view.add_team_observe_gift(cx)));
+    add_observe = add_observe.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if team_activation_key(event) {
+            window.prevent_default();
+            view.add_team_observe_gift(cx);
+        }
+    }));
     let observe_field = observe_input
         .map(|input| {
             div()
@@ -1889,19 +2006,31 @@ fn advanced_editor(
         .h(px(28.))
         .px_2()
         .rounded_md()
+        .tab_index(0)
         .border_1()
         .border_color(rgb(BORDER))
         .cursor_pointer()
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .text_size(px(11.))
         .text_color(rgb(crate::app::ACCENT))
         .child(icon(ICON_PASTE, 14., current_render_palette().brand))
         .child(text("粘贴 / 导入 JSON", "Paste / Import JSON").get(language));
-    import_toggle = import_toggle.on_click(cx.listener(|view, _, _, cx| {
-        if let Some(editor) = view.teams.editor.as_mut() {
-            editor.json_import_open = !editor.json_import_open;
-        }
-        cx.notify();
-    }));
+    import_toggle = import_toggle
+        .on_click(cx.listener(|view, _, _, cx| {
+            if let Some(editor) = view.teams.editor.as_mut() {
+                editor.json_import_open = !editor.json_import_open;
+            }
+            cx.notify();
+        }))
+        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                if let Some(editor) = view.teams.editor.as_mut() {
+                    editor.json_import_open = !editor.json_import_open;
+                }
+                cx.notify();
+            }
+        }));
     let json_panel = if app
         .teams
         .editor
@@ -1923,21 +2052,34 @@ fn advanced_editor(
                     .flex()
                     .justify_end()
                     .gap_2()
-                    .child(
-                        button(text("关闭", "Close").get(language), ButtonVariant::Ghost)
-                            .id("advanced-json-close")
-                            .h(px(28.))
-                            .px_3()
-                            .py_0()
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                if let Some(editor) = view.teams.editor.as_mut() {
-                                    editor.json_import_open = false;
+                    .child({
+                        let mut close =
+                            button(text("关闭", "Close").get(language), ButtonVariant::Ghost)
+                                .id("advanced-json-close")
+                                .h(px(28.))
+                                .px_3()
+                                .py_0()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    if let Some(editor) = view.teams.editor.as_mut() {
+                                        editor.json_import_open = false;
+                                    }
+                                    cx.notify();
+                                }));
+                        close = close.on_key_down(cx.listener(
+                            |view, event: &KeyDownEvent, window, cx| {
+                                if team_activation_key(event) {
+                                    window.prevent_default();
+                                    if let Some(editor) = view.teams.editor.as_mut() {
+                                        editor.json_import_open = false;
+                                    }
+                                    cx.notify();
                                 }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        button(
+                            },
+                        ));
+                        close
+                    })
+                    .child({
+                        let mut import = button(
                             text("校验并覆盖", "Validate & Apply").get(language),
                             ButtonVariant::Default,
                         )
@@ -1945,8 +2087,17 @@ fn advanced_editor(
                         .h(px(28.))
                         .px_3()
                         .py_0()
-                        .on_click(cx.listener(|view, _, _, cx| view.import_team_json(cx))),
-                    ),
+                        .on_click(cx.listener(|view, _, _, cx| view.import_team_json(cx)));
+                        import = import.on_key_down(cx.listener(
+                            |view, event: &KeyDownEvent, window, cx| {
+                                if team_activation_key(event) {
+                                    window.prevent_default();
+                                    view.import_team_json(cx);
+                                }
+                            },
+                        ));
+                        import
+                    }),
             )
     } else {
         div()
@@ -2068,19 +2219,30 @@ fn delete_confirmation(
                         .flex()
                         .justify_end()
                         .gap_2()
-                        .child(
-                            button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
-                                .id("delete-cancel")
-                                .h(px(32.))
-                                .px_3()
-                                .py_0()
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.teams.cancel_delete();
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            button(
+                        .child({
+                            let mut cancel =
+                                button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
+                                    .id("delete-cancel")
+                                    .h(px(32.))
+                                    .px_3()
+                                    .py_0()
+                                    .on_click(cx.listener(|view, _, _, cx| {
+                                        view.teams.cancel_delete();
+                                        cx.notify();
+                                    }));
+                            cancel = cancel.on_key_down(cx.listener(
+                                |view, event: &KeyDownEvent, window, cx| {
+                                    if team_activation_key(event) {
+                                        window.prevent_default();
+                                        view.teams.cancel_delete();
+                                        cx.notify();
+                                    }
+                                },
+                            ));
+                            cancel
+                        })
+                        .child({
+                            let mut confirm = button(
                                 text("删除", "Delete").get(language),
                                 ButtonVariant::Destructive,
                             )
@@ -2093,8 +2255,20 @@ fn delete_confirmation(
                                     view.teams.feedback = Some(error);
                                 }
                                 cx.notify();
-                            })),
-                        ),
+                            }));
+                            confirm = confirm.on_key_down(cx.listener(
+                                |view, event: &KeyDownEvent, window, cx| {
+                                    if team_activation_key(event) {
+                                        window.prevent_default();
+                                        if let Err(error) = view.teams.confirm_delete() {
+                                            view.teams.feedback = Some(error);
+                                        }
+                                        cx.notify();
+                                    }
+                                },
+                            ));
+                            confirm
+                        }),
                 ),
         )
         .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
@@ -2335,7 +2509,9 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
         .border_1()
         .border_color(palette_rgb(border))
         .bg(palette_rgb(background))
+        .tab_index(0)
         .cursor_pointer()
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .text_size(px(11.))
         .text_color(palette_rgb(foreground))
         .child(
@@ -2539,6 +2715,45 @@ fn starlight_short_level(level: u8) -> &'static str {
     }
 }
 
+fn starlight_cost_label(cost: u32, language: Language) -> String {
+    match language {
+        Language::ZhCn => format!("总消耗 {cost} 点"),
+        Language::EnUs => format!("Total Starlight Cost: {cost}"),
+    }
+}
+
+fn starlight_points_label(cost: u32, language: Language) -> String {
+    match language {
+        Language::ZhCn => format!("{cost} 点"),
+        Language::EnUs => format!("{cost} pts"),
+    }
+}
+
+fn localized_feedback(feedback: &str, language: Language) -> String {
+    if matches!(language, Language::ZhCn) {
+        return feedback.to_owned();
+    }
+    if let Some(detail) = feedback.strip_prefix("导入失败：") {
+        return format!("Import failed: {detail}");
+    }
+    match feedback {
+        "已导入队伍 JSON（尚未保存）" => "Team JSON imported (not saved yet)".to_owned(),
+        "队伍 JSON 已复制" => "Team JSON copied".to_owned(),
+        "队伍已保存" => "Team saved".to_owned(),
+        "队伍已删除" => "Team deleted".to_owned(),
+        "队伍名称不能为空" => "Team name is required".to_owned(),
+        "队伍最多选择 12 名人格" => "A team can contain at most 12 sinners".to_owned(),
+        "当前没有打开队伍编辑器" => "No team editor is open".to_owned(),
+        "队伍 JSON 必须是对象" => "Team JSON must be an object".to_owned(),
+        "队伍 JSON 缺少 name" => "Team JSON is missing name".to_owned(),
+        "purpose 无效" => "Invalid team purpose".to_owned(),
+        "sinners 无效" => "Invalid sinner list".to_owned(),
+        "mirrorConfig 必须是对象" => "mirrorConfig must be an object".to_owned(),
+        "mirrorConfig 默认值无效" => "Invalid mirrorConfig defaults".to_owned(),
+        _ => feedback.to_owned(),
+    }
+}
+
 fn sinner_path(id: &str) -> ImageSource {
     let asset = SinnerAsset::from_id(id).unwrap_or(SinnerAsset::DonQuixote);
     assets::image_source(Asset::Sinner(asset))
@@ -2566,6 +2781,20 @@ mod tests {
     fn unknown_scheme_falls_back_to_burn() {
         assert_eq!(scheme_label("unknown", Language::ZhCn), "燃烧");
         assert_eq!(discard_count(&TeamMirrorConfig::default()), 0);
+    }
+
+    #[test]
+    fn dynamic_labels_follow_the_selected_language() {
+        assert_eq!(starlight_cost_label(30, Language::ZhCn), "总消耗 30 点");
+        assert_eq!(
+            starlight_cost_label(30, Language::EnUs),
+            "Total Starlight Cost: 30"
+        );
+        assert_eq!(starlight_points_label(10, Language::EnUs), "10 pts");
+        assert_eq!(
+            localized_feedback("队伍 JSON 已复制", Language::EnUs),
+            "Team JSON copied"
+        );
     }
 
     #[test]
