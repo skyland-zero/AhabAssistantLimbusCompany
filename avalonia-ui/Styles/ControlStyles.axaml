@@ -17,6 +17,20 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
     </Style>
 
+    <!-- 语义化文字层级：避免把说明文字和日志统一加粗。 -->
+    <Style Selector="TextBlock.section-title">
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.card-title">
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="TextBlock.field-label">
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="TextBlock.status-label">
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+
     <Style Selector="SelectableTextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
     </Style>
@@ -88,6 +102,7 @@
         <Setter Property="MinHeight" Value="36" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Transitions">
@@ -113,6 +128,9 @@
                                   VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
             </ControlTemplate>
         </Setter>
+    </Style>
+    <Style Selector="Button.app-btn TextBlock">
+        <Setter Property="FontWeight" Value="Medium" />
     </Style>
     <!-- 模板部件单独过渡，覆盖 pointerover/focus/pressed 对 ContentPresenter 的状态设置。 -->
     <Style Selector="Button.app-btn /template/ ContentPresenter#PART_ContentPresenter">
@@ -227,6 +245,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+        <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Padding" Value="12,5" />
         <Setter Property="MinHeight" Value="30" />
         <Setter Property="CornerRadius" Value="6" />
@@ -246,6 +265,7 @@
     </Style>
     <Style Selector="Button.nav-tab TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+        <Setter Property="FontWeight" Value="Medium" />
     </Style>
     <Style Selector="Button.nav-tab controls|AppIcon">
         <Setter Property="Stroke" Value="{DynamicResource MutedFgBrush}" />
@@ -265,6 +285,7 @@
     <Style Selector="Button.nav-tab.active">
         <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.nav-tab.active /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
@@ -272,6 +293,7 @@
     </Style>
     <Style Selector="Button.nav-tab.active TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource BrandFgBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.nav-tab.active controls|AppIcon">
         <Setter Property="Stroke" Value="{DynamicResource BrandFgBrush}" />
@@ -293,6 +315,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource MutedFgBrush}" />
+        <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Padding" Value="12,4" />
         <Setter Property="MinHeight" Value="28" />
         <Setter Property="CornerRadius" Value="6" />
@@ -309,6 +332,10 @@
     <Style Selector="Button.app-btn.seg.active">
         <Setter Property="Background" Value="{DynamicResource BgBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.app-btn.seg.active TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.app-btn.seg:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}" />

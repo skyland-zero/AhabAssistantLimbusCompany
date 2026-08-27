@@ -23,7 +23,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
                     <controls:MotionVisibility Classes="motion-state" IsShown="{Binding SyncProgress, Converter={StaticResource NullVis}}" Mode="Fade">
                     <Border Classes="badge" Height="20">
-                        <TextBlock Text="{Binding SyncText}" FontSize="11" FontFamily="{StaticResource MonoFont}" />
+                        <TextBlock Text="{Binding SyncText}" FontSize="11" Classes="status-label" FontFamily="{StaticResource MonoFont}" />
                     </Border>
                     </controls:MotionVisibility>
                 </StackPanel>
@@ -64,8 +64,8 @@
                             </Border.Transitions>
                             <StackPanel Spacing="12">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" />
-                                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource FgBrush}" />
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="13" Classes="card-title" />
+                                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11" Classes="status-label" Foreground="{DynamicResource FgBrush}" />
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="本地版本" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" Margin="0,0,16,3" />

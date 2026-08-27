@@ -78,6 +78,12 @@ public partial class TeamEditWindow : MotionWindow
     private static TextBlock Label(string text, double size = 12, IBrush? fg = null, FontWeight weight = FontWeight.Normal)
         => new() { Text = text, FontSize = size, Foreground = fg ?? (IBrush)global::Avalonia.Application.Current!.Resources["FgBrush"]!, FontWeight = weight };
 
+    private static TextBlock FieldLabel(string text, double size = 12)
+        => Label(text, size, weight: FontWeight.Medium);
+
+    private static TextBlock SubsectionTitle(string text, double size = 12)
+        => Label(text, size, weight: FontWeight.SemiBold);
+
     private static TextBlock Muted(string text, double size = 11)
         => new() { Text = text, FontSize = size, Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!, TextWrapping = TextWrapping.Wrap };
 
@@ -216,10 +222,10 @@ public partial class TeamEditWindow : MotionWindow
         }, i => _team.Purpose = i switch { 0 => "mirror", 1 => "luxcavation", _ => "general" });
         var topGrid = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,*,Auto") };
         var nameStack = new StackPanel { Spacing = 4 };
-        nameStack.Children.Add(Label("队伍名称"));
+        nameStack.Children.Add(FieldLabel("队伍名称"));
         nameStack.Children.Add(nameBox);
         var purposeStack = new StackPanel { Spacing = 4 };
-        purposeStack.Children.Add(Label("用途"));
+        purposeStack.Children.Add(FieldLabel("用途"));
         purposeStack.Children.Add(purposeCb);
         SetCol(topGrid, 0, nameStack);
         SetCol(topGrid, 1, purposeStack);
@@ -227,7 +233,7 @@ public partial class TeamEditWindow : MotionWindow
 
         // 主体系
         var schemeStack = new StackPanel { Spacing = 6 };
-        schemeStack.Children.Add(Label("主体系"));
+        schemeStack.Children.Add(FieldLabel("主体系"));
         var schemeWrap = new WrapPanel();
         for (var i = 0; i < Systems.Length; i++)
         {
@@ -262,7 +268,7 @@ public partial class TeamEditWindow : MotionWindow
         var selectedText = Localization.IsEnglish
             ? $"{_team.Sinners.Count}/12 selected"
             : $"{_team.Sinners.Count}/12 已选";
-        var headerGrid = Row(Label("人格编成"), Label(selectedText));
+        var headerGrid = Row(SubsectionTitle("人格编成"), Label(selectedText));
         sinnerSection.Children.Add(headerGrid);
         sinnerSection.Children.Add(Muted("点击选择/取消，按点击顺序分配出战位次 #1~#12"));
         var sinnerWrap = new WrapPanel { Name = "SinnerWrap" };
@@ -273,13 +279,13 @@ public partial class TeamEditWindow : MotionWindow
         // 编队码 & 固定用途
         var twoCols = new UniformGrid { Columns = 2 };
         var codePanel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 8, 0) };
-        codePanel.Children.Add(Row(Label("使用编队码"), MakeSwitch(Mc.UseTeamCode, v => { Mc.UseTeamCode = v; RefreshTab(); })));
+        codePanel.Children.Add(Row(FieldLabel("使用编队码"), MakeSwitch(Mc.UseTeamCode, v => { Mc.UseTeamCode = v; RefreshTab(); })));
         codePanel.Children.Add(Muted("直接填入游戏内编队码自动配队"));
         if (Mc.UseTeamCode)
             codePanel.Children.Add(MakeInput(Mc.TeamCode, "输入或粘贴游戏内编队码", v => Mc.TeamCode = v));
 
         var fixedPanel = new StackPanel { Spacing = 6, Margin = new Thickness(8, 0, 0, 0) };
-        fixedPanel.Children.Add(Row(Label("固定队伍用途"), MakeSwitch(Mc.FixedTeamUse, v => { Mc.FixedTeamUse = v; RefreshTab(); })));
+        fixedPanel.Children.Add(Row(FieldLabel("固定队伍用途"), MakeSwitch(Mc.FixedTeamUse, v => { Mc.FixedTeamUse = v; RefreshTab(); })));
         fixedPanel.Children.Add(Muted("限制此队伍仅在特定镜牢难度下使用"));
         if (Mc.FixedTeamUse)
             fixedPanel.Children.Add(MakeCombo(new[] { "困难镜牢专用", "普通镜牢专用", "全部通用" }, Mc.FixedTeamUseSelect,
@@ -289,7 +295,7 @@ public partial class TeamEditWindow : MotionWindow
         root.Children.Add(Section(twoCols));
 
         // 启用开关
-        root.Children.Add(Row(Label("启用"), MakeSwitch(_team.Enabled, v => _team.Enabled = v)));
+        root.Children.Add(Row(FieldLabel("启用"), MakeSwitch(_team.Enabled, v => _team.Enabled = v)));
         return root;
     }
 
@@ -301,7 +307,10 @@ public partial class TeamEditWindow : MotionWindow
         foreach (var child in ((StackPanel)btn.Content!).Children)
         {
             if (child is TextBlock tb)
+            {
                 tb.Foreground = selected ? Brushes.White : (IBrush)res["MutedFgBrush"]!;
+                tb.FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal;
+            }
         }
     }
 
@@ -325,6 +334,7 @@ public partial class TeamEditWindow : MotionWindow
             {
                 Text = info.Name,
                 FontSize = 11,
+                FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Foreground = selected ? (IBrush)global::Avalonia.Application.Current!.Resources["FgBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
             });
@@ -343,12 +353,13 @@ public partial class TeamEditWindow : MotionWindow
                 var badge = new Border
                 {
                     Background = (IBrush)global::Avalonia.Application.Current!.Resources["BrandBrush"]!,
-                    CornerRadius = new CornerRadius(9),
-                    Width = 18, Height = 18,
+                    CornerRadius = new CornerRadius(10),
+                    Width = 20, Height = 20,
                     Child = new TextBlock
                     {
                         Text = $"#{orderIdx + 1}",
-                        FontSize = 9,
+                        FontSize = 10,
+                        FontWeight = FontWeight.Bold,
                         FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
                         Foreground = Brushes.White,
                         HorizontalAlignment = HorizontalAlignment.Center,
@@ -383,7 +394,7 @@ public partial class TeamEditWindow : MotionWindow
 
         // 舍弃体系
         var discardStack = new StackPanel { Spacing = 8 };
-        discardStack.Children.Add(Label("舍弃的饰品体系 (多选)"));
+        discardStack.Children.Add(FieldLabel("舍弃的饰品体系 (多选)"));
         discardStack.Children.Add(Muted("在商店与战斗掉落中避开或售卖选中的体系饰品"));
         var discardWrap = new WrapPanel();
         foreach (var (id, label) in Systems)
@@ -436,7 +447,7 @@ public partial class TeamEditWindow : MotionWindow
         var fusionPanel = WrapVertical("进阶合成策略", fusion);
         fusionPanel.Children.Add(Separator());
         fusionPanel.Children.Add(Row(
-            WrapHorizontal(MakeSwitch(Mc.AfterLevelIv, v => { Mc.AfterLevelIv = v; RefreshTab(); }), Label("合成四级饰品后行为")),
+            WrapHorizontal(MakeSwitch(Mc.AfterLevelIv, v => { Mc.AfterLevelIv = v; RefreshTab(); }), FieldLabel("合成四级饰品后行为")),
             Mc.AfterLevelIv
                 ? MakeCombo(new[] { "停止合成", "继续合成其他", "转为升级已有饰品" }, Mc.AfterLevelIvSelect, i => Mc.AfterLevelIvSelect = i, 170)
                 : new Control()));
@@ -445,13 +456,13 @@ public partial class TeamEditWindow : MotionWindow
         // 刷新上限 + 忽略楼层
         var grid = new UniformGrid { Columns = 2 };
         var refreshPanel = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 8, 0) };
-        refreshPanel.Children.Add(Label("商店刷新与忽略"));
-        refreshPanel.Children.Add(Row(Label("定向刷新上限"), NumInput(Mc.MaxKeywordRefresh, v => Mc.MaxKeywordRefresh = v)));
-        refreshPanel.Children.Add(Row(Label("普通刷新上限"), NumInput(Mc.MaxNormalRefresh, v => Mc.MaxNormalRefresh = v)));
+        refreshPanel.Children.Add(SubsectionTitle("商店刷新与忽略"));
+        refreshPanel.Children.Add(Row(FieldLabel("定向刷新上限"), NumInput(Mc.MaxKeywordRefresh, v => Mc.MaxKeywordRefresh = v)));
+        refreshPanel.Children.Add(Row(FieldLabel("普通刷新上限"), NumInput(Mc.MaxNormalRefresh, v => Mc.MaxNormalRefresh = v)));
         SetCol(grid, 0, refreshPanel);
 
         var floorPanel = new StackPanel { Spacing = 8, Margin = new Thickness(8, 0, 0, 0) };
-        floorPanel.Children.Add(Label("忽略指定楼层商店"));
+        floorPanel.Children.Add(FieldLabel("忽略指定楼层商店"));
         var floors = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         for (var f = 0; f < 5; f++)
         {
@@ -503,7 +514,10 @@ public partial class TeamEditWindow : MotionWindow
         if (border.Child is StackPanel sp)
             foreach (var c in sp.Children)
                 if (c is TextBlock tb)
+                {
                     tb.Foreground = discarded ? (IBrush)res["DestructiveBrush"]! : (IBrush)res["MutedFgBrush"]!;
+                    tb.FontWeight = discarded ? FontWeight.SemiBold : FontWeight.Normal;
+                }
     }
 
     private Control BuildCombat()
@@ -518,14 +532,14 @@ public partial class TeamEditWindow : MotionWindow
         {
             secondPanel.Children.Add(Separator());
             var selGrid = new UniformGrid { Columns = 2 };
-            var sel1 = WrapVertical(Muted("次要体系"),
+            var sel1 = WrapVertical(FieldLabel("次要体系"),
                 MakeCombo(Systems.Select(s => s.Label).ToArray(), Mc.SecondSystemSelect, i => Mc.SecondSystemSelect = i, 150));
-            var sel2 = WrapVertical(Muted("起始启用楼层"),
+            var sel2 = WrapVertical(FieldLabel("起始启用楼层"),
                 MakeCombo(new[] { "第2层", "第3层", "第4层", "第5层" }, Mc.SecondSystemSetting - 2, i => Mc.SecondSystemSetting = i + 2, 150));
             SetCol(selGrid, 0, sel1);
             SetCol(selGrid, 1, sel2);
             secondPanel.Children.Add(selGrid);
-            secondPanel.Children.Add(Muted("第二体系联动动作"));
+            secondPanel.Children.Add(FieldLabel("第二体系联动动作"));
             secondPanel.Children.Add(SwitchGroup(new[]
             {
                 ("合成四级", Mc.SecondSystemFuseIv, (Action<bool>)(v => Mc.SecondSystemFuseIv = v)),
@@ -570,7 +584,7 @@ public partial class TeamEditWindow : MotionWindow
                 Mc.DefenseForSolo = v;
                 if (v) Mc.DefenseFirstRound = false;
                 RefreshTab();
-            }), Label("小指良单通杀家人机制")),
+            }), FieldLabel("小指良单通杀家人机制")),
             Mc.DefenseForSolo
                 ? MakeCombo(new[] { "防御回合数: 1 回合", "防御回合数: 2 回合", "防御回合数: 3 回合", "防御回合数: 4 回合", "防御回合数: 5 回合" },
                     Mc.DefenseForSoloTurns - 1, i => Mc.DefenseForSoloTurns = i + 1, 190)
@@ -581,9 +595,9 @@ public partial class TeamEditWindow : MotionWindow
 
         // 技能替换
         var skillPanel = WrapVertical(null,
-            Row(Label("技能替换"), MakeSwitch(Mc.SkillReplacement, v => { Mc.SkillReplacement = v; RefreshTab(); })));
+            Row(FieldLabel("技能替换"), MakeSwitch(Mc.SkillReplacement, v => { Mc.SkillReplacement = v; RefreshTab(); })));
         if (Mc.SkillReplacement)
-            skillPanel.Children.Add(WrapVertical(Muted("替换偏好"),
+            skillPanel.Children.Add(WrapVertical(FieldLabel("替换偏好"),
                 MakeCombo(new[] { "1技能替换为2技能", "1技能替换为3技能" }, Mc.SkillReplacementMode, i => Mc.SkillReplacementMode = i, 190)));
         root.Children.Add(Section(skillPanel.Children.ToArray()));
         return root;
@@ -599,7 +613,7 @@ public partial class TeamEditWindow : MotionWindow
 
         // 一键全选 + 总消耗
         var quickBar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        quickBar.Children.Add(Label("一键全选:"));
+        quickBar.Children.Add(FieldLabel("一键全选:"));
         string[] lvlNames = { "0 关闭", "1 基础", "2 增益+", "3 增益++" };
         for (var lvl = 0; lvl < 4; lvl++)
         {
@@ -662,7 +676,7 @@ public partial class TeamEditWindow : MotionWindow
             costText.Children.Add(new TextBlock
             {
                 Text = item.Cost.ToString(),
-                FontSize = 10,
+                FontSize = 11,
                 FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
                 Foreground = (IBrush)global::Avalonia.Application.Current!.Resources["MutedFgBrush"]!,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -678,7 +692,7 @@ public partial class TeamEditWindow : MotionWindow
                 {
                     Classes = { "app-btn" },
                     Content = segNames[l],
-                    FontSize = 10,
+                    FontSize = 11,
                     FontFamily = (global::Avalonia.Application.Current!.Resources["MonoFont"] as FontFamily)!,
                     Padding = new Thickness(6, 1),
                     CornerRadius = new CornerRadius(2),
@@ -704,7 +718,7 @@ public partial class TeamEditWindow : MotionWindow
                 BorderThickness = new Thickness(1),
                 BorderBrush = active ? (IBrush)global::Avalonia.Application.Current!.Resources["WarningBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["InputBorderBrush"]!,
                 Background = active ? (IBrush)global::Avalonia.Application.Current!.Resources["WarningLightBrush"]! : (IBrush)global::Avalonia.Application.Current!.Resources["CardBrush"]!,
-                Child = new StackPanel { Spacing = 5, Children = { headGrid, Muted(item.Desc, 10) } },
+                Child = new StackPanel { Spacing = 5, Children = { headGrid, Muted(item.Desc, 11) } },
             };
             itemsWrap.Children.Add(card);
         }
@@ -775,7 +789,7 @@ public partial class TeamEditWindow : MotionWindow
         pasteContent.Children.Add(new TextBlock { Text = Localization.T("粘贴配置覆盖") });
         pasteBtn.Content = pasteContent;
         pasteBtn.Click += OnPasteJson;
-        var ioPanel = WrapVertical(null, Row(Label("队伍配置导入 / 导出"), pasteBtn));
+        var ioPanel = WrapVertical(null, Row(FieldLabel("队伍配置导入 / 导出"), pasteBtn));
         root.Children.Add(Section(ioPanel.Children.ToArray()));
 
         return root;
@@ -839,7 +853,12 @@ public partial class TeamEditWindow : MotionWindow
     {
         var sp = new StackPanel { Spacing = 5 };
         foreach (var c in children)
-            if (c is Control ctl) sp.Children.Add(ctl);
+        {
+            if (c is string text && !string.IsNullOrWhiteSpace(text))
+                sp.Children.Add(SubsectionTitle(text));
+            else if (c is Control ctl)
+                sp.Children.Add(ctl);
+        }
         return sp;
     }
 
@@ -856,7 +875,7 @@ public partial class TeamEditWindow : MotionWindow
         var sp = new StackPanel { Spacing = 9 };
         foreach (var (label, initial, onChange) in items)
         {
-            var row = Row(MakeSwitch(initial, onChange), Label(label, 12));
+            var row = Row(MakeSwitch(initial, onChange), FieldLabel(label));
             sp.Children.Add(row);
         }
         return sp;

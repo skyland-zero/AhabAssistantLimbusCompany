@@ -18,7 +18,7 @@
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="总权重：" FontSize="12" Foreground="{DynamicResource MutedFgBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding TotalWeight}" FontSize="12"
+                    <TextBlock Text="{Binding TotalWeight}" FontSize="12" Classes="status-label"
                                FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
@@ -70,9 +70,9 @@
                             <Grid ColumnDefinitions="Auto,180,*,Auto" Margin="20,12">
                                 <ToggleSwitch Grid.Column="0" Classes="compact" IsChecked="{Binding Enabled}" />
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}" FontSize="13"
+                                    <TextBlock Text="{Binding Name}" FontSize="13" Classes="card-title"
                                                MaxWidth="120" TextTrimming="CharacterEllipsis" />
-                                    <Border Classes="badge"><TextBlock Text="{Binding Tier}" FontSize="11" /></Border>
+                                    <Border Classes="badge"><TextBlock Text="{Binding Tier}" FontSize="11" Classes="status-label" /></Border>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="12,0,0,0">
                                     <TextBlock Text="权重" FontSize="11" Foreground="{DynamicResource MutedFgBrush}" />

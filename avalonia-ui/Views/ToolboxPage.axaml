@@ -37,13 +37,13 @@
                                     <Border Classes="badge" Background="{DynamicResource SuccessLightBrush}">
                                         <StackPanel Orientation="Horizontal" Spacing="5">
                                             <Ellipse Width="6" Height="6" Fill="{DynamicResource SuccessBrush}" />
-                                            <TextBlock Text="运行中" FontSize="11" Foreground="{DynamicResource SuccessBrush}" />
+                                            <TextBlock Text="运行中" FontSize="11" Classes="status-label" Foreground="{DynamicResource SuccessBrush}" />
                                         </StackPanel>
                                     </Border>
                                     </controls:MotionVisibility>
                                     <controls:MotionVisibility Grid.Column="1" IsShown="{Binding Running, Converter={StaticResource BoolVisInv}}" Mode="Fade">
                                     <Border Classes="badge">
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource MutedFgBrush}">
+                                        <TextBlock FontSize="11" Classes="status-label" Foreground="{DynamicResource MutedFgBrush}">
                                             <Run Text="{Binding IsScreenshotText}" />
                                         </TextBlock>
                                     </Border>
@@ -51,7 +51,7 @@
                                 </Grid>
 
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding Title}" FontSize="13" />
+                                    <TextBlock Text="{Binding Title}" FontSize="13" Classes="card-title" />
                                     <TextBlock Text="{Binding Desc}" FontSize="12" Foreground="{DynamicResource MutedFgBrush}"
                                                TextWrapping="Wrap" LineHeight="17" />
                                 </StackPanel>
