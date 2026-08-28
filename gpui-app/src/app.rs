@@ -826,7 +826,7 @@ impl Render for AhabApp {
             .min_h_0()
             .with_animation(
                 format!("page-transition-{current_page:?}"),
-                Animation::new(Duration::from_millis(200)).with_easing(gpui::ease_out_quint()),
+                Animation::new(Duration::from_millis(150)).with_easing(gpui::ease_out_quint()),
                 |page, progress| page.opacity(progress).top(px(4.0 * (1.0 - progress))),
             );
 
