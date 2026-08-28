@@ -1,4 +1,4 @@
-//! Resource status and synchronization page backed by the shared Mock IPC state.
+//! Resource status and synchronization page backed by the shared IPC state.
 //!
 //! The page provides a compact update toolbar, a responsive resource-card
 //! grid, and explicit synchronization progress, success, warning, loading,

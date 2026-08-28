@@ -199,11 +199,10 @@ The AALC project could not have been possible without the help of the following 
 |---------------------------------------|-----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
 | LALC                                  | [LixAssistantLimbusCompany](https://github.com/HSLix/LixAssistantLimbusCompany)   | Thanks to the big guy's open source, so I can learn and start my own project by rewriting the big guy's project with step-by-step follow-up |
 | OCR Text Recognition                  | [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json)                    | Without it there would be no auto-recognition of teams, auto-recognition of Mirror Jail theme packs                                         |
-| Graphical Interface Component Library | [PyQt-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)             | Although only used the basic components, not much development potential, but the basic components have made the GUI aesthetics UP           |
 | March7thAssistant                     | [March7thAssistant](https://github.com/moesnow/March7thAssistant)                 | Learned quite a bit from the big guy here                                                                                                   |
 | BAAS                                  | [blue_archive_auto_script](https://github.com/pur1fying/blue_archive_auto_script) | I learned the simulator-related code from the big guy here                                                                                  |
 
-The file [ChineseFont.ttf](./assets/app/fonts/ChineseFont.ttf) is sourced from [Sarasa-Gothic](https://github.com/be5invis/Sarasa-Gothic), This portion of the code adheres to the **SIL Open Font License** license.
+AALC's GPUI interface uses system fonts and bundled GPUI resources; the old Qt font is no longer packaged.
 
 ### Uniform acknowledgements
 
@@ -248,7 +247,7 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # Download dependencies via uv (uv tool needs to be installed separately)
 uv sync --frozen
-uv run main.py
+.\\run-gpui.bat
 
 # Update
 git pull
@@ -260,9 +259,10 @@ git pull
 # Clone the repository
 git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
-# Please use a Python binary with version higher than 3.13 (with GIL)
+# Please use Python 3.12 or newer
 pip install -r requirements.txt
-python main.py
+# Rust nightly must be installed
+cargo +nightly run --manifest-path gpui-app/Cargo.toml
 
 # Update
 git pull

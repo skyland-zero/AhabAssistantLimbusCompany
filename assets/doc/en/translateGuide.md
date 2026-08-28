@@ -2,59 +2,30 @@
 
 [简体中文](../zh/translateGuide.md) | **English**
 
+## Documentation
 
-This document provides guidance and instructions for translating AALC into your language.  
+1. Fork this repository.
+2. Translate `README.md` or documents under `assets/doc/` while preserving Markdown formatting.
+3. Submit a Pull Request.
 
-It is divided into three sections (click to jump):  
-1. [Translating Documentation into Your Language](#document-translation)  
-2. [Translating the GUI into Your Language](#gui-translation)  
-3. [Adding Support for Your Preferred Game Language (Image Support)](#image-support)  
+## GPUI interface translations
 
-If you encounter difficulties or have suggestions during translation, feel free to seek help or provide feedback via Issues.  
+GPUI translation tables live under `gpui-app/src/i18n/`:
 
----  
+1. Select or add the Rust translation table for the target language.
+2. Keep translation keys unchanged and edit only the localized text.
+3. Preserve `{}` and other placeholders exactly.
+4. Run formatting and Rust tests before submitting.
 
-## Document Translation  
-This part is relatively straightforward and requires basic knowledge of Git and GitHub.  
+```powershell
+cargo +nightly fmt --manifest-path gpui-app/Cargo.toml
+cargo +nightly test --manifest-path gpui-app/Cargo.toml
+```
 
-### Steps  
-1. `Fork` this repository first.  
-2. Translate the document content without altering the formatting.  
-3. Submit your forked repository and initiate a Pull Request.  
-4. Wait for the merge.  
+Qt Linguist, `.ts`, `.qm`, and `lrelease` are no longer required.
 
----  
-## GUI Translation  
-This part requires the Qt toolkit. You need to download `Qt Linguist` from the [Qt Official Website](https://www.qt.io/download-dev). While `Qt Linguist` is optional, it helps streamline translation and compilation of translation files (.ts) for program use. A text editor is sufficient for translation itself.  
+## Images and OCR resources
 
-To verify translation results:  
-- Use `lrelease` or Qt Linguist’s compile feature to convert your `.ts` file into a `.qm` file.  
-- Rename it to `myapp_en.qm` and set AALC’s language to `English` for testing.  
-
-### Steps  
-1. `Fork` this repository.  
-2. Locate `i18n\myapp_en.ts` in the repository. Rename it to `myapp_yourLanguageCode.ts` (e.g., `zh_TW`), following international naming conventions.  
-3. Open the file in `Qt Linguist` and translate each entry. Since the source text is in Chinese, refer to the English translation if needed.  
-4. Upload the translated `.ts` file and initiate a Pull Request.  
-
-### Special Notes  
-- Preserve text enclosed in `{}` exactly (these are variable placeholders).  
-- When editing manually, **only modify text within `<translation>Translated Text</translation>` tags**.  
-
----  
-
-## Image Support  
-This section requires two tools: a screenshot tool and an image editor. Use tools of your preference.  
-
-### Steps  
-1. `Fork` the repository.  
-2. Take in-game screenshots matching the structure of images in `assets\images\zh_cn`.  
-3. Use an image editor to **paint non-target areas black (RGB: 0,0,0 / #000000)**.  
-4. Save images with identical filenames.  
-5. Submit the images to the repository and initiate a Pull Request.  
-
-### Notes  
-- Maintain original image dimensions where possible. Adjust if the reference image is partial.  
-- **Thoroughly test your images** to ensure recognition.  
-- If *(Experimental) Auto-Language* is enabled, disable it in Settings before testing.  
-- **We are unable to maintain your image resources. Limbus Company may frequently update in-game UI, requiring you to update images accordingly.**
+When updating game-recognition resources, add images under `assets/images/` with
+the expected directory structure and filenames. Verify them against the real
+game window before submitting a Pull Request.

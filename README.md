@@ -176,11 +176,10 @@ AALC的项目离不开以下开源项目的帮助
 |---------|-----------------------------------------------------------------------------------|-------------------------------------------|
 | LALC    | [LixAssistantLimbusCompany](https://github.com/HSLix/LixAssistantLimbusCompany)   | 感谢大佬的开源，让我能通过一步步跟进重写大佬的项目，从而学习、开始自己的项目    |
 | OCR文字识别 | [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json)                    | 没有它就没有自动识别队伍、自动识别镜牢主题包的功能                 |
-| 图形界面组件库 | [PyQt-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)             | 虽然只是用到了基础的部件，没怎么开发潜力，但是基础的部件已经让GUI的美观性UP了 |
 | 三月七小助手  | [March7thAssistant](https://github.com/moesnow/March7thAssistant)                 | 从大佬这里学到了挺多                                |
 | BAAS    | [blue_archive_auto_script](https://github.com/pur1fying/blue_archive_auto_script) | 从大佬这里学习了模拟器相关代码                           |
 
-[ChineseFont.ttf](./assets/app/fonts/ChineseFont.ttf)文件来源于[更纱黑体](https://github.com/be5invis/Sarasa-Gothic)，该部分代码遵循 **SIL Open Font License** 许可证。
+AALC 的 GPUI 界面使用系统字体和 GPUI 内置资源，不再额外打包旧 Qt 字体。
 
 ### 统一致谢
 
@@ -224,7 +223,7 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # 通过uv下载依赖, uv工具自行下载
 uv sync --frozen
-uv run main.py
+.\\run-gpui.bat
 
 # 更新
 git pull
@@ -236,9 +235,10 @@ git pull
 # 克隆仓库
 git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
-# 请使用版本高于 3.13 的 Python 二进制程序 (含GIL)
+# 请使用 Python 3.12 或更高版本
 pip install -r requirements.txt
-python main.py
+# 需要预先安装 Rust nightly
+cargo +nightly run --manifest-path gpui-app/Cargo.toml
 
 # 更新
 git pull

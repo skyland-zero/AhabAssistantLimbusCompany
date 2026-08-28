@@ -10,7 +10,7 @@ fn unknown_method_is_a_structured_error() {
 
 #[test]
 fn execution_has_deterministic_state_transitions() {
-    let mut client = MockClient::default();
+    let client = MockClient::default();
     assert_eq!(
         client
             .call(method::EXECUTION_GET_STATE, None)
@@ -35,7 +35,7 @@ fn execution_has_deterministic_state_transitions() {
 #[test]
 fn execution_start_stays_idle_when_only_non_executable_settings_are_enabled() {
     for ahab_enabled in [false, true] {
-        let mut client = MockClient::default();
+        let client = MockClient::default();
         let mut config = TasksConfig::default();
         config.enabledTasks.daily_task = false;
         config.enabledTasks.get_reward = false;
@@ -65,7 +65,7 @@ fn execution_start_stays_idle_when_only_non_executable_settings_are_enabled() {
 
 #[test]
 fn device_starts_disconnected_until_explicit_connect() {
-    let mut client = MockClient::default();
+    let client = MockClient::default();
     assert_eq!(client.device_status(), ConnectionStatus::Disconnected);
     let devices = client.call(method::DEVICE_LIST, None).result.unwrap();
     assert_eq!(devices.as_array().unwrap().len(), 2);
@@ -83,8 +83,8 @@ fn device_starts_disconnected_until_explicit_connect() {
 
 #[test]
 fn cloned_clients_observe_one_backend_state() {
-    let mut writer = MockClient::default();
-    let mut reader = writer.shared();
+    let writer = MockClient::default();
+    let reader = writer.shared();
     let team = json!({
         "id": "",
         "name": "shared",
@@ -101,7 +101,7 @@ fn cloned_clients_observe_one_backend_state() {
 
 #[test]
 fn config_and_team_calls_round_trip() {
-    let mut client = MockClient::default();
+    let client = MockClient::default();
     let config = client.call(method::TASKS_GET_CONFIG, None).result.unwrap();
     assert_eq!(config["set_windows"]["set_win_size"], 1080);
     let team = json!({"id":"", "name":"test", "sinners":[], "purpose":"general", "accessoryScheme":"", "enabled":true, "mirrorConfig":null});

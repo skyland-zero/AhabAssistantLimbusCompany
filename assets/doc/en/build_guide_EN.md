@@ -1,30 +1,38 @@
-## Build Guide
+# Build guide
 
-## Configuring the python environment
+## Environment
 
-Dependencies on python version 3.12
+- Windows x64
+- Python 3.12+
+- Rust nightly (required by the current GPUI source)
+- `uv` (recommended) and 7-Zip
 
-See [requirements.txt](/requirements.txt) for python library dependencies.
+Install dependencies:
 
-```bash
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-pip install pyinstaller
+```powershell
+uv sync --frozen
+rustup toolchain install nightly
 ```
 
-## Build executables
+## Run from source
 
-```bash
-pyinstaller main.spec
+```powershell
+.\run-gpui.bat
 ```
 
-## Add other subsidiary documents
+The GPUI window starts and launches `main_backend.py` from the same checkout.
+For visual-only development, set `AHAB_BACKEND=mock` explicitly. Production
+mode never falls back to Mock.
 
-```bash
-mkdir dist_release
-mv dist/* dist_release/
-cp -r 3rdparty dist_release/AALC/
-cp -r assets dist_release/AALC/
-cp LICENSE dist_release/AALC/
-cp README.md dist_release/AALC/
+## Build a release package
+
+```powershell
+uv run python scripts/build.py --version 1.0.0
 ```
+
+The build compiles the GPUI frontend, creates `AALC Backend.exe` from
+`main_backend.spec`, creates `AALC Updater.exe`, stages the `assets/` and
+`resources/` trees, and produces `dist/AALC_<version>.7z`.
+
+Without 7-Zip, an equivalent `.zip` archive is produced. A release package
+does not require Python, Qt, Node, or WebView2 at runtime.

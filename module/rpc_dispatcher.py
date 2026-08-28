@@ -134,6 +134,8 @@ class RpcDispatcher:
             "device.list",
             "device.disconnect",
         }:
+            if params is not None:
+                raise RpcDispatchError(-32602, f"{method} does not accept params")
             return self._call_without_params(route)
         if route == "device.connect":
             return self._device_connect(params)
@@ -169,8 +171,15 @@ class RpcDispatcher:
     @staticmethod
     def _error(request_id: Any, code: int, message: str, data: Any = None) -> dict[str, Any]:
         error: dict[str, Any] = {"code": code, "message": message}
-        if data is not None:
-            error["data"] = data
+        details: dict[str, Any] = {
+            "retryable": code in {-32000, -32030},
+            "userMessage": message,
+        }
+        if isinstance(data, dict):
+            details.update(data)
+        elif data is not None:
+            details["details"] = data
+        error["data"] = details
         return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
 

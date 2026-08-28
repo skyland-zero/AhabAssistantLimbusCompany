@@ -12,7 +12,6 @@ from ruamel.yaml import YAML
 
 from core.events import Event
 from core.i18n import tr
-
 from module import CONFIG_PATH, VERSION_PATH
 from utils.singletonmeta import SingletonMeta
 
@@ -20,11 +19,21 @@ from utils.singletonmeta import SingletonMeta
 class TranslationFormatter(colorlog.ColoredFormatter):
     """自定义日志格式化器，用于日志消息国际化"""
 
-    project_root = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else Path.cwd()
+    project_root = (
+        Path(sys.executable).resolve().parent
+        if getattr(sys, "frozen", False)
+        else Path.cwd()
+    )
 
     def format(self, record):
         record.msg = tr("Logger", str(record.msg))
-        record.pathname = os.path.relpath(record.pathname, self.project_root)
+        try:
+            record.pathname = os.path.relpath(record.pathname, self.project_root)
+        except ValueError:
+            # A frozen module may retain the checkout's absolute source path
+            # while the executable runs from another drive.  Formatting logs
+            # must never turn a normal backend message into a logging error.
+            record.pathname = os.path.basename(record.pathname)
 
         return super().format(record)
 

@@ -1,15 +1,12 @@
 """框架无关的事件总线。
 
-用纯 Python 实现 Qt ``Signal`` 的常用接口（``connect`` / ``disconnect`` /
-``emit``），使核心业务代码可以在不依赖 PySide6 的情况下发布和订阅事件。
+用纯 Python 实现多播事件的常用接口（``connect`` / ``disconnect`` /
+``emit``），使核心业务代码可以在不依赖界面框架的情况下发布和订阅事件。
 
-与 Qt Signal 的语义差异：
-- 处理器在**发射者所在线程**被同步调用，没有 Qt 的接收者线程亲和性。
-  UI 层订阅可能由后台线程发射的事件时，必须使用 app.event_bridge.connect_queued
-  将回调封送回 GUI 主线程。
+处理器在**发射者所在线程**被同步调用；桌面前端订阅后台线程事件时，需要在
+自己的 UI 线程中安排回调。
 
-为兼容历史调用点，单例实例沿用了 ``mediator`` 这一名称；
-app 包会将其再次导出，UI 层代码无需感知来源变化。
+为兼容历史调用点，单例实例沿用了 ``mediator`` 这一名称。
 """
 
 from __future__ import annotations
@@ -22,7 +19,7 @@ logger = logging.getLogger("AALC")
 
 
 class Event:
-    """带 Qt Signal 风格接口的多播事件。
+    """提供 connect/disconnect/emit 接口的多播事件。
 
     用法::
 

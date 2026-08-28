@@ -3,7 +3,7 @@
 //! The card grid uses one column on narrow windows, two columns from the `md`
 //! breakpoint, and three on wide windows.
 //! Tool actions continue to use `ToolboxState`, so this page stays on the
-//! canonical Mock IPC boundary.
+//! canonical sidecar IPC boundary.
 
 use gpui::{Context, Div, Svg, div, prelude::*, px, svg};
 
@@ -104,8 +104,8 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .text_color(rgb(TEXT_MUTED))
             .child(
                 text(
-                    "工具均为 Mock 模拟，后端接入后生效",
-                    "Tools are mocked until the backend lands",
+                    "工具请求通过 Python sidecar 执行",
+                    "Tool requests are executed by the Python sidecar",
                 )
                 .get(language),
             ),

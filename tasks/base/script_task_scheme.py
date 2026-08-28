@@ -129,7 +129,7 @@ def init_game():
     # When GPUI has selected a target, reuse the already-established runtime
     # session instead of silently rebuilding the legacy default device from
     # cfg.simulator/cfg.simulator_port.  The old configuration-driven path is
-    # retained for the Qt application and command-line compatibility.
+    # retained for desktop and command-line compatibility.
     from module.device_manager import get_device_manager
 
     selected_session = get_device_manager().active_session

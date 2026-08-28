@@ -1,14 +1,11 @@
 """核心层的可插拔翻译钩子。
 
-核心业务代码不允许依赖 Qt 的翻译设施（QApplication.translate /
-QT_TRANSLATE_NOOP）。本模块提供一个进程级翻译函数插槽：
+核心业务代码不依赖具体界面框架。本模块提供一个进程级翻译函数插槽：
 
-- 核心层通过 :func:`tr` 取译文，未注册翻译器时原样返回源文本（中文）；
-- UI 层启动后把基于 Qt 翻译器的实现注册进来（见 app.language_manager），
-  使核心层产生的文案也能随界面语言切换。
+- 核心层通过 :func:`tr` 取译文，未注册翻译器时原样返回源文本；
+- 桌面前端可以注册自己的翻译实现，使核心层产生的文案随界面语言切换。
 
-:func:`noop` 对应 QT_TRANSLATE_NOOP：仅作为翻译源码提取标记，
-运行时直接返回原文。
+:func:`noop` 用于保留可提取的翻译文本，运行时直接返回原文。
 """
 
 from __future__ import annotations
@@ -39,5 +36,5 @@ def tr(domain: str, text: str) -> str:
 
 
 def noop(_domain: str, text: str) -> str:
-    """QT_TRANSLATE_NOOP 的替代：标记可翻译文本，运行时返回原文。"""
+    """标记可翻译文本，运行时返回原文。"""
     return text

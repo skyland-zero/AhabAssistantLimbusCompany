@@ -1,7 +1,7 @@
-"""Headless Python sidecar entry point for the GPUI application.
+"""Standalone headless Python sidecar entry point for the GPUI application.
 
-This is intentionally separate from ``main.py``.  The latter creates the
-legacy Qt window; this process only owns automation services and local RPC.
+This process owns automation services and local RPC only.  It never creates a
+window or imports the legacy UI layer.
 """
 
 from __future__ import annotations
@@ -94,8 +94,14 @@ async def _watch_parent(parent_pid: int, stop_event: asyncio.Event) -> None:
             continue
 
 
+def _application_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
 def _version() -> str:
-    version_file = Path(__file__).resolve().parent / "assets" / "config" / "version.txt"
+    version_file = _application_root() / "assets" / "config" / "version.txt"
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
@@ -104,7 +110,7 @@ def _version() -> str:
 
 def main() -> None:
     args = _parse_args()
-    os.chdir(Path(__file__).resolve().parent)
+    os.chdir(_application_root())
     try:
         asyncio.run(_run(args))
     except KeyboardInterrupt:

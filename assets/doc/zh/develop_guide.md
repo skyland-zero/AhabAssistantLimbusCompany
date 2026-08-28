@@ -2,64 +2,53 @@
 
 ## 环境配置
 
-1. **Python 版本**：项目要求 Python 3.12
-2. **windows 环境**：目前仅支持在windows环境下开发
+- Windows x64
+- Python 3.12 或更高版本
+- Rust nightly（GPUI 当前依赖 nightly 工具链）
+- [uv](https://docs.astral.sh/uv/)
 
-### 使用 uv（推荐）
-
-```bash
-uv venv --python=3.12
-# After activate the env
+```powershell
 uv sync
+rustup toolchain install nightly
 ```
 
-### 使用 Conda
+## 启动开发版本
 
-```bash
-# 创建 Python 3.12 虚拟环境
-conda create -n aalc python=3.12
-conda activate aalc
+推荐使用仓库根目录的启动脚本，它会启动 GPUI 前端；前端需要时会自动拉起
+同目录的 Python sidecar。
 
-# 升级 pip 并安装依赖
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+```powershell
+.\\run-gpui.bat
 ```
 
-## 启动开发服务器
+也可以直接启动 GPUI：
 
-```bash
-# 默认：启用热重载（自动重启 + Ctrl+R）
-python main_dev.py
-
-# 仅手动重载：禁用自动热重载，但保留 Ctrl+R
-python main_dev.py --no-reload
+```powershell
+cargo +nightly run --manifest-path gpui-app/Cargo.toml
 ```
 
-## 开发特性
+仅调试后端协议时，可以单独启动 sidecar：
 
-- **热重载**：
-  - 默认：代码修改后自动重新加载
-  - `--no-reload`：只在按下 `Ctrl+R` 时才重启
-- **快捷键**：
-  - `Ctrl+R`：手动触发重载
-  - `Ctrl+C`：退出程序
+```powershell
+uv run python main_backend.py --token dev-token
+```
+
+视觉开发或没有可用设备时，可显式使用 Mock 后端；生产模式不会静默回退：
+
+```powershell
+$env:AHAB_BACKEND = "mock"
+cargo +nightly run --manifest-path gpui-app/Cargo.toml
+```
+
+## 测试和格式化
+
+```powershell
+uv run pytest -q
+cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
+cargo +nightly test --manifest-path gpui-app/Cargo.toml
+```
 
 ## 翻译
 
-```powershell
-# 提取可翻译文本到 .ts 文件
-uv run .\scripts\translation_files_build.py
-# 或者
-python scripts\translation_files_build.py
-
-# 手动编辑翻译
-pyside6-Linguist  .\i18n\myapp_en.ts
-
-# 更编译生成 .qm 文件
-uv run .\scripts\translation_files_compile.py
-# 或者
-python scripts\translation_files_compile.py
-# 或者
-pyside6-lrelease i18n/myapp_en.ts -qm i18n/myapp_en.qm
-
-```
+GPUI 翻译表位于 `gpui-app/src/i18n/`。新增或修改语言时，同时更新语言枚举、
+翻译键和页面调用处；不需要 Qt Linguist、`.ts` 或 `.qm` 编译链。

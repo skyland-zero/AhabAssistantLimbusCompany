@@ -39,13 +39,23 @@ pub(super) fn spawn_sidecar() -> Result<(Arc<SidecarGuard>, u16, String), String
             .map_err(|error| error.to_string())?
             .as_nanos()
     );
-    let mut command = if let Ok(executable) = env::var("AHAB_BACKEND_EXE") {
-        Command::new(executable)
+    let (mut command, working_directory) = if let Ok(executable) = env::var("AHAB_BACKEND_EXE") {
+        let path = PathBuf::from(executable);
+        let directory = path.parent().map(Path::to_path_buf);
+        (Command::new(path), directory)
+    } else if let Some(executable) = find_backend_executable() {
+        let directory = executable.parent().map(Path::to_path_buf);
+        (Command::new(executable), directory)
     } else {
+        let script = find_backend_script()?;
+        let directory = script.parent().map(Path::to_path_buf);
         let mut command = Command::new(find_python());
-        command.arg("-u").arg(find_backend_script()?);
-        command
+        command.arg("-u").arg(&script);
+        (command, directory)
     };
+    if let Some(directory) = working_directory {
+        command.current_dir(directory);
+    }
     command
         .arg("--host")
         .arg("127.0.0.1")
@@ -202,4 +212,17 @@ fn find_backend_script() -> Result<PathBuf, String> {
         .map(|path| if path.is_file() { Ok(path) } else { Err(path) })
         .find_map(Result::ok)
         .ok_or_else(|| "找不到 main_backend.py，请设置 AHAB_BACKEND_SCRIPT".to_owned())
+}
+
+fn find_backend_executable() -> Option<PathBuf> {
+    let candidates = [
+        std::env::current_exe().ok().and_then(|path| {
+            path.parent()
+                .map(|directory| directory.join("AALC Backend.exe"))
+        }),
+        std::env::current_dir()
+            .ok()
+            .map(|directory| directory.join("AALC Backend.exe")),
+    ];
+    candidates.into_iter().flatten().find(|path| path.is_file())
 }

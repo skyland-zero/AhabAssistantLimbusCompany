@@ -108,7 +108,7 @@ impl HomeState {
         self.apply_rpc_result(result);
     }
 
-    /// Drain events from either the shared Mock backend or the sidecar.
+    /// Drain events from either the shared test backend or the sidecar.
     /// Returns whether the caller should request a repaint.
     pub fn poll_events(&mut self) -> bool {
         let events = self.rpc.take_events();

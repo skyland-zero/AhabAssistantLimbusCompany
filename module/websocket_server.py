@@ -226,7 +226,14 @@ class WebSocketServer:
         return {
             "jsonrpc": "2.0",
             "id": request_id,
-            "error": {"code": code, "message": message},
+            "error": {
+                "code": code,
+                "message": message,
+                "data": {
+                    "retryable": code in {-32000, -32030},
+                    "userMessage": message,
+                },
+            },
         }
 
 

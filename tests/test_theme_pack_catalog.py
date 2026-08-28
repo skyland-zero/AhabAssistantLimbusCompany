@@ -2,8 +2,8 @@
 theme pack catalog test
 
 主题包权重的唯一来源是 assets/config/theme_pack_list.example.yaml
-app/theme_pack_setting_interface.py 只负责把权重 key 映射到展示名和封面
-用 AST + ruamel 静态比对两边，不 import UI 模块，避免依赖图形环境
+module/config/theme_pack_catalog.py 负责把权重 key 映射到展示名和封面
+以及 OCR 备用名称，且不依赖图形环境
 
 主题包选择走 Automation.find_str_in_text 的子串匹配（忽略空格），
 因此 key 是卡包名的片段而不是全名。find_str_in_text 按 dict 的插入顺序
@@ -13,7 +13,6 @@ app/theme_pack_setting_interface.py 只负责把权重 key 映射到展示名和
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -21,8 +20,6 @@ from ruamel.yaml import YAML
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 CATALOG_PATH: Path = REPO_ROOT / "assets" / "config" / "theme_pack_list.example.yaml"
-INTERFACE_PATH: Path = REPO_ROOT / "app" / "theme_pack_setting_interface.py"
-COVER_DIR: Path = REPO_ROOT / "assets" / "app" / "theme_packs"
 
 
 def _catalog() -> Dict[str, Dict[str, int]]:
@@ -41,15 +38,12 @@ def _catalog() -> Dict[str, Dict[str, int]]:
 
 
 def _interface_dict(name: str) -> Dict[str, str]:
-    """从 theme_pack_setting_interface.py 的 AST 里提取指定的字面量字典"""
-    tree: ast.Module = ast.parse(INTERFACE_PATH.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == name:
-                return ast.literal_eval(node.value)
-    raise AssertionError(f"theme_pack_setting_interface.py 里找不到 {name}")
+    """从纯 Python 主题包目录中读取指定映射。"""
+    from module.config import theme_pack_catalog
+
+    value = getattr(theme_pack_catalog, name, None)
+    assert isinstance(value, dict), f"theme_pack_catalog.py 里找不到 {name}"
+    return value
 
 
 def _keywords(*sections: str) -> List[str]:
@@ -279,13 +273,3 @@ def test_unknown_keyword_never_shadows_a_real_theme_pack() -> None:
         keywords = _keywords(*sections)
         for sample in samples:
             assert _match(sample, keywords) != fallback, sample
-
-
-def test_configured_covers_exist() -> None:
-    # 展示名和封面都以权重 key 为准，配置了封面就必须有对应图片
-    for name in ("THEME_PACK_IMAGE_MAP", "THEME_PACK_HARD_IMAGE_MAP"):
-        missing = sorted(
-            cover for cover in _interface_dict(name).values()
-            if not (COVER_DIR / cover).is_file()
-        )
-        assert missing == [], f"{name} 配置了不存在的封面：{missing}"

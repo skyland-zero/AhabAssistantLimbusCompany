@@ -1,23 +1,31 @@
-# UI 组件开发说明
+# GPUI 界面开发说明
 
-本文档整理当前项目中常用 UI 组件的分层、配置绑定、样式与翻译约定。新增或调整界面时，优先复用现有组件和模式。
+当前桌面界面由 Rust/GPUI 实现，业务能力通过 Python sidecar 的 JSON-RPC
+接口提供。新增页面或组件时，保持界面和业务边界清晰。
 
-## UI 架构层次
+## 代码分层
 
-当前 UI 不是单纯的 `PySide6 + qfluentwidgets`，而是由几层共同组成：
+- `gpui-app/src/main.rs`：应用入口、窗口生命周期和系统壳初始化。
+- `gpui-app/src/shell/`：Windows 单实例、托盘和窗口激活。
+- `gpui-app/src/pages/`：页面状态、交互和布局。
+- `gpui-app/src/components/`：可复用的 GPUI 组件。
+- `gpui-app/src/ipc/`：sidecar 启动、WebSocket、请求和事件分发。
+- `gpui-app/src/i18n/`：界面翻译表。
+- `module/backend_application.py`：sidecar 服务上下文和业务 RPC。
+- `core/`、`tasks/`、`utils/`：与界面无关的业务能力。
 
-- `PySide6`：窗口、布局、信号槽、线程、托盘、翻译和自绘等 Qt 基础能力。
-- `qfluentwidgets`：Fluent 风格控件、设置卡片、导航、弹窗、进度环和主题系统。
-- `qframelesswindow`：无边框窗口、标题栏和无边框弹窗。
-- `app/base_tools.py`：复选框、下拉框、按钮、标签等基础控件。
-- `app/base_combination.py`：设置卡片、队伍选择、进度条等组合控件。
-- `app/card/messagebox_custom.py`：确认框、警告框、更新弹窗、输入弹窗和提示条。
-- `app/custom_pivot.py`：顶部 `Pivot` 导航和选中指示器。
-- `app/starlight_bonus.py`：开局星光按钮、等级选择器和 Tooltip。
-- `app/my_app.py`：主窗口、顶层页面切换、托盘、公告和更新进度。
-- `app/farming_interface.py`：主功能页、任务开关、任务配置页、日志栏和脚本启停。
-- `app/page_card.py`：窗口设置、日常、奖励、狂气换体、镜牢和帮助文档页面。
-- `app/setting_interface.py`：游戏、模拟器、定时执行、个性化、更新、日志和关于设置。
-- `app/team_setting_card.py`：镜牢队伍、罪人选择、体系、商店策略、星光加成和统计信息。
-- `app/tools_interface.py`：自动战斗、自动换饼、截图等小工具入口。
-- UI 服务层：`cfg` 配置读写、`mediator` 跨页面信号、`LanguageManager` 运行时翻译、`app/common/ui_config.py` 主题 QSS，以及日志分发、Windows Toast、全局快捷键等桌面交互。
+## 页面与后端交互
+
+页面初始化和写操作都应通过统一的 `BackendClient` 发送 RPC。网络请求在后台
+线程执行，页面只消费状态更新和事件，不能直接读写 Python 配置文件。
+
+长操作应立即返回 `accepted` 和 `runId`，进度及最终结果通过事件通知；错误要
+保留稳定错误码、可重试标志和用户可见消息。
+
+## 开发检查
+
+```powershell
+cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
+cargo +nightly test --manifest-path gpui-app/Cargo.toml
+uv run pytest -q
+```

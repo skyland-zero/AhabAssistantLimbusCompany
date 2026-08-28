@@ -1,96 +1,124 @@
+"""Build the Windows GPUI application, Python sidecar and updater."""
+
+from __future__ import annotations
+
 import argparse
-import os
+import json
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 
-import PyInstaller.__main__
+ROOT = Path(__file__).resolve().parents[1]
+DIST = ROOT / "dist"
+RELEASE = DIST / "AALC"
 
-# 读取版本号
-parser = argparse.ArgumentParser(description="Build AALC")
-parser.add_argument("--version", default="dev", help="AALC Version")
-args = parser.parse_args()
-version = args.version
 
-# 清理旧的构建文件
-shutil.rmtree("./dist", ignore_errors=True)
+def run(command: list[str], *, cwd: Path = ROOT) -> None:
+    sys.stdout.write(f"+ {' '.join(command)}\n")
+    sys.stdout.flush()
+    subprocess.run(command, cwd=cwd, check=True)
 
-# 构建应用程序
-PyInstaller.__main__.run(
-    [
-        "main.spec",
-        "--noconfirm",
-    ]
-)
 
-PyInstaller.__main__.run(
-    [
-        "updater.spec",
-        "--noconfirm",
-    ]
-)
+def build_python_executable(spec: str) -> None:
+    run(
+        [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            spec,
+            "--noconfirm",
+            "--clean",
+        ]
+    )
 
-# 移动更新程序到主程序目录
-shutil.move(os.path.join("dist", "AALC Updater.exe"), os.path.join("dist", "AALC"))
 
-# 拷贝必要的文件到dist目录
-shutil.copy("README.md", os.path.join("dist", "AALC", "README.md"))
-shutil.copy("LICENSE", os.path.join("dist", "AALC", "LICENSE"))
-shutil.copytree("assets", os.path.join("dist", "AALC", "assets"), dirs_exist_ok=True)
+def copy_tree(source: Path, destination: Path) -> None:
+    if not source.is_dir():
+        raise FileNotFoundError(f"required release directory is missing: {source}")
+    shutil.copytree(source, destination, dirs_exist_ok=True)
 
-# 生成翻译文件
-os.makedirs(os.path.join("dist", "AALC", "i18n"), exist_ok=True)
-for ts_file in os.listdir("./i18n"):
-    if ts_file.endswith(".ts"):
-        qm_path = os.path.join("./i18n", ts_file.replace(".ts", ".qm"))
-        subprocess.run(["pyside6-lrelease", os.path.join("./i18n", ts_file), "-qm", qm_path])
-        print(f"Generated: {qm_path}")
-        shutil.move(qm_path, os.path.join("dist", "AALC", "i18n", ts_file.replace(".ts", ".qm")))
 
-# 注入版本号到./dist/AALC/assets/config/version.txt
-os.makedirs(os.path.join("dist", "AALC", "assets", "config"), exist_ok=True)
-with open(
-    os.path.join("dist", "AALC", "assets", "config", "version.txt"),
-    "w",
-    encoding="utf-8",
-) as f:
-    f.write(version)
+def stage_release(version: str) -> None:
+    RELEASE.mkdir(parents=True, exist_ok=True)
 
-# 裁剪多余的文件
-bundled_internal_dir = os.path.join("dist", "AALC", "_internal")
-redundant_files = [
-    # qt6自带的翻译文件，体积较大且不需要
-    "PySide6/translations",
-    # QML相关，我们用的是QtWidgets并不需要
-    "PySide6/Qt6Qml.dll",
-    "PySide6/Qt6Quick.dll",
-    "PySide6/Qt6QmlModels.dll",
-    "PySide6/Qt6QmlWorkerScript.dll",
-    "PySide6/Qt6QmlMeta.dll",
-    # opengl相关，我们用的是QtWidgets并不需要
-    "PySide6/Qt6OpenGL.dll",
-    "PySide6/opengl32sw.dll",  # 软件渲染库，没GPU的机器才需要
-    # 其他不需要的Qt模块
-    "PySide6/Qt6Pdf.dll",  # pdf文件
-    "PySide6/Qt6Network.dll",  # 网络相关
-    "PySide6/QtNetwork.pyd",
-    # rapidocr自带的模型文件，我们只用PPV4模型，可以删掉V5的
-    "rapidocr/models/ch_PP-OCRv5_rec_mobile_infer.onnx",
-    "rapidocr/models/ch_PP-OCRv5_mobile_det.onnx",
-    # rapidocr用来可视化识别结果的字体，我们不用这个功能
-    # 但是因为rapidocr代码耦合的问题，即使不用可视化也会强制下载这个文件，所以还是留着吧...
-    # "rapidocr/models/FZYTK.TTF",
-    # opencv的videoio插件，我们不需要
-    "cv2/opencv_videoio_ffmpeg4110_64.dll",
-]
+    gpui_binary = ROOT / "gpui-app" / "target" / "release" / "ahab-gpui-app.exe"
+    backend_binary = DIST / "AALC Backend.exe"
+    updater_binary = DIST / "AALC Updater.exe"
+    for path in (gpui_binary, backend_binary, updater_binary):
+        if not path.is_file():
+            raise FileNotFoundError(f"required build output is missing: {path}")
 
-for rel_path in redundant_files:
-    abs_path = os.path.join(bundled_internal_dir, rel_path)
-    if os.path.isdir(abs_path):
-        shutil.rmtree(abs_path, ignore_errors=True)
-    elif os.path.isfile(abs_path):
-        os.remove(abs_path)
-    else:
-        print(f"Warning: {abs_path} not found.")
+    shutil.copy2(gpui_binary, RELEASE / "AALC.exe")
+    shutil.copy2(backend_binary, RELEASE / "AALC Backend.exe")
+    shutil.copy2(updater_binary, RELEASE / "AALC Updater.exe")
+    shutil.copy2(ROOT / "README.md", RELEASE / "README.md")
+    shutil.copy2(ROOT / "LICENSE", RELEASE / "LICENSE")
+    copy_tree(ROOT / "assets", RELEASE / "assets")
+    copy_tree(ROOT / "gpui-app" / "resources", RELEASE / "resources")
 
-# 压缩为7z文件
-subprocess.run(["7z", "a", "-mx=7", f"AALC_{version}.7z", "AALC/*"], cwd="./dist")
+    version_file = RELEASE / "assets" / "config" / "version.txt"
+    version_file.parent.mkdir(parents=True, exist_ok=True)
+    version_file.write_text(version, encoding="utf-8")
+
+    (RELEASE / "release.json").write_text(
+        json.dumps(
+            {
+                "version": version,
+                "frontend": "AALC.exe",
+                "backend": "AALC Backend.exe",
+                "updater": "AALC Updater.exe",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def archive_release(version: str) -> Path:
+    archive_base = DIST / f"AALC_{version}"
+    seven_zip = shutil.which("7z") or shutil.which("7zz")
+    if seven_zip:
+        run([seven_zip, "a", "-mx=7", f"{archive_base}.7z", "AALC/*"], cwd=DIST)
+        return archive_base.with_suffix(".7z")
+
+    # A zip fallback keeps local builds usable on machines without 7-Zip;
+    # CI installs 7-Zip and therefore publishes the normal .7z artifact.
+    archive = Path(shutil.make_archive(str(archive_base), "zip", root_dir=DIST, base_dir="AALC"))
+    sys.stdout.write(f"7z/7zz not found; created fallback archive: {archive}\n")
+    return archive
+
+
+def build(version: str) -> Path:
+    if DIST.exists():
+        shutil.rmtree(DIST)
+
+    run(
+        [
+            "cargo",
+            "+nightly",
+            "build",
+            "--release",
+            "--manifest-path",
+            "gpui-app/Cargo.toml",
+        ]
+    )
+    build_python_executable("main_backend.spec")
+    build_python_executable("updater.spec")
+    stage_release(version)
+    archive = archive_release(version)
+    sys.stdout.write(f"Release ready: {archive}\n")
+    return archive
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Build AALC GPUI + Python sidecar")
+    parser.add_argument("--version", default="dev", help="release version")
+    args = parser.parse_args()
+    build(args.version)
+
+
+if __name__ == "__main__":
+    main()

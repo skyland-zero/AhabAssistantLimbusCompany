@@ -1,10 +1,9 @@
 """Headless application services exposed by the GPUI sidecar.
 
-The legacy Qt application owns a large amount of orchestration code.  The
-sidecar must not import that UI layer, so this module is the narrow runtime
-context shared by RPC handlers and the WebSocket event publisher.  Services
-are deliberately kept behind small methods: the transport does not need to
-know where configuration, devices, or task execution are implemented.
+The sidecar is the narrow runtime context shared by RPC handlers and the
+WebSocket event publisher.  Services are deliberately kept behind small
+methods: the transport does not need to know where configuration, devices, or
+task execution are implemented.
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.logger import log
 
@@ -595,7 +595,10 @@ class BackendApplication:
                 packs.append(
                     {
                         "id": pack_id,
-                        "name": pack_id,
+                        "name": theme_pack_display_name(
+                            pack_id,
+                            hard=section_name.endswith("hard"),
+                        ),
                         "weight": min(10, abs(raw_weight)),
                         "enabled": raw_weight >= 0,
                         "tier": "HARD" if section_name.endswith("hard") else "NORMAL",

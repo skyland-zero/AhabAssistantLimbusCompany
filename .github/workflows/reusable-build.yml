@@ -27,6 +27,23 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --frozen
+
+      - name: Setup Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly
+          components: rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gpui-app
+
+      - name: Run backend and GPUI tests
+        run: |
+          uv run pytest -q
+          cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
+          cargo +nightly test --manifest-path gpui-app/Cargo.toml
       
       # 构建并打包程序
       - name: build & bundle
@@ -40,4 +57,5 @@ jobs:
           name: AALC_${{ inputs.version }}
           path: |
             dist/AALC_${{ inputs.version }}.7z
+            dist/AALC_${{ inputs.version }}.zip
           archive: false

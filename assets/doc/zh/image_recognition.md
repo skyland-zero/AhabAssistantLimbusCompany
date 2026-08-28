@@ -81,4 +81,4 @@ find_element 返回的坐标是当前游戏窗口客户区坐标，而硬编码�
 
 ### 脚本
 - `scripts/match_steam_image.py`：运行游戏，在终端中运行。截图保存在项目根目录下 `screenshot.png`
-- `scripts/image_similarity.py`: 检查图片相似度
+- 图片资源应直接在 `assets/images/` 下维护；提交前请使用实际游戏窗口验证识别效果。

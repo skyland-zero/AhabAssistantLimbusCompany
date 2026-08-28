@@ -55,6 +55,18 @@ fn configure_windows_window(window: &gpui::Window) {
 }
 
 fn main() {
+    #[cfg(target_os = "windows")]
+    let _instance = match shell::acquire_instance() {
+        Ok(Some(instance)) => instance,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("{error}");
+            return;
+        }
+    };
+    #[cfg(target_os = "windows")]
+    shell::start_tray();
+
     application().run(|cx: &mut App| {
         cx.set_app_identity("com.kiyi671.ahab-gpui-app", "AALC · GPUI");
         cx.set_text_rendering_mode(TextRenderingMode::Grayscale);

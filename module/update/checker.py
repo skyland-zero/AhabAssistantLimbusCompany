@@ -1,6 +1,6 @@
 """软件更新检查与下载的核心逻辑。
 
-本模块是核心层实现：不依赖 PySide6 / qfluentwidgets / UI 层。
+本模块是核心层实现：不依赖具体界面框架或 UI 层。
 - 后台检查线程基于 threading.Thread，结果通过 core.events.Event 回调；
 - 文案翻译走 core.i18n 可插拔钩子；
 - 下载进度通过 core.events.mediator 对外发布。
@@ -24,7 +24,7 @@ from utils.utils import decrypt_string
 
 md_renderer = MarkdownIt("gfm-like", {"html": True})
 
-# 更新日志弹窗标题的翻译域，保持与旧 QT_TRANSLATE_NOOP 域名一致
+# 更新日志标题的翻译域，保持配置和文案兼容
 TRANSLATE_DOMAIN = "UpdateThread"
 
 
@@ -61,7 +61,7 @@ class UpdateThread(Thread):
         flag -- 是否强制遵循配置项 check_update 来决定是否执行检查
         """
         super().__init__(daemon=True)
-        # 实例级事件（与旧 Qt Signal 一致：不同检查实例的订阅互不干扰）。
+        # 实例级事件：不同检查实例的订阅互不干扰。
         self.updateSignal = Event("update_signal")
         self.timeout = timeout  # 超时时间
         self.flag = flag  # 标志位，用于控制是否执行检查更新

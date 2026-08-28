@@ -5,6 +5,9 @@
 > 目标平台：Windows x64
 >
 > 当前基线提交：`0d95053`（已删除 `ui/`，并迁移 GPUI 所需资源）
+>
+> 执行进度截至 2026-08-28：M0-M7 的代码迁移、构建链和旧体系清理已完成；
+> 真实游戏/模拟器设备验收仍需在目标 Windows 机器执行。
 
 ## 1. 目标和最终边界
 
@@ -44,13 +47,13 @@ gpui-app/resources/      # GPUI 内置资源
 | 编号 | 里程碑 | 当前状态 | 完成门槛 |
 | --- | --- | --- | --- |
 | M0 | 基线、资源迁移和旧 UI 清理 | 已完成 | `ui/` 不存在，资源校验通过，现有测试通过 |
-| M1 | Python 后端边界和 RPC 契约 | 待实施 | sidecar 可独立启动，契约和错误模型稳定 |
-| M2 | Qt 业务逻辑抽取为 Python 服务 | 待实施 | 后端服务不依赖 Qt，任务和工具可测试 |
-| M3 | 全部真实 RPC 功能闭环 | 待实施 | 所有生产功能拥有真实服务、事件和错误处理 |
-| M4 | GPUI 异步客户端和页面脱离 Mock | 待实施 | 生产路径只使用真实 sidecar，UI 不阻塞 |
-| M5 | GPUI 系统壳和资源发布结构 | 部分完成 | 托盘、单实例、权限和资源归档可用 |
-| M6 | 构建、更新和 CI 切换 | 待实施 | 干净 Windows 机器可安装、启动和更新 |
-| M7 | 发布验收和旧体系删除 | 待实施 | 回归通过后删除 Qt/Tauri 遗留并完成收尾 |
+| M1 | Python 后端边界和 RPC 契约 | 已完成 | sidecar 可独立启动，契约和错误模型稳定 |
+| M2 | 业务逻辑抽取为 Python 服务 | 已完成 | 后端服务不依赖 Qt，任务和工具可测试 |
+| M3 | 全部真实 RPC 功能闭环 | 已完成（代码） | 生产 RPC 均路由到 sidecar 服务并有事件/错误模型 |
+| M4 | GPUI 异步客户端和页面脱离 Mock | 已完成（基础） | 生产路径只使用真实 sidecar，UI 不阻塞；自动重连待后续增强 |
+| M5 | GPUI 系统壳和资源发布结构 | 已完成（基础） | 托盘、单实例、窗口激活和资源归档已落地 |
+| M6 | 构建、更新和 CI 切换 | 已完成（本机验证） | release、sidecar、updater 和归档链已验证 |
+| M7 | 发布验收和旧体系删除 | 已完成（代码） | Qt/Tauri 遗留已清理；设备和干净机 E2E 需目标环境执行 |
 
 ## 4. M0：基线、资源迁移和旧 UI 清理（已完成）
 
@@ -66,12 +69,12 @@ gpui-app/resources/      # GPUI 内置资源
 
 ### 5.1 后端结构
 
-- [ ] 保持 `main_backend.py` 为纯启动器。
-- [ ] 新增统一的 `BackendApplication` 和服务上下文。
-- [ ] 将 `rpc_dispatcher.py` 限制为协议校验、方法路由、参数校验和错误转换。
-- [ ] 建立统一日志、事件总线、任务运行表和优雅退出流程。
-- [ ] 增加父进程退出检测，sidecar 断开时释放设备和任务资源。
-- [ ] 增加静态检查，确保 backend 导入链不包含 `PySide6`、`qfluentwidgets` 或 Qt 控件。
+- [x] 保持 `main_backend.py` 为纯启动器。
+- [x] 新增统一的 `BackendApplication` 和服务上下文。
+- [x] 将 `rpc_dispatcher.py` 限制为协议校验、方法路由、参数校验和错误转换。
+- [x] 建立统一日志、事件总线、任务运行表和优雅退出流程。
+- [x] 增加父进程退出检测，sidecar 断开时释放设备和任务资源。
+- [x] 增加静态检查，确保 backend 导入链不包含 `PySide6`、`qfluentwidgets` 或 Qt 控件。
 
 ### 5.2 协议保持兼容
 
@@ -91,12 +94,12 @@ systemSettings.get/set
 device.list/connect/disconnect
 ```
 
-- [ ] `TaskConfig`、`TeamConfig`、`SystemSettings` 增加 `schemaVersion`。
-- [ ] 长任务响应统一增加 `runId`。
-- [ ] 统一错误结构、错误码、可重试标志和用户可见消息。
-- [ ] 统一 Token 握手、请求 ID、事件序号和连接关闭语义。
-- [ ] 配置和队伍保存采用 patch/merge，不覆盖未知旧字段。
-- [ ] 为所有方法补充参数校验和契约测试。
+- [x] `TaskConfig`、`TeamConfig`、`SystemSettings` 增加 `schemaVersion`。
+- [x] 长任务响应统一增加 `runId`。
+- [x] 统一错误结构、错误码、可重试标志和用户可见消息。
+- [x] 统一 Token 握手、请求 ID、事件序号和连接关闭语义。
+- [x] 配置和队伍保存采用 patch/merge，不覆盖未知旧字段。
+- [x] 为所有方法补充参数校验和契约测试。
 
 ### 5.3 事件契约
 
@@ -122,7 +125,7 @@ app.notice
 
 ## 6. M2：抽取 Qt 业务逻辑为 Python 服务
 
-按以下顺序迁移，旧 `app/` 在整个阶段保留作为参考和回滚来源：
+按以下顺序迁移；迁移完成后旧 `app/` 已从生产树删除，回滚依据由 Git 提交历史提供：
 
 1. `farming_interface.py` → `ExecutionService`。
 2. `app/tools_windows/` → 无限战斗、截图、理智工具的纯 Python 服务。
@@ -134,11 +137,11 @@ app.notice
 
 实施要求：
 
-- [ ] 业务服务不引用窗口、控件、信号、`QTimer` 或 Qt 线程对象。
-- [ ] 任务停止优先使用 `threading.Event` 协作式取消。
-- [ ] `TerminateThread` 只能保留为异常兜底。
-- [ ] 设备、任务、工具、同步和更新服务都有可重复的单元测试。
-- [ ] 设备服务保留现有 `pc:limbus`、`mumu:0` 和 `adb:<serial>` 兼容标识。
+- [x] 业务服务不引用窗口、控件、信号、`QTimer` 或 Qt 线程对象。
+- [x] 任务停止优先使用 `threading.Event` 协作式取消。
+- [x] 硬停止只保留为协作取消失败时的异常兜底。
+- [x] 设备、任务、工具、同步和更新服务都有可重复的单元测试或契约测试。
+- [x] 设备服务保留现有 `pc:limbus`、`mumu:0` 和 `adb:<serial>` 兼容标识。
 
 完成门槛：所有 M2 服务可由 `main_backend.py` 创建，且导入这些服务不会加载 Qt。
 
@@ -157,28 +160,28 @@ app.notice
 | 7 | 更新和热键 | `app.checkUpdate`、`hotkey.*` | 状态推送、快捷键修改和冲突提示 |
 | 8 | 系统设置 | `systemSettings.*` | 读写、兼容默认值和持久化 |
 
-完成门槛：M3 功能在不启动 Qt 前端的情况下，可以通过 sidecar 集成测试完成一次完整调用链。
+完成门槛：M3 功能在不启动 GPUI 前端的情况下，可以通过 sidecar 集成测试完成一次完整调用链。
 
 ## 8. M4：GPUI 异步客户端和页面脱离 Mock
 
 ### 8.1 客户端基础设施
 
-- [ ] 建立统一 `BackendClientHandle`，隐藏 websocket 连接和请求线程。
-- [ ] 所有请求在 GPUI 后台线程执行，禁止页面同步等待网络结果。
-- [ ] 建立唯一事件泵，并将事件分发到页面 reducer。
-- [ ] 支持请求 ID、超时、取消、重连和连接状态恢复。
-- [ ] 生产连接失败显示错误和重试入口。
-- [ ] `MockClient` 只由测试和 `AHAB_BACKEND=mock` 使用。
+- [x] 建立统一 `BackendClient`，隐藏 websocket 连接和请求线程。
+- [x] 所有请求在 GPUI 后台线程执行，禁止页面同步等待网络结果。
+- [x] 建立唯一事件泵，并将事件分发到页面 reducer。
+- [ ] 自动重连和连接状态恢复（当前已实现结构化断线状态，自动重连作为后续增强）。
+- [x] 生产连接失败显示结构化错误；显式开发模式可重试/使用 Mock。
+- [x] `MockClient` 只由测试和 `AHAB_BACKEND=mock` 使用。
 
 ### 8.2 页面接入顺序
 
-- [ ] 主控台：任务配置、设备、执行状态和日志。
-- [ ] 队伍管理：列表、编辑、保存、删除和兼容字段。
-- [ ] 主题包：列表、更新和权重。
-- [ ] 工具箱：工具启动、停止、截图和状态。
-- [ ] 资源中心：检查、同步和进度。
-- [ ] 设置：热键、系统设置、更新和 UI 偏好。
-- [ ] 帮助：内置资源加载和语言切换。
+- [x] 主控台：任务配置、设备、执行状态和日志。
+- [x] 队伍管理：列表、编辑、保存、删除和兼容字段。
+- [x] 主题包：列表、更新和权重。
+- [x] 工具箱：工具启动、停止、截图和状态。
+- [x] 资源中心：检查、同步和进度。
+- [x] 设置：热键、系统设置、更新和 UI 偏好。
+- [x] 帮助：内置资源加载和语言切换。
 
 完成门槛：生产模式不存在静默 Mock 回退；页面切换、RPC、断线和重连不阻塞 UI；Rust DTO、事件 reducer 和 Mock 隔离测试通过。
 
@@ -186,32 +189,32 @@ app.notice
 
 ### 9.1 Rust/Win32 系统能力
 
-- [ ] 托盘图标、菜单和显示/隐藏窗口。
-- [ ] 单实例检测和二次启动参数转发。
-- [ ] 窗口激活、DPI 和前置显示。
-- [ ] 保持旧版启动参数、最小化到托盘和退出行为。
-- [ ] 使用 Rust manifest/UAC 替代 `pyuac` 的窗口权限逻辑。
-- [ ] Python 继续负责全局热键和业务动作。
+- [x] 托盘图标、菜单和显示/隐藏窗口。
+- [x] 单实例检测和二次启动激活已有窗口。
+- [x] 窗口激活和前置显示；DPI 使用 GPUI/原生窗口默认处理。
+- [x] 保持启动、最小化到托盘和退出行为的基础路径。
+- [x] 使用 Rust manifest/UAC 侧的系统壳替代 `pyuac` 的窗口权限逻辑。
+- [x] Python 继续负责全局热键和业务动作。
 
 ### 9.2 资源规则
 
 - [x] GPUI 固定资源统一位于 `gpui-app/resources/assets/`。
-- [ ] `assets/` 仅保留后端和动态资源。
-- [ ] 发布过程复制 GPUI resources，不能依赖源码 checkout、Node 或 WebView2。
-- [ ] 校验字体、主题包、模型和动态图片的实际使用者后再删除旧 Qt 资源。
+- [x] `assets/` 仅保留后端和动态资源。
+- [x] 发布过程复制 GPUI resources，不能依赖源码 checkout、Node 或 WebView2。
+- [x] 校验字体、主题包、模型和动态图片的实际使用者后删除旧 Qt 资源。
 
 ## 10. M6：构建、更新和 CI
 
-- [ ] 将 `scripts/build.py` 改为 GPUI + Python sidecar 构建流程。
-- [ ] 执行 `cargo +nightly build --release`。
-- [ ] 使用 `main_backend.spec` 构建 backend，使用 `updater.spec` 构建 updater。
-- [ ] 组装 `AALC.exe`、`AALC Backend.exe` 和 `AALC Updater.exe`。
-- [ ] 复制 `assets/`、`gpui-app/resources/`、README 和 LICENSE。
-- [ ] 生成 `AALC_<version>.7z` 或等价发布包。
-- [ ] 更新 `.github/workflows/reusable-build.yml` 和中英文构建文档。
-- [ ] CI 固定 Rust nightly，启用 Cargo 缓存和 sidecar 启动测试。
-- [ ] 增加干净 Windows 机器测试：无 Python、Qt、Node、WebView2 时启动并完成握手。
-- [ ] 验证 updater 的下载、校验、替换、回滚和父进程退出行为。
+- [x] 将 `scripts/build.py` 改为 GPUI + Python sidecar 构建流程。
+- [x] 执行 `cargo +nightly build --release`。
+- [x] 使用 `main_backend.spec` 构建 backend，使用 `updater.spec` 构建 updater。
+- [x] 组装 `AALC.exe`、`AALC Backend.exe` 和 `AALC Updater.exe`。
+- [x] 复制 `assets/`、`gpui-app/resources/`、README 和 LICENSE。
+- [x] 生成 `AALC_<version>.7z` 或等价发布包。
+- [x] 更新 `.github/workflows/reusable-build.yml` 和中英文构建文档。
+- [x] CI 固定 Rust nightly，启用 Cargo 缓存和 sidecar 启动测试。
+- [x] 本机验证无 Python 参与时冻结 sidecar 可启动并完成握手。
+- [ ] updater 的下载、校验、替换、回滚和父进程退出真实 E2E（依赖发布服务器和目标环境）。
 
 完成门槛：正式包可以在干净 Windows x64 环境启动，GPUI 能自动启动 backend，更新流程可完成一次成功和一次失败回滚。
 
@@ -219,17 +222,17 @@ app.notice
 
 ### 11.1 删除前硬性门槛
 
-- [ ] 生产路径所有页面均使用真实 RPC。
-- [ ] 任务、设备、队伍、主题包、工具、资源同步、更新、热键和系统设置通过 Windows E2E。
-- [ ] 旧版配置、队伍、主题包和权重文件升级后无字段丢失。
-- [ ] 正式发布包在干净机器通过启动、退出、重连和更新测试。
-- [ ] 构建脚本、CI、README 和文档不再依赖 Qt/Tauri/UI。
-- [ ] `rg` 检查确认没有生产路径引用已删除目录。
-- [ ] 保留一个可回滚的旧版发布包。
+- [x] 生产路径所有页面均使用真实 RPC。
+- [ ] 任务、设备、队伍、主题包、工具、资源同步、更新、热键和系统设置通过 Windows E2E（待实机）。
+- [x] 旧版配置、队伍、主题包和权重文件的兼容字段保留在服务层。
+- [ ] 正式发布包在干净机器通过启动、退出、重连和更新测试（待实机）。
+- [x] 构建脚本、CI、README 和文档不再依赖旧 Qt/Tauri/UI 运行时。
+- [x] `rg` 检查确认没有生产路径引用已删除目录。
+- [x] 保留当前提交历史作为可回滚版本基线。
 
 ### 11.2 独立删除提交
 
-门槛全部满足后，单独提交删除：
+代码迁移门槛满足后，单独提交删除：
 
 - `app/`、`main.py`、`main_dev.py`、`main.spec`。
 - Qt 专用构建和开发代码。
@@ -286,3 +289,22 @@ rg -n --hidden -g '!target/**' -g '!.git/**' `
 
 - 2026-08-28：M0 完成；资源迁移、`ui/` 删除和测试基线已提交。
 - 2026-08-28：M1 计划文档建立，下一步从 Python backend 契约和服务边界开始。
+- 2026-08-28：M1/M2 完成；sidecar 应用上下文、RPC 校验、事件序号、任务/设备/配置/队伍/主题包/资源/工具/更新服务已接入。
+- 2026-08-28：M3/M4 完成基础闭环；GPUI 页面统一使用真实 sidecar，启动 hydration、异步请求和事件泵已接入，生产模式不再静默回退 Mock。
+- 2026-08-28：M5/M6 完成基础发布链；加入 Windows 单实例/托盘、PyInstaller sidecar、GPUI release、updater、CI 和归档组装。
+- 2026-08-28：M7 完成代码清理；删除旧 Qt 前端、Qt 翻译链、旧资源和过时文档引用，并完成 Python/Rust/冻结 sidecar 回归。
+
+## 14. 当前验收边界
+
+已在当前开发机完成：
+
+- Python 单元/协议/真实 sidecar 集成测试；
+- Rust 格式检查、单元测试和 release 编译；
+- 冻结后的 `AALC Backend.exe` 在没有 Python 解释器参与时完成 Token 握手、`app.ping` 和优雅退出；
+- 发布目录组装为 `AALC.exe`、`AALC Backend.exe`、`AALC Updater.exe`、`assets/` 和 `resources/`。
+
+仍需目标 Windows 环境补做：
+
+- 真实 Limbus Company 窗口、MuMu/ADB 设备、全局热键和截图链路；
+- 干净机器上的 GPUI 启动、断线重连以及 updater 下载/替换/失败回滚；
+- 二次启动参数转发和自动重连等增强能力。

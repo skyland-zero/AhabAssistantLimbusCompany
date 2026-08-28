@@ -1,4 +1,4 @@
-//! Settings page backed by the shared settings and Mock IPC state.
+//! Settings page backed by the shared settings and sidecar IPC state.
 //!
 //! The card stack is centered at the `max-w-2xl` width, keeps each setting in
 //! its own card, and exposes appearance, language, hotkey, simulator, system,

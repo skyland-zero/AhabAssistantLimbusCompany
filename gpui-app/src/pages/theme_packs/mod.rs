@@ -1,4 +1,4 @@
-//! Theme-pack management page backed by the shared Mock IPC state.
+//! Theme-pack management page backed by the shared sidecar IPC state.
 //!
 //! The layout provides a compact action bar, an optional hard-mirror warning,
 //! and a single independently scrolling list.
