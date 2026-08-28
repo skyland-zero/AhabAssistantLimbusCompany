@@ -21,10 +21,7 @@ actions!(app_actions, [Quit]);
 
 fn main() {
     application().run(|cx: &mut App| {
-        cx.set_app_identity(
-            "com.kiyi671.ahab-gpui-app",
-            "Ahab Assistant · Limbus Company",
-        );
+        cx.set_app_identity("com.kiyi671.ahab-gpui-app", "AALC · GPUI");
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.bind_keys(components::text_input::key_bindings());
@@ -35,7 +32,7 @@ fn main() {
                 // `appears_transparent` hides the native Windows titlebar while
                 // retaining the platform window controls and resize frame.
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Ahab Assistant · Limbus Company".into()),
+                    title: Some("AALC · GPUI".into()),
                     appears_transparent: true,
                     ..Default::default()
                 }),
