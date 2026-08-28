@@ -6,7 +6,7 @@
 >
 > 当前基线提交：`0d95053`（已删除 `ui/`，并迁移 GPUI 所需资源）
 >
-> 执行进度截至 2026-08-28：M0-M7 的代码迁移、构建链和旧体系清理已完成；
+> 执行进度截至 2026-08-28：M0-M7 的代码迁移、构建链和旧体系清理已完成；本次补齐了设备连接后的持续实时画面预览闭环；
 > 真实游戏/模拟器设备验收仍需在目标 Windows 机器执行。
 
 ## 1. 目标和最终边界
@@ -112,6 +112,7 @@ device.status
 tool.status
 resource.sync.progress
 screenshot.frame
+preview.status
 log.entry
 app.notice
 ```
@@ -156,7 +157,7 @@ app.notice
 | 3 | 队伍和罪人 | `team.*`、`sinner.list` | 旧字段不丢失，新增/编辑/删除可回读 |
 | 4 | 主题包 | `themePack.*` | 列表、批量更新、权重和重置 |
 | 5 | 资源同步 | `resource.*` | 检查、同步、进度、失败和取消 |
-| 6 | 工具和截图 | `tool.*`、`screenshot.frame` | 启停、截图、状态和错误 |
+| 6 | 工具和截图 | `tool.*`、`screenshot.frame`、`preview.status` | 启停、单次截图、连接后持续预览、状态和错误 |
 | 7 | 更新和热键 | `app.checkUpdate`、`hotkey.*` | 状态推送、快捷键修改和冲突提示 |
 | 8 | 系统设置 | `systemSettings.*` | 读写、兼容默认值和持久化 |
 
@@ -176,12 +177,22 @@ app.notice
 ### 8.2 页面接入顺序
 
 - [x] 主控台：任务配置、设备、执行状态和日志。
+- [x] 主控台实时画面：设备连接后独立于任务持续推送最新 JPEG 帧，断开后清理画面。
 - [x] 队伍管理：列表、编辑、保存、删除和兼容字段。
 - [x] 主题包：列表、更新和权重。
 - [x] 工具箱：工具启动、停止、截图和状态。
 - [x] 资源中心：检查、同步和进度。
 - [x] 设置：热键、系统设置、更新和 UI 偏好。
 - [x] 帮助：内置资源加载和语言切换。
+
+### 8.3 主控台持续实时画面（已完成代码）
+
+- [x] `device.status=connected` 启动独立预览线程，`disconnected`、重连和 sidecar 退出时停止。
+- [x] 复用既有 PC 窗口、MuMu 和 ADB 截图路径；预览不移动 PC 游戏窗口、不写磁盘，也不受任务截图节流影响。
+- [x] 预览默认 5 FPS，最长边压缩到 720 像素后以 JPEG 推送，仅保留当前帧，限制 GPUI 图片缓存增长。
+- [x] 增加 `preview.status` 状态事件；GPUI 按当前设备过滤帧，异步解码并显示实时画面，断开时释放旧帧。
+- [x] 覆盖帧编码、预览线程生命周期、事件 reducer、断开清理、Rust 单元测试和发布构建。
+- [ ] 使用真实 Limbus Company 窗口、MuMu 或 ADB 设备完成 Windows 实机验收。
 
 完成门槛：生产模式不存在静默 Mock 回退；页面切换、RPC、断线和重连不阻塞 UI；Rust DTO、事件 reducer 和 Mock 隔离测试通过。
 
@@ -267,7 +278,7 @@ rg -n --hidden -g '!target/**' -g '!.git/**' `
 
 - RPC 参数、错误码、事件顺序、Token、并发、重连和优雅关闭。
 - Rust DTO、异步客户端、事件 reducer 和页面状态恢复。
-- Windows 真实游戏窗口、MuMu、ADB、任务控制、托盘、热键、截图、同步和更新。
+- Windows 真实游戏窗口、MuMu、ADB、任务控制、托盘、热键、持续实时画面、截图、同步和更新。
 - 干净机器发布包和旧配置兼容性。
 
 ## 13. 提交计划和进度记录
@@ -293,6 +304,7 @@ rg -n --hidden -g '!target/**' -g '!.git/**' `
 - 2026-08-28：M3/M4 完成基础闭环；GPUI 页面统一使用真实 sidecar，启动 hydration、异步请求和事件泵已接入，生产模式不再静默回退 Mock。
 - 2026-08-28：M5/M6 完成基础发布链；加入 Windows 单实例/托盘、PyInstaller sidecar、GPUI release、updater、CI 和归档组装。
 - 2026-08-28：M7 完成代码清理；删除旧 Qt 前端、Qt 翻译链、旧资源和过时文档引用，并完成 Python/Rust/冻结 sidecar 回归。
+- 2026-08-28：补齐主控台持续实时画面；后端按设备连接独立采集并推送最新 JPEG，GPUI 异步解码显示并在断开时清理，发布包构建完成。
 
 已落地提交：
 
@@ -307,13 +319,13 @@ rg -n --hidden -g '!target/**' -g '!.git/**' `
 
 已在当前开发机完成：
 
-- Python 单元/协议/真实 sidecar 集成测试（`27 passed`）；
+- Python 单元/协议/真实 sidecar 集成测试（`30 passed`）；
 - Rust 格式检查、单元测试和 release 编译；
 - 冻结后的 `AALC Backend.exe` 在没有 Python 解释器参与时完成 Token 握手、`app.ping` 和优雅退出；
-- 发布目录组装为 `AALC.exe`、`AALC Backend.exe`、`AALC Updater.exe`、`assets/` 和 `resources/`，并生成 `AALC_0.0.0-final.zip`。
+- 发布目录组装为 `AALC.exe`、`AALC Backend.exe`、`AALC Updater.exe`、`assets/` 和 `resources/`，并生成 `AALC_live-preview.zip`。
 
 仍需目标 Windows 环境补做：
 
-- 真实 Limbus Company 窗口、MuMu/ADB 设备、全局热键和截图链路；
+- 真实 Limbus Company 窗口、MuMu/ADB 设备、持续实时画面、全局热键和截图链路；
 - 干净机器上的 GPUI 启动、断线重连以及 updater 下载/替换/失败回滚；
 - 二次启动参数转发和自动重连等增强能力。

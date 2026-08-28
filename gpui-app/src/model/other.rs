@@ -172,6 +172,24 @@ pub struct DeviceStatusPayload {
     pub status: ConnectionStatus,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PreviewStatus {
+    #[default]
+    Stopped,
+    Starting,
+    Running,
+    Error,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PreviewStatusPayload {
+    pub deviceId: Option<String>,
+    pub status: PreviewStatus,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ScreenshotFrame {
     pub instanceId: String,

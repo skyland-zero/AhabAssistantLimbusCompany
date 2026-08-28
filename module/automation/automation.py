@@ -180,7 +180,13 @@ class Automation(metaclass=SingletonMeta):
         with self._screenshot_lock:
             self._latest_screenshot_monotonic = 0.0
 
-    def take_monitor_screenshot(self, gray: bool = True, max_age: float = 0.0) -> Image | None:
+    def take_monitor_screenshot(
+        self,
+        gray: bool = True,
+        max_age: float = 0.0,
+        *,
+        ensure_window_visible: bool = True,
+    ) -> Image | None:
         """获取监控截图，优先复用业务线程的最近帧且不覆盖业务截图。"""
         with self._screenshot_lock:
             if (
@@ -192,7 +198,10 @@ class Automation(metaclass=SingletonMeta):
                     return self._latest_screenshot.convert("L")
                 return self._latest_screenshot
 
-            screenshot = ScreenShot.take_screenshot(gray)
+            screenshot = ScreenShot.take_screenshot(
+                gray,
+                ensure_window_visible=ensure_window_visible,
+            )
             self._remember_screenshot(screenshot)
             return screenshot
 

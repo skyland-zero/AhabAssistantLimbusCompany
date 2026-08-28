@@ -1,4 +1,6 @@
-use gpui::ScrollHandle;
+use std::sync::Arc;
+
+use gpui::{Image, RenderImage, ScrollHandle};
 
 use crate::{
     app_inputs::{SettingsInputs, TeamInputs},
@@ -118,6 +120,9 @@ pub struct AhabApp {
     pub toast: Option<shell::Toast>,
     toast_generation: u64,
     home_log_revision_seen: u64,
+    pub(crate) screenshot_image_source: Option<Arc<Image>>,
+    pub(crate) screenshot_render_image: Option<Arc<RenderImage>>,
+    pub(crate) screenshot_image_revision: u64,
 }
 
 /// Deterministic transient states used by the visual-regression harness. These

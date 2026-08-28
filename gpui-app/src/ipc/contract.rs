@@ -160,6 +160,7 @@ pub mod method {
 
 pub mod event {
     pub const SCREENSHOT_FRAME: &str = "screenshot.frame";
+    pub const PREVIEW_STATUS: &str = "preview.status";
     pub const EXECUTION_STATUS: &str = "execution.status";
     pub const EXECUTION_MIRROR_PROGRESS: &str = "execution.mirrorProgress";
     pub const TOOL_STATUS: &str = "tool.status";

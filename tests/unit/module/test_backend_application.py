@@ -137,6 +137,24 @@ class FakeDeviceManager:
         return None
 
 
+class FakePreviewCapture:
+    def __init__(self) -> None:
+        self.started: list[str] = []
+        self.stop_count = 0
+        self.close_count = 0
+
+    def start(self, device_id: str) -> bool:
+        self.started.append(device_id)
+        return True
+
+    def stop(self) -> bool:
+        self.stop_count += 1
+        return True
+
+    def close(self) -> None:
+        self.close_count += 1
+
+
 class FakeThemeStore:
     def __init__(self) -> None:
         self.config = {
@@ -149,12 +167,13 @@ class FakeThemeStore:
         self.config = config_data
 
 
-def make_application() -> BackendApplication:
+def make_application(preview_capture=None) -> BackendApplication:
     return BackendApplication(
         FakeDeviceManager(),
         version="test",
         config=FakeConfig(),
         theme_list=FakeThemeStore(),
+        preview_capture=preview_capture,
     )
 
 
@@ -168,6 +187,29 @@ def test_event_bus_adds_ordered_sequence_to_application_events() -> None:
 
     assert [event[2] for event in events] == [1, 2]
     app.close()
+
+
+def test_device_events_control_continuous_preview_lifecycle() -> None:
+    preview = FakePreviewCapture()
+    app = make_application(preview)
+
+    app._on_device_event(
+        "device.status",
+        {"deviceId": "pc:limbus", "status": "connected"},
+    )
+    app._on_device_event(
+        "device.status",
+        {"deviceId": "pc:limbus", "status": "connecting"},
+    )
+    app._on_device_event(
+        "device.status",
+        {"deviceId": None, "status": "disconnected"},
+    )
+
+    assert preview.started == ["pc:limbus"]
+    assert preview.stop_count == 2
+    app.close()
+    assert preview.close_count == 1
 
 
 def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:

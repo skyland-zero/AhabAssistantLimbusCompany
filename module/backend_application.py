@@ -21,6 +21,7 @@ from typing import Any
 from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.logger import log
+from module.preview_capture import PreviewCapture, encode_screenshot_frame
 
 SCHEMA_VERSION = 1
 
@@ -115,6 +116,7 @@ class BackendApplication:
         config: Any | None = None,
         theme_list: Any | None = None,
         resource_service: Any | None = None,
+        preview_capture: PreviewCapture | None = None,
     ) -> None:
         self.version = version
         self.events = BackendEventBus()
@@ -138,6 +140,7 @@ class BackendApplication:
         self._hotkey_enabled = True
         self._hotkey_listener: Any | None = None
         self._mediator_bindings: list[tuple[Any, Callable[..., Any]]] = []
+        self._preview_capture = preview_capture or PreviewCapture(self.emit)
 
         self.device_manager = device_manager or get_device_manager()
         if hasattr(self.device_manager, "set_busy_checker"):
@@ -742,19 +745,9 @@ class BackendApplication:
         path = directory / f"screenshot_{time.strftime('%Y%m%d_%H%M%S')}.jpg"
         image.save(path, format="JPEG", quality=92)
         try:
-            import io
-
-            buffer = io.BytesIO()
-            image.save(buffer, format="JPEG", quality=80)
-            jpeg = list(buffer.getvalue())
             self.emit(
                 "screenshot.frame",
-                {
-                    "instanceId": "default",
-                    "jpeg": jpeg,
-                    "width": image.width,
-                    "height": image.height,
-                },
+                encode_screenshot_frame(image, "default", max_width=None, quality=80),
             )
         except Exception:
             log.debug("截图事件编码失败", exc_info=True)
@@ -848,6 +841,7 @@ class BackendApplication:
             return {"schemaVersion": SCHEMA_VERSION, "updateAvailable": False, "latest": self.version}
 
     def close(self) -> None:
+        self._preview_capture.close()
         self.execution_stop()
         for tool_id in tuple(self._tool_workers):
             try:
@@ -1052,6 +1046,27 @@ class BackendApplication:
 
     def _on_device_event(self, event: str, payload: dict[str, Any]) -> None:
         self.emit(event, payload)
+        if event != "device.status":
+            return
+
+        status = payload.get("status")
+        device_id = payload.get("deviceId")
+        try:
+            if status == "connected" and isinstance(device_id, str) and device_id:
+                self._preview_capture.start(device_id)
+            elif status in {"connecting", "disconnected"}:
+                self._preview_capture.stop()
+        except Exception as error:
+            log.exception("实时预览生命周期处理失败")
+            if isinstance(device_id, str) and device_id:
+                self.emit(
+                    "preview.status",
+                    {
+                        "deviceId": device_id,
+                        "status": "error",
+                        "error": str(error),
+                    },
+                )
 
     def _bind_core_events(self) -> None:
         """Bridge framework-free core events into the RPC event contract."""

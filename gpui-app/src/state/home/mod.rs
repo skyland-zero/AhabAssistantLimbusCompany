@@ -11,7 +11,7 @@ use crate::{
     model::{
         AfterExitAction, AfterPowerAction, ConnectionStatus, DeviceInfo, DeviceStatusPayload,
         ExecutionState, ExecutionStatusPayload, FixedTaskId, LogEntryPayload, LogLevel,
-        MirrorProgressPayload, ScreenshotFrame, TasksConfig,
+        MirrorProgressPayload, PreviewStatus, PreviewStatusPayload, ScreenshotFrame, TasksConfig,
     },
 };
 
@@ -77,6 +77,9 @@ pub struct HomeState {
     pub open_select: Option<HomeSelect>,
     pub mirror_progress: Option<MirrorProgressPayload>,
     pub latest_screenshot: Option<ScreenshotFrame>,
+    pub screenshot_revision: u64,
+    pub preview_status: PreviewStatus,
+    pub preview_error: Option<String>,
     pub after_completion_open: bool,
     pub after_completion_draft: Option<crate::model::AfterCompletionConfig>,
     pub last_event_sequence: u64,
@@ -134,6 +137,9 @@ impl HomeState {
             open_select: None,
             mirror_progress: None,
             latest_screenshot: None,
+            screenshot_revision: 0,
+            preview_status: PreviewStatus::Stopped,
+            preview_error: None,
             after_completion_open: false,
             after_completion_draft: None,
             last_event_sequence: 0,

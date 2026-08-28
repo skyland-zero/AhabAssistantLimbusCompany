@@ -15,7 +15,11 @@ from module.my_error.my_error import withOutGameWinError
 
 class ScreenShot:
     @staticmethod
-    def take_screenshot(gray: bool = True) -> Image.Image | None:
+    def take_screenshot(
+        gray: bool = True,
+        *,
+        ensure_window_visible: bool = True,
+    ) -> Image.Image | None:
         """
         截取屏幕截图
         Args:
@@ -36,7 +40,7 @@ class ScreenShot:
                 except Exception as e:
                     log.debug(f"adb截图报错 {type(e).__name__}: {e}")
                     return None
-        else:
+        elif ensure_window_visible:
             # 将窗口移动到屏幕可见区域，确保获取到完整的内容
             screen.handle.bring_window_into_view(not cfg.background_click)
 

@@ -142,8 +142,31 @@ impl HomeState {
                     }
                 }
                 crate::ipc::contract::event::SCREENSHOT_FRAME => {
-                    if let Ok(frame) = serde_json::from_value(event.payload) {
-                        self.latest_screenshot = Some(frame);
+                    if let Ok(frame) = serde_json::from_value::<ScreenshotFrame>(event.payload) {
+                        if frame.instanceId == "default"
+                            || self.selected_device.as_deref() == Some(frame.instanceId.as_str())
+                        {
+                            let changed = self
+                                .latest_screenshot
+                                .as_ref()
+                                .is_none_or(|current| current != &frame);
+                            if changed {
+                                self.latest_screenshot = Some(frame);
+                                self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
+                            }
+                            self.preview_status = PreviewStatus::Running;
+                            self.preview_error = None;
+                        }
+                    }
+                }
+                crate::ipc::contract::event::PREVIEW_STATUS => {
+                    if let Ok(status) =
+                        serde_json::from_value::<PreviewStatusPayload>(event.payload)
+                        && (status.deviceId.is_none()
+                            || self.selected_device.as_deref() == status.deviceId.as_deref())
+                    {
+                        self.preview_status = status.status;
+                        self.preview_error = status.error;
                     }
                 }
                 crate::ipc::contract::event::DEVICE_STATUS => {
@@ -151,8 +174,26 @@ impl HomeState {
                     {
                         self.selected_device = status.deviceId;
                         self.device_status = status.status;
-                        if status.status == ConnectionStatus::Connected {
-                            self.device_error = None;
+                        match status.status {
+                            ConnectionStatus::Connected => {
+                                self.device_error = None;
+                                self.latest_screenshot = None;
+                                self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
+                                self.preview_status = PreviewStatus::Starting;
+                                self.preview_error = None;
+                            }
+                            ConnectionStatus::Connecting => {
+                                self.latest_screenshot = None;
+                                self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
+                                self.preview_status = PreviewStatus::Starting;
+                                self.preview_error = None;
+                            }
+                            ConnectionStatus::Disconnected => {
+                                self.latest_screenshot = None;
+                                self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
+                                self.preview_status = PreviewStatus::Stopped;
+                                self.preview_error = None;
+                            }
                         }
                     }
                 }
@@ -210,5 +251,48 @@ impl HomeState {
             self.logs.pop_front();
         }
         self.log_revision = self.log_revision.wrapping_add(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn preview_frames_follow_selected_device_and_clear_on_disconnect() {
+        let mut home = HomeState::default();
+        home.apply_events(vec![
+            EventEnvelope::new(
+                crate::ipc::contract::event::DEVICE_STATUS,
+                json!({"deviceId":"pc:limbus","status":"connected"}),
+            )
+            .with_sequence(1),
+            EventEnvelope::new(
+                crate::ipc::contract::event::SCREENSHOT_FRAME,
+                json!({
+                    "instanceId":"pc:limbus",
+                    "jpeg":[255,216,255,217],
+                    "width":720,
+                    "height":405
+                }),
+            )
+            .with_sequence(2),
+        ]);
+
+        assert_eq!(home.preview_status, PreviewStatus::Running);
+        assert_eq!(home.latest_screenshot.as_ref().unwrap().width, 720);
+
+        home.apply_events(vec![
+            EventEnvelope::new(
+                crate::ipc::contract::event::DEVICE_STATUS,
+                json!({"deviceId":null,"status":"disconnected"}),
+            )
+            .with_sequence(3),
+        ]);
+
+        assert_eq!(home.preview_status, PreviewStatus::Stopped);
+        assert!(home.latest_screenshot.is_none());
     }
 }

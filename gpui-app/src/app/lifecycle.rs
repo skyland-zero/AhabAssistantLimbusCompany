@@ -218,6 +218,9 @@ impl AhabApp {
             toast: None,
             toast_generation: 0,
             home_log_revision_seen: 0,
+            screenshot_image_source: None,
+            screenshot_render_image: None,
+            screenshot_image_revision: u64::MAX,
         };
 
         if let Some(last_id) = app.state.settings.lastDeviceId.as_ref()

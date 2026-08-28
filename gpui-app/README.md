@@ -68,14 +68,14 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps
 ## 当前可操作范围
 
 - 点击顶部 TabBar 切换 7 个原生页面：主控台、队伍管理、主题包、工具箱、资源中心、帮助、设置。
-- 主控台支持任务开关、General/Advanced 配置、日常队伍选择、数量边界、执行状态、暂停/继续、设备选择、结构化日志和结束后动作；设备列表和连接已支持 Python sidecar。
+- 主控台支持任务开关、General/Advanced 配置、日常队伍选择、数量边界、执行状态、暂停/继续、设备选择、结构化日志和结束后动作；设备列表和连接已支持 Python sidecar，连接设备后右侧实时画面会独立持续刷新。
 - 队伍管理支持 Mock 队伍列表、用途筛选、新建/编辑/删除、5 个编辑 Tab、人格顺序、互斥策略、星光计算和 JSON 剪贴板。
 - 主题包、工具箱、资源中心、设置和帮助页均通过统一 RPC 边界工作；帮助目录使用 GPUI `ScrollHandle` 跳转，不嵌入 WebView。
 - 队伍名称、编队码、观察饰品、Mirror 酱 CDK 使用 `EntityInputHandler` 文本输入，支持 UTF-16 选择、中文 IME 基础路径和剪贴板。
 - 页面旧 token 会通过 render-time Palette 跟随浅色/深色和强调色；全局 Toast、日志复制和自动滚动已接入。
 - 使用 `Ctrl-Q` 退出。
 
-Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、资源同步进度和任务镜牢进度已纳入事件泵。托盘、单实例和正式发布流水线仍在后续里程碑中完成。
+Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、连接设备后的持续实时预览、资源同步进度和任务镜牢进度已纳入事件泵。实时预览默认以 5 FPS、最长边 720 像素的 JPEG 推送，并在断开设备后清理画面。
 
 ## 测量建议
 

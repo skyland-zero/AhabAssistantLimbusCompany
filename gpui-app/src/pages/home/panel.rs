@@ -1,5 +1,9 @@
 use super::*;
 
+use gpui::{ObjectFit, img};
+
+use crate::model::PreviewStatus;
+
 pub(super) fn splitter(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> gpui::Stateful<Div> {
     let collapsed = app.home.right_panel_collapsed;
     let width = if collapsed {
@@ -65,23 +69,6 @@ pub(super) fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 }
 
 fn screenshot_card(app: &AhabApp, language: Language) -> Div {
-    let screenshot_detail = app
-        .home
-        .latest_screenshot
-        .as_ref()
-        .map(|frame| {
-            format!(
-                "{} · {}×{}",
-                text("收到最新画面", "Latest frame").get(language),
-                frame.width,
-                frame.height
-            )
-        })
-        .unwrap_or_else(|| {
-            text("等待游戏窗口画面接入", "Waiting for game screen connection")
-                .get(language)
-                .to_owned()
-        });
     let screenshot_header = div()
         .h(px(32.0))
         .flex_none()
@@ -92,33 +79,97 @@ fn screenshot_card(app: &AhabApp, language: Language) -> Div {
             ICON_MONITOR_PLAY,
             text("实时画面", "Live Screen").get(language),
         ));
-    let screenshot_body = div()
+    let mut screenshot_body = div()
+        .relative()
         .w_full()
         .aspect_ratio(16.0 / 9.0)
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap_1()
+        .overflow_hidden()
         .rounded_md()
         .border_1()
-        .border_dashed()
-        .border_color(rgb(SURFACE_HOVER))
+        .border_color(rgba(0))
         .bg(rgb(BACKGROUND))
-        .text_size(px(11.0))
-        .text_color(rgb(TEXT_MUTED))
-        .child(
-            div()
-                .opacity(0.25)
-                .child(action_icon(ICON_MONITOR_PLAY, 32., TEXT_MUTED)),
-        )
-        .child(screenshot_detail)
-        .child(
-            div()
-                .text_size(px(10.0))
-                .text_color(rgb(TEXT_MUTED))
-                .child(text("16:9 · 1280×720", "16:9 · 1280×720").get(language)),
+        .text_size(px(11.0));
+
+    if let (Some(frame), Some(image)) = (
+        app.home.latest_screenshot.as_ref(),
+        app.screenshot_render_image.clone(),
+    ) {
+        let detail = format!(
+            "{} · {}×{}",
+            text("实时画面", "Live frame").get(language),
+            frame.width,
+            frame.height
         );
+        screenshot_body = screenshot_body
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .child(img(image).size_full().object_fit(ObjectFit::Contain)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .px(px(8.0))
+                    .py(px(4.0))
+                    .bg(rgba(0x000000a6))
+                    .text_color(rgb(0xffffff))
+                    .child(detail),
+            );
+    } else {
+        let screenshot_detail = if app.home.latest_screenshot.is_some() {
+            text("画面加载中", "Loading game screen").get(language)
+        } else {
+            match app.home.preview_status {
+                PreviewStatus::Starting => {
+                    text("正在获取画面", "Getting game screen").get(language)
+                }
+                PreviewStatus::Error => {
+                    text("实时画面获取失败", "Live screen unavailable").get(language)
+                }
+                PreviewStatus::Running => {
+                    text("等待最新画面", "Waiting for latest frame").get(language)
+                }
+                PreviewStatus::Stopped => text(
+                    "连接设备后显示实时画面",
+                    "Connect a device to view the game",
+                )
+                .get(language),
+            }
+        };
+        let detail = app
+            .home
+            .preview_error
+            .clone()
+            .unwrap_or_else(|| screenshot_detail.to_owned());
+        screenshot_body = screenshot_body
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_1()
+            .border_dashed()
+            .border_color(rgb(SURFACE_HOVER))
+            .text_color(rgb(TEXT_MUTED))
+            .child(
+                div()
+                    .opacity(0.25)
+                    .child(action_icon(ICON_MONITOR_PLAY, 32., TEXT_MUTED)),
+            )
+            .child(detail)
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child(text("16:9 · 720p 预览", "16:9 · 720p preview").get(language)),
+            );
+    }
     panel_card(
         div()
             .flex()
