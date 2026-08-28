@@ -5,6 +5,7 @@
 //! sidecar never has to know about desktop shell concerns.
 
 #![allow(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::upper_case_acronyms)]
 
 use std::{ffi::c_void, mem, ptr, thread};
 
@@ -210,7 +211,7 @@ unsafe fn tray_thread() {
         cb_cls_extra: 0,
         cb_wnd_extra: 0,
         h_instance: instance,
-        h_icon: LoadIconW(instance, 1 as usize as LPCWSTR),
+        h_icon: LoadIconW(instance, 1_usize as LPCWSTR),
         h_cursor: ptr::null_mut(),
         hbr_background: ptr::null_mut(),
         lpsz_menu_name: ptr::null(),
@@ -243,7 +244,7 @@ unsafe fn tray_thread() {
         u_id: 1,
         u_flags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
         u_callback_message: TRAY_MESSAGE,
-        h_icon: LoadIconW(instance, 1 as usize as LPCWSTR),
+        h_icon: LoadIconW(instance, 1_usize as LPCWSTR),
         sz_tip: [0; 128],
         dw_state: 0,
         dw_state_mask: 0,

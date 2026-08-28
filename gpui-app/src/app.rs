@@ -123,6 +123,9 @@ pub struct AhabApp {
     pub(crate) screenshot_image_source: Option<Arc<Image>>,
     pub(crate) screenshot_render_image: Option<Arc<RenderImage>>,
     pub(crate) screenshot_image_revision: u64,
+    pub(crate) screenshot_pending_image_source: Option<Arc<Image>>,
+    pub(crate) screenshot_pending_render_image: Option<Arc<RenderImage>>,
+    pub(crate) screenshot_pending_image_revision: Option<u64>,
 }
 
 /// Deterministic transient states used by the visual-regression harness. These

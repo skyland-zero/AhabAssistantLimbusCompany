@@ -6,7 +6,11 @@ import time
 
 from PIL import Image
 
-from module.preview_capture import PreviewCapture, encode_screenshot_frame
+from module.preview_capture import PREVIEW_INTERVAL, PreviewCapture, encode_screenshot_frame
+
+
+def test_preview_default_interval_is_two_frames_per_second() -> None:
+    assert PREVIEW_INTERVAL == 0.5
 
 
 def test_encode_preview_frame_limits_width_and_keeps_jpeg_payload() -> None:

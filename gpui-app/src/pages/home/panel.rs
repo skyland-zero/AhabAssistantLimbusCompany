@@ -90,16 +90,7 @@ fn screenshot_card(app: &AhabApp, language: Language) -> Div {
         .bg(rgb(BACKGROUND))
         .text_size(px(11.0));
 
-    if let (Some(frame), Some(image)) = (
-        app.home.latest_screenshot.as_ref(),
-        app.screenshot_render_image.clone(),
-    ) {
-        let detail = format!(
-            "{} · {}×{}",
-            text("实时画面", "Live frame").get(language),
-            frame.width,
-            frame.height
-        );
+    if let Some(image) = app.screenshot_render_image.clone() {
         screenshot_body = screenshot_body
             .child(
                 div()
@@ -113,14 +104,9 @@ fn screenshot_card(app: &AhabApp, language: Language) -> Div {
             .child(
                 div()
                     .absolute()
-                    .left_0()
-                    .right_0()
-                    .bottom_0()
-                    .px(px(8.0))
-                    .py(px(4.0))
-                    .bg(rgba(0x000000a6))
-                    .text_color(rgb(0xffffff))
-                    .child(detail),
+                    .top(px(8.0))
+                    .right(px(8.0))
+                    .child(badge("LIVE", BadgeTone::Success)),
             );
     } else {
         let screenshot_detail = if app.home.latest_screenshot.is_some() {
@@ -162,13 +148,7 @@ fn screenshot_card(app: &AhabApp, language: Language) -> Div {
                     .opacity(0.25)
                     .child(action_icon(ICON_MONITOR_PLAY, 32., TEXT_MUTED)),
             )
-            .child(detail)
-            .child(
-                div()
-                    .text_size(px(10.0))
-                    .text_color(rgb(TEXT_MUTED))
-                    .child(text("16:9 · 720p 预览", "16:9 · 720p preview").get(language)),
-            );
+            .child(detail);
     }
     panel_card(
         div()

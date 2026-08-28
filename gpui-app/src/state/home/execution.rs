@@ -142,21 +142,20 @@ impl HomeState {
                     }
                 }
                 crate::ipc::contract::event::SCREENSHOT_FRAME => {
-                    if let Ok(frame) = serde_json::from_value::<ScreenshotFrame>(event.payload) {
-                        if frame.instanceId == "default"
-                            || self.selected_device.as_deref() == Some(frame.instanceId.as_str())
-                        {
-                            let changed = self
-                                .latest_screenshot
-                                .as_ref()
-                                .is_none_or(|current| current != &frame);
-                            if changed {
-                                self.latest_screenshot = Some(frame);
-                                self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
-                            }
-                            self.preview_status = PreviewStatus::Running;
-                            self.preview_error = None;
+                    if let Ok(frame) = serde_json::from_value::<ScreenshotFrame>(event.payload)
+                        && (frame.instanceId == "default"
+                            || self.selected_device.as_deref() == Some(frame.instanceId.as_str()))
+                    {
+                        let changed = self
+                            .latest_screenshot
+                            .as_ref()
+                            .is_none_or(|current| current != &frame);
+                        if changed {
+                            self.latest_screenshot = Some(frame);
+                            self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
                         }
+                        self.preview_status = PreviewStatus::Running;
+                        self.preview_error = None;
                     }
                 }
                 crate::ipc::contract::event::PREVIEW_STATUS => {

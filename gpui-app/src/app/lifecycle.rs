@@ -221,6 +221,9 @@ impl AhabApp {
             screenshot_image_source: None,
             screenshot_render_image: None,
             screenshot_image_revision: u64::MAX,
+            screenshot_pending_image_source: None,
+            screenshot_pending_render_image: None,
+            screenshot_pending_image_revision: None,
         };
 
         if let Some(last_id) = app.state.settings.lastDeviceId.as_ref()

@@ -16,7 +16,7 @@ from typing import Any
 
 from module.logger import log
 
-PREVIEW_INTERVAL = 0.2
+PREVIEW_INTERVAL = 0.5
 PREVIEW_MAX_WIDTH = 720
 PREVIEW_JPEG_QUALITY = 72
 
