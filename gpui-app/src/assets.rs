@@ -345,13 +345,13 @@ fn default_roots() -> Vec<PathBuf> {
         roots.push(manifest.join("..").join("ui").join("src").join("assets"));
     }
 
-    if let Ok(executable) = std::env::current_exe() {
-        if let Some(directory) = executable.parent() {
-            roots.push(directory.join("resources"));
-            roots.push(directory.join("resources").join("assets"));
-            roots.push(directory.join("assets"));
-            roots.push(directory.to_owned());
-        }
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(directory) = executable.parent()
+    {
+        roots.push(directory.join("resources"));
+        roots.push(directory.join("resources").join("assets"));
+        roots.push(directory.join("assets"));
+        roots.push(directory.to_owned());
     }
     if let Ok(current) = std::env::current_dir() {
         roots.push(current.join("resources"));

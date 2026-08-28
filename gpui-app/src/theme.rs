@@ -116,10 +116,12 @@ mod tests {
 
     #[test]
     fn snapshot_derives_all_runtime_values_from_app_settings() {
-        let mut settings = AppSettings::default();
-        settings.themeMode = ThemeMode::Dark;
-        settings.accentId = "violet".into();
-        settings.language = Language::EnUs;
+        let settings = AppSettings {
+            themeMode: ThemeMode::Dark,
+            accentId: "violet".into(),
+            language: Language::EnUs,
+            ..AppSettings::default()
+        };
         let snapshot = ThemeSnapshot::from_settings(&settings, false);
         assert_eq!(snapshot.scheme, ColorScheme::Dark);
         assert_eq!(snapshot.accent, AccentId::Violet);

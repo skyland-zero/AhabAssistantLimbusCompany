@@ -11,9 +11,10 @@ use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, TEXT, TEXT_MUTED},
     components::style::{DANGER, GREEN, current_render_palette},
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state, palette_rgb, render_rgb as rgb,
-        scroll_area_with_id,
+        BadgeTone, ButtonVariant, action_button, badge, card, empty_state, is_activation_key,
+        palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon,
     },
+    i18n::{Localized, paired as text},
     model::{Language, ToolId},
 };
 
@@ -22,25 +23,6 @@ const ICON_PILL: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 const ICON_CAMERA: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>"#;
 const ICON_PLAY: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>"#;
 const ICON_STOP: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>"#;
-
-#[derive(Clone, Copy)]
-struct Localized {
-    zh: &'static str,
-    en: &'static str,
-}
-
-impl Localized {
-    fn get(self, language: Language) -> &'static str {
-        match language {
-            Language::ZhCn => self.zh,
-            Language::EnUs => self.en,
-        }
-    }
-}
-
-const fn text(zh: &'static str, en: &'static str) -> Localized {
-    Localized { zh, en }
-}
 
 #[derive(Clone, Copy)]
 enum ToolIcon {
@@ -163,20 +145,23 @@ fn tool_card(
         action_button(
             text("运行", "Run").get(language),
             ButtonVariant::Outline,
-            icon(ICON_CAMERA, 16., TEXT),
+            Some(svg_icon(ICON_CAMERA, 16., TEXT)),
+            32.,
         )
     } else if running {
         action_button(
             text("停止", "Stop").get(language),
             ButtonVariant::Outline,
-            icon(ICON_STOP, 16., TEXT),
+            Some(svg_icon(ICON_STOP, 16., TEXT)),
+            32.,
         )
         .text_color(rgb(DANGER))
     } else {
         action_button(
             text("运行", "Run").get(language),
             ButtonVariant::Default,
-            brand_icon(ICON_PLAY, 16.),
+            Some(brand_icon(ICON_PLAY, 16.)),
+            32.,
         )
     }
     .id(format!("tool-action-{:?}", tool.id))
@@ -188,7 +173,7 @@ fn tool_card(
                 cx.notify();
             }))
             .on_key_down(cx.listener(|view, event: &gpui::KeyDownEvent, window, cx| {
-                if toolbox_activation_key(event) {
+                if is_activation_key(event) {
                     window.prevent_default();
                     view.toolbox.screenshot();
                     cx.notify();
@@ -204,7 +189,7 @@ fn tool_card(
             }))
             .on_key_down(
                 cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
-                    if toolbox_activation_key(event) {
+                    if is_activation_key(event) {
                         window.prevent_default();
                         view.toolbox.toggle(tool_id_for_key);
                         cx.notify();
@@ -243,7 +228,7 @@ fn tool_card(
                 .items_center()
                 .justify_between()
                 .w_full()
-                .child(icon(tool_icon_path(tool.icon), 20., ACCENT))
+                .child(svg_icon(tool_icon_path(tool.icon), 20., ACCENT))
                 .child(status),
         )
         .child(
@@ -269,23 +254,6 @@ fn tool_card(
     card(body).p_0().w_full()
 }
 
-fn action_button(label: &'static str, variant: ButtonVariant, icon: Svg) -> Div {
-    button("", variant)
-        .h(px(32.))
-        .px_3()
-        .py_0()
-        .text_size(px(12.))
-        .child(icon)
-        .child(label)
-}
-
-fn icon(data: &'static str, size: f32, color: u32) -> Svg {
-    svg()
-        .data(data.as_bytes())
-        .size(px(size))
-        .text_color(rgb(color))
-}
-
 fn brand_icon(data: &'static str, size: f32) -> Svg {
     svg()
         .data(data.as_bytes())
@@ -299,13 +267,6 @@ fn tool_icon_path(icon: ToolIcon) -> &'static str {
         ToolIcon::Pill => ICON_PILL,
         ToolIcon::Camera => ICON_CAMERA,
     }
-}
-
-fn toolbox_activation_key(event: &gpui::KeyDownEvent) -> bool {
-    matches!(
-        event.keystroke.key.to_ascii_lowercase().as_str(),
-        "enter" | "space"
-    )
 }
 
 fn localized_feedback(feedback: &str, language: Language) -> String {

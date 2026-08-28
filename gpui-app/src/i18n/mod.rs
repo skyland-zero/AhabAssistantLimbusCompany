@@ -9,6 +9,30 @@ pub mod zh_cn;
 
 use crate::model::Language;
 
+/// A small render-time language pair for page-local labels.
+///
+/// Keeping this next to the catalog avoids every page reimplementing the
+/// same two-field type and selection method for labels that are not part of
+/// the persisted application catalog.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Localized {
+    pub zh: &'static str,
+    pub en: &'static str,
+}
+
+impl Localized {
+    pub const fn get(self, language: Language) -> &'static str {
+        match language {
+            Language::ZhCn => self.zh,
+            Language::EnUs => self.en,
+        }
+    }
+}
+
+pub const fn paired(zh: &'static str, en: &'static str) -> Localized {
+    Localized { zh, en }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Catalog {
     pub app_name: &'static str,

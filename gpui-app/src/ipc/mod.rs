@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_imports)]
 
 pub mod contract;
+pub mod gateway;
 pub mod mock;
 pub mod websocket;
 
@@ -14,4 +15,5 @@ pub trait RpcClient {
 }
 
 pub use contract::{EventEnvelope, RequestId, RequestSequence, RpcError, RpcResponse};
+pub use gateway::RpcGateway;
 pub use mock::MockClient;

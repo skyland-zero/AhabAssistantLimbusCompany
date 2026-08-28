@@ -6,39 +6,21 @@
 
 use std::time::Duration;
 
-use gpui::{Context, Div, Svg, div, prelude::*, px, relative, svg};
+use gpui::{Context, Div, div, prelude::*, px, relative};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
     components::style::GREEN,
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state, loading, render_rgb as rgb,
-        scroll_area_with_id,
+        BadgeTone, ButtonVariant, action_button, badge, card, empty_state, is_activation_key,
+        loading, render_rgb as rgb, scroll_area_with_id, svg_icon,
     },
+    i18n::paired as text,
     model::{Language, ResourceGroup},
 };
 
 const ICON_REFRESH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>"#;
 const ICON_SEARCH_CHECK: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 2 2 4-4"/></svg>"#;
-
-#[derive(Clone, Copy)]
-struct Localized {
-    zh: &'static str,
-    en: &'static str,
-}
-
-impl Localized {
-    fn get(self, language: Language) -> &'static str {
-        match language {
-            Language::ZhCn => self.zh,
-            Language::EnUs => self.en,
-        }
-    }
-}
-
-const fn text(zh: &'static str, en: &'static str) -> Localized {
-    Localized { zh, en }
-}
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     // The mock emits its terminal progress event synchronously. Keep that
@@ -71,7 +53,8 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let mut check = action_button(
         text("检查更新", "Check for Updates").get(language),
         ButtonVariant::Outline,
-        icon(ICON_SEARCH_CHECK, 14., TEXT),
+        Some(svg_icon(ICON_SEARCH_CHECK, 14., TEXT)),
+        28.,
     )
     .id("resources-check");
     check = check
@@ -86,7 +69,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         }))
         .on_key_down(
             cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
-                if resources_activation_key(event) {
+                if is_activation_key(event) {
                     window.prevent_default();
                     view.resources.check_update();
                     view.show_toast(
@@ -103,7 +86,8 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let mut sync = action_button(
         text("立即同步", "Sync Now").get(language),
         ButtonVariant::Default,
-        icon(ICON_REFRESH, 14., TEXT),
+        Some(svg_icon(ICON_REFRESH, 14., TEXT)),
+        28.,
     )
     .id("resources-sync");
     if progress.is_none() {
@@ -119,7 +103,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             }))
             .on_key_down(
                 cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
-                    if resources_activation_key(event) {
+                    if is_activation_key(event) {
                         window.prevent_default();
                         view.resources.sync_now();
                         view.show_toast(
@@ -137,11 +121,13 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
     let progress_badge = progress.map(|value| {
         let mut status = badge("", BadgeTone::Accent);
-        status = status.child(icon(ICON_REFRESH, 12., ACCENT)).child(format!(
-            "{} {}%",
-            text("同步中…", "Syncing…").get(language),
-            value
-        ));
+        status = status
+            .child(svg_icon(ICON_REFRESH, 12., ACCENT))
+            .child(format!(
+                "{} {}%",
+                text("同步中…", "Syncing…").get(language),
+                value
+            ));
         status
     });
     let toolbar_status = progress_badge.unwrap_or_else(|| div().w(px(1.)).h(px(1.)));
@@ -330,13 +316,6 @@ fn format_sync_time(timestamp: Option<i64>, language: Language) -> String {
     }
 }
 
-fn resources_activation_key(event: &gpui::KeyDownEvent) -> bool {
-    matches!(
-        event.keystroke.key.to_ascii_lowercase().as_str(),
-        "enter" | "space"
-    )
-}
-
 fn localized_feedback(feedback: &str, language: Language) -> String {
     if matches!(language, Language::ZhCn) {
         return feedback.to_owned();
@@ -347,23 +326,6 @@ fn localized_feedback(feedback: &str, language: Language) -> String {
         "资源同步完成" => "Resource sync completed".to_owned(),
         _ => feedback.to_owned(),
     }
-}
-
-fn action_button(label: &'static str, variant: ButtonVariant, icon: Svg) -> Div {
-    button("", variant)
-        .h(px(28.))
-        .px_3()
-        .py_0()
-        .text_size(px(12.))
-        .child(icon)
-        .child(label)
-}
-
-fn icon(data: &'static str, size: f32, color: u32) -> Svg {
-    svg()
-        .data(data.as_bytes())
-        .size(px(size))
-        .text_color(rgb(color))
 }
 
 #[cfg(test)]

@@ -9,6 +9,8 @@
 
 use gpui::{Pixels, Rgba, Styled, Svg, px, svg};
 
+use super::style::render_rgb;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Icon {
     ChevronDown,
@@ -39,6 +41,20 @@ impl Icon {
 /// Render an embedded Lucide path at a fixed square size.
 pub fn icon(kind: Icon, size: Pixels, color: Rgba) -> Svg {
     svg().data(kind.data()).w(size).h(size).text_color(color)
+}
+
+/// Render a page-owned SVG string using the active render palette for legacy
+/// RGB tokens.
+pub fn svg_icon(data: &'static str, size: f32, color: u32) -> Svg {
+    svg()
+        .data(data.as_bytes())
+        .size(px(size))
+        .text_color(render_rgb(color))
+}
+
+/// Render a page-owned SVG byte slice when the source is declared as bytes.
+pub fn svg_icon_bytes(data: &'static [u8], size: f32, color: Rgba) -> Svg {
+    svg().data(data).w(px(size)).h(px(size)).text_color(color)
 }
 
 pub fn chevron_down(color: Rgba) -> Svg {

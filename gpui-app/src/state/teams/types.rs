@@ -1,0 +1,164 @@
+use super::*;
+
+/// The five sections of the mirror-team editor. Keeping this as a model enum
+/// makes tab selection testable without constructing a GPUI window.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TeamEditorTab {
+    #[default]
+    Basic,
+    Shop,
+    Combat,
+    Starlight,
+    Advanced,
+}
+
+impl TeamEditorTab {
+    pub const ALL: [Self; 5] = [
+        Self::Basic,
+        Self::Shop,
+        Self::Combat,
+        Self::Starlight,
+        Self::Advanced,
+    ];
+
+    #[allow(dead_code)]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Basic => "基础编成",
+            Self::Shop => "商店与合成",
+            Self::Combat => "二体系与战斗",
+            Self::Starlight => "开局星光",
+            Self::Advanced => "观测与高级",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TeamFilter {
+    #[default]
+    All,
+    Mirror,
+    Luxcavation,
+    General,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TeamSelect {
+    Purpose,
+    FixedTeamUse,
+    ShopStrategy,
+    AfterLevelIv,
+    SecondSystem,
+    SecondSystemFloor,
+    DefenseTurns,
+    SkillReplacementMode,
+}
+
+impl TeamFilter {
+    pub const ALL: [Self; 4] = [Self::All, Self::Mirror, Self::Luxcavation, Self::General];
+
+    #[allow(dead_code)]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::All => "全部",
+            Self::Mirror => "镜牢",
+            Self::Luxcavation => "经验本",
+            Self::General => "通用",
+        }
+    }
+
+    pub const fn purpose(self) -> Option<TeamPurpose> {
+        match self {
+            Self::All => None,
+            Self::Mirror => Some(TeamPurpose::Mirror),
+            Self::Luxcavation => Some(TeamPurpose::Luxcavation),
+            Self::General => Some(TeamPurpose::General),
+        }
+    }
+}
+
+pub struct TeamEditorState {
+    pub team: TeamDetail,
+    pub tab: TeamEditorTab,
+    pub json_import_open: bool,
+}
+
+impl TeamEditorState {
+    pub fn new(team: TeamDetail) -> Self {
+        Self {
+            team,
+            tab: TeamEditorTab::Basic,
+            json_import_open: false,
+        }
+    }
+
+    pub fn mirror_config(&self) -> TeamMirrorConfig {
+        self.team.mirrorConfig.clone().unwrap_or_default()
+    }
+}
+
+/// State and RPC boundary for the Teams page. The page only mutates this
+/// object and calls `cx.notify`; all contract serialization remains here.
+pub struct TeamsState {
+    pub rpc: RpcGateway,
+    pub teams: Vec<TeamDetail>,
+    pub sinners: Vec<SinnerInfo>,
+    pub filter: TeamFilter,
+    pub editor: Option<TeamEditorState>,
+    pub delete_target: Option<TeamDetail>,
+    pub open_select: Option<TeamSelect>,
+    pub feedback: Option<String>,
+}
+
+/// Named bool fields keep the page readable and prevent ad-hoc JSON patches.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MirrorBool {
+    DoNotHeal,
+    DoNotBuy,
+    DoNotFuse,
+    DoNotSell,
+    DoNotEnhance,
+    OnlyAggressiveFuse,
+    DoNotSystemFuse,
+    OnlySystemFuse,
+    AggressiveAlsoEnhance,
+    AggressiveSaveSystems,
+    AfterLevelIv,
+    SecondSystem,
+    SecondSystemFuseIv,
+    SecondSystemBuy,
+    SecondSystemSelectReward,
+    SecondSystemPowerUp,
+    AvoidSkill3,
+    PrioritizeSkill3,
+    ReformationEachFloor,
+    DefenseFirstRound,
+    DefenseForSolo,
+    SkillReplacement,
+    UseStarlight,
+    FixedTeamUse,
+    UseTeamCode,
+    UseCustomThemeWeight,
+    ObserveEgoGift,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MirrorU8 {
+    ShopStrategy,
+    AfterLevelIvSelect,
+    MaxKeywordRefresh,
+    MaxNormalRefresh,
+    SecondSystemSelect,
+    SecondSystemStartFloor,
+    DefenseTurns,
+    SkillReplacementMode,
+    FixedTeamUseSelect,
+}
+
+pub const SYSTEM_NAMES: [&str; 10] = [
+    "burn", "bleed", "tremor", "rupture", "sinking", "poise", "charge", "slash", "pierce", "blunt",
+];
+
+pub const SYSTEM_LABELS: [&str; 10] = [
+    "燃烧", "流血", "震颤", "破裂", "沉潜", "呼吸", "充能", "斩击", "突刺", "打击",
+];

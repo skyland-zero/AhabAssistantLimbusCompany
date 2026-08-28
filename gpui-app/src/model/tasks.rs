@@ -24,6 +24,7 @@ pub enum ExecutionState {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(clippy::enum_variant_names)]
 #[serde(rename_all = "snake_case")]
 pub enum AfterExitAction {
     ExitGame,
@@ -138,14 +139,9 @@ impl DailyTaskConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct GetRewardConfig {
     pub set_get_prize: u8,
-}
-impl Default for GetRewardConfig {
-    fn default() -> Self {
-        Self { set_get_prize: 0 }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -268,18 +264,10 @@ impl Default for TasksConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct ExecutionStatusPayload {
     pub state: ExecutionState,
     pub currentTaskId: Option<FixedTaskId>,
-}
-impl Default for ExecutionStatusPayload {
-    fn default() -> Self {
-        Self {
-            state: Default::default(),
-            currentTaskId: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

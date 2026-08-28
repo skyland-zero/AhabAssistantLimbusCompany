@@ -1,0 +1,155 @@
+use super::*;
+
+pub fn dialog(title: impl Into<String>, body: impl IntoElement, actions: impl IntoElement) -> Div {
+    dialog_with_palette(
+        title,
+        body,
+        actions,
+        &current_render_palette(),
+        ControlState::default(),
+    )
+}
+
+pub fn dialog_with_palette(
+    title: impl Into<String>,
+    body: impl IntoElement,
+    actions: impl IntoElement,
+    palette: &Palette,
+    state: ControlState,
+) -> Div {
+    let mut surface = card_with_state(
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .text_size(px(16.))
+                    .text_color(paint_color(palette.foreground))
+                    .child(title.into()),
+            )
+            .child(body)
+            .child(div().flex().justify_end().gap_2().child(actions)),
+        palette,
+        CardState {
+            interactive: false,
+            disabled: state.disabled,
+            focused: state.focused,
+        },
+    );
+    surface = surface
+        .border_1()
+        .border_color(paint_color(if state.focused {
+            palette.ring
+        } else {
+            palette.input
+        }));
+    surface
+}
+
+/// Center a dialog and paint a modal scrim. The owner should close it on Esc,
+/// restore focus to the triggering entity, and attach confirmation handlers;
+/// GPUI cannot infer those application actions from an ordinary `Div`.
+pub fn dialog_overlay(child: impl IntoElement, palette: &Palette) -> Div {
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_4()
+        .bg(gpui::rgba(0x00000080))
+        .child(child)
+        .text_color(paint_color(palette.foreground))
+}
+
+pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
+    scroll_area_with_palette(
+        "scroll-area",
+        child,
+        &current_render_palette(),
+        ControlState::default(),
+    )
+}
+
+/// Scroll container with a caller-provided stable GPUI id for repeated lists.
+/// GPUI owns wheel/trackpad behavior; the thin scrollbar is a platform paint
+/// concern, so callers should keep this as the single scroll boundary.
+pub fn scroll_area_with_id(id: &'static str, child: impl IntoElement) -> Stateful<Div> {
+    scroll_area_with_palette(
+        id,
+        child,
+        &current_render_palette(),
+        ControlState::default(),
+    )
+}
+
+pub fn scroll_area_with_palette(
+    id: &'static str,
+    child: impl IntoElement,
+    palette: &Palette,
+    state: ControlState,
+) -> Stateful<Div> {
+    let focus_ring = palette.ring;
+    let mut area = div()
+        .id(id)
+        .min_w_0()
+        .overflow_y_scroll()
+        .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
+        .child(child);
+    if state.disabled {
+        area = area.opacity(0.5);
+    }
+    area
+}
+
+pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
+    let palette = current_render_palette();
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_2()
+        .p_6()
+        .text_color(paint_color(palette.muted_foreground))
+        .child(
+            div()
+                .text_color(paint_color(palette.foreground))
+                .child(title.into()),
+        )
+        .child(detail.into())
+}
+
+pub fn loading(label: impl Into<String>) -> Div {
+    let palette = current_render_palette();
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .text_color(paint_color(palette.muted_foreground))
+        .child(icon(
+            Icon::LoaderCircle,
+            px(14.),
+            paint_color(palette.brand),
+        ))
+        .child(label.into())
+}
+
+pub fn skeleton(width: gpui::Pixels, height: gpui::Pixels) -> Div {
+    div()
+        .w(width)
+        .h(height)
+        .rounded_md()
+        .bg(paint_color(current_render_palette().muted))
+}
+
+/// The design-system lane intentionally keeps palette construction independent
+/// from the root `theme` module, so old pages can compile before the root is
+/// rewired. This helper makes the canonical accent parser available to callers
+/// that only import components.
+pub fn parse_accent_id(id: &str) -> AccentId {
+    AccentId::parse(id)
+}
