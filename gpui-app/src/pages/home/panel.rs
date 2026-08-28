@@ -106,7 +106,7 @@ fn screenshot_card(app: &AhabApp, language: Language) -> Div {
                     .absolute()
                     .top(px(8.0))
                     .right(px(8.0))
-                    .child(badge("LIVE", BadgeTone::Success)),
+                    .child(live_indicator()),
             );
     } else {
         let screenshot_detail = if app.home.latest_screenshot.is_some() {
@@ -158,6 +158,19 @@ fn screenshot_card(app: &AhabApp, language: Language) -> Div {
             .child(div().p(px(10.0)).child(screenshot_body)),
     )
     .flex_none()
+}
+
+fn live_indicator() -> Div {
+    let success = palette_rgb(current_render_palette().success);
+    div()
+        .flex()
+        .items_center()
+        .gap(px(3.0))
+        .text_size(px(9.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(success)
+        .child("LIVE")
+        .child(div().w(px(5.0)).h(px(5.0)).rounded_full().bg(success))
 }
 
 pub(super) fn panel_card(child: impl IntoElement) -> Div {
