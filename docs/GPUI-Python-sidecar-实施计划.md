@@ -294,14 +294,23 @@ rg -n --hidden -g '!target/**' -g '!.git/**' `
 - 2026-08-28：M5/M6 完成基础发布链；加入 Windows 单实例/托盘、PyInstaller sidecar、GPUI release、updater、CI 和归档组装。
 - 2026-08-28：M7 完成代码清理；删除旧 Qt 前端、Qt 翻译链、旧资源和过时文档引用，并完成 Python/Rust/冻结 sidecar 回归。
 
+已落地提交：
+
+- `0d95053`：删除 `ui/` 并迁移 GPUI 资源。
+- `b2fdcb4`：建立 GPUI + Python sidecar 实施计划。
+- `0ab7b9e`：建立后端应用上下文和 RPC 契约。
+- `a2ada16`：GPUI 页面接入真实 sidecar。
+- `cb9294a`：独立删除旧 Qt 前端、翻译链和旧资源。
+- `f474a60`：完成系统壳、发布构建、CI、文档和验收收口。
+
 ## 14. 当前验收边界
 
 已在当前开发机完成：
 
-- Python 单元/协议/真实 sidecar 集成测试；
+- Python 单元/协议/真实 sidecar 集成测试（`27 passed`）；
 - Rust 格式检查、单元测试和 release 编译；
 - 冻结后的 `AALC Backend.exe` 在没有 Python 解释器参与时完成 Token 握手、`app.ping` 和优雅退出；
-- 发布目录组装为 `AALC.exe`、`AALC Backend.exe`、`AALC Updater.exe`、`assets/` 和 `resources/`。
+- 发布目录组装为 `AALC.exe`、`AALC Backend.exe`、`AALC Updater.exe`、`assets/` 和 `resources/`，并生成 `AALC_0.0.0-final.zip`。
 
 仍需目标 Windows 环境补做：
 
