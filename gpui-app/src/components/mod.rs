@@ -290,10 +290,10 @@ fn switch_with_track(
     let mut control = div()
         .flex()
         .items_center()
-        .w(px(32.))
-        .h(px(18.))
+        .w(px(36.))
+        .h(px(20.))
         .p(px(1.))
-        .rounded_lg()
+        .rounded_full()
         .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.border))
@@ -317,7 +317,7 @@ fn switch_with_track(
         div()
             .w(px(16.))
             .h(px(16.))
-            .rounded_lg()
+            .rounded_full()
             .bg(paint_color(thumb)),
     )
 }

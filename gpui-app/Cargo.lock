@@ -133,6 +133,7 @@ dependencies = [
 name = "ahab-gpui-app"
 version = "0.1.0"
 dependencies = [
+ "embed-resource",
  "gpui",
  "gpui_platform",
  "serde",

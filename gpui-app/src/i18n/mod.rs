@@ -35,6 +35,7 @@ pub struct Catalog {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub enum Key {
     AppName,
     TitlebarTitle,

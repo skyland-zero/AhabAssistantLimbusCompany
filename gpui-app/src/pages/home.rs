@@ -1579,7 +1579,7 @@ fn task_card(
         .items_center()
         .gap_2()
         .px_3()
-        .h(px(32.0))
+        .h(px(36.0))
         .py_0();
     if has_options {
         header = header
@@ -1775,10 +1775,13 @@ fn execution_toolbar(
     state: ExecutionState,
 ) -> Div {
     let language = app.state.settings.language;
+    let palette = current_render_palette();
+    let is_dark = matches!(palette.scheme, crate::components::style::ColorScheme::Dark);
+
     let mut select_all = button("", ButtonVariant::Outline)
         .id("select-all")
         .h(px(32.0))
-        .px(px(8.0))
+        .px(px(10.0))
         .gap(px(4.0))
         .text_size(px(12.0))
         .child(action_icon(ICON_CHECK_SQUARE, 14., TEXT))
@@ -1786,11 +1789,15 @@ fn execution_toolbar(
     let mut clear_all = button("", ButtonVariant::Outline)
         .id("clear-all")
         .h(px(32.0))
-        .px(px(8.0))
+        .px(px(10.0))
         .gap(px(4.0))
         .text_size(px(12.0))
         .child(action_icon(ICON_ROTATE, 14., TEXT_MUTED))
-        .child(text("清空", "Clear All").get(language));
+        .child(
+            div()
+                .text_color(rgb(TEXT_MUTED))
+                .child(text("清空", "Clear All").get(language)),
+        );
     if !busy {
         select_all = select_all.on_click(cx.listener(|view, _, _, cx| {
             view.home.set_all_tasks(true);
@@ -1826,18 +1833,26 @@ fn execution_toolbar(
         }));
     }
 
-    let (pause_icon, pause_label) = if state == ExecutionState::Paused {
-        (ICON_PLAY, text("继续", "Resume").get(language))
+    let (pause_icon, pause_label, pause_icon_color) = if state == ExecutionState::Paused {
+        (
+            ICON_PLAY,
+            text("继续", "Resume").get(language),
+            palette.success.rgb_hex(),
+        )
     } else {
-        (ICON_PAUSE, text("暂停", "Pause").get(language))
+        (
+            ICON_PAUSE,
+            text("暂停", "Pause").get(language),
+            palette.warning.rgb_hex(),
+        )
     };
     let mut pause = button("", ButtonVariant::Outline)
         .id("pause-resume")
-        .h(px(36.0))
+        .h(px(34.0))
         .px(px(12.0))
         .gap(px(6.0))
         .text_size(px(12.0))
-        .child(action_icon(pause_icon, 14., TEXT))
+        .child(action_icon(pause_icon, 14., pause_icon_color))
         .child(pause_label);
     if busy {
         pause = pause.on_click(cx.listener(|view, _, _, cx| {
@@ -1854,22 +1869,29 @@ fn execution_toolbar(
     };
     let mut run = button("", run_variant)
         .id("start-stop")
-        .h(px(36.0))
-        .w(px(132.0))
-        .px_0()
-        .gap(px(8.0))
+        .h(px(34.0))
+        .px(px(16.0))
+        .gap(px(6.0))
         .text_size(px(12.0))
+        .font_weight(FontWeight::SEMIBOLD)
         .child(brand_action_icon(run_icon, 14.))
         .child(run_label);
     if !busy {
+        let kbd_bg = if is_dark {
+            rgba(0xffffff33)
+        } else {
+            rgba(0x00000028)
+        };
         run = run.child(
             div()
                 .rounded_sm()
-                .bg(rgba(0x00000033))
-                .px(px(4.0))
-                .py(px(2.0))
+                .bg(kbd_bg)
+                .px(px(5.0))
+                .py(px(1.5))
                 .font_family("monospace")
                 .text_size(px(10.0))
+                .font_weight(FontWeight::NORMAL)
+                .text_color(palette_rgb(palette.brand_foreground))
                 .child("F10"),
         );
     }
@@ -1913,10 +1935,15 @@ fn execution_toolbar(
         .items_center()
         .justify_between()
         .gap_3()
-        .border_t_1()
-        .border_color(rgb(BORDER))
-        .bg(rgba((SURFACE << 8) | 0xf2))
-        .p_3()
+        .mx(px(14.0))
+        .mb(px(10.0))
+        .mt(px(4.0))
+        .rounded_lg()
+        .border_1()
+        .border_color(rgba(0))
+        .bg(palette_rgb(palette.card))
+        .px(px(12.0))
+        .py(px(8.0))
         .child(
             div()
                 .min_w_0()
@@ -1928,10 +1955,10 @@ fn execution_toolbar(
                 .child(clear_all)
                 .child(
                     div()
-                        .mx_1()
+                        .mx(px(4.0))
                         .w(px(1.0))
                         .h(px(16.0))
-                        .bg(rgba((TEXT_MUTED << 8) | 0x40)),
+                        .bg(palette_rgb(palette.input)),
                 )
                 .child(after_button),
         )
