@@ -45,6 +45,7 @@ pub enum HomeSelect {
     DailyTeam(u8),
     RewardMode,
     AfterPowerAction,
+    Device,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,6 +64,8 @@ pub struct HomeState {
     pub devices: Vec<DeviceInfo>,
     pub selected_device: Option<String>,
     pub device_status: ConnectionStatus,
+    pub is_scanning_devices: bool,
+    pub device_error: Option<String>,
     pub right_panel_width: f32,
     pub right_panel_collapsed: bool,
     pub expanded_tasks: HashSet<FixedTaskId>,
@@ -114,6 +117,8 @@ impl HomeState {
             devices,
             selected_device: None,
             device_status: ConnectionStatus::Disconnected,
+            is_scanning_devices: false,
+            device_error: None,
             right_panel_width: right_panel_width as f32,
             right_panel_collapsed,
             expanded_tasks: HashSet::new(),
@@ -536,7 +541,14 @@ impl HomeState {
         self.log_revision = self.log_revision.wrapping_add(1);
     }
 
+    pub fn dismiss_device_error(&mut self) {
+        self.device_error = None;
+    }
+
     pub fn select_device(&mut self, id: String) {
+        self.device_error = None;
+        self.device_status = ConnectionStatus::Connecting;
+        self.close_select();
         self.send(
             crate::ipc::contract::method::DEVICE_CONNECT,
             Some(json!({ "id": id })),
@@ -544,11 +556,15 @@ impl HomeState {
     }
 
     pub fn disconnect_device(&mut self) {
+        self.device_error = None;
+        self.close_select();
         self.send(crate::ipc::contract::method::DEVICE_DISCONNECT, None);
     }
 
     pub fn apply_device_list_response(&mut self, response: RpcResponse) {
+        self.is_scanning_devices = false;
         if let Some(error) = response.error {
+            self.device_error = Some(error.message.clone());
             self.log_level(LogLevel::Error, &format!("IPC 错误：{}", error.message));
         } else if let Some(value) = response.result
             && let Ok(devices) = serde_json::from_value(value)
@@ -560,6 +576,10 @@ impl HomeState {
 
     pub fn apply_rpc_response(&mut self, response: RpcResponse) {
         if let Some(error) = response.error {
+            if self.device_status == ConnectionStatus::Connecting {
+                self.device_status = ConnectionStatus::Disconnected;
+                self.device_error = Some(error.message.clone());
+            }
             self.log_level(LogLevel::Error, &format!("IPC 错误：{}", error.message));
         }
         self.poll_events();
@@ -612,6 +632,9 @@ impl HomeState {
                     {
                         self.selected_device = status.deviceId;
                         self.device_status = status.status;
+                        if status.status == ConnectionStatus::Connected {
+                            self.device_error = None;
+                        }
                     }
                 }
                 crate::ipc::contract::event::LOG_ENTRY => {
@@ -630,6 +653,14 @@ impl HomeState {
                         .get("message")
                         .and_then(|value| value.as_str())
                     {
+                        if level == LogLevel::Error
+                            && (message.contains("设备")
+                                || message.contains("device")
+                                || message.contains("窗口")
+                                || message.contains("HWND"))
+                        {
+                            self.device_error = Some(message.to_owned());
+                        }
                         self.log_level(level, message);
                     }
                 }
@@ -805,13 +836,55 @@ mod tests {
         let mut home = HomeState::default();
         home.toggle_select(HomeSelect::RewardMode);
         assert!(home.is_select_open(HomeSelect::RewardMode));
-        home.toggle_select(HomeSelect::WindowPosition);
+        home.toggle_select(HomeSelect::Device);
         assert!(!home.is_select_open(HomeSelect::RewardMode));
+        assert!(home.is_select_open(HomeSelect::Device));
+        home.toggle_select(HomeSelect::WindowPosition);
+        assert!(!home.is_select_open(HomeSelect::Device));
         assert!(home.is_select_open(HomeSelect::WindowPosition));
         home.set_after_completion_open(true);
         assert!(home.after_completion_open);
         assert!(home.after_completion_draft.is_some());
         assert!(home.open_select.is_none());
+    }
+
+    #[test]
+    fn device_error_tracking_and_dismissal() {
+        let mut home = HomeState::default();
+        assert!(home.device_error.is_none());
+        home.device_error = Some("未找到设备".into());
+        assert_eq!(home.device_error.as_deref(), Some("未找到设备"));
+        home.dismiss_device_error();
+        assert!(home.device_error.is_none());
+
+        home.device_error = Some("连接超时".into());
+        home.select_device("mumu:0".into());
+        assert!(home.device_error.is_none());
+        assert_eq!(home.device_status, ConnectionStatus::Connected);
+    }
+
+    #[test]
+    fn device_kind_detection() {
+        let pc = crate::model::DeviceInfo {
+            id: "pc:limbus".into(),
+            name: "Limbus Company".into(),
+            detail: None,
+        };
+        assert_eq!(pc.kind(), crate::model::DeviceKind::PcWindow);
+
+        let mumu = crate::model::DeviceInfo {
+            id: "mumu:0".into(),
+            name: "MuMu 模拟器".into(),
+            detail: None,
+        };
+        assert_eq!(mumu.kind(), crate::model::DeviceKind::MumuEmulator);
+
+        let adb = crate::model::DeviceInfo {
+            id: "adb:127.0.0.1:5555".into(),
+            name: "雷电模拟器".into(),
+            detail: None,
+        };
+        assert_eq!(adb.kind(), crate::model::DeviceKind::AdbGeneric);
     }
 
     #[test]

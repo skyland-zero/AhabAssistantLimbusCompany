@@ -36,6 +36,7 @@ pub struct AppSettings {
     pub themeMode: ThemeMode,
     pub accentId: String,
     pub language: Language,
+    pub lastDeviceId: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -47,6 +48,7 @@ impl Default for AppSettings {
             themeMode: ThemeMode::System,
             accentId: "crimson".into(),
             language: Language::ZhCn,
+            lastDeviceId: None,
         }
     }
 }
@@ -184,6 +186,7 @@ mod tests {
         assert_eq!(settings.themeMode, ThemeMode::System);
         assert_eq!(settings.accentId, "crimson");
         assert_eq!(settings.language, Language::ZhCn);
+        assert_eq!(settings.lastDeviceId, None);
     }
     #[test]
     fn versioned_json_round_trip_and_legacy_migration() {

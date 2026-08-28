@@ -6,9 +6,10 @@ pub mod tasks;
 pub mod teams;
 
 pub use other::{
-    AppNotice, ConnectionStatus, DeviceInfo, DeviceStatusPayload, HotkeyConfig, LogEntryPayload,
-    LogLevel, ResourceGroup, ScreenshotFrame, SyncProgressPayload, SystemSettingsConfig, ThemePack,
-    ThemePackState, ToolId, ToolStatusPayload, UpdateInfo, UpdateSource,
+    AppNotice, ConnectionStatus, DeviceInfo, DeviceKind, DeviceStatusPayload, HotkeyConfig,
+    LogEntryPayload, LogLevel, ResourceGroup, ScreenshotFrame, SyncProgressPayload,
+    SystemSettingsConfig, ThemePack, ThemePackState, ToolId, ToolStatusPayload, UpdateInfo,
+    UpdateSource,
 };
 pub use settings::{AppSettings, Language, ThemeMode};
 pub use tasks::{

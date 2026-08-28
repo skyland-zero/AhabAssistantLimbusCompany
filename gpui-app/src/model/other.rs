@@ -125,11 +125,31 @@ pub struct UpdateInfo {
     pub latest: String,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceKind {
+    PcWindow,
+    MumuEmulator,
+    AdbGeneric,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeviceInfo {
     pub id: String,
     pub name: String,
     pub detail: Option<String>,
+}
+
+impl DeviceInfo {
+    pub fn kind(&self) -> DeviceKind {
+        if self.id.starts_with("pc:") {
+            DeviceKind::PcWindow
+        } else if self.id.starts_with("mumu:") {
+            DeviceKind::MumuEmulator
+        } else {
+            DeviceKind::AdbGeneric
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]

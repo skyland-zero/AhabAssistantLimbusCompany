@@ -52,6 +52,10 @@ const ICON_PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 const ICON_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>"#;
 const ICON_CHEVRON_UP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>"#;
 const ICON_MONITOR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"#;
+const ICON_SMARTPHONE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg>"#;
+const ICON_CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>"#;
+const ICON_HISTORY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>"#;
+const ICON_LOADER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>"#;
 const ICON_MONITOR_PLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10 8 15 11 10 14 10 8"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"#;
 const ICON_SCROLL_TEXT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5h12"/><path d="M8 9h12"/><path d="M8 13h8"/><path d="M4 4v13a3 3 0 0 0 3 3h13"/><path d="M4 8H2"/><path d="M4 12H2"/></svg>"#;
 const ICON_ALERT_CIRCLE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>"#;
@@ -1946,6 +1950,7 @@ fn execution_toolbar(
         }));
     } else {
         run = run.on_click(cx.listener(|view, _, _, cx| {
+            let language = view.state.settings.language;
             if view.home.selected_task_count() == 0 {
                 view.show_toast(
                     crate::shell::ToastKind::Warning,
@@ -1953,9 +1958,60 @@ fn execution_toolbar(
                         "请至少勾选一个要执行的任务",
                         "Select at least one task to run",
                     )
-                    .get(view.state.settings.language),
+                    .get(language),
                     cx,
                 );
+            } else if view.home.device_status != ConnectionStatus::Connected {
+                if view.home.devices.is_empty() {
+                    view.home.open_select = Some(HomeSelect::Device);
+                    view.home.device_error = Some(
+                        text(
+                            "未检测到可用的游戏窗口或模拟器，请先启动游戏并连接",
+                            "No game window or emulator detected, please launch and connect first",
+                        )
+                        .get(language)
+                        .to_owned(),
+                    );
+                    view.show_toast(
+                        crate::shell::ToastKind::Warning,
+                        text(
+                            "未连接设备，请先选择游戏窗口或模拟器",
+                            "Device not connected, please select game window first",
+                        )
+                        .get(language),
+                        cx,
+                    );
+                } else {
+                    let last_id_opt = view
+                        .state
+                        .settings
+                        .lastDeviceId
+                        .clone()
+                        .filter(|id| view.home.devices.iter().any(|d| &d.id == id));
+                    if let Some(last_id) = last_id_opt {
+                        view.show_toast(
+                            crate::shell::ToastKind::Info,
+                            text(
+                                "正在自动连接上次使用的设备...",
+                                "Auto-connecting to last used device...",
+                            )
+                            .get(language),
+                            cx,
+                        );
+                        view.select_device(last_id, cx);
+                    } else {
+                        view.home.open_select = Some(HomeSelect::Device);
+                        view.show_toast(
+                            crate::shell::ToastKind::Warning,
+                            text(
+                                "请先选择并连接游戏窗口或模拟器",
+                                "Please select and connect a device first",
+                            )
+                            .get(language),
+                            cx,
+                        );
+                    }
+                }
             } else {
                 view.home.start();
             }
@@ -2386,6 +2442,8 @@ fn splitter(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> gpui::Stateful<Div>
 fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let width = bounded_right_panel_width(app.home.right_panel_width);
+    let palette = current_render_palette();
+
     let connection_status = match app.home.device_status {
         ConnectionStatus::Connected => (
             text("已连接", "Connected").get(language),
@@ -2395,43 +2453,120 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             text("连接中", "Connecting").get(language),
             BadgeTone::Accent,
         ),
-        ConnectionStatus::Disconnected => (
-            text("未连接", "Not connected").get(language),
-            BadgeTone::Neutral,
-        ),
+        ConnectionStatus::Disconnected => {
+            if app.home.device_error.is_some() {
+                (
+                    text("连接失败", "Failed").get(language),
+                    BadgeTone::Danger,
+                )
+            } else {
+                (
+                    text("未连接", "Not connected").get(language),
+                    BadgeTone::Neutral,
+                )
+            }
+        }
     };
 
     let selected_id = app.home.selected_device.clone();
     let selected_device = selected_id
         .as_deref()
         .and_then(|id| app.home.devices.iter().find(|device| device.id == id));
+    let is_open = app.home.is_select_open(HomeSelect::Device);
+    let is_busy = app.home.is_busy();
+    let is_connecting = app.home.device_status == ConnectionStatus::Connecting;
+    let is_scanning = app.home.is_scanning_devices;
+
+    let trigger_icon = match selected_device.map(|d| d.kind()) {
+        Some(crate::model::DeviceKind::PcWindow) => ICON_MONITOR,
+        Some(crate::model::DeviceKind::MumuEmulator) => ICON_SMARTPHONE,
+        _ => ICON_RADIO,
+    };
+
     let selected_name = selected_device
         .map(|device| device.name.clone())
         .unwrap_or_else(|| {
-            text("选择游戏窗口", "Select game window")
+            text("选择游戏窗口 / 模拟器", "Select game window / emulator")
                 .get(language)
                 .to_owned()
         });
-    let next_device = next_device_id(&app.home.devices, selected_id.as_deref());
-    let mut device_select = button(selected_name, ButtonVariant::Outline)
+
+    let mut device_trigger = div()
         .id("device-select")
-        .h(px(30.0))
         .flex_1()
         .min_w_0()
-        .px(px(10.0))
+        .h(px(30.0))
+        .px(px(8.0))
         .gap(px(6.0))
-        .text_size(px(12.0))
+        .rounded_md()
+        .border_1()
+        .border_color(palette_rgb(if is_open {
+            palette.ring
+        } else {
+            palette.input
+        }))
+        .bg(palette_rgb(palette.card))
+        .flex()
+        .items_center()
         .justify_between()
-        .child(action_icon(ICON_CHEVRON_DOWN, 14., TEXT_MUTED));
-    if app.home.device_status != ConnectionStatus::Connecting
-        && let Some(next_device) = next_device
-    {
-        device_select = device_select.on_click(cx.listener(move |view, _, _, cx| {
-            view.select_device(next_device.clone(), cx);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .min_w_0()
+                .child(action_icon(trigger_icon, 14., TEXT))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(palette_rgb(if selected_device.is_some() {
+                            palette.foreground
+                        } else {
+                            palette.muted_foreground
+                        }))
+                        .truncate()
+                        .child(selected_name),
+                ),
+        )
+        .child(action_icon(
+            if is_open {
+                ICON_CHEVRON_UP
+            } else {
+                ICON_CHEVRON_DOWN
+            },
+            14.,
+            TEXT_MUTED,
+        ));
+
+    if is_busy || is_connecting {
+        device_trigger = device_trigger.opacity(0.5).cursor_not_allowed();
+    } else {
+        let hover = palette_rgb(palette.accent_surface);
+        device_trigger = device_trigger
+            .cursor_pointer()
+            .hover(move |s| s.bg(hover))
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.home.toggle_select(HomeSelect::Device);
+                cx.stop_propagation();
+                cx.notify();
+            }));
     }
+
+    let refresh_icon: gpui::AnyElement = if is_scanning {
+        action_icon(ICON_LOADER, 14., ACCENT)
+            .with_animation(
+                "device-refresh-spin",
+                Animation::new(Duration::from_millis(700)).repeat(),
+                |svg, progress| {
+                    svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
+                        progress,
+                    )))
+                },
+            )
+            .into_any_element()
+    } else {
+        action_icon(ICON_REFRESH, 14., TEXT_MUTED).into_any_element()
+    };
 
     let mut refresh = button("", ButtonVariant::Icon)
         .id("device-refresh")
@@ -2439,8 +2574,15 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .h(px(30.0))
         .p_0()
         .gap_0()
-        .child(action_icon(ICON_REFRESH, 14., TEXT_MUTED));
-    if app.home.device_status != ConnectionStatus::Connecting {
+        .child(refresh_icon);
+
+    if is_scanning {
+        refresh = refresh
+            .border_1()
+            .border_color(palette_rgb(palette.ring))
+            .bg(palette_rgb(palette.accent_surface))
+            .cursor_not_allowed();
+    } else if !is_connecting {
         refresh = refresh.on_click(cx.listener(|view, _, _, cx| {
             view.refresh_devices(cx);
             cx.stop_propagation();
@@ -2463,6 +2605,168 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         }));
     }
 
+    let mut device_control_wrapper = div().relative().flex_1().min_w_0().child(device_trigger);
+
+    if is_open {
+        let last_device_id = app.state.settings.lastDeviceId.clone();
+        let selected_id_popup = app.home.selected_device.clone();
+        let mut device_list = div().flex().flex_col().gap_1();
+
+        if app.home.devices.is_empty() {
+            let empty_view = div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .py_3()
+                .px_2()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(palette_rgb(palette.muted_foreground))
+                        .child(
+                            text(
+                                "未检测到游戏窗口或模拟器",
+                                "No game window or emulator detected",
+                            )
+                            .get(language),
+                        ),
+                )
+                .child(
+                    button(
+                        text("重新扫描", "Rescan").get(language),
+                        ButtonVariant::Outline,
+                    )
+                    .id("rescan-devices")
+                    .h(px(24.0))
+                    .text_size(px(11.0))
+                    .px_2()
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        view.refresh_devices(cx);
+                        cx.stop_propagation();
+                        cx.notify();
+                    })),
+                );
+            device_list = device_list.child(empty_view);
+        } else {
+            for device in &app.home.devices {
+                let dev_id = device.id.clone();
+                let dev_name = device.name.clone();
+                let dev_detail = device.detail.clone();
+                let dev_kind = device.kind();
+                let is_last = last_device_id.as_deref() == Some(&dev_id);
+                let is_selected = selected_id_popup.as_deref() == Some(&dev_id);
+
+                let item_icon = match dev_kind {
+                    crate::model::DeviceKind::PcWindow => ICON_MONITOR,
+                    crate::model::DeviceKind::MumuEmulator => ICON_SMARTPHONE,
+                    crate::model::DeviceKind::AdbGeneric => ICON_RADIO,
+                };
+
+                let click_id = dev_id.clone();
+                let opt_id = format!("device-opt-{}", dev_id);
+                let mut item = div()
+                    .id(opt_id)
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .w_full()
+                    .min_h(px(32.0))
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .cursor_pointer()
+                    .hover({
+                        let hover_bg = palette_rgb(palette.accent_surface);
+                        move |s| s.bg(hover_bg)
+                    })
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.select_device(click_id.clone(), cx);
+                        view.home.close_select();
+                        cx.stop_propagation();
+                        cx.notify();
+                    }));
+
+                if is_selected {
+                    item = item.bg(palette_rgb(palette.accent_surface));
+                }
+
+                let left_content = div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .child(action_icon(
+                        item_icon,
+                        14.,
+                        if is_selected { ACCENT } else { TEXT },
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .font_weight(if is_selected {
+                                        FontWeight::SEMIBOLD
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
+                                    .text_color(palette_rgb(if is_selected {
+                                        palette.brand
+                                    } else {
+                                        palette.foreground
+                                    }))
+                                    .truncate()
+                                    .child(dev_name),
+                            )
+                            .children(dev_detail.map(|d| {
+                                div()
+                                    .text_size(px(10.0))
+                                    .text_color(palette_rgb(palette.muted_foreground))
+                                    .truncate()
+                                    .child(d)
+                            })),
+                    );
+
+                let mut right_content = div().flex().items_center().gap_1();
+                if is_last {
+                    right_content = right_content.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(2.0))
+                            .px(px(4.0))
+                            .py(px(1.0))
+                            .rounded_sm()
+                            .bg(palette_rgb(palette.warning_light))
+                            .text_size(px(9.0))
+                            .text_color(palette_rgb(palette.warning))
+                            .child(action_icon(ICON_HISTORY, 10., 0xFAAD14))
+                            .child(text("上次", "Last").get(language)),
+                    );
+                }
+                if is_selected {
+                    right_content = right_content.child(action_icon(ICON_CHECK, 14., ACCENT));
+                }
+
+                item = item.child(left_content).child(right_content);
+                device_list = device_list.child(item);
+            }
+        }
+
+        let popup = select_popup(device_list, &palette)
+            .shadow_md()
+            .on_mouse_down_out(cx.listener(move |view, _, _, cx| {
+                view.home.close_select();
+                cx.notify();
+            }));
+        device_control_wrapper = device_control_wrapper.child(deferred(popup).priority(10));
+    }
+
     let connection_header = div()
         .h(px(36.0))
         .flex_none()
@@ -2477,14 +2781,59 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             text("设备连接", "Device Connection").get(language),
         ))
         .child(badge(connection_status.0, connection_status.1));
+
     let connection_body = div()
         .flex()
         .items_center()
         .gap_2()
         .p_3()
-        .child(device_select)
+        .child(device_control_wrapper)
         .child(refresh)
         .children((app.home.device_status == ConnectionStatus::Connected).then_some(disconnect));
+
+    let error_banner = app.home.device_error.as_ref().map(|err| {
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .mx_3()
+            .mb_2()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .border_1()
+            .border_color(rgba(0xFF4D4F40))
+            .bg(rgba(0xFF4D4F14))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .child(action_icon(ICON_ALERT_CIRCLE, 13., 0xFF4D4F))
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(rgb(0xFF4D4F))
+                            .truncate()
+                            .child(err.clone()),
+                    ),
+            )
+            .child(
+                button("", ButtonVariant::Icon)
+                    .id("dismiss-device-err")
+                    .w(px(20.0))
+                    .h(px(20.0))
+                    .p_0()
+                    .gap_0()
+                    .child(action_icon(ICON_X, 12., 0xFF4D4F))
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        view.home.dismiss_device_error();
+                        cx.stop_propagation();
+                        cx.notify();
+                    })),
+            )
+    });
 
     let screenshot_detail = app
         .home
@@ -2665,7 +3014,8 @@ fn right_panel(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     .flex()
                     .flex_col()
                     .child(connection_header)
-                    .child(connection_body),
+                    .child(connection_body)
+                    .children(error_banner),
             )
             .flex_none(),
         )
@@ -2693,20 +3043,6 @@ fn panel_heading(icon_data: &'static [u8], title: &'static str) -> Div {
         .text_color(rgb(TEXT_MUTED))
         .child(action_icon(icon_data, 14., TEXT_MUTED))
         .child(title)
-}
-
-fn next_device_id(
-    devices: &[crate::model::DeviceInfo],
-    selected_id: Option<&str>,
-) -> Option<String> {
-    if devices.is_empty() {
-        return None;
-    }
-    let next_index = selected_id
-        .and_then(|selected| devices.iter().position(|device| device.id == selected))
-        .map(|index| (index + 1) % devices.len())
-        .unwrap_or(0);
-    Some(devices[next_index].id.clone())
 }
 
 fn visible_logs_count(app: &AhabApp) -> usize {
@@ -2781,12 +3117,12 @@ mod tests {
     use crate::model::Language;
 
     use super::{
-        ICON_ALERT_CIRCLE, ICON_ALERT_TRIANGLE, ICON_CALENDAR_CHECK, ICON_CHECK_SQUARE,
-        ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, ICON_COMPASS, ICON_GIFT, ICON_MONITOR,
-        ICON_MONITOR_PLAY, ICON_PAUSE, ICON_PLAY, ICON_RADIO, ICON_REFRESH, ICON_ROTATE,
-        ICON_SCROLL_TEXT, ICON_SETTINGS, ICON_SLIDERS, ICON_SQUARE, ICON_TRASH, ICON_X, ICON_ZAP,
-        RIGHT_PANEL_DEFAULT_WIDTH, RIGHT_PANEL_MAX_WIDTH, RIGHT_PANEL_MIN_WIDTH,
-        SPLITTER_COLLAPSED_WIDTH, SPLITTER_WIDTH, after_completion_summary,
+        ICON_ALERT_CIRCLE, ICON_ALERT_TRIANGLE, ICON_CALENDAR_CHECK, ICON_CHECK, ICON_CHECK_SQUARE,
+        ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, ICON_COMPASS, ICON_GIFT, ICON_HISTORY, ICON_LOADER,
+        ICON_MONITOR, ICON_MONITOR_PLAY, ICON_PAUSE, ICON_PLAY, ICON_RADIO, ICON_REFRESH,
+        ICON_ROTATE, ICON_SCROLL_TEXT, ICON_SETTINGS, ICON_SLIDERS, ICON_SMARTPHONE, ICON_SQUARE,
+        ICON_TRASH, ICON_X, ICON_ZAP, RIGHT_PANEL_DEFAULT_WIDTH, RIGHT_PANEL_MAX_WIDTH,
+        RIGHT_PANEL_MIN_WIDTH, SPLITTER_COLLAPSED_WIDTH, SPLITTER_WIDTH, after_completion_summary,
         bounded_right_panel_width, reward_mode_label,
     };
 
@@ -2855,6 +3191,10 @@ mod tests {
             ICON_CHEVRON_DOWN,
             ICON_CHEVRON_UP,
             ICON_MONITOR,
+            ICON_SMARTPHONE,
+            ICON_CHECK,
+            ICON_HISTORY,
+            ICON_LOADER,
             ICON_MONITOR_PLAY,
             ICON_SCROLL_TEXT,
             ICON_ALERT_CIRCLE,

@@ -248,7 +248,7 @@ impl AhabApp {
             state.settings.rightPanelCollapsed,
         );
 
-        Self {
+        let mut app = Self {
             current_page,
             state,
             home,
@@ -274,7 +274,17 @@ impl AhabApp {
             toast: None,
             toast_generation: 0,
             home_log_revision_seen: 0,
+        };
+
+        if let Some(last_id) = app.state.settings.lastDeviceId.as_ref() {
+            if app.home.devices.iter().any(|d| &d.id == last_id)
+                && app.home.device_status == crate::model::ConnectionStatus::Disconnected
+            {
+                app.home.select_device(last_id.clone());
+            }
         }
+
+        app
     }
 
     /// Start a lightweight GPUI-side event pump for unsolicited sidecar
@@ -395,11 +405,17 @@ impl AhabApp {
     }
 
     pub fn select_device(&mut self, id: String, cx: &mut Context<Self>) {
+        self.state.settings.lastDeviceId = Some(id.clone());
+        let _ = self.state.save();
+        self.home.device_error = None;
+        self.home.close_select();
         if !self.home.client.is_sidecar() {
             self.home.select_device(id);
             cx.notify();
             return;
         }
+        self.home.device_status = crate::model::ConnectionStatus::Connecting;
+        cx.notify();
         self.spawn_device_request(
             crate::ipc::contract::method::DEVICE_CONNECT,
             Some(serde_json::json!({ "id": id })),
@@ -408,6 +424,8 @@ impl AhabApp {
     }
 
     pub fn disconnect_device(&mut self, cx: &mut Context<Self>) {
+        self.home.close_select();
+        self.home.device_error = None;
         if !self.home.client.is_sidecar() {
             self.home.disconnect_device();
             cx.notify();
@@ -417,20 +435,63 @@ impl AhabApp {
     }
 
     pub fn refresh_devices(&mut self, cx: &mut Context<Self>) {
-        if !self.home.client.is_sidecar() {
-            let response = self
-                .home
-                .client
-                .call(crate::ipc::contract::method::DEVICE_LIST, None);
-            self.home.apply_device_list_response(response);
-            cx.notify();
-            return;
-        }
+        self.home.is_scanning_devices = true;
+        self.home.device_error = None;
+        cx.notify();
+
         let mut client = self.home.client.clone();
         cx.spawn(async move |this, cx| {
+            // Keep scanning state active for at least 400ms so the user sees clear feedback
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(400))
+                .await;
             let response = client.call(crate::ipc::contract::method::DEVICE_LIST, None);
             let _ = this.update(cx, |view, cx| {
                 view.home.apply_device_list_response(response);
+                view.home.is_scanning_devices = false;
+
+                let count = view.home.devices.len();
+                let language = view.state.settings.language;
+                if count > 0 {
+                    view.show_toast(
+                        crate::shell::ToastKind::Success,
+                        match language {
+                            crate::model::Language::ZhCn => {
+                                format!("已刷新设备列表，发现 {} 个可用设备", count)
+                            }
+                            crate::model::Language::EnUs => {
+                                format!("Device list refreshed, found {} available devices", count)
+                            }
+                        },
+                        cx,
+                    );
+                } else {
+                    view.show_toast(
+                        crate::shell::ToastKind::Warning,
+                        match language {
+                            crate::model::Language::ZhCn => {
+                                "已刷新，未检测到游戏窗口或模拟器".to_string()
+                            }
+                            crate::model::Language::EnUs => {
+                                "Refreshed, no game window or emulator detected".to_string()
+                            }
+                        },
+                        cx,
+                    );
+                }
+
+                // If not connected and we have a saved lastDeviceId, try auto-connecting
+                if view.home.device_status == crate::model::ConnectionStatus::Disconnected {
+                    let last_id_opt = view
+                        .state
+                        .settings
+                        .lastDeviceId
+                        .clone()
+                        .filter(|id| view.home.devices.iter().any(|d| &d.id == id));
+                    if let Some(last_id) = last_id_opt {
+                        view.select_device(last_id, cx);
+                    }
+                }
                 cx.notify();
             });
         })
