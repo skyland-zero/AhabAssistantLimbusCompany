@@ -808,7 +808,6 @@ impl AhabApp {
 impl Render for AhabApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let current_page = self.current_page;
-        let language = self.state.settings.language;
         let palette = self.palette_for_window(window);
         crate::components::style::set_current_render_palette(palette);
         self.apply_visual_state(cx);
@@ -826,8 +825,7 @@ impl Render for AhabApp {
             .bg(rgb(palette.background.rgb_hex()))
             .text_color(rgb(palette.foreground.rgb_hex()))
             .font_family("Segoe UI")
-            .child(shell::title_bar(window, language, palette))
-            .child(shell::tab_bar(current_page, self, palette, cx))
+            .child(shell::title_bar(window, current_page, self, palette, cx))
             .child(
                 div()
                     .flex()

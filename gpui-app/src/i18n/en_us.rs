@@ -2,7 +2,7 @@ use super::Catalog;
 
 pub const CATALOG: Catalog = Catalog {
     app_name: "Ahab Assistant · Limbus Company",
-    titlebar_title: "Ahab Assistant",
+    titlebar_title: "AALC",
     nav_home: "Console",
     nav_teams: "Teams",
     nav_themes: "Themes",

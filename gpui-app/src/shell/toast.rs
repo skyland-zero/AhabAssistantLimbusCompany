@@ -33,7 +33,7 @@ pub fn toast_layer(toast: Option<&Toast>, palette: Palette) -> Div {
 
     div()
         .absolute()
-        .top(px(80.))
+        .top(px(48.))
         .left_0()
         .right_0()
         .flex()

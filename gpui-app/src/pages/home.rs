@@ -5,7 +5,7 @@ use std::{rc::Rc, time::Duration};
 
 use gpui::{
     Animation, AnimationExt, Context, Div, FontWeight, KeyDownEvent, Render, Svg, Window, deferred,
-    div, prelude::*, px, svg,
+    div, prelude::*, px, relative, svg,
 };
 
 use crate::{
@@ -160,11 +160,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_col()
         .border_r_1()
         .border_color(rgba(0))
-        .child(task_header(
-            execution_state,
-            current_task,
-            app.state.settings.language,
-        ))
         .child(task_list)
         .child(execution_toolbar(app, cx, busy, execution_state));
 
@@ -201,6 +196,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(after_completion_editor(app, cx, app.home.is_busy()))
 }
 
+#[allow(dead_code)]
 fn task_header(
     state: ExecutionState,
     current_task: Option<FixedTaskId>,
@@ -237,10 +233,10 @@ fn task_header(
         .px(px(14.0))
         .h(px(36.0))
         .py_0()
-        .bg(rgba((SURFACE << 8) | 0x4d))
         .child(
             div()
                 .text_size(px(14.0))
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(TEXT))
                 .child(i18n::text(language, I18nKey::HomeTitle)),
         )
@@ -253,24 +249,57 @@ fn options_tabs(
     language: Language,
     cx: &mut Context<AhabApp>,
 ) -> Div {
-    let mut tabs = div().flex().items_center().gap_1();
+    let palette = current_render_palette();
+    let mut tabs = div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .p(px(2.))
+        .rounded_md()
+        .bg(palette_rgb(palette.muted));
+
     for (tab, label) in [
         (TaskOptionsTab::General, text("常规设置", "General")),
         (TaskOptionsTab::Advanced, text("高级设置", "Advanced")),
     ] {
-        let mut control = button(
-            label.get(language),
-            if selected == tab {
-                ButtonVariant::Secondary
+        let active = selected == tab;
+        let mut control = div()
+            .id(format!("home-options-{task:?}-{tab:?}"))
+            .flex()
+            .items_center()
+            .justify_center()
+            .h(px(26.))
+            .px_3()
+            .rounded_md()
+            .tab_index(0)
+            .cursor_pointer()
+            .text_size(px(12.))
+            .font_weight(if active {
+                FontWeight::MEDIUM
             } else {
-                ButtonVariant::Ghost
-            },
-        )
-        .id(format!("home-options-{task:?}-{tab:?}"))
-        .h(px(28.))
-        .px_3()
-        .py_0()
-        .text_size(px(12.));
+                FontWeight::NORMAL
+            })
+            .text_color(palette_rgb(if active {
+                palette.foreground
+            } else {
+                palette.muted_foreground
+            }))
+            .bg(palette_rgb(if active {
+                palette.card
+            } else {
+                palette.muted
+            }))
+            .focus_visible(|style| style.border_1().border_color(palette_rgb(current_render_palette().ring)))
+            .child(label.get(language));
+
+        if !active {
+            control = control.hover(|style| {
+                style
+                    .text_color(palette_rgb(current_render_palette().foreground))
+                    .bg(palette_rgb(current_render_palette().accent_surface))
+            });
+        }
+
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.home.set_options_tab(task, tab);
             cx.stop_propagation();
@@ -1661,6 +1690,7 @@ fn task_card(
     let mut root = div()
         .relative()
         .min_w_0()
+        .overflow_hidden()
         .rounded_lg()
         .border_1()
         .border_color(if executing { rgb(ACCENT) } else { rgba(0) })
@@ -1716,25 +1746,32 @@ fn task_icon(label: &'static str, executing: bool) -> Div {
 }
 
 fn running_sweep() -> Div {
+    let palette = current_render_palette();
+    let is_dark = matches!(palette.scheme, crate::components::style::ColorScheme::Dark);
+    let track_color = rgba((palette.brand.rgb_hex() << 8) | if is_dark { 0x38 } else { 0x28 });
+    let core_color = palette_rgb(palette.brand);
+
     div()
         .absolute()
-        .top_0()
-        .bottom_0()
-        .left_0()
+        .top(px(6.0))
+        .bottom(px(6.0))
+        .left(px(4.0))
         .w(px(3.0))
+        .rounded_full()
         .overflow_hidden()
-        .bg(rgb(ACCENT))
+        .bg(track_color)
         .child(
             div()
                 .absolute()
                 .left_0()
                 .right_0()
-                .h(px(28.0))
-                .bg(rgb(ACCENT))
+                .h(relative(0.45))
+                .rounded_full()
+                .bg(core_color)
                 .with_animation(
                     "home-task-sweep",
-                    Animation::new(Duration::from_millis(1200)).repeat(),
-                    |element, progress| element.top(px(-28.0 + progress * 120.0)),
+                    Animation::new(Duration::from_millis(1300)).repeat(),
+                    |element, progress| element.top(relative(progress * 1.45 - 0.45)),
                 ),
         )
 }
@@ -2833,6 +2870,7 @@ mod tests {
     }
 }
 
+#[allow(dead_code)]
 fn task_title(task: FixedTaskId, language: Language) -> &'static str {
     match task {
         FixedTaskId::SetWindows => text("窗口设置", "Window Settings").get(language),

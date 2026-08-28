@@ -47,7 +47,8 @@ def wait_for_window(title: str, timeout: float, pid: int | None = None) -> int:
             if found or not win32gui.IsWindowVisible(hwnd):
                 return
             _thread_id, window_pid = win32process.GetWindowThreadProcessId(hwnd)
-            if window_pid == pid and win32gui.GetWindowText(hwnd) == title:
+            text = win32gui.GetWindowText(hwnd)
+            if window_pid == pid and (text == title or "Ahab Assistant" in text or "AALC" in text):
                 found = hwnd
 
         win32gui.EnumWindows(visit, None)

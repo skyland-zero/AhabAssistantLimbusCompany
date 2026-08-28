@@ -140,7 +140,11 @@ pub fn button_with_palette(
     if state.loading {
         control = control.child(icon(Icon::LoaderCircle, px(14.), paint_color(foreground)));
     }
-    control.child(label.into())
+    let label: String = label.into();
+    if !label.is_empty() {
+        control = control.child(label);
+    }
+    control
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
