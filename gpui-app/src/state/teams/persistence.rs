@@ -18,7 +18,7 @@ impl TeamsState {
         Self::with_client(MockClient::default())
     }
 
-    pub fn with_client(client: MockClient) -> Self {
+    pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
         let mut state = Self {
             rpc: RpcGateway::new(client),
             teams: Vec::new(),
@@ -29,11 +29,16 @@ impl TeamsState {
             open_select: None,
             feedback: None,
         };
-        state.reload();
+        if !state.rpc.is_sidecar() {
+            state.reload();
+        }
         state
     }
 
     pub fn reload(&mut self) {
+        if self.rpc.is_sidecar() {
+            return;
+        }
         self.teams = self
             .request_value(method::TEAM_LIST, None)
             .and_then(|value| serde_json::from_value(value).ok())
@@ -146,6 +151,18 @@ impl TeamsState {
             return Err("队伍名称不能为空".to_owned());
         }
         let value = serde_json::to_value(&editor.team).map_err(|error| error.to_string())?;
+        if self.rpc.is_sidecar() {
+            let team = editor.team.clone();
+            let _ = self.rpc.request_async(method::TEAM_SAVE, Some(value));
+            if let Some(existing) = self.teams.iter_mut().find(|item| item.id == team.id) {
+                *existing = team;
+            } else {
+                self.teams.push(team);
+            }
+            self.editor = None;
+            self.feedback = Some("队伍保存请求已提交".to_owned());
+            return Ok(());
+        }
         if let Err(error) = self.rpc.request_value(method::TEAM_SAVE, Some(value)) {
             return Err(error.message);
         }
@@ -168,6 +185,14 @@ impl TeamsState {
         let Some(team) = self.delete_target.take() else {
             return Ok(());
         };
+        if self.rpc.is_sidecar() {
+            let _ = self
+                .rpc
+                .request_async(method::TEAM_DELETE, Some(json!({"id": team.id.clone()})));
+            self.teams.retain(|item| item.id != team.id);
+            self.feedback = Some("队伍删除请求已提交".to_owned());
+            return Ok(());
+        }
         if let Err(error) = self
             .rpc
             .request_value(method::TEAM_DELETE, Some(json!({"id": team.id})))

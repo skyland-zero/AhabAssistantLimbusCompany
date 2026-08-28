@@ -6,6 +6,9 @@ from pydantic import BaseModel, field_validator
 class TeamSetting(BaseModel):
     """单个队伍设置"""
 
+    purpose: str = "mirror"
+    """GPUI 队伍用途；旧配置没有该字段时按镜牢兼容。"""
+
     team_system: int = 0
     """队伍使用的体系"""
 

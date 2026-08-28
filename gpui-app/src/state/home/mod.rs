@@ -79,6 +79,7 @@ pub struct HomeState {
     pub latest_screenshot: Option<ScreenshotFrame>,
     pub after_completion_open: bool,
     pub after_completion_draft: Option<crate::model::AfterCompletionConfig>,
+    pub last_event_sequence: u64,
 }
 
 impl Default for HomeState {
@@ -97,17 +98,23 @@ impl HomeState {
     }
 
     pub fn with_client(
-        client: MockClient,
+        client: impl Into<crate::ipc::BackendClient>,
         right_panel_width: u32,
         right_panel_collapsed: bool,
     ) -> Self {
         let mut rpc = RpcGateway::new(client);
-        let tasks = rpc
-            .request(crate::ipc::contract::method::TASKS_GET_CONFIG, None)
-            .unwrap_or_default();
-        let devices = rpc
-            .request(crate::ipc::contract::method::DEVICE_LIST, None)
-            .unwrap_or_default();
+        let (tasks, devices) = if rpc.is_sidecar() {
+            // Runtime hydration is scheduled from AhabApp::start_backend_hydration
+            // so sidecar startup and first paint never wait on the network.
+            (TasksConfig::default(), Vec::new())
+        } else {
+            (
+                rpc.request(crate::ipc::contract::method::TASKS_GET_CONFIG, None)
+                    .unwrap_or_default(),
+                rpc.request(crate::ipc::contract::method::DEVICE_LIST, None)
+                    .unwrap_or_default(),
+            )
+        };
 
         Self {
             rpc,
@@ -129,6 +136,7 @@ impl HomeState {
             latest_screenshot: None,
             after_completion_open: false,
             after_completion_draft: None,
+            last_event_sequence: 0,
         }
     }
 

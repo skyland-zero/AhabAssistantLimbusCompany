@@ -11,7 +11,7 @@ impl SettingsPageState {
         Self::with_client(MockClient::default())
     }
 
-    pub fn with_client(client: MockClient) -> Self {
+    pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
         let mut state = Self {
             rpc: RpcGateway::new(client),
             hotkey: HotkeyConfig::default(),
@@ -20,11 +20,16 @@ impl SettingsPageState {
             open_select: None,
             feedback: None,
         };
-        state.reload();
+        if !state.rpc.is_sidecar() {
+            state.reload();
+        }
         state
     }
 
     pub fn reload(&mut self) {
+        if self.rpc.is_sidecar() {
+            return;
+        }
         if let Some(value) = self.request(method::HOTKEY_GET, None)
             && let Ok(hotkey) = serde_json::from_value(value)
         {
@@ -103,6 +108,11 @@ impl SettingsPageState {
     }
 
     pub fn check_update(&mut self) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(method::APP_CHECK_UPDATE, None);
+            self.feedback = Some("正在检查更新".to_owned());
+            return;
+        }
         match self.rpc.request_value(method::APP_CHECK_UPDATE, None) {
             Err(error) => self.feedback = Some(error.message),
             Ok(result) => {
@@ -135,6 +145,14 @@ impl SettingsPageState {
     }
 
     fn persist_hotkey(&mut self) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(
+                method::HOTKEY_SET,
+                Some(serde_json::to_value(&self.hotkey).expect("HotkeyConfig is serializable")),
+            );
+            self.feedback = Some("设置保存请求已提交".to_owned());
+            return;
+        }
         let result = self.rpc.request_value(
             method::HOTKEY_SET,
             Some(serde_json::to_value(&self.hotkey).expect("HotkeyConfig is serializable")),
@@ -143,6 +161,17 @@ impl SettingsPageState {
     }
 
     fn persist_system(&mut self) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(
+                method::SYSTEM_SETTINGS_SET,
+                Some(
+                    serde_json::to_value(&self.system)
+                        .expect("SystemSettingsConfig is serializable"),
+                ),
+            );
+            self.feedback = Some("设置保存请求已提交".to_owned());
+            return;
+        }
         let result = self.rpc.request_value(
             method::SYSTEM_SETTINGS_SET,
             Some(serde_json::to_value(&self.system).expect("SystemSettingsConfig is serializable")),

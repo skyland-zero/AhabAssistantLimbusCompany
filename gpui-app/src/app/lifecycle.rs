@@ -3,33 +3,30 @@ use gpui::Context;
 use super::{AhabApp, Page, VisualState};
 use crate::{
     app_inputs::{SettingsInputs, TeamInputs},
-    ipc::MockClient,
+    ipc::{BackendClient, RpcGateway, contract::method},
     state::{
         AppState, HomeState, ResourcesState, SettingsPageState, TeamsState, ThemePacksState,
         ToolboxState,
     },
 };
 
-fn runtime_client() -> MockClient {
+fn runtime_client() -> BackendClient {
     let mode = std::env::var("AHAB_BACKEND")
         .unwrap_or_default()
         .to_ascii_lowercase();
     let visual_run = std::env::var_os("AHAB_VISUAL_PAGE").is_some()
         || std::env::var_os("AHAB_VISUAL_STATE").is_some();
-    let use_sidecar = match mode.as_str() {
-        "mock" => false,
-        "sidecar" | "real" => true,
-        _ => !visual_run,
-    };
-    if use_sidecar {
-        match MockClient::try_sidecar() {
-            Ok(client) => return client,
-            Err(error) => {
-                eprintln!("Python sidecar unavailable, falling back to MockClient: {error}")
-            }
+    let use_mock = mode == "mock" || (mode.is_empty() && visual_run);
+    if use_mock {
+        return BackendClient::mock();
+    }
+    match BackendClient::try_sidecar() {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Python sidecar unavailable: {error}");
+            BackendClient::unavailable(error)
         }
     }
-    MockClient::default()
 }
 
 fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
@@ -56,6 +53,137 @@ fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
 }
 
 impl AhabApp {
+    /// Hydrate the first renderable state from the sidecar away from the
+    /// render thread. Constructors intentionally use DTO defaults for a real
+    /// transport so startup never synchronously waits on network responses.
+    pub fn start_backend_hydration(&mut self, cx: &mut Context<Self>) {
+        if !self.home.rpc.is_sidecar() {
+            return;
+        }
+
+        let home_rpc = self.home.rpc.clone();
+        let teams_rpc = self.teams.rpc.clone();
+        let themes_rpc = self.theme_packs.rpc.clone();
+        let resources_rpc = self.resources.rpc.clone();
+        let settings_rpc = self.settings_page.rpc.clone();
+        cx.spawn(async move |this, cx| {
+            let tasks_request = home_rpc.request_async(method::TASKS_GET_CONFIG, None);
+            let tasks_response = cx
+                .background_executor()
+                .spawn(async move { tasks_request.recv().ok() })
+                .await;
+            let devices_request = home_rpc.request_async(method::DEVICE_LIST, None);
+            let devices_response = cx
+                .background_executor()
+                .spawn(async move { devices_request.recv().ok() })
+                .await;
+            let execution_request = home_rpc.request_async(method::EXECUTION_GET_STATE, None);
+            let execution_response = cx
+                .background_executor()
+                .spawn(async move { execution_request.recv().ok() })
+                .await;
+
+            let teams_request = teams_rpc.request_async(method::TEAM_LIST, None);
+            let teams_response = cx
+                .background_executor()
+                .spawn(async move { teams_request.recv().ok() })
+                .await;
+            let sinners_request = teams_rpc.request_async(method::SINNER_LIST, None);
+            let sinners_response = cx
+                .background_executor()
+                .spawn(async move { sinners_request.recv().ok() })
+                .await;
+            let themes_request = themes_rpc.request_async(method::THEME_PACK_LIST, None);
+            let themes_response = cx
+                .background_executor()
+                .spawn(async move { themes_request.recv().ok() })
+                .await;
+            let resources_request = resources_rpc.request_async(method::RESOURCE_STATUS, None);
+            let resources_response = cx
+                .background_executor()
+                .spawn(async move { resources_request.recv().ok() })
+                .await;
+            let hotkey_request = settings_rpc.request_async(method::HOTKEY_GET, None);
+            let hotkey_response = cx
+                .background_executor()
+                .spawn(async move { hotkey_request.recv().ok() })
+                .await;
+            let system_request = settings_rpc.request_async(method::SYSTEM_SETTINGS_GET, None);
+            let system_response = cx
+                .background_executor()
+                .spawn(async move { system_request.recv().ok() })
+                .await;
+
+            let _ = this.update(cx, |view, cx| {
+                if let Some(response) = tasks_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::TASKS_GET_CONFIG, response)
+                    && let Ok(tasks) = serde_json::from_value(value)
+                {
+                    view.home.tasks = tasks;
+                }
+                if let Some(response) = devices_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::DEVICE_LIST, response)
+                    && let Ok(devices) = serde_json::from_value(value)
+                {
+                    view.home.devices = devices;
+                }
+                if let Some(response) = execution_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::EXECUTION_GET_STATE, response)
+                    && let Ok(execution) = serde_json::from_value(value)
+                {
+                    view.home.execution = execution;
+                }
+                if let Some(response) = teams_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::TEAM_LIST, response)
+                    && let Ok(teams) = serde_json::from_value(value)
+                {
+                    view.teams.teams = teams;
+                }
+                if let Some(response) = sinners_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::SINNER_LIST, response)
+                    && let Ok(sinners) = serde_json::from_value(value)
+                {
+                    view.teams.sinners = sinners;
+                }
+                if let Some(response) = themes_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::THEME_PACK_LIST, response)
+                    && let Ok(data) = serde_json::from_value(value)
+                {
+                    view.theme_packs.data = data;
+                }
+                if let Some(response) = resources_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::RESOURCE_STATUS, response)
+                    && let Ok(groups) = serde_json::from_value(value)
+                {
+                    view.resources.groups = groups;
+                }
+                if let Some(response) = hotkey_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::HOTKEY_GET, response)
+                    && let Ok(hotkey) = serde_json::from_value(value)
+                {
+                    view.settings_page.hotkey = hotkey;
+                }
+                if let Some(response) = system_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::SYSTEM_SETTINGS_GET, response)
+                    && let Ok(system) = serde_json::from_value(value)
+                {
+                    view.settings_page.system = system;
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     pub fn new() -> Self {
         let mut state = AppState::load();
         apply_visual_overrides(&mut state.settings);

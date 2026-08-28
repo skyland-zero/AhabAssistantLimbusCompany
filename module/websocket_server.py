@@ -10,7 +10,7 @@ from typing import Any
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
-from module.backend_application import BackendApplication
+from module.backend_application import SCHEMA_VERSION, BackendApplication
 from module.device_manager import DeviceManager
 from module.logger import log
 from module.rpc_dispatcher import RpcDispatcher
@@ -32,7 +32,7 @@ class _BroadcastLogHandler(logging.Handler):
                 logging.ERROR: "error",
                 logging.CRITICAL: "error",
             }.get(record.levelno, "info")
-            self.owner.publish(
+            self.owner.application.emit(
                 "log.entry",
                 {
                     "ts": int(record.created * 1000),
@@ -182,7 +182,7 @@ class WebSocketServer:
             return False
         await connection.send(
             json.dumps(
-                {"type": "hello", "ok": True, "schemaVersion": 1},
+                {"type": "hello", "ok": True, "schemaVersion": SCHEMA_VERSION},
                 separators=(",", ":"),
             )
         )

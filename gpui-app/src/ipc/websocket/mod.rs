@@ -30,7 +30,7 @@ use tungstenite::{Error as TungsteniteError, Message};
 
 use super::{
     RpcClient,
-    contract::{EventEnvelope, RequestId, RpcError, RpcRequest, RpcResponse},
+    contract::{EventEnvelope, RPC_SCHEMA_VERSION, RequestId, RpcError, RpcRequest, RpcResponse},
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
@@ -154,6 +154,9 @@ impl WebSocketClient {
             || hello_value.get("ok") != Some(&Value::Bool(true))
         {
             return Err("sidecar 鉴权失败".to_owned());
+        }
+        if hello_value.get("schemaVersion") != Some(&json!(RPC_SCHEMA_VERSION)) {
+            return Err("sidecar RPC 协议版本不兼容".to_owned());
         }
 
         socket

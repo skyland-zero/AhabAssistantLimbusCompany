@@ -16,7 +16,7 @@ impl AhabApp {
                     .await;
                 if this
                     .update(cx, |view, cx| {
-                        if view.home.poll_events() {
+                        if view.poll_backend_events() {
                             cx.notify();
                         }
                     })
@@ -27,6 +27,17 @@ impl AhabApp {
             }
         })
         .detach();
+    }
+
+    pub(crate) fn poll_backend_events(&mut self) -> bool {
+        let events = self.home.rpc.take_events();
+        if events.is_empty() {
+            return false;
+        }
+        self.home.apply_events(events.clone());
+        self.toolbox.apply_events(events.clone());
+        self.resources.apply_events(events);
+        true
     }
 
     pub fn select_device(&mut self, id: String, cx: &mut Context<Self>) {
@@ -64,13 +75,24 @@ impl AhabApp {
         self.home.device_error = None;
         cx.notify();
 
-        let mut rpc = self.home.rpc.clone();
+        let rpc = self.home.rpc.clone();
         cx.spawn(async move |this, cx| {
             // Keep scanning state active for at least 400ms so the user sees clear feedback
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(400))
                 .await;
-            let result = rpc.request_value(crate::ipc::contract::method::DEVICE_LIST, None);
+            let request = rpc.request_async(crate::ipc::contract::method::DEVICE_LIST, None);
+            let result = cx
+                .background_executor()
+                .spawn(async move { request.recv().ok() })
+                .await
+                .map(|response| {
+                    crate::ipc::RpcGateway::decode_response(
+                        crate::ipc::contract::method::DEVICE_LIST,
+                        response,
+                    )
+                })
+                .unwrap_or_else(|| Err(crate::ipc::RpcError::new(-32000, "后端连接已断开")));
             let _ = this.update(cx, |view, cx| {
                 view.home.apply_device_list_result(result);
                 view.home.is_scanning_devices = false;
@@ -128,9 +150,15 @@ impl AhabApp {
         params: Option<serde_json::Value>,
         cx: &mut Context<Self>,
     ) {
-        let mut rpc = self.home.rpc.clone();
+        let rpc = self.home.rpc.clone();
         cx.spawn(async move |this, cx| {
-            let result = rpc.request_value(method, params);
+            let request = rpc.request_async(method, params);
+            let result = cx
+                .background_executor()
+                .spawn(async move { request.recv().ok() })
+                .await
+                .map(|response| crate::ipc::RpcGateway::decode_response(method, response))
+                .unwrap_or_else(|| Err(crate::ipc::RpcError::new(-32000, "后端连接已断开")));
             let _ = this.update(cx, |view, cx| {
                 view.home.apply_rpc_result(result);
                 cx.notify();

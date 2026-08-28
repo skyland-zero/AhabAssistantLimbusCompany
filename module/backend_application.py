@@ -134,8 +134,10 @@ class BackendApplication:
         self._execution_stop = threading.Event()
         self._tools: dict[str, dict[str, Any]] = {}
         self._tool_workers: dict[str, tuple[threading.Thread, threading.Event, Any]] = {}
+        self._tool_runtimes: dict[str, Any] = {}
         self._hotkey_enabled = True
         self._hotkey_listener: Any | None = None
+        self._mediator_bindings: list[tuple[Any, Callable[..., Any]]] = []
 
         self.device_manager = device_manager or get_device_manager()
         if hasattr(self.device_manager, "set_busy_checker"):
@@ -144,6 +146,7 @@ class BackendApplication:
             self.device_manager.add_status_listener(self._on_device_event)
         if hasattr(self.device_manager, "add_notice_listener"):
             self.device_manager.add_notice_listener(self._on_device_event)
+        self._bind_core_events()
 
         # Hotkeys are optional on non-Windows hosts and in headless test
         # environments.  A malformed user value must not prevent RPC startup.
@@ -513,9 +516,6 @@ class BackendApplication:
 
     def team_save(self, params: Any) -> bool:
         values = self._require_mapping(params, "team.save")
-        name = self._require_string(values.get("name"), "team.save.name").strip()
-        if not name:
-            raise ValueError("队伍名称不能为空")
         team_id = values.get("id", "")
         if not isinstance(team_id, str):
             raise ValueError("team.save.id must be a string")
@@ -530,13 +530,27 @@ class BackendApplication:
             raise RuntimeError(f"无法加载队伍配置模型：{error}") from error
         current = getattr(self.config.config, "teams", {}).get(str(team_number))
         setting = current.model_copy(deep=True) if current is not None else TeamSetting(team_number=team_number)
-        mirror = values.get("mirrorConfig") or {}
-        mirror = self._require_mapping(mirror, "team.save.mirrorConfig")
+        current_name = getattr(setting, "remark_name", None) or f"编队 {team_number}"
+        name = self._require_string(values.get("name", current_name), "team.save.name").strip()
+        if not name:
+            raise ValueError("队伍名称不能为空")
         setting.remark_name = name
-        self._write_team_sinners(setting, values.get("sinners", []))
-        self._write_mirror_setting(setting, mirror)
+        if "sinners" in values:
+            self._write_team_sinners(setting, values["sinners"])
+        if "mirrorConfig" in values and values["mirrorConfig"] is not None:
+            mirror = self._require_mapping(values["mirrorConfig"], "team.save.mirrorConfig")
+            self._write_mirror_setting(setting, mirror)
+        elif "accessoryScheme" in values:
+            self._write_accessory_scheme(setting, values["accessoryScheme"])
+        if "purpose" in values:
+            purpose = self._require_string(values["purpose"], "team.save.purpose")
+            if purpose not in {"mirror", "luxcavation", "general"}:
+                raise ValueError("team.save.purpose 无效")
+            setting.purpose = purpose
         self.config.config.teams[str(team_number)] = setting
-        enabled = bool(values.get("enabled", True))
+        enabled = values.get("enabled", self._team_enabled(team_number))
+        if not isinstance(enabled, bool):
+            raise ValueError("team.save.enabled requires a boolean")
         if hasattr(self.config, "set_team_enabled"):
             self.config.set_team_enabled(team_number, enabled)
         self._persist_config()
@@ -708,6 +722,9 @@ class BackendApplication:
                 return {"accepted": False, "runId": None}
             run_id = runtime[2]
             runtime[1].set()
+            tool_runtime = self._tool_runtimes.get(tool_id)
+            if tool_runtime is not None and hasattr(tool_runtime, "running"):
+                tool_runtime.running = False
             self.emit("tool.status", {"toolId": tool_id, "running": False, "runId": run_id})
             return {"accepted": True, "runId": run_id}
 
@@ -835,6 +852,12 @@ class BackendApplication:
             except Exception:
                 log.exception("关闭工具失败：%s", tool_id)
         self._stop_hotkeys()
+        for event, handler in self._mediator_bindings:
+            try:
+                event.disconnect(handler)
+            except Exception:
+                log.debug("解绑核心事件失败", exc_info=True)
+        self._mediator_bindings.clear()
         if hasattr(self.device_manager, "remove_status_listener"):
             self.device_manager.remove_status_listener(self._on_device_event)
         if hasattr(self.device_manager, "remove_notice_listener"):
@@ -911,6 +934,8 @@ class BackendApplication:
 
                 init_game()
                 runtime = Battle(is_tool=True)
+                with self._lock:
+                    self._tool_runtimes[tool_id] = runtime
                 runtime.fight(infinite_battle=True)
             elif tool_id == "enkephalin":
                 from tasks.base.back_init_menu import back_init_menu
@@ -934,6 +959,7 @@ class BackendApplication:
             with self._lock:
                 self._tools[tool_id] = {"runId": run_id, "running": False}
                 self._tool_workers.pop(tool_id, None)
+                self._tool_runtimes.pop(tool_id, None)
                 self.emit("tool.status", {"toolId": tool_id, "running": False, "runId": run_id})
 
     def _get_resource_service(self) -> Any:
@@ -1024,6 +1050,56 @@ class BackendApplication:
     def _on_device_event(self, event: str, payload: dict[str, Any]) -> None:
         self.emit(event, payload)
 
+    def _bind_core_events(self) -> None:
+        """Bridge framework-free core events into the RPC event contract."""
+        try:
+            from core.events import mediator
+
+            bindings = (
+                (mediator.mirror_signal, self._on_mirror_signal),
+                (mediator.warning, self._on_core_warning),
+                (mediator.hdr_warning, self._on_hdr_warning),
+                (mediator.update_progress, self._on_update_progress),
+                (mediator.download_complete, self._on_download_complete),
+            )
+            for event, handler in bindings:
+                event.connect(handler)
+                self._mediator_bindings.append((event, handler))
+        except Exception:
+            # A core event bridge is an enhancement; it must not stop the
+            # sidecar from serving read-only RPC when an optional module is
+            # unavailable in a packaged environment.
+            log.debug("核心事件桥接不可用", exc_info=True)
+
+    def _on_mirror_signal(self, current: Any, total: Any) -> None:
+        self.emit(
+            "execution.mirrorProgress",
+            {
+                "current": max(0, int(current)),
+                "total": max(0, int(total)),
+                "isHard": bool(self._config_value("hard_mirror", False)),
+                "isInfinite": bool(self._config_value("infinite_dungeons", False)),
+                "runId": self._execution_run_id,
+            },
+        )
+
+    def _on_core_warning(self, message: Any) -> None:
+        self.emit("app.notice", {"level": "warn", "message": str(message)})
+
+    def _on_hdr_warning(self, acknowledgement: Any) -> None:
+        self.emit(
+            "app.notice",
+            {"level": "warn", "message": "检测到游戏所在显示器已开启 HDR，可能影响图像识别"},
+        )
+        if hasattr(acknowledgement, "set"):
+            acknowledgement.set()
+
+    def _on_update_progress(self, progress: Any) -> None:
+        self.emit("app.notice", {"level": "info", "message": f"更新下载进度：{int(progress)}%"})
+
+    def _on_download_complete(self, file_name: Any) -> None:
+        self.emit("app.notice", {"level": "info", "message": f"更新下载完成：{file_name}"})
+
     def _team_numbers(self) -> list[int]:
         teams = getattr(self.config.config, "teams", {}) or {}
         numbers: list[int] = []
@@ -1097,7 +1173,9 @@ class BackendApplication:
         mirror["second_system_buy"] = bool((values.get("second_system_action", []) or [True, True])[1])
         mirror["second_system_select_reward"] = bool((values.get("second_system_action", []) or [True, True, True])[2])
         mirror["second_system_power_up"] = bool((values.get("second_system_action", []) or [True, True, True, True])[3])
-        purpose = "mirror"
+        purpose = values.get("purpose", "mirror")
+        if purpose not in {"mirror", "luxcavation", "general"}:
+            purpose = "mirror"
         return {
             "id": f"team-{number}",
             "name": values.get("remark_name") or f"编队 {number}",
@@ -1129,26 +1207,60 @@ class BackendApplication:
         setting.sinner_order = order
         setting.sinners_be_select = sum(selected)
 
+    def _team_enabled(self, number: int) -> bool:
+        return number in set(self.config.get_value("teams_active_queue", []) or [])
+
+    @staticmethod
+    def _write_accessory_scheme(setting: Any, value: Any) -> None:
+        scheme = BackendApplication._require_string(value, "team.save.accessoryScheme")
+        if scheme in SYSTEM_NAMES:
+            setting.team_system = SYSTEM_NAMES.index(scheme)
+
     @staticmethod
     def _write_mirror_setting(setting: Any, mirror: Mapping[str, Any]) -> None:
-        discard = mirror.get("discard_systems", {})
-        if not isinstance(discard, Mapping):
+        discard = mirror.get("discard_systems")
+        if discard is not None and not isinstance(discard, Mapping):
             raise ValueError("team.save.mirrorConfig.discard_systems must be an object")
         for key, value in mirror.items():
             if key in {"discard_systems", "second_system_fuse_IV", "second_system_buy", "second_system_select_reward", "second_system_power_up"}:
                 continue
             if hasattr(setting, key):
                 setattr(setting, key, copy.deepcopy(value))
-        for system in SYSTEM_NAMES:
-            setattr(setting, f"system_{system}", bool(discard.get(system, False)))
-        setting.ignore_shop = [1 if value else 0 for value in list(mirror.get("ignore_shop", []))[:5]]
-        setting.ignore_shop += [0] * (5 - len(setting.ignore_shop))
-        setting.second_system_action = [
-            1 if mirror.get("second_system_fuse_IV", True) else 0,
-            1 if mirror.get("second_system_buy", True) else 0,
-            1 if mirror.get("second_system_select_reward", True) else 0,
-            1 if mirror.get("second_system_power_up", True) else 0,
-        ]
+        if isinstance(discard, Mapping):
+            for system in SYSTEM_NAMES:
+                if system in discard:
+                    setattr(setting, f"system_{system}", BackendApplication._require_bool(
+                        discard[system], f"team.save.mirrorConfig.discard_systems.{system}"
+                    ))
+        if "ignore_shop" in mirror:
+            ignore_shop = mirror["ignore_shop"]
+            if not isinstance(ignore_shop, list) or not all(isinstance(value, bool) for value in ignore_shop):
+                raise ValueError("team.save.mirrorConfig.ignore_shop must be a boolean list")
+            setting.ignore_shop = [1 if value else 0 for value in ignore_shop[:5]]
+            setting.ignore_shop += [0] * (5 - len(setting.ignore_shop))
+        if any(
+            key in mirror
+            for key in (
+                "second_system_fuse_IV",
+                "second_system_buy",
+                "second_system_select_reward",
+                "second_system_power_up",
+            )
+        ):
+            actions = list(getattr(setting, "second_system_action", [0, 0, 0, 0]) or [])[:4]
+            actions += [0] * (4 - len(actions))
+            keys = (
+                "second_system_fuse_IV",
+                "second_system_buy",
+                "second_system_select_reward",
+                "second_system_power_up",
+            )
+            for index, key in enumerate(keys):
+                if key in mirror:
+                    actions[index] = 1 if BackendApplication._require_bool(
+                        mirror[key], f"team.save.mirrorConfig.{key}"
+                    ) else 0
+            setting.second_system_action = actions
 
     @staticmethod
     def _require_mapping(value: Any, name: str) -> dict[str, Any]:

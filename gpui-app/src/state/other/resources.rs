@@ -11,7 +11,7 @@ impl ResourcesState {
         Self::with_client(MockClient::default())
     }
 
-    pub fn with_client(client: MockClient) -> Self {
+    pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
         let mut state = Self {
             rpc: RpcGateway::new(client),
             groups: Vec::new(),
@@ -19,11 +19,16 @@ impl ResourcesState {
             sync_finish_scheduled: false,
             feedback: None,
         };
-        state.reload();
+        if !state.rpc.is_sidecar() {
+            state.reload();
+        }
         state
     }
 
     pub fn reload(&mut self) {
+        if self.rpc.is_sidecar() {
+            return;
+        }
         if let Some(value) = self.request(method::RESOURCE_STATUS, None)
             && let Ok(groups) = serde_json::from_value(value)
         {
@@ -32,6 +37,11 @@ impl ResourcesState {
     }
 
     pub fn check_update(&mut self) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(method::RESOURCE_CHECK_UPDATE, None);
+            self.feedback = Some("正在检查资源更新".to_owned());
+            return;
+        }
         let groups = match self.rpc.request_value(method::RESOURCE_CHECK_UPDATE, None) {
             Err(error) => {
                 self.feedback = Some(error.message);
@@ -61,6 +71,11 @@ impl ResourcesState {
         }
         self.sync_progress = Some(0);
         self.sync_finish_scheduled = false;
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(method::RESOURCE_SYNC_START, None);
+            self.feedback = Some("资源同步请求已提交".to_owned());
+            return;
+        }
         let result = self.rpc.request_value(method::RESOURCE_SYNC_START, None);
         let events = self.rpc.take_events();
         self.apply_events(events);
@@ -78,7 +93,7 @@ impl ResourcesState {
         self.sync_finish_scheduled = false;
     }
 
-    fn apply_events(&mut self, events: Vec<EventEnvelope>) {
+    pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {
         for event in events {
             if event.event == event::RESOURCE_SYNC_PROGRESS {
                 self.sync_progress = event

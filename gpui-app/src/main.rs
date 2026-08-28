@@ -88,6 +88,7 @@ fn main() {
                 cx.new(|cx| {
                     let mut app = AhabApp::new();
                     app.start_event_pump(cx);
+                    app.start_backend_hydration(cx);
                     app
                 })
             },

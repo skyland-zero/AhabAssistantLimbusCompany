@@ -100,6 +100,10 @@ impl HomeState {
     }
 
     fn send(&mut self, method: &str, params: Option<serde_json::Value>) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(method, params);
+            return;
+        }
         let result = self.rpc.request_value(method, params);
         self.apply_rpc_result(result);
     }
@@ -115,8 +119,14 @@ impl HomeState {
         true
     }
 
-    fn apply_events(&mut self, events: Vec<EventEnvelope>) {
+    pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {
         for event in events {
+            if let Some(sequence) = event.seq {
+                if sequence <= self.last_event_sequence {
+                    continue;
+                }
+                self.last_event_sequence = sequence;
+            }
             match event.event.as_str() {
                 crate::ipc::contract::event::EXECUTION_STATUS => {
                     if let Ok(status) = serde_json::from_value(event.payload) {

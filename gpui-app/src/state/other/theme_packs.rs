@@ -11,14 +11,16 @@ impl ThemePacksState {
         Self::with_client(MockClient::default())
     }
 
-    pub fn with_client(client: MockClient) -> Self {
+    pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
         let mut state = Self {
             rpc: RpcGateway::new(client),
             data: ThemePackState::default(),
             sort_by_weight: false,
             feedback: None,
         };
-        state.reload();
+        if !state.rpc.is_sidecar() {
+            state.reload();
+        }
         state
     }
 
@@ -107,6 +109,16 @@ impl ThemePacksState {
     }
 
     pub fn reset_weights(&mut self) {
+        if self.rpc.is_sidecar() {
+            let _ = self
+                .rpc
+                .request_async(method::THEME_PACK_RESET_WEIGHTS, None);
+            for pack in &mut self.data.packs {
+                pack.weight = 1;
+            }
+            self.feedback = Some("默认权重恢复请求已提交".to_owned());
+            return;
+        }
         match self
             .rpc
             .request_value(method::THEME_PACK_RESET_WEIGHTS, None)
@@ -131,6 +143,15 @@ impl ThemePacksState {
     }
 
     fn persist_packs(&mut self, packs: Vec<ThemePack>) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(
+                method::THEME_PACK_UPDATE_ALL,
+                Some(json!({ "packs": packs.clone() })),
+            );
+            self.data.packs = packs;
+            self.feedback = Some("主题包设置保存请求已提交".to_owned());
+            return;
+        }
         let result = self.rpc.request_value(
             method::THEME_PACK_UPDATE_ALL,
             Some(json!({ "packs": packs })),

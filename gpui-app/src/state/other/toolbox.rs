@@ -11,7 +11,7 @@ impl ToolboxState {
         Self::with_client(MockClient::default())
     }
 
-    pub fn with_client(client: MockClient) -> Self {
+    pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
         Self {
             rpc: RpcGateway::new(client),
             running: HashMap::new(),
@@ -29,6 +29,14 @@ impl ToolboxState {
         } else {
             method::TOOL_START
         };
+        if self.rpc.is_sidecar() {
+            let _ = self
+                .rpc
+                .request_async(method_name, Some(json!({ "id": tool })));
+            self.running.insert(tool, !self.is_running(tool));
+            self.feedback = Some("工具请求已提交".to_owned());
+            return;
+        }
         let result = self
             .rpc
             .request_value(method_name, Some(json!({ "id": tool })));
@@ -40,6 +48,11 @@ impl ToolboxState {
     }
 
     pub fn screenshot(&mut self) {
+        if self.rpc.is_sidecar() {
+            let _ = self.rpc.request_async(method::TOOL_SCREENSHOT, None);
+            self.feedback = Some("截图请求已提交".to_owned());
+            return;
+        }
         match self.rpc.request_value(method::TOOL_SCREENSHOT, None) {
             Err(error) => self.feedback = Some(error.message),
             Ok(result) => {
@@ -56,7 +69,7 @@ impl ToolboxState {
         }
     }
 
-    fn apply_events(&mut self, events: Vec<EventEnvelope>) {
+    pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {
         for event in events {
             if event.event == event::TOOL_STATUS
                 && let Ok(status) = serde_json::from_value::<ToolStatusPayload>(event.payload)

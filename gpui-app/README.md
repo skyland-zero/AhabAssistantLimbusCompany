@@ -33,7 +33,7 @@ cargo +nightly test --manifest-path gpui-app/Cargo.toml
 
 ## Python sidecar
 
-普通运行时 GPUI 会自动启动仓库根目录的 `main_backend.py`，通过 loopback WebSocket 使用 JSON-RPC 连接；视觉回归或显式设置 `AHAB_BACKEND=mock` 时继续使用 Mock。也可以显式选择真实 sidecar：
+普通运行时 GPUI 会自动启动仓库根目录的 `main_backend.py`（发布包中为 `AALC Backend.exe`），通过 loopback WebSocket 使用 JSON-RPC 连接；视觉回归或显式设置 `AHAB_BACKEND=mock` 时才使用 Mock。生产连接失败会显示后端不可用状态，不会静默伪造业务数据。也可以显式选择真实 sidecar：
 
 ```powershell
 $env:AHAB_BACKEND = "sidecar"
@@ -47,7 +47,7 @@ $env:AHAB_BACKEND_URL = "ws://127.0.0.1:9000"
 $env:AHAB_BACKEND_TOKEN = "your-token"
 ```
 
-当前真实接入范围为设备发现和连接：`pc:limbus`、`mumu:0` 以及 `adb:<serial>`；其他页面 RPC 暂时继续使用共享 Mock。
+真实 sidecar 已提供配置、任务执行、设备、队伍、主题包、资源同步、工具、截图、热键、系统设置和更新检查等 RPC；设备标识继续兼容 `pc:limbus`、`mumu:0` 以及 `adb:<serial>`。
 
 ## 固定尺寸视觉回归
 
@@ -70,12 +70,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps
 - 点击顶部 TabBar 切换 7 个原生页面：主控台、队伍管理、主题包、工具箱、资源中心、帮助、设置。
 - 主控台支持任务开关、General/Advanced 配置、日常队伍选择、数量边界、执行状态、暂停/继续、设备选择、结构化日志和结束后动作；设备列表和连接已支持 Python sidecar。
 - 队伍管理支持 Mock 队伍列表、用途筛选、新建/编辑/删除、5 个编辑 Tab、人格顺序、互斥策略、星光计算和 JSON 剪贴板。
-- 主题包、工具箱、资源中心、设置和帮助页均使用同一套 Mock IPC；帮助目录使用 GPUI `ScrollHandle` 跳转，不嵌入 WebView。
+- 主题包、工具箱、资源中心、设置和帮助页均通过统一 RPC 边界工作；帮助目录使用 GPUI `ScrollHandle` 跳转，不嵌入 WebView。
 - 队伍名称、编队码、观察饰品、Mirror 酱 CDK 使用 `EntityInputHandler` 文本输入，支持 UTF-16 选择、中文 IME 基础路径和剪贴板。
 - 页面旧 token 会通过 render-time Palette 跟随浅色/深色和强调色；全局 Toast、日志复制和自动滚动已接入。
 - 使用 `Ctrl-Q` 退出。
 
-当前 Python sidecar 已接入设备发现/连接；任务、队伍、资源和工具等业务 RPC 仍使用 Mock。真实 JPEG 解码、托盘、全局热键注册和 Windows 电源 API 将在后续迭代中继续。
+Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、资源同步进度和任务镜牢进度已纳入事件泵。托盘、单实例和正式发布流水线仍在后续里程碑中完成。
 
 ## 测量建议
 

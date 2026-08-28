@@ -1,21 +1,22 @@
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use super::{EventEnvelope, MockClient, RpcError, RpcResponse};
+use super::{BackendClient, EventEnvelope, RpcError, RpcResponse, decode_response};
 
 /// Application-facing RPC adapter.
 ///
 /// State objects depend on this small boundary instead of knowing which
-/// transport serves a method. MockClient can still route device methods to
-/// the sidecar while the rest of the app remains deterministic in tests.
+/// transport serves a method.
 #[derive(Clone)]
 pub struct RpcGateway {
-    client: MockClient,
+    client: BackendClient,
 }
 
 impl RpcGateway {
-    pub fn new(client: MockClient) -> Self {
-        Self { client }
+    pub fn new(client: impl Into<BackendClient>) -> Self {
+        Self {
+            client: client.into(),
+        }
     }
 
     pub fn shared(&self) -> Self {
@@ -24,6 +25,10 @@ impl RpcGateway {
 
     pub fn is_sidecar(&self) -> bool {
         self.client.is_sidecar()
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.client.is_connected()
     }
 
     /// Keep raw responses available for state transitions that also consume
@@ -38,12 +43,19 @@ impl RpcGateway {
         method: &str,
         params: Option<Value>,
     ) -> Result<Option<Value>, RpcError> {
-        let response = self.call(method, params);
-        if let Some(error) = response.error {
-            Err(error)
-        } else {
-            Ok(response.result)
-        }
+        decode_response(method, self.call(method, params))
+    }
+
+    pub fn request_async(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> std::sync::mpsc::Receiver<RpcResponse> {
+        self.client.request_async(method, params)
+    }
+
+    pub fn decode_response(method: &str, response: RpcResponse) -> Result<Option<Value>, RpcError> {
+        decode_response(method, response)
     }
 
     /// Request and deserialize a typed payload at the IPC boundary.
@@ -75,7 +87,7 @@ mod tests {
 
     #[test]
     fn typed_requests_decode_through_the_gateway() {
-        let mut gateway = RpcGateway::new(MockClient::default());
+        let mut gateway = RpcGateway::new(BackendClient::mock());
         let config: TasksConfig = gateway
             .request(method::TASKS_GET_CONFIG, None)
             .expect("mock task config should decode");
@@ -84,7 +96,7 @@ mod tests {
 
     #[test]
     fn gateway_preserves_structured_errors() {
-        let mut gateway = RpcGateway::new(MockClient::default());
+        let mut gateway = RpcGateway::new(BackendClient::mock());
         let error = gateway
             .request_value("not.implemented", None)
             .expect_err("unknown methods should remain structured errors");
