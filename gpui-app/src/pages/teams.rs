@@ -283,17 +283,11 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .child(localized_feedback(&feedback, language)),
         );
     }
-    root = root.child(
+    root.child(
         scroll_area_with_id("teams-list-scroll", div().p_4().child(cards))
             .flex_1()
             .min_h_0(),
-    );
-    root.on_any_mouse_down(cx.listener(|view, _, _, cx| {
-        if view.teams.open_select.is_some() {
-            view.teams.close_select();
-            cx.notify();
-        }
-    }))
+    )
 }
 
 fn team_card(
@@ -746,13 +740,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     )
                     .child(div().flex().flex_none().gap_2().child(close).child(save)),
             )
-            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
-            .on_any_mouse_down(cx.listener(|view, _, _, cx| {
-                if view.teams.open_select.is_some() {
-                    view.teams.close_select();
-                    cx.notify();
-                }
-            }));
+            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
 
     let mut surface = div()
         .id("team-editor-overlay")
@@ -2200,6 +2188,7 @@ fn delete_confirmation(
         .border_1()
         .border_color(palette_rgb(current_render_palette().danger))
         .bg(palette_rgb(current_render_palette().danger_light))
+        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
         .child(
             div()
                 .flex()
@@ -2426,7 +2415,13 @@ fn team_select(
         // paint so the popup is composited above the following form sections
         // instead of being covered by them (and by the scroll area's paint
         // order), matching the floating SelectContent used by the React UI.
-        root = root.child(deferred(select_popup(option_list, &palette).shadow_sm()).priority(10));
+        let popup = select_popup(option_list, &palette)
+            .shadow_sm()
+            .on_mouse_down_out(cx.listener(move |view, _, _, cx| {
+                view.teams.close_select();
+                cx.notify();
+            }));
+        root = root.child(deferred(popup).priority(10));
     }
     root
 }
@@ -2487,8 +2482,8 @@ fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
         .py_1()
         .child(
             div()
-                .text_size(px(11.))
-                .text_color(rgb(TEXT_MUTED))
+                .text_size(px(13.))
+                .text_color(rgb(TEXT))
                 .child(label.into()),
         )
         .child(control)

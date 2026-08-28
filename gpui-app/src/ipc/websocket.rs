@@ -417,8 +417,7 @@ fn spawn_sidecar() -> Result<(Arc<SidecarGuard>, u16, String), String> {
     let mut command = if let Ok(executable) = env::var("AHAB_BACKEND_EXE") {
         Command::new(executable)
     } else {
-        let python = env::var("AHAB_PYTHON").unwrap_or_else(|_| "python".to_owned());
-        let mut command = Command::new(python);
+        let mut command = Command::new(find_python());
         command.arg("-u").arg(find_backend_script()?);
         command
     };
@@ -486,18 +485,79 @@ fn read_ready_line(stdout: impl std::io::Read + Send + 'static) -> Result<Value,
     thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
-        let result = reader
-            .read_line(&mut line)
-            .map_err(|error| format!("读取 sidecar 启动信息失败：{error}"))
-            .and_then(|_| {
-                serde_json::from_str::<Value>(line.trim())
-                    .map_err(|error| format!("sidecar 启动信息无效：{error}"))
-            });
-        let _ = sender.send(result);
+        let mut last_lines = Vec::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => {
+                    let context = if last_lines.is_empty() {
+                        "sidecar 进程在输出就绪前退出（stdout 为空，请检查 Python 依赖）".to_owned()
+                    } else {
+                        format!(
+                            "sidecar 进程已退出，未检测到就绪 JSON。输出内容：\n{}",
+                            last_lines.join("\n")
+                        )
+                    };
+                    let _ = sender.send(Err(context));
+                    break;
+                }
+                Ok(_) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if last_lines.len() < 10 {
+                        last_lines.push(trimmed.to_owned());
+                    }
+                    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                        if value.get("ready") == Some(&Value::Bool(true))
+                            || value.get("port").is_some()
+                        {
+                            let _ = sender.send(Ok(value));
+                            break;
+                        }
+                    }
+                }
+                Err(error) => {
+                    let _ = sender.send(Err(format!("读取 sidecar 启动信息失败：{error}")));
+                    break;
+                }
+            }
+        }
     });
     receiver
         .recv_timeout(Duration::from_secs(20))
         .map_err(|error| format!("等待 sidecar 启动超时：{error}"))?
+}
+
+fn find_python() -> PathBuf {
+    if let Some(python) = env::var_os("AHAB_PYTHON") {
+        return PathBuf::from(python);
+    }
+    let venv_candidates = [
+        #[cfg(windows)]
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join(".venv")
+            .join("Scripts")
+            .join("python.exe"),
+        #[cfg(not(windows))]
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join(".venv")
+            .join("bin")
+            .join("python"),
+        #[cfg(windows)]
+        PathBuf::from(".venv").join("Scripts").join("python.exe"),
+        #[cfg(not(windows))]
+        PathBuf::from(".venv").join("bin").join("python"),
+    ];
+    for path in venv_candidates {
+        if path.is_file() {
+            return path;
+        }
+    }
+    PathBuf::from("python")
 }
 
 fn find_backend_script() -> Result<PathBuf, String> {

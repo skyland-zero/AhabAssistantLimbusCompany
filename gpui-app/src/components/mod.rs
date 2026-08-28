@@ -401,13 +401,14 @@ pub fn select_trigger(label: impl Into<String>, open: bool, palette: &Palette) -
         .justify_between()
         .w_full()
         .min_w_0()
-        .h(px(34.))
-        .px_3()
+        .h(px(30.))
+        .px_2p5()
         .rounded_md()
         .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.card))
+        .text_size(px(13.))
         .text_color(paint_color(palette.foreground))
         .focus_visible({
             let ring = palette.ring;
@@ -422,7 +423,7 @@ pub fn select_trigger(label: impl Into<String>, open: bool, palette: &Palette) -
         .child(div().min_w_0().truncate().child(label.into()))
         .child(icon(
             Icon::ChevronDown,
-            px(14.),
+            px(13.),
             paint_color(palette.muted_foreground),
         ))
 }
@@ -433,7 +434,7 @@ pub fn select_trigger(label: impl Into<String>, open: bool, palette: &Palette) -
 pub fn select_popup(options: impl IntoElement, palette: &Palette) -> Div {
     div()
         .absolute()
-        .top(px(38.))
+        .top(px(34.))
         .left_0()
         .right_0()
         .p_1()
@@ -452,12 +453,12 @@ pub fn select_option(label: impl Into<String>, selected: bool, palette: &Palette
         .items_center()
         .w_full()
         .min_w_0()
-        .min_h(px(30.))
+        .min_h(px(28.))
         .px_2()
         .rounded_sm()
         .tab_index(0)
         .cursor_pointer()
-        .text_size(px(12.))
+        .text_size(px(13.))
         .text_color(paint_color(if selected {
             palette.brand
         } else {

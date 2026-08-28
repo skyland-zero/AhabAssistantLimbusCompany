@@ -175,7 +175,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         right_panel(app, cx)
     };
 
-    let mut root = div()
+    let root = div()
         .relative()
         .w_full()
         .flex_1()
@@ -188,12 +188,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(left_panel)
         .child(splitter)
         .child(right);
-    root = root.on_any_mouse_down(cx.listener(|view, _, _, cx| {
-        if view.home.open_select.is_some() {
-            view.home.close_select();
-            cx.notify();
-        }
-    }));
     root
 }
 
@@ -276,7 +270,7 @@ fn options_tabs(
         .h(px(28.))
         .px_3()
         .py_0()
-        .text_size(px(11.));
+        .text_size(px(12.));
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.home.set_options_tab(task, tab);
             cx.stop_propagation();
@@ -661,7 +655,7 @@ fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -> Di
         ));
     if config.targeted_teaming_EXP || config.targeted_teaming_thread {
         advanced = advanced.child(
-            div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+            div().text_size(px(11.)).text_color(rgb(TEXT_MUTED)).child(
                 text(
                     "选择对应日期使用的队伍（点击按钮循环队伍）",
                     "Choose the team for each day (click to cycle teams)",
@@ -954,7 +948,7 @@ fn enkephalin_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) 
                     skip,
                 ))
                 .child(
-                    div().text_size(px(10.0)).text_color(rgb(TEXT_MUTED)).child(
+                    div().text_size(px(11.0)).text_color(rgb(TEXT_MUTED)).child(
                         text(
                             "除狂气换体外，不自动将多余体力合成为脑啡肽模块。",
                             "Do not convert surplus enkephalin into modules.",
@@ -1492,7 +1486,13 @@ fn home_select(
         // Home Selects live inside the scrolling task list. Defer the popup so
         // later control rows cannot paint over it, matching the floating menu
         // behavior of the React SelectContent component.
-        root = root.child(deferred(select_popup(option_list, &palette).shadow_sm()).priority(10));
+        let popup = select_popup(option_list, &palette)
+            .shadow_sm()
+            .on_mouse_down_out(cx.listener(move |view, _, _, cx| {
+                view.home.close_select();
+                cx.notify();
+            }));
+        root = root.child(deferred(popup).priority(10));
     }
     root
 }
@@ -1764,8 +1764,8 @@ fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(12.))
-                .text_color(rgb(TEXT_MUTED))
+                .text_size(px(13.))
+                .text_color(rgb(TEXT))
                 .child(label.into()),
         )
         .child(div().flex_none().child(control))

@@ -96,7 +96,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         );
     }
 
-    let mut root = div()
+    let root = div()
         .size_full()
         .flex()
         .flex_col()
@@ -106,12 +106,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .size_full()
                 .min_h_0(),
         );
-    root = root.on_any_mouse_down(cx.listener(|view, _, _, cx| {
-        if view.settings_page.open_select.is_some() {
-            view.settings_page.close_select();
-            cx.notify();
-        }
-    }));
     root
 }
 
@@ -674,7 +668,13 @@ fn update_card(
     if source_open {
         // This card is inside settings-scroll. Defer the popup so the
         // following settings rows cannot cover the floating menu.
-        source = source.child(deferred(select_popup(source_options, &palette)).priority(10));
+        let popup = select_popup(source_options, &palette).on_mouse_down_out(cx.listener(
+            move |view, _, _, cx| {
+                view.settings_page.close_select();
+                cx.notify();
+            },
+        ));
+        source = source.child(deferred(popup).priority(10));
     }
 
     let mut check = action_button(
@@ -839,7 +839,7 @@ fn settings_card(title: &'static str, body: Div) -> Div {
 fn setting_row(label: &'static str, detail: &'static str, control: impl IntoElement) -> Div {
     let mut copy = div().flex().flex_col().gap_1().min_w_0().flex_1().child(
         div()
-            .text_size(px(12.))
+            .text_size(px(13.))
             .font_weight(FontWeight::MEDIUM)
             .text_color(rgb(TEXT))
             .child(label),
@@ -847,7 +847,7 @@ fn setting_row(label: &'static str, detail: &'static str, control: impl IntoElem
     if !detail.is_empty() {
         copy = copy.child(
             div()
-                .text_size(px(11.))
+                .text_size(px(12.))
                 .text_color(rgb(TEXT_MUTED))
                 .child(detail),
         );
@@ -870,7 +870,7 @@ fn setting_line(label: &'static str, control: impl IntoElement) -> Div {
         .child(
             div()
                 .min_w_0()
-                .text_size(px(12.))
+                .text_size(px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(rgb(TEXT))
                 .child(label),
@@ -1013,7 +1013,13 @@ fn select_system_u16(
     if open {
         // Simulator Selects also sit inside settings-scroll; keep the menu on
         // the floating layer instead of letting later rows paint over it.
-        root = root.child(deferred(select_popup(option_list, &palette)).priority(10));
+        let popup = select_popup(option_list, &palette).on_mouse_down_out(cx.listener(
+            move |view, _, _, cx| {
+                view.settings_page.close_select();
+                cx.notify();
+            },
+        ));
+        root = root.child(deferred(popup).priority(10));
     }
     root
 }
