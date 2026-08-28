@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Runtime theme derivation for the GPUI client.
 //!
 //! `AppSettings` remains the only persisted and writable source for theme
@@ -6,9 +8,7 @@
 //! system appearance changes, call `cx.notify()`, and render it without
 //! maintaining a second mutable settings store.
 
-pub use crate::components::style::{
-    ACCENT_PRESETS, AccentId, AccentTokens, ColorScheme, ColorToken, Palette,
-};
+pub use crate::components::style::{AccentId, ColorScheme, Palette};
 use crate::model::AppSettings;
 pub use crate::model::{Language, ThemeMode};
 

@@ -1,17 +1,31 @@
-import { useEffect } from "react";
+import type { ComponentType, LazyExoticComponent } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { TabBar } from "@/components/layout/TabBar";
 import { TitleBar } from "@/components/layout/TitleBar";
 import { Toaster } from "@/components/ui/sonner";
-import { HelpPage } from "@/pages/HelpPage";
-import { HomePage } from "@/pages/HomePage";
-import { ResourcesPage } from "@/pages/ResourcesPage";
-import { SettingsPage } from "@/pages/SettingsPage";
-import { TeamsPage } from "@/pages/TeamsPage";
-import { ThemePacksPage } from "@/pages/ThemePacksPage";
-import { ToolboxPage } from "@/pages/ToolboxPage";
+import type { PageId } from "@/stores/appStore";
 import { useAppStore } from "@/stores/appStore";
 import { applyTheme, watchSystemMode } from "@/themes";
+
+// 页面按需加载，避免启动时同时解析所有页面及其依赖（尤其是帮助页的 Markdown 渲染器）。
+const PAGES: Record<PageId, LazyExoticComponent<ComponentType>> = {
+  home: lazy(() => import("@/pages/HomePage").then(({ HomePage }) => ({ default: HomePage }))),
+  teams: lazy(() => import("@/pages/TeamsPage").then(({ TeamsPage }) => ({ default: TeamsPage }))),
+  themes: lazy(() =>
+    import("@/pages/ThemePacksPage").then(({ ThemePacksPage }) => ({ default: ThemePacksPage })),
+  ),
+  toolbox: lazy(() =>
+    import("@/pages/ToolboxPage").then(({ ToolboxPage }) => ({ default: ToolboxPage })),
+  ),
+  resources: lazy(() =>
+    import("@/pages/ResourcesPage").then(({ ResourcesPage }) => ({ default: ResourcesPage })),
+  ),
+  help: lazy(() => import("@/pages/HelpPage").then(({ HelpPage }) => ({ default: HelpPage }))),
+  settings: lazy(() =>
+    import("@/pages/SettingsPage").then(({ SettingsPage }) => ({ default: SettingsPage })),
+  ),
+};
 
 export default function App() {
   const currentPage = useAppStore((s) => s.currentPage);
@@ -49,21 +63,17 @@ export default function App() {
   );
 }
 
-function PageView({ page }: { page: ReturnType<typeof useAppStore.getState>["currentPage"] }) {
-  switch (page) {
-    case "home":
-      return <HomePage />;
-    case "teams":
-      return <TeamsPage />;
-    case "themes":
-      return <ThemePacksPage />;
-    case "toolbox":
-      return <ToolboxPage />;
-    case "resources":
-      return <ResourcesPage />;
-    case "help":
-      return <HelpPage />;
-    case "settings":
-      return <SettingsPage />;
-  }
+function PageView({ page }: { page: PageId }) {
+  const Page = PAGES[page];
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center bg-background">
+          <div className="size-5 animate-spin rounded-full border-2 border-muted border-t-brand" />
+        </div>
+      }
+    >
+      <Page />
+    </Suspense>
+  );
 }

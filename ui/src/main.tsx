@@ -1,8 +1,7 @@
-import React from "react";
+import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
-import { Toaster } from "@/components/ui/sonner";
 import { initI18n } from "@/i18n";
 
 // 从持久化设置读取初始语言（zustand persist 存于 localStorage）
@@ -16,8 +15,7 @@ try {
 initI18n(initialLang);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
+  <StrictMode>
     <App />
-    <Toaster position="bottom-right" richColors />
-  </React.StrictMode>,
+  </StrictMode>,
 );

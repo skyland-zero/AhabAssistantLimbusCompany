@@ -1,8 +1,7 @@
 import { Pencil, Plus, Sparkles, Trash2, UsersRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/components/common/EmptyState";
-import { TeamEditModal } from "@/components/teams/TeamEditModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,6 +45,13 @@ const schemeKey: Record<string, string> = {
   pierce: "teams.schemePierce",
   blunt: "teams.schemeBlunt",
 };
+
+// 编辑器体积较大，仅在用户真正打开编辑弹窗时加载。
+const TeamEditModal = lazy(() =>
+  import("@/components/teams/TeamEditModal").then(({ TeamEditModal }) => ({
+    default: TeamEditModal,
+  })),
+);
 
 export function TeamsPage() {
   const { t } = useTranslation();
@@ -167,7 +173,7 @@ export function TeamsPage() {
             <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
               {filteredTeams.map((team) => {
                 const mc = team.mirrorConfig;
-                const hasStarlight = mc?.opening_bonus && mc.opening_bonus.some((b) => b > 0);
+                const hasStarlight = mc?.opening_bonus?.some((b) => b > 0);
                 const discardedCount = mc?.discard_systems
                   ? Object.values(mc.discard_systems).filter(Boolean).length
                   : 0;
@@ -285,17 +291,21 @@ export function TeamsPage() {
         </div>
       </ScrollArea>
 
-      {/* 5-Tab 完整镜牢策略编辑模态框 */}
-      <TeamEditModal
-        open={modalOpen}
-        team={editing}
-        sinners={sinners}
-        onClose={() => {
-          setModalOpen(false);
-          setEditing(null);
-        }}
-        onSave={(tData) => void save(tData)}
-      />
+      {/* 5-Tab 完整镜牢策略编辑模态框：按需加载，避免列表页常驻编辑器代码与状态 */}
+      {modalOpen && editing && (
+        <Suspense fallback={null}>
+          <TeamEditModal
+            open={modalOpen}
+            team={editing}
+            sinners={sinners}
+            onClose={() => {
+              setModalOpen(false);
+              setEditing(null);
+            }}
+            onSave={(tData) => void save(tData)}
+          />
+        </Suspense>
+      )}
 
       {/* 删除确认 - 组件库 Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

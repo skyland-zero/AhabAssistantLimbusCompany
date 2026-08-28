@@ -271,6 +271,7 @@ impl HomeState {
         });
     }
 
+    #[allow(dead_code)]
     pub fn toggle_after_exit_action(&mut self, action: AfterExitAction) {
         self.update_tasks(|tasks| {
             if let Some(index) = tasks
@@ -286,10 +287,12 @@ impl HomeState {
         });
     }
 
+    #[allow(dead_code)]
     pub fn set_after_power_action(&mut self, action: AfterPowerAction) {
         self.update_tasks(|tasks| tasks.afterCompletion.powerAction = action);
     }
 
+    #[allow(dead_code)]
     pub fn set_keep_after_completion(&mut self, keep: bool) {
         self.update_tasks(|tasks| tasks.afterCompletion.keepAfterCompletion = keep);
     }
@@ -461,6 +464,7 @@ impl HomeState {
         });
     }
 
+    #[allow(dead_code)]
     pub fn cycle_number(&mut self, task: FixedTaskId) {
         if self.is_busy() {
             return;

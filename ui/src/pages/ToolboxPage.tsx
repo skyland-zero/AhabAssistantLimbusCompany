@@ -43,15 +43,23 @@ export function ToolboxPage() {
   const [running, setRunning] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    let disposed = false;
     let unsub: (() => void) | undefined;
+
     void (async () => {
       const ipc = await getIpc();
-      unsub = ipc.on("tool.status", (payload) => {
+      const dispose = ipc.on("tool.status", (payload) => {
         const { toolId, running: isRunning } = payload as ToolStatusPayload;
         setRunning((prev) => ({ ...prev, [toolId]: isRunning }));
       });
+      if (disposed) dispose();
+      else unsub = dispose;
     })();
-    return () => void unsub?.();
+
+    return () => {
+      disposed = true;
+      unsub?.();
+    };
   }, []);
 
   const toggleTool = async (tool: ToolMeta) => {

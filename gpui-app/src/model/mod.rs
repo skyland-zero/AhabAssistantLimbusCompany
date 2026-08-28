@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 pub mod other;
 pub mod settings;
 pub mod tasks;

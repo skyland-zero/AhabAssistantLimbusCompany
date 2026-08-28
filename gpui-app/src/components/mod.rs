@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Small, page-agnostic GPUI controls used by the shell and pages.
 //!
 //! The short functions (`button`, `card`, and friends) are compatibility
@@ -15,10 +17,7 @@ pub use text_input::TextInput;
 use gpui::{Div, Rgba, Stateful, div, prelude::*, px};
 
 use icon::{Icon, icon};
-use style::{
-    ACCENT, AccentId, BACKGROUND, BORDER, ColorToken, DANGER, GREEN, Palette, SURFACE,
-    SURFACE_HOVER, TEXT, TEXT_MUTED,
-};
+use style::{AccentId, ColorToken, Palette};
 
 fn paint_color(token: ColorToken) -> Rgba {
     gpui::rgba(token.rgba_hex())
@@ -835,6 +834,10 @@ pub fn parse_accent_id(id: &str) -> AccentId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::style::{
+        ACCENT, AccentId, BACKGROUND, BORDER, DANGER, GREEN, SURFACE, SURFACE_HOVER, TEXT,
+        TEXT_MUTED,
+    };
 
     #[test]
     fn slider_normalization_is_bounded() {

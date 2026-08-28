@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Small inline Lucide-compatible icons used by reusable controls.
 //!
 //! GPUI does not have a browser DOM in which to mount the Lucide React

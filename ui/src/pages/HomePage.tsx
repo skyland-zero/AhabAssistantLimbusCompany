@@ -10,18 +10,12 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ConnectionPanel } from "@/components/connection/ConnectionPanel";
-import { AfterCompletionModal } from "@/components/tasks/AfterCompletionModal";
-import { BuyEnkephalinOptions } from "@/components/tasks/BuyEnkephalinOptions";
-import { DailyTaskOptions } from "@/components/tasks/DailyTaskOptions";
 import { ExecutionToolbar } from "@/components/tasks/ExecutionToolbar";
 import { FixedTaskCard, type PreviewTag } from "@/components/tasks/FixedTaskCard";
-import { GetRewardOptions } from "@/components/tasks/GetRewardOptions";
-import { MirrorOptions } from "@/components/tasks/MirrorOptions";
-import { SetWindowsOptions } from "@/components/tasks/SetWindowsOptions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -40,6 +34,42 @@ import type {
   TeamSummary,
 } from "@/services/ipc/types";
 import { useAppStore } from "@/stores/appStore";
+
+// 任务详情包含大量表单控件；折叠时不加载其代码，打开对应卡片后再加载。
+const AfterCompletionModal = lazy(() =>
+  import("@/components/tasks/AfterCompletionModal").then(({ AfterCompletionModal }) => ({
+    default: AfterCompletionModal,
+  })),
+);
+const BuyEnkephalinOptions = lazy(() =>
+  import("@/components/tasks/BuyEnkephalinOptions").then(({ BuyEnkephalinOptions }) => ({
+    default: BuyEnkephalinOptions,
+  })),
+);
+const DailyTaskOptions = lazy(() =>
+  import("@/components/tasks/DailyTaskOptions").then(({ DailyTaskOptions }) => ({
+    default: DailyTaskOptions,
+  })),
+);
+const GetRewardOptions = lazy(() =>
+  import("@/components/tasks/GetRewardOptions").then(({ GetRewardOptions }) => ({
+    default: GetRewardOptions,
+  })),
+);
+const MirrorOptions = lazy(() =>
+  import("@/components/tasks/MirrorOptions").then(({ MirrorOptions }) => ({
+    default: MirrorOptions,
+  })),
+);
+const SetWindowsOptions = lazy(() =>
+  import("@/components/tasks/SetWindowsOptions").then(({ SetWindowsOptions }) => ({
+    default: SetWindowsOptions,
+  })),
+);
+
+function OptionsFallback() {
+  return <div className="h-16 animate-pulse rounded-md bg-muted/40" />;
+}
 
 export function HomePage() {
   const { t } = useTranslation();
@@ -73,6 +103,11 @@ export function HomePage() {
   const [logs, setLogs] = useState<(LogEntryPayload & { id: number })[]>([]);
   const logIdRef = useRef(0);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => resizeCleanupRef.current?.();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,20 +249,32 @@ export function HomePage() {
   /* 监听系统托盘事件 (开始/停止任务) */
   useEffect(() => {
     if (!isTauri()) return;
+    let disposed = false;
     let unlistenStart: (() => void) | null = null;
     let unlistenStop: (() => void) | null = null;
 
     void (async () => {
       const { listen } = await import("@tauri-apps/api/event");
-      unlistenStart = await listen("tray-start-tasks", () => {
+      if (disposed) return;
+
+      const disposeStart = await listen("tray-start-tasks", () => {
         void handleStartRef.current();
       });
-      unlistenStop = await listen("tray-stop-tasks", () => {
+      if (disposed) {
+        disposeStart();
+        return;
+      }
+      unlistenStart = disposeStart;
+
+      const disposeStop = await listen("tray-stop-tasks", () => {
         void handleStopRef.current();
       });
+      if (disposed) disposeStop();
+      else unlistenStop = disposeStop;
     })();
 
     return () => {
+      disposed = true;
       unlistenStart?.();
       unlistenStop?.();
     };
@@ -243,6 +290,8 @@ export function HomePage() {
   /* 拖拽分隔条调宽（对齐 MXU）：280~800px，向右拖到底(<160)折叠 */
   const startResize = () => {
     const MIN_LEFT_PANEL_WIDTH = 460;
+    resizeCleanupRef.current?.();
+
     const onMove = (ev: MouseEvent) => {
       const newWidth = document.body.clientWidth - ev.clientX;
       if (newWidth < 160) {
@@ -253,12 +302,16 @@ export function HomePage() {
       setRightPanelWidth(Math.max(280, Math.min(maxWidth, newWidth)));
       setRightPanelCollapsed(false);
     };
-    const onUp = () => {
+    const onUp = () => cleanup();
+    const cleanup = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      if (resizeCleanupRef.current === cleanup) resizeCleanupRef.current = null;
     };
+
+    resizeCleanupRef.current = cleanup;
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
     document.body.style.cursor = "col-resize";
@@ -388,16 +441,18 @@ export function HomePage() {
               previewTags={windowTags}
               onToggleExpanded={() => toggleExpanded("set_windows")}
             >
-              <SetWindowsOptions
-                config={tasksConfig.set_windows}
-                onChange={(patch) =>
-                  updateTasksConfig((c) => ({
-                    ...c,
-                    set_windows: { ...c.set_windows, ...patch },
-                  }))
-                }
-                disabled={isBusy}
-              />
+              <Suspense fallback={<OptionsFallback />}>
+                <SetWindowsOptions
+                  config={tasksConfig.set_windows}
+                  onChange={(patch) =>
+                    updateTasksConfig((c) => ({
+                      ...c,
+                      set_windows: { ...c.set_windows, ...patch },
+                    }))
+                  }
+                  disabled={isBusy}
+                />
+              </Suspense>
             </FixedTaskCard>
 
             {/* 2. 日常任务 */}
@@ -412,17 +467,19 @@ export function HomePage() {
               onToggleEnabled={() => toggleTaskEnabled("daily_task")}
               onToggleExpanded={() => toggleExpanded("daily_task")}
             >
-              <DailyTaskOptions
-                config={tasksConfig.daily_task}
-                teams={teams}
-                onChange={(patch) =>
-                  updateTasksConfig((c) => ({
-                    ...c,
-                    daily_task: { ...c.daily_task, ...patch },
-                  }))
-                }
-                disabled={isBusy}
-              />
+              <Suspense fallback={<OptionsFallback />}>
+                <DailyTaskOptions
+                  config={tasksConfig.daily_task}
+                  teams={teams}
+                  onChange={(patch) =>
+                    updateTasksConfig((c) => ({
+                      ...c,
+                      daily_task: { ...c.daily_task, ...patch },
+                    }))
+                  }
+                  disabled={isBusy}
+                />
+              </Suspense>
             </FixedTaskCard>
 
             {/* 3. 领取奖励 */}
@@ -437,16 +494,18 @@ export function HomePage() {
               onToggleEnabled={() => toggleTaskEnabled("get_reward")}
               onToggleExpanded={() => toggleExpanded("get_reward")}
             >
-              <GetRewardOptions
-                config={tasksConfig.get_reward}
-                onChange={(patch) =>
-                  updateTasksConfig((c) => ({
-                    ...c,
-                    get_reward: { ...c.get_reward, ...patch },
-                  }))
-                }
-                disabled={isBusy}
-              />
+              <Suspense fallback={<OptionsFallback />}>
+                <GetRewardOptions
+                  config={tasksConfig.get_reward}
+                  onChange={(patch) =>
+                    updateTasksConfig((c) => ({
+                      ...c,
+                      get_reward: { ...c.get_reward, ...patch },
+                    }))
+                  }
+                  disabled={isBusy}
+                />
+              </Suspense>
             </FixedTaskCard>
 
             {/* 4. 狂气换体 */}
@@ -461,16 +520,18 @@ export function HomePage() {
               onToggleEnabled={() => toggleTaskEnabled("buy_enkephalin")}
               onToggleExpanded={() => toggleExpanded("buy_enkephalin")}
             >
-              <BuyEnkephalinOptions
-                config={tasksConfig.buy_enkephalin}
-                onChange={(patch) =>
-                  updateTasksConfig((c) => ({
-                    ...c,
-                    buy_enkephalin: { ...c.buy_enkephalin, ...patch },
-                  }))
-                }
-                disabled={isBusy}
-              />
+              <Suspense fallback={<OptionsFallback />}>
+                <BuyEnkephalinOptions
+                  config={tasksConfig.buy_enkephalin}
+                  onChange={(patch) =>
+                    updateTasksConfig((c) => ({
+                      ...c,
+                      buy_enkephalin: { ...c.buy_enkephalin, ...patch },
+                    }))
+                  }
+                  disabled={isBusy}
+                />
+              </Suspense>
             </FixedTaskCard>
 
             {/* 5. 坐牢设置 (镜牢) */}
@@ -485,17 +546,19 @@ export function HomePage() {
               onToggleEnabled={() => toggleTaskEnabled("mirror")}
               onToggleExpanded={() => toggleExpanded("mirror")}
             >
-              <MirrorOptions
-                config={tasksConfig.mirror}
-                progress={mirrorProgress}
-                onChange={(patch) =>
-                  updateTasksConfig((c) => ({
-                    ...c,
-                    mirror: { ...c.mirror, ...patch },
-                  }))
-                }
-                disabled={isBusy}
-              />
+              <Suspense fallback={<OptionsFallback />}>
+                <MirrorOptions
+                  config={tasksConfig.mirror}
+                  progress={mirrorProgress}
+                  onChange={(patch) =>
+                    updateTasksConfig((c) => ({
+                      ...c,
+                      mirror: { ...c.mirror, ...patch },
+                    }))
+                  }
+                  disabled={isBusy}
+                />
+              </Suspense>
             </FixedTaskCard>
 
             {/* 6. 亚哈共鸣 */}
@@ -606,13 +669,17 @@ export function HomePage() {
         </aside>
       )}
 
-      {/* 结束后操作配置弹窗 */}
-      <AfterCompletionModal
-        open={afterModalOpen}
-        onOpenChange={setAfterModalOpen}
-        config={tasksConfig.afterCompletion}
-        onSave={handleSaveAfterCompletion}
-      />
+      {/* 结束后操作配置弹窗：只在打开时加载 */}
+      {afterModalOpen && (
+        <Suspense fallback={null}>
+          <AfterCompletionModal
+            open={afterModalOpen}
+            onOpenChange={setAfterModalOpen}
+            config={tasksConfig.afterCompletion}
+            onSave={handleSaveAfterCompletion}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

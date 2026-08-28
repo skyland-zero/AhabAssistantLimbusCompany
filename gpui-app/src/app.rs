@@ -32,6 +32,7 @@ pub enum Page {
 }
 
 impl Page {
+    #[allow(dead_code)]
     pub const ALL: [Page; 7] = [
         Self::Home,
         Self::Teams,
@@ -42,6 +43,7 @@ impl Page {
         Self::Settings,
     ];
 
+    #[allow(dead_code)]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Home => "主控台",
@@ -67,6 +69,7 @@ impl Page {
         i18n::text(language, key)
     }
 
+    #[allow(dead_code)]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Home => "CONSOLE",
@@ -298,6 +301,7 @@ impl AhabApp {
         .detach();
     }
 
+    #[allow(dead_code)]
     pub fn palette(&self) -> Palette {
         crate::theme::palette_for_settings(&self.state.settings, crate::theme::system_is_dark())
     }

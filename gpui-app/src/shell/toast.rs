@@ -2,6 +2,7 @@ use gpui::{Div, div, prelude::*, px};
 
 use crate::components::style::Palette;
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ToastKind {
     Success,

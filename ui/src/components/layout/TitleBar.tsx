@@ -29,17 +29,28 @@ export function TitleBar() {
 
   useEffect(() => {
     if (!isTauri()) return;
+    let disposed = false;
     let unlisten: (() => void) | null = null;
+
     void (async () => {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      if (disposed) return;
       const win = getCurrentWindow();
-      setIsMaximized(await win.isMaximized());
+      const maximized = await win.isMaximized();
+      if (disposed) return;
+      setIsMaximized(maximized);
+
       const dispose = await win.onResized(async () => {
-        setIsMaximized(await win.isMaximized());
+        if (!disposed) setIsMaximized(await win.isMaximized());
       });
-      unlisten = dispose;
+      if (disposed) dispose();
+      else unlisten = dispose;
     })();
-    return () => unlisten?.();
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   const minimize = async () => {

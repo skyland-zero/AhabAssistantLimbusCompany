@@ -19,13 +19,25 @@ export interface RpcClient {
 }
 
 let instance: RpcClient | null = null;
+let instancePromise: Promise<RpcClient> | null = null;
 
 /** 获取全局 IPC 客户端单例 */
-export async function getIpc(): Promise<RpcClient> {
-  if (!instance) {
+export function getIpc(): Promise<RpcClient> {
+  if (instance) return Promise.resolve(instance);
+  if (instancePromise) return instancePromise;
+
+  // 多个页面/组件首次同时请求时共用同一个初始化 Promise，避免创建多个
+  // mock/WebSocket 客户端及其心跳定时器，最后只保留其中一个实例。
+  instancePromise = (async () => {
     const { createMockClient } = await import("./mock/server");
-    instance = createMockClient();
-    await instance.connect();
-  }
-  return instance;
+    const client = createMockClient();
+    await client.connect();
+    instance = client;
+    return client;
+  })().catch((error) => {
+    instancePromise = null;
+    throw error;
+  });
+
+  return instancePromise;
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Design tokens shared by the native GPUI controls.
 //!
 //! The values in this module are the sRGB values obtained from the CSS

@@ -570,6 +570,7 @@ impl MockClient {
         events
     }
 
+    #[allow(dead_code)]
     pub fn device_status(&self) -> ConnectionStatus {
         self.inner
             .lock()

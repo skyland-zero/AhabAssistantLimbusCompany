@@ -5,6 +5,8 @@
 //! IME composition and clipboard routing through `EntityInputHandler`, while
 //! the entity owns the UTF-8 value and selection.
 
+#![allow(dead_code)]
+
 use std::ops::Range;
 
 use gpui::{
@@ -643,7 +645,6 @@ impl Element for TextElement {
         let input = self.input.read(cx);
         let focus_handle = input.focus_handle.clone();
         let disabled = input.disabled;
-        drop(input);
         if !disabled {
             window.handle_input(
                 &focus_handle,

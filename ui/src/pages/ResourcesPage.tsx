@@ -16,29 +16,45 @@ export function ResourcesPage() {
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
 
   useEffect(() => {
-    let unsub: (() => void) | undefined;
     let cancelled = false;
+    let unsub: (() => void) | undefined;
+    let completionTimer: ReturnType<typeof setTimeout> | null = null;
+
     void (async () => {
       const ipc = await getIpc();
-      setGroups(await ipc.request<ResourceGroup[]>("resource.status"));
-      unsub = ipc.on("resource.sync.progress", (payload) => {
+      const nextGroups = await ipc.request<ResourceGroup[]>("resource.status");
+      if (cancelled) return;
+      setGroups(nextGroups);
+
+      const dispose = ipc.on("resource.sync.progress", (payload) => {
         const { progress } = payload as SyncProgressPayload;
         setSyncProgress(progress);
-        if (progress >= 100 && !cancelled) {
+        if (progress >= 100 && !cancelled && completionTimer === null) {
           // 进度走完后刷新最终状态并复位
-          setTimeout(() => {
+          completionTimer = setTimeout(() => {
+            completionTimer = null;
+            if (cancelled) return;
             void (async () => {
-              setGroups(await (await getIpc()).request<ResourceGroup[]>("resource.status"));
+              const groups = await (await getIpc()).request<ResourceGroup[]>("resource.status");
+              if (cancelled) return;
+              setGroups(groups);
               setSyncProgress(null);
               toast.success(t("resources.syncDone"));
             })();
           }, 300);
         }
       });
+      if (cancelled) dispose();
+      else unsub = dispose;
     })();
+
     return () => {
       cancelled = true;
-      void unsub?.();
+      unsub?.();
+      if (completionTimer) {
+        clearTimeout(completionTimer);
+        completionTimer = null;
+      }
     };
   }, [t]);
 

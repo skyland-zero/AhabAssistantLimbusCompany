@@ -1,5 +1,5 @@
 import { Circle, Loader2, Monitor, RefreshCw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,26 +33,51 @@ export function ConnectionPanel() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [scanning, setScanning] = useState(false);
+  const mountedRef = useRef(true);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
+    let disposed = false;
     let unsub: (() => void) | undefined;
+
     void (async () => {
       const ipc = await getIpc();
-      setDevices(await ipc.request<DeviceInfo[]>("device.list"));
-      unsub = ipc.on("device.status", (payload) => {
+      const nextDevices = await ipc.request<DeviceInfo[]>("device.list");
+      if (disposed) return;
+      setDevices(nextDevices);
+
+      const dispose = ipc.on("device.status", (payload) => {
         const { deviceId: id, status: s } = payload as DeviceStatusPayload;
         setDeviceId(id);
         setStatus(s);
       });
+      if (disposed) dispose();
+      else unsub = dispose;
     })();
-    return () => void unsub?.();
+
+    return () => {
+      disposed = true;
+      mountedRef.current = false;
+      unsub?.();
+      if (scanTimerRef.current) {
+        clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
   }, []);
 
   const rescan = async () => {
     setScanning(true);
-    setDevices(await (await getIpc()).request<DeviceInfo[]>("device.list"));
+    const nextDevices = await (await getIpc()).request<DeviceInfo[]>("device.list");
+    if (!mountedRef.current) return;
+    setDevices(nextDevices);
     // 保持扫描态一小会儿，让转圈可见
-    setTimeout(() => setScanning(false), 400);
+    if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    scanTimerRef.current = setTimeout(() => {
+      scanTimerRef.current = null;
+      setScanning(false);
+    }, 400);
   };
 
   const selectDevice = async (id: string) => {

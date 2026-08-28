@@ -505,8 +505,18 @@ export function createMockClient(): RpcClient {
 
     close: () => {
       state = "disconnected";
-      if (heartbeat) clearInterval(heartbeat);
-      if (syncTimer) clearInterval(syncTimer);
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+      if (syncTimer) {
+        clearInterval(syncTimer);
+        syncTimer = null;
+      }
+      if (executionTimer) {
+        clearTimeout(executionTimer);
+        executionTimer = null;
+      }
       listeners.clear();
     },
 
@@ -537,6 +547,7 @@ export function createMockClient(): RpcClient {
       set.add(handler);
       return () => {
         set?.delete(handler);
+        if (set?.size === 0) listeners.delete(event);
       };
     },
   };

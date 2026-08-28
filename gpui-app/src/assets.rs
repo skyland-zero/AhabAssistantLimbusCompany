@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Asset identity, embedding, and dev/release resolution.
 //!
 //! Pages should request an [`Asset`] instead of joining paths. Fixed assets are

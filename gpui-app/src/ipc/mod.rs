@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 pub mod contract;
 pub mod mock;
 pub mod websocket;

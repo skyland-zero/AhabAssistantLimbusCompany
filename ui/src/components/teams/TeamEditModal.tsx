@@ -1,5 +1,5 @@
 import { ClipboardCopy, ClipboardPaste, Plus, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -155,15 +155,14 @@ export function TeamEditModal({ open, team, sinners, onClose, onSave }: TeamEdit
   const [jsonImportOpen, setJsonImportOpen] = useState(false);
 
   // Sync state when incoming team changes
-  const initialTeamId = team?.id;
-  useMemo(() => {
+  useEffect(() => {
     if (team) {
       setForm({
         ...team,
         mirrorConfig: team.mirrorConfig ? { ...team.mirrorConfig } : createDefaultMirrorConfig(),
       });
     }
-  }, [team, initialTeamId]);
+  }, [team]);
 
   const mirrorConfig = form.mirrorConfig || createDefaultMirrorConfig();
 

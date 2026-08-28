@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -150,11 +152,13 @@ pub struct ScreenshotFrame {
     pub width: u32,
     pub height: u32,
 }
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AppNotice {
     pub level: NoticeLevel,
     pub message: String,
 }
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NoticeLevel {

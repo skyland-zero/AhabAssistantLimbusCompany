@@ -26,6 +26,7 @@ impl TeamEditorTab {
         Self::Advanced,
     ];
 
+    #[allow(dead_code)]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Basic => "基础编成",
@@ -61,6 +62,7 @@ pub enum TeamSelect {
 impl TeamFilter {
     pub const ALL: [Self; 4] = [Self::All, Self::Mirror, Self::Luxcavation, Self::General];
 
+    #[allow(dead_code)]
     pub const fn label(self) -> &'static str {
         match self {
             Self::All => "全部",
@@ -571,6 +573,7 @@ impl TeamsState {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn take_feedback(&mut self) -> Option<String> {
         self.feedback.take()
     }

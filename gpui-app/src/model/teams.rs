@@ -112,6 +112,7 @@ impl Default for TeamMirrorConfig {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TeamSummary {
     pub id: String,

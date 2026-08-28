@@ -1,6 +1,6 @@
 import { CheckSquare, Pause, Play, RotateCcw, Settings2, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { formatAfterCompletionSummary } from "@/components/tasks/AfterCompletionModal";
+import { formatAfterCompletionSummary } from "@/components/tasks/afterCompletionSummary";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AfterCompletionConfig, ExecutionState } from "@/services/ipc/types";
