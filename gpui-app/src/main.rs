@@ -10,8 +10,8 @@ mod state;
 mod theme;
 
 use gpui::{
-    App, AppContext, Bounds, KeyBinding, TitlebarOptions, WindowBounds, WindowDecorations,
-    WindowOptions, actions, px, size,
+    App, AppContext, Bounds, KeyBinding, TextRenderingMode, TitlebarOptions, WindowBounds,
+    WindowDecorations, WindowOptions, actions, px, size,
 };
 use gpui_platform::application;
 
@@ -19,9 +19,44 @@ use app::AhabApp;
 
 actions!(app_actions, [Quit]);
 
+#[cfg(target_os = "windows")]
+fn configure_windows_window(window: &gpui::Window) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+    if let Ok(handle) = <gpui::Window as HasWindowHandle>::window_handle(window) {
+        if let RawWindowHandle::Win32(win32_handle) = handle.as_raw() {
+            let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+
+            unsafe extern "system" {
+                fn DwmSetWindowAttribute(
+                    hwnd: *mut std::ffi::c_void,
+                    dwAttribute: u32,
+                    pvAttribute: *const std::ffi::c_void,
+                    cbAttribute: u32,
+                ) -> i32;
+            }
+
+            // On Windows 11 (Build 22000+), request native small rounded corners (4px).
+            // On Windows 10, this is safely ignored by DWM with zero side-effects.
+            const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+            const DWMWCP_ROUNDSMALL: u32 = 3;
+            let preference = DWMWCP_ROUNDSMALL;
+            unsafe {
+                let _ = DwmSetWindowAttribute(
+                    hwnd,
+                    DWMWA_WINDOW_CORNER_PREFERENCE,
+                    &preference as *const _ as *const _,
+                    std::mem::size_of::<u32>() as u32,
+                );
+            }
+        }
+    }
+}
+
 fn main() {
     application().run(|cx: &mut App| {
         cx.set_app_identity("com.kiyi671.ahab-gpui-app", "AALC · GPUI");
+        cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.bind_keys(components::text_input::key_bindings());
@@ -45,7 +80,10 @@ fn main() {
                 window_decorations: Some(WindowDecorations::Client),
                 ..Default::default()
             },
-            |_, cx| {
+            |window, cx| {
+                #[cfg(target_os = "windows")]
+                configure_windows_window(window);
+
                 cx.new(|cx| {
                     let mut app = AhabApp::new();
                     app.start_event_pump(cx);
