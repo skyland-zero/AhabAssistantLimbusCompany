@@ -132,27 +132,37 @@ def apply_power_keep_awake(enable: bool) -> None:
 
 
 def _action_exit_game() -> None:
+    from module.device_manager import get_device_manager
     from module.game_and_screen import game_process, screen
 
     if os.name != "nt":
         log.info("跳过退出游戏：仅支持 Windows")
         return
 
-    if cfg.get_value("simulator", False):
+    selected_session = get_device_manager().active_session
+    if selected_session is not None and selected_session.target.kind in ("mumu", "adb"):
+        controller = selected_session.controller
+        if controller is None:
+            raise RuntimeError("当前设备会话缺少模拟器控制器")
+        controller.close_current_app()
+        log.info("已执行：退出游戏（模拟器）")
+        return
+
+    if selected_session is None and cfg.get_value("simulator", False):
         if cfg.get_value("simulator_type", 0) == 0:
             from module.automation.input_handlers.simulator.mumu_control import (
                 MumuControl,
             )
 
-            if MumuControl.connection_device is not None:
-                MumuControl.connection_device.close_current_app()
+            controller = MumuControl.connection_device
         else:
             from module.automation.input_handlers.simulator.simulator_control import (
                 SimulatorControl,
             )
 
-            if SimulatorControl.connection_device is not None:
-                SimulatorControl.connection_device.close_current_app()
+            controller = SimulatorControl.connection_device
+        if controller is not None:
+            controller.close_current_app()
         log.info("已执行：退出游戏（模拟器）")
         return
 
@@ -185,6 +195,22 @@ def _action_exit_game() -> None:
 
 
 def _action_exit_emulator() -> None:
+    from module.device_manager import get_device_manager
+
+    selected_session = get_device_manager().active_session
+    if selected_session is not None:
+        if selected_session.target.kind == "mumu":
+            controller = selected_session.controller
+            if controller is None:
+                raise RuntimeError("当前设备会话缺少模拟器控制器")
+            controller.close_simulator()
+            log.info("已执行：退出 MuMu 模拟器")
+        elif selected_session.target.kind == "adb":
+            log.error("退出模拟器失败：暂不支持非 MuMu 模拟器的整机关闭")
+        else:
+            log.info("跳过退出模拟器：当前选中的是 Windows 游戏窗口")
+        return
+
     if not cfg.get_value("simulator", False):
         log.info("跳过退出模拟器：当前未启用模拟器模式")
         return

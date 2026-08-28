@@ -79,7 +79,9 @@ class Handle:
     def hwnd(self) -> int:
         """获取窗口句柄"""
         if self._hwnd == 0:
-            if cfg.config.simulator:
+            from module.device_manager import is_simulator_runtime
+
+            if is_simulator_runtime():
                 log.debug("模拟器模式下无法获取窗口句柄", stacklevel=3)
             else:
                 self.init_handle()

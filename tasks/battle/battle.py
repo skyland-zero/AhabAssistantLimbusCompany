@@ -11,6 +11,7 @@ import numpy as np
 from module.automation import auto
 from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
+from module.device_manager import is_simulator_runtime
 from module.logger import log
 from module.ocr import ocr
 from tasks import sins
@@ -695,7 +696,7 @@ class Battle:
 
             for skill in skill_list:
                 auto.mouse_click(skill[0], skill[1])
-                if cfg.simulator:
+                if is_simulator_runtime():
                     sleep(cfg.mouse_action_interval)
                 else:
                     sleep(cfg.mouse_action_interval // 1.5)

@@ -7,10 +7,10 @@ from time import sleep, time
 import win32api
 import win32con
 from playsound3 import playsound
+
 from core.events import mediator
 from core.i18n import noop
-
-from module.notification.toast import TemplateToast, send_toast
+from module.after_completion_types import ACTION_EXIT_EMULATOR
 from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -29,6 +29,7 @@ from module.my_error.my_error import (
     withOutGameWinError,
     withOutPicError,
 )
+from module.notification.toast import TemplateToast, send_toast
 from module.system_actions import (
     apply_power_keep_awake,
     execute_after_completion,
@@ -132,9 +133,10 @@ def init_game():
     # retained for desktop and command-line compatibility.
     from module.device_manager import get_device_manager
 
-    selected_session = get_device_manager().active_session
+    device_manager = get_device_manager()
+    selected_session = device_manager.active_session
     if selected_session is not None:
-        auto.init_input()
+        auto.init_input(session=selected_session)
         if selected_session.target.kind in ("mumu", "adb"):
             controller = selected_session.controller
             if controller is None:
@@ -199,8 +201,14 @@ def init_game():
             screen.set_win()
 
 
+def _is_simulator_runtime() -> bool:
+    from module.device_manager import is_simulator_runtime
+
+    return is_simulator_runtime()
+
+
 def _warn_if_game_monitor_hdr_enabled() -> None:
-    if cfg.simulator or not bool(cfg.get_value("experimental_hdr_warning", True)):
+    if _is_simulator_runtime() or not bool(cfg.get_value("experimental_hdr_warning", True)):
         return
 
     hwnd = screen.handle.hwnd
@@ -382,10 +390,11 @@ def script_task() -> None | int:
     # 获取（启动）游戏对游戏窗口进行设置
     init_game()
     _warn_if_game_monitor_hdr_enabled()
+    simulator_runtime = _is_simulator_runtime()
 
     if cfg.skip_enkephalin:
         log.info("设置了跳过合成脑啡肽，将不会自动合成\nSet to skip make enkephalin, it will not to do")
-    if not cfg.simulator:
+    if not simulator_runtime:
         if _get_game_rendering_scale() == 2:
             log.warning("当前游戏渲染比例为低, 可能会导致识别错误, 建议设置为中或更高")
         if cfg.set_win_size == 720:
@@ -424,7 +433,7 @@ def script_task() -> None | int:
     for task in task_list:
         task()
 
-    if cfg.set_reduce_miscontact and not cfg.simulator:
+    if cfg.set_reduce_miscontact and not simulator_runtime:
         # 任务已结束，这里只恢复游戏窗口样式，避免把前台重新切回游戏。
         screen.reset_win(activate=False)
 
@@ -447,6 +456,7 @@ def script_task() -> None | int:
         Resonate_with_Ahab()
 
     should_exit_aalc = False
+    actions: list[str] = []
     if platform.system() == "Windows":
         # 收尾动作可能主动关闭游戏或模拟器。先停止截图监控，避免设备消失
         # 被误判为断链并触发自动恢复，重新拉起刚关闭的模拟器。
@@ -457,7 +467,17 @@ def script_task() -> None | int:
         except Exception:
             log.exception("脚本结束后的操作失败")
 
-    if cfg.simulator:
+    from module.device_manager import get_device_manager
+
+    device_manager = get_device_manager()
+    selected_session = device_manager.active_session
+    if selected_session is not None:
+        if (
+            selected_session.target.kind == "mumu"
+            and ACTION_EXIT_EMULATOR.value in actions
+        ):
+            device_manager.release_after_task()
+    elif cfg.simulator:
         if cfg.simulator_type == 0:
             from module.automation.input_handlers.simulator.mumu_control import (
                 MumuControl,

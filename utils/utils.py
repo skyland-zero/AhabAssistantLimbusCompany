@@ -183,23 +183,38 @@ def check_game_running() -> bool:
     """检查游戏是否正在运行（缓存 PID 以加速后续检查）"""
     global _game_pid_cache
 
-    if cfg.simulator:
+    from module.device_manager import get_device_manager
+
+    selected_session = get_device_manager().active_session
+    if selected_session is not None:
+        if selected_session.target.kind in ("mumu", "adb"):
+            controller = selected_session.controller
+            if controller is None:
+                return False
+            try:
+                return controller.check_game_alive()
+            except Exception:
+                return False
+    elif cfg.simulator:
         if cfg.simulator_type == 0:
             from module.automation.input_handlers.simulator.mumu_control import (
                 MumuControl,
             )
-            return MumuControl.connection_device.check_game_alive()
+
+            controller = MumuControl.connection_device
         else:
             # 其他模拟器类型，使用通用的 SimulatorControl 检查
-            try:
-                from module.automation.input_handlers.simulator.simulator_control import (
-                    SimulatorControl,
-                )
-                if SimulatorControl.connection_device is None:
-                    return False
-                return SimulatorControl.connection_device.check_game_alive()
-            except Exception:
-                return False
+            from module.automation.input_handlers.simulator.simulator_control import (
+                SimulatorControl,
+            )
+
+            controller = SimulatorControl.connection_device
+        if controller is None:
+            return False
+        try:
+            return controller.check_game_alive()
+        except Exception:
+            return False
 
     import psutil
 

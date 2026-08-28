@@ -3,6 +3,7 @@ from time import sleep
 from module.automation import auto
 from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
+from module.device_manager import is_simulator_runtime
 from module.logger import log
 
 SIMULATOR_ORDERED_TEAM_PAGE_SWIPE_DISTANCE = 375
@@ -62,7 +63,7 @@ def team_formation(sinner_team):
 
 
 def _ordered_team_page_swipe_distance():
-    if not cfg.simulator:
+    if not is_simulator_runtime():
         return WINDOWS_ORDERED_TEAM_PAGE_SWIPE_DISTANCE
     return SIMULATOR_ORDERED_TEAM_PAGE_SWIPE_DISTANCE
 

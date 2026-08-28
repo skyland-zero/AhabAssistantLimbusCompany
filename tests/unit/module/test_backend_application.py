@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from module.backend_application import BackendApplication
+from module.device_manager import DeviceManager, DeviceSession
 from module.rpc_dispatcher import RpcDispatcher
 
 
@@ -273,3 +274,45 @@ def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> 
     )
     assert invalid["error"]["code"] == -32602
     app.close()
+
+
+def test_execution_and_tool_entries_reject_missing_active_device() -> None:
+    app = make_application()
+    app.config.values["mirror"] = True
+    dispatcher = RpcDispatcher(application=app, version="test")
+
+    execution = dispatcher.dispatch(
+        {"jsonrpc": "2.0", "id": 1, "method": "execution.start"}
+    )
+    tool = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tool.start",
+            "params": {"id": "screenshot"},
+        }
+    )
+
+    assert execution["error"]["code"] == -32020
+    assert "未连接设备" in execution["error"]["message"]
+    assert tool["error"]["code"] == -32020
+    app.close()
+
+
+def test_manager_release_stops_preview_before_controller_cleanup() -> None:
+    manager = DeviceManager()
+    manager._active = DeviceSession(DeviceManager._make_mumu_target(0), object())
+    preview = FakePreviewCapture()
+    app = BackendApplication(
+        manager,
+        version="test",
+        config=FakeConfig(),
+        theme_list=FakeThemeStore(),
+        preview_capture=preview,
+    )
+
+    manager.release_after_task()
+
+    assert preview.stop_count == 1
+    app.close()
+    assert preview.close_count == 1

@@ -27,20 +27,39 @@ class ScreenShot:
         Returns:
             PIL.Image: 截图图像
         """
-        if cfg.simulator:
+        active_session = ScreenShot._active_session()
+        if active_session is not None:
+            target_kind = getattr(getattr(active_session, "target", None), "kind", None)
+            if target_kind == "mumu":
+                try:
+                    return ScreenShot.mumu_screenshot(gray, controller=active_session.controller)
+                except Exception as e:
+                    log.debug(f"MUMU截图报错 {type(e).__name__}: {e}")
+                    return None
+            if target_kind == "adb":
+                try:
+                    return ScreenShot.adb_screenshot(gray, controller=active_session.controller)
+                except Exception as e:
+                    log.debug(f"adb截图报错 {type(e).__name__}: {e}")
+                    return None
+            if target_kind != "pc":
+                log.error("当前设备会话类型不支持截图：%s", target_kind)
+                return None
+        elif cfg.simulator:
             if cfg.simulator_type == 0:
                 try:
                     return ScreenShot.mumu_screenshot(gray)
                 except Exception as e:
                     log.debug(f"MUMU截图报错 {type(e).__name__}: {e}")
                     return None
-            elif cfg.simulator_type == 10:
+            if cfg.simulator_type == 10:
                 try:
                     return ScreenShot.adb_screenshot(gray)
                 except Exception as e:
                     log.debug(f"adb截图报错 {type(e).__name__}: {e}")
                     return None
-        elif ensure_window_visible:
+
+        if ensure_window_visible:
             # 将窗口移动到屏幕可见区域，确保获取到完整的内容
             screen.handle.bring_window_into_view(not cfg.background_click)
 
@@ -318,7 +337,7 @@ class ScreenShot:
             return False, 0.0
 
     @staticmethod
-    def mumu_screenshot(gray: bool = True) -> Image.Image:
+    def mumu_screenshot(gray: bool = True, *, controller=None) -> Image.Image:
         """
         截图
 
@@ -328,20 +347,29 @@ class ScreenShot:
         Returns:
             Image.Image: 截图图像
         """
-        from module.automation.input_handlers.simulator.mumu_control import MumuControl
+        if controller is None:
+            active_session = ScreenShot._active_session()
+            if active_session is not None:
+                if getattr(getattr(active_session, "target", None), "kind", None) != "mumu":
+                    raise ConnectionError("当前选中设备不是 MuMu 模拟器")
+                controller = active_session.controller
+            else:
+                from module.automation.input_handlers.simulator.mumu_control import MumuControl
 
-        if MumuControl.connection_device is not None:
-            image = MumuControl.connection_device.screenshot()
-            mumu_image = Image.fromarray(image)
-            if gray:
-                mumu_image = mumu_image.convert("L")
-            return mumu_image
-        else:
+                controller = MumuControl.connection_device
+
+        if controller is None:
             log.error("未连接到MuMu模拟器")
             raise ConnectionError("未连接到MuMu模拟器")
 
+        image = controller.screenshot()
+        mumu_image = Image.fromarray(image)
+        if gray:
+            mumu_image = mumu_image.convert("L")
+        return mumu_image
+
     @staticmethod
-    def adb_screenshot(gray: bool = True) -> Image.Image:
+    def adb_screenshot(gray: bool = True, *, controller=None) -> Image.Image:
         """
         截图
 
@@ -351,16 +379,35 @@ class ScreenShot:
         Returns:
             Image.Image: 截图图像
         """
-        from module.automation.input_handlers.simulator.simulator_control import (
-            SimulatorControl,
-        )
+        if controller is None:
+            active_session = ScreenShot._active_session()
+            if active_session is not None:
+                if getattr(getattr(active_session, "target", None), "kind", None) != "adb":
+                    raise ConnectionError("当前选中设备不是通用 ADB 模拟器")
+                controller = active_session.controller
+            else:
+                from module.automation.input_handlers.simulator.simulator_control import (
+                    SimulatorControl,
+                )
 
-        if SimulatorControl.connection_device is not None:
-            image = SimulatorControl.connection_device.screenshot()
-            image = Image.fromarray(image)
-            if gray:
-                image = image.convert("L")
-            return image
-        else:
+                controller = SimulatorControl.connection_device
+
+        if controller is None:
             log.error("未连接到adb设备")
             raise ConnectionError("未连接到adb设备")
+
+        image = controller.screenshot()
+        image = Image.fromarray(image)
+        if gray:
+            image = image.convert("L")
+        return image
+
+    @staticmethod
+    def _active_session():
+        """Return the process-wide selected session, if the sidecar has one."""
+        try:
+            from module.device_manager import get_device_manager
+
+            return get_device_manager().active_session
+        except ImportError:
+            return None

@@ -16,29 +16,45 @@ _last_title_screen_tap_time = 0.0
 _last_simulator_alive_check_time = 0.0
 
 
+def _active_session():
+    from module.device_manager import get_device_manager
+
+    return get_device_manager().active_session
+
+
 def ensure_simulator_game_started() -> bool:
     """模拟器模式下确认游戏仍在前台，不在时尝试拉起游戏。"""
     global _last_simulator_alive_check_time
-    if not cfg.simulator:
-        return False
+
+    selected_session = _active_session()
+    if selected_session is not None:
+        target_kind = selected_session.target.kind
+        if target_kind not in ("mumu", "adb"):
+            return False
+        connection_device = selected_session.controller
+        if connection_device is None:
+            raise RuntimeError("当前设备会话缺少模拟器控制器")
+    else:
+        if not cfg.simulator:
+            return False
+
+        if cfg.simulator_type == 0:
+            from module.automation.input_handlers.simulator.mumu_control import (
+                MumuControl,
+            )
+
+            connection_device = MumuControl.connection_device
+        else:
+            from module.automation.input_handlers.simulator.simulator_control import (
+                SimulatorControl,
+            )
+
+            connection_device = SimulatorControl.connection_device
 
     now = time.time()
     if now - _last_simulator_alive_check_time < 5:
         return False
     _last_simulator_alive_check_time = now
-
-    if cfg.simulator_type == 0:
-        from module.automation.input_handlers.simulator.mumu_control import (
-            MumuControl,
-        )
-
-        connection_device = MumuControl.connection_device
-    else:
-        from module.automation.input_handlers.simulator.simulator_control import (
-            SimulatorControl,
-        )
-
-        connection_device = SimulatorControl.connection_device
 
     if connection_device is None:
         return False
@@ -55,7 +71,14 @@ def ensure_simulator_game_started() -> bool:
 def click_title_screen_safely() -> None:
     """标题页点击入口，避开账号、清缓存和中间弹窗区域。"""
     global _last_title_screen_tap_time
-    if not cfg.simulator:
+    selected_session = _active_session()
+    selected_is_simulator = (
+        selected_session is not None
+        and selected_session.target.kind in ("mumu", "adb")
+    )
+    if (selected_session is None and not cfg.simulator) or (
+        selected_session is not None and not selected_is_simulator
+    ):
         auto.mouse_click_blank()
         return
 
@@ -74,19 +97,30 @@ def click_title_screen_safely() -> None:
 
 def kill_game():
     """关闭游戏"""
-    if cfg.simulator:
+    selected_session = _active_session()
+    if selected_session is not None:
+        if selected_session.target.kind in ("mumu", "adb"):
+            connection_device = selected_session.controller
+            if connection_device is None:
+                raise RuntimeError("当前设备会话缺少模拟器控制器")
+            connection_device.close_current_app()
+            return
+    elif cfg.simulator:
         if cfg.simulator_type == 0:
             from module.automation.input_handlers.simulator.mumu_control import (
                 MumuControl,
             )
 
-            MumuControl.connection_device.close_current_app()
+            connection_device = MumuControl.connection_device
         else:
             from module.automation.input_handlers.simulator.simulator_control import (
                 SimulatorControl,
             )
 
-            SimulatorControl.connection_device.close_current_app()
+            connection_device = SimulatorControl.connection_device
+        if connection_device is None:
+            raise RuntimeError("未连接模拟器，无法关闭游戏")
+        connection_device.close_current_app()
         return
     if platform.system() == "Windows":
         from module.game_and_screen import screen
@@ -137,7 +171,12 @@ def retry():
     为保证稳定性，retry 内循环始终刷新截图，避免复用旧帧导致误判。
     """
     start_time = time.time()
-    is_windows = not cfg.config.simulator
+    selected_session = _active_session()
+    is_windows = (
+        selected_session.target.kind == "pc"
+        if selected_session is not None
+        else not cfg.config.simulator
+    )
     if is_windows:
         saved_hwnd = screen.handle.hwnd
     while True:

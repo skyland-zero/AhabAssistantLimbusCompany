@@ -449,6 +449,7 @@ class BackendApplication:
             enabled = tasks["enabledTasks"]
             if not any(enabled.get(name, False) for name in ("daily_task", "get_reward", "buy_enkephalin", "mirror")):
                 return {"accepted": False, "runId": None, "reason": "没有选择可执行任务"}
+            self._require_active_runtime()
             run_id = uuid.uuid4().hex
             task_id = None
             if isinstance(params, Mapping) and isinstance(params.get("taskId"), str):
@@ -699,6 +700,7 @@ class BackendApplication:
 
     def tool_start(self, params: Any) -> dict[str, Any]:
         tool_id = self._tool_id(params)
+        self._require_active_runtime()
         with self._lock:
             existing = self._tool_workers.get(tool_id)
             if existing is not None and existing[0].is_alive():
@@ -735,6 +737,7 @@ class BackendApplication:
             return {"accepted": True, "runId": run_id}
 
     def tool_screenshot(self) -> dict[str, Any]:
+        active_session = self._require_active_runtime()
         from module.automation import auto
 
         image = auto.take_screenshot(gray=False)
@@ -747,7 +750,12 @@ class BackendApplication:
         try:
             self.emit(
                 "screenshot.frame",
-                encode_screenshot_frame(image, "default", max_width=None, quality=80),
+                encode_screenshot_frame(
+                    image,
+                    active_session.target.info.id,
+                    max_width=None,
+                    quality=80,
+                ),
             )
         except Exception:
             log.debug("截图事件编码失败", exc_info=True)
@@ -865,6 +873,20 @@ class BackendApplication:
     def is_busy(self) -> bool:
         with self._lock:
             return self._execution_state != "idle"
+
+    def _require_active_runtime(self) -> Any:
+        """Validate and rebind the device selected by the sidecar UI."""
+        binder = getattr(self.device_manager, "bind_active_runtime", None)
+        if callable(binder):
+            return binder()
+
+        session = getattr(self.device_manager, "active_session", None)
+        if session is None:
+            raise DeviceError("未连接设备，请先选择并连接设备")
+        target = getattr(session, "target", None)
+        if getattr(target, "kind", None) in ("mumu", "adb") and getattr(session, "controller", None) is None:
+            raise DeviceError("当前设备会话缺少模拟器控制器")
+        return session
 
     def _run_execution(self, run_id: str) -> None:
         worker = None

@@ -97,6 +97,37 @@ class DeviceManager:
         with self._lock:
             return self._active
 
+    def require_active_session(self) -> DeviceSession:
+        """Return the selected runtime session or raise a user-facing error.
+
+        The GPUI sidecar must never silently fall back to the persisted legacy
+        simulator configuration. Legacy callers that do not use the device
+        manager can keep their compatibility path, but sidecar execution
+        entry points should use this guard.
+        """
+        with self._lock:
+            session = self._active
+        if session is None:
+            raise DeviceError("未连接设备，请先选择并连接设备")
+        if session.target.kind in ("mumu", "adb") and session.controller is None:
+            raise DeviceError("当前设备会话缺少模拟器控制器")
+        if session.target.kind == "pc" and not self._valid_hwnd(session.target.hwnd):
+            raise DeviceError("当前设备窗口已失效，请重新连接设备")
+        return session
+
+    def require_active_controller(self) -> Any:
+        """Return the controller belonging to the selected simulator session."""
+        session = self.require_active_session()
+        if session.target.kind not in ("mumu", "adb"):
+            raise DeviceError("当前选中设备不是模拟器")
+        return session.controller
+
+    def bind_active_runtime(self) -> DeviceSession:
+        """Rebind automation to the currently selected runtime session."""
+        session = self.require_active_session()
+        self._activate_runtime(session)
+        return session
+
     def set_busy_checker(self, checker: Callable[[], bool]) -> None:
         self._busy_checker = checker
 
@@ -166,12 +197,26 @@ class DeviceManager:
             if self._connecting:
                 raise DeviceError("已有设备连接任务正在进行")
             if self._active and self._active.target.info.id == device_id:
-                return {
-                    "deviceId": device_id,
-                    "status": "connected",
-                    "alreadyConnected": True,
-                }
-            self._connecting = True
+                active_session = self._active
+            else:
+                active_session = None
+            if active_session is None:
+                self._connecting = True
+
+        if active_session is not None:
+            # Rebind the compatibility layer even when the selected id is
+            # unchanged. This repairs old callers that cleared a class-level
+            # pointer without creating another controller.
+            try:
+                self._activate_runtime(active_session)
+            except Exception as error:
+                log.exception("重新绑定设备运行时失败：%s", device_id)
+                raise DeviceError(f"重新绑定设备失败：{error}") from error
+            return {
+                "deviceId": device_id,
+                "status": "connected",
+                "alreadyConnected": True,
+            }
 
         self._emit_status(device_id, "connecting")
         session: DeviceSession | None = None
@@ -208,13 +253,30 @@ class DeviceManager:
 
     def disconnect(self) -> dict[str, Any]:
         """Release the active target without closing a game or emulator."""
-        if self._busy_checker():
+        return self._release_active(check_busy=True, notice=True)
+
+    def release_after_task(self) -> dict[str, Any]:
+        """Release a session after an explicit task-owned shutdown action.
+
+        ``disconnect`` is intentionally blocked while execution is marked
+        busy. A task that explicitly closes its emulator still needs a
+        manager-owned cleanup after the action, otherwise the manager keeps a
+        dead session and the preview thread keeps retrying it.
+        """
+        return self._release_active(check_busy=False, notice=False)
+
+    def _release_active(self, *, check_busy: bool, notice: bool) -> dict[str, Any]:
+        if check_busy and self._busy_checker():
             raise DeviceError("任务运行期间不能断开设备")
         with self._lock:
             active_id = self._active.target.info.id if self._active else None
-        self._disconnect_active(restore_config=True)
+
+        # Stop consumers before tearing down the controller. BackendApplication
+        # maps this event to PreviewCapture.stop(), preventing a completed
+        # task's preview loop from racing the connection cleanup.
         self._emit_status(None, "disconnected")
-        if active_id:
+        self._disconnect_active(restore_config=True)
+        if notice and active_id:
             self._emit_notice("info", "设备已断开连接")
         return {"status": "disconnected"}
 
@@ -267,36 +329,23 @@ class DeviceManager:
         if target.kind == "mumu":
             if target.instance_number is None:
                 raise DeviceError("MuMu 实例编号缺失")
-            self._set_runtime_config(
-                simulator=True,
-                simulator_type=0,
-                simulator_port=self._mumu_port(target.instance_number),
-                mumu_instance_number=target.instance_number,
-            )
+            self._set_target_runtime_config(target)
             from module.automation.input_handlers.simulator.mumu_control import MumuControl
 
             return DeviceSession(target, MumuControl(instance_number=target.instance_number))
 
         if target.endpoint is None:
             raise DeviceError("ADB 设备地址缺失")
-        port = (
-            self._port_from_endpoint(target.endpoint)
-            if ":" in target.endpoint
-            else int(cfg.get_value("simulator_port", 0) or 0)
-        )
-        self._set_runtime_config(
-            simulator=True,
-            simulator_type=10,
-            simulator_port=port,
-            mumu_instance_number=-1,
-        )
+        self._set_target_runtime_config(target)
         from module.automation.input_handlers.simulator.simulator_control import SimulatorControl
 
         return DeviceSession(target, SimulatorControl(endpoint=target.endpoint))
 
     def _activate_runtime(self, session: DeviceSession) -> None:
+        # Legacy modules still read these values. Keep them synchronized with
+        # the selected session whenever a task or an RPC rebinds the runtime.
+        self._set_target_runtime_config(session.target)
         if session.target.kind == "pc":
-            self._set_runtime_config(simulator=False)
             from module.game_and_screen import screen
 
             screen.handle.bind(session.target.hwnd or 0)
@@ -304,7 +353,39 @@ class DeviceManager:
 
         # ``auto`` is created during module import, before the GPUI selection
         # exists.  Rebuild only its input binding after activating the target.
-        auto.init_input()
+        auto.init_input(session=session)
+
+    def _set_target_runtime_config(self, target: DeviceTarget) -> None:
+        if target.kind == "pc":
+            self._set_runtime_config(simulator=False)
+            return
+
+        if target.kind == "mumu":
+            if target.instance_number is None:
+                raise DeviceError("MuMu 实例编号缺失")
+            self._set_runtime_config(
+                simulator=True,
+                simulator_type=0,
+                simulator_port=self._mumu_port(target.instance_number),
+                mumu_instance_number=target.instance_number,
+            )
+            return
+
+        if target.endpoint is None:
+            raise DeviceError("ADB 设备地址缺失")
+        if ":" in target.endpoint:
+            port = self._port_from_endpoint(target.endpoint)
+        else:
+            try:
+                port = int(cfg.get_value("simulator_port", 0) or 0)
+            except (TypeError, ValueError):
+                port = 0
+        self._set_runtime_config(
+            simulator=True,
+            simulator_type=10,
+            simulator_port=port,
+            mumu_instance_number=-1,
+        )
 
     def _disconnect_active(self, *, restore_config: bool) -> None:
         with self._lock:
@@ -598,6 +679,18 @@ def get_device_manager() -> DeviceManager:
     return _default_manager
 
 
+def is_simulator_runtime() -> bool:
+    """Return whether the selected runtime is an Android emulator.
+
+    The legacy configuration remains the fallback for command-line callers,
+    but a sidecar-selected session always wins over its persisted values.
+    """
+    session = get_device_manager().active_session
+    if session is not None:
+        return session.target.kind in ("mumu", "adb")
+    return bool(cfg.get_value("simulator", False))
+
+
 __all__ = [
     "DeviceError",
     "DeviceInfo",
@@ -605,4 +698,5 @@ __all__ = [
     "DeviceSession",
     "DeviceTarget",
     "get_device_manager",
+    "is_simulator_runtime",
 ]

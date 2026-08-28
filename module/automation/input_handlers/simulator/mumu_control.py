@@ -14,7 +14,7 @@ from time import sleep
 
 import cv2
 import numpy as np
-from adbutils import AdbError, adb
+from adbutils import adb
 
 from module.config import cfg
 from module.logger import log
@@ -220,11 +220,17 @@ class MumuControl(AbstractInput):
 
     @staticmethod
     def clean_connect():
-        if MumuControl.connection_device is None:
+        controller = MumuControl.connection_device
+        if controller is None:
             return
-        MumuControl.connection_device.disconnect()
-        MumuControl.connection_device.adb_disconnect()
-        MumuControl.connection_device = None
+        try:
+            controller.disconnect()
+        finally:
+            try:
+                controller.adb_disconnect()
+            finally:
+                if MumuControl.connection_device is controller:
+                    MumuControl.connection_device = None
 
     def __init__(self, instance_number=0, display_id=0):
         self.install_path = None
@@ -303,43 +309,62 @@ class MumuControl(AbstractInput):
         except:
             pass
 
-    def start_game(self):
+    def _ensure_adb_device(self):
         if self.device is None:
+            self.adb_connect()
             self.device = adb.device(self.get_mumu_adb_port())
-        try:
-            self.device.app_start(self.game_package_name)
-        except Exception as e:
-            log.error(f"启动游戏失败，失败原因为{str(e)}")
-            log.error(
-                "启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动，每5次失败后将重启模拟器继续尝试"
-            )
-            if self.package_list is False:
-                self.package_list = True
-                command = [
-                    self.exe_path,
-                    "control",
-                    "-v",
-                    str(self.multi_instance_number),
-                    "app",
-                    "info",
-                    "-i",
-                ]
-                no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
-                result = subprocess.run(
-                    command,
-                    universal_newlines=True,
-                    capture_output=True,
-                    check=True,
-                    encoding="utf-8",
-                    creationflags=no_window_flag,
+        return self.device
+
+    def start_game(self):
+        """Start the game through the ADB endpoint for this MuMu instance."""
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                self._ensure_adb_device().app_start(self.game_package_name)
+                self.start_game_times = 0
+                return
+            except Exception as error:
+                last_error = error
+                # adbutils device objects remain non-None after the remote
+                # transport disappears. Never reuse that stale handle on the
+                # next attempt.
+                self.device = None
+                log.error(f"启动游戏失败，失败原因为{error}")
+                log.error(
+                    "启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动"
                 )
-                log.debug(f"获取到的应用列表列表：{result.stdout}")
-            sleep(5)
-            if self.start_game_times > 0 and self.start_game_times % 5 == 0:
-                self.close_simulator()
-                self.start()
-            self.start_game_times += 1
-            self.start_game()
+                if self.package_list is False:
+                    self.package_list = True
+                    command = [
+                        self.exe_path,
+                        "control",
+                        "-v",
+                        str(self.multi_instance_number),
+                        "app",
+                        "info",
+                        "-i",
+                    ]
+                    no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+                    try:
+                        result = subprocess.run(
+                            command,
+                            universal_newlines=True,
+                            capture_output=True,
+                            check=True,
+                            encoding="utf-8",
+                            creationflags=no_window_flag,
+                        )
+                        log.debug(f"获取到的应用列表列表：{result.stdout}")
+                    except Exception as info_error:
+                        log.debug(f"获取应用列表失败：{info_error}")
+                self.start_game_times += 1
+                if self.start_game_times > 0 and self.start_game_times % 5 == 0:
+                    self.close_simulator()
+                    self.start()
+                if attempt < 2:
+                    sleep(5)
+
+        raise RuntimeError(f"无法启动 Limbus Company：{last_error}") from last_error
 
     def mumu_control_api_backend(self):
         if os.name == "nt":
@@ -730,6 +755,9 @@ class MumuControl(AbstractInput):
 
     def connect(self):
         if self.connect_id > 0:
+            # A legacy cleanup path may have cleared the compatibility
+            # pointer while the controller itself is still connected.
+            MumuControl.connection_device = self
             return
 
         self.nemu_folder = os.path.dirname(self.install_path)
@@ -1195,18 +1223,24 @@ class MumuControl(AbstractInput):
         return True
 
     def get_current_package(self):
-        for _ in range(3):
+        for attempt in range(3):
             try:
-                current_package = self.device.app_current().package
+                current_package = self._ensure_adb_device().app_current().package
                 log.debug(f"当前应用包名: {current_package}")
                 return current_package
-            except AdbError as e:
-                log.error(f"获取当前应用包名错误: {e}")
-                continue
+            except Exception as error:
+                log.error(f"获取当前应用包名错误: {error}")
+                self.device = None
+                if attempt < 2:
+                    try:
+                        self.adb_connect()
+                    except Exception as reconnect_error:
+                        log.debug(f"重建 MuMu ADB 连接失败：{reconnect_error}")
         return ""
 
     def close_current_app(self):
         log.info("Close Current App")
-        if self.get_current_package() is None:
+        package = self.get_current_package()
+        if not package:
             return
-        self.device.app_stop(self.get_current_package())
+        self._ensure_adb_device().app_stop(package)

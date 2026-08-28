@@ -57,11 +57,41 @@ class Automation(metaclass=SingletonMeta):
         self.last_click_time = 0
         self.model = "clam"
 
-    def init_input(self):
-        """初始化输入处理器，将输入操作如点击、拖动等绑定至实例变量"""
+    def init_input(self, *, session=None):
+        """初始化输入处理器并绑定当前选中的运行时设备。
+
+        The sidecar owns a ``DeviceSession`` in ``DeviceManager``. Resolve it
+        before consulting the legacy class-level connection pointers so a
+        stale pointer cannot redirect input to another device.
+        """
         if self.input_handler:
             self.input_handler = None
-        if cfg.simulator:
+
+        if session is None:
+            try:
+                from module.device_manager import get_device_manager
+
+                session = get_device_manager().active_session
+            except ImportError:
+                # Keep import-time compatibility for the legacy application.
+                session = None
+
+        active_kind = getattr(getattr(session, "target", None), "kind", None)
+        if active_kind in ("mumu", "adb"):
+            controller = getattr(session, "controller", None)
+            if controller is None:
+                from module.device_manager import DeviceError
+
+                raise DeviceError("当前设备会话缺少模拟器控制器")
+            self.input_handler = controller
+            if active_kind == "mumu":
+                log.debug("使用选中 MuMu 模拟器输入模块")
+            else:
+                log.debug("使用选中 ADB 模拟器输入模块")
+        elif active_kind == "pc":
+            self._init_windows_input()
+        elif cfg.simulator:
+            # Legacy configuration-driven path used by the old UI/CLI.
             if cfg.simulator_type == 0:
                 from .input_handlers.simulator.mumu_control import MumuControl
 
@@ -74,23 +104,13 @@ class Automation(metaclass=SingletonMeta):
                 log.debug("使用基于PyMiniTouch的通用模拟器输入模块")
                 self.input_handler = SimulatorControl.connection_device
         else:
-            input_type = cfg.win_input_type
-            if input_type == "background":
-                from .input_handlers.input import BackgroundInput
+            self._init_windows_input()
 
-                log.debug("使用后台点击模块")
-                self.input_handler = BackgroundInput()
-            elif input_type == "foreground":
-                from .input_handlers.input import Input
-
-                log.debug("使用前台点击模块")
-                self.input_handler = Input()
-            elif input_type == "window_move":
-                from .input_handlers.input import WindowMoveInput
-
-                log.debug("使用基于窗口移动的后台点击模块")
-                self.input_handler = WindowMoveInput()
         if self.input_handler is None:
+            if active_kind in ("mumu", "adb"):
+                from module.device_manager import DeviceError
+
+                raise DeviceError("当前选中设备没有可用的输入控制器")
             from .input_handlers.input import BackgroundInput
 
             self.input_handler = BackgroundInput()
@@ -98,6 +118,24 @@ class Automation(metaclass=SingletonMeta):
         self.set_pause = self.input_handler.set_pause
         self.wait_pause = self.input_handler.wait_pause
         self.memory_protection = cfg.memory_protection
+
+    def _init_windows_input(self) -> None:
+        input_type = cfg.win_input_type
+        if input_type == "background":
+            from .input_handlers.input import BackgroundInput
+
+            log.debug("使用后台点击模块")
+            self.input_handler = BackgroundInput()
+        elif input_type == "foreground":
+            from .input_handlers.input import Input
+
+            log.debug("使用前台点击模块")
+            self.input_handler = Input()
+        elif input_type == "window_move":
+            from .input_handlers.input import WindowMoveInput
+
+            log.debug("使用基于窗口移动的后台点击模块")
+            self.input_handler = WindowMoveInput()
 
     def suspend_interactions(self) -> None:
         """暂时阻止业务线程继续点击。"""
@@ -393,13 +431,21 @@ class Automation(metaclass=SingletonMeta):
                 log.error("截图超时，尝试重启游戏")
                 import os
 
-                import win32process
-
                 from module.game_and_screen import screen
 
                 try:
-                    _, pid = win32process.GetWindowThreadProcessId(screen.handle.hwnd)
-                    os.system(f"taskkill /F /PID {pid}")
+                    from module.device_manager import get_device_manager
+
+                    selected_session = get_device_manager().active_session
+                    if selected_session is not None and selected_session.target.kind in ("mumu", "adb"):
+                        controller = selected_session.controller
+                        if controller is not None:
+                            controller.close_current_app()
+                    else:
+                        import win32process
+
+                        _, pid = win32process.GetWindowThreadProcessId(screen.handle.hwnd)
+                        os.system(f"taskkill /F /PID {pid}")
                 except:
                     pass
                 from tasks.base.script_task_scheme import init_game
