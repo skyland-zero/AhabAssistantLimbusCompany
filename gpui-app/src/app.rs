@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use gpui::{
-    ClipboardItem, Context, Entity, Render, ScrollHandle, Subscription, Window, WindowAppearance,
-    div, prelude::*, rgb,
+    Animation, AnimationExt, ClipboardItem, Context, Entity, Render, ScrollHandle, Subscription,
+    Window, WindowAppearance, div, prelude::*, px, rgb,
 };
 
 use crate::{
@@ -817,6 +819,17 @@ impl Render for AhabApp {
             self.home_log_revision_seen = self.home.log_revision;
         }
 
+        let page = pages::render(current_page, self, cx)
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .with_animation(
+                format!("page-transition-{current_page:?}"),
+                Animation::new(Duration::from_millis(200)).with_easing(gpui::ease_out_quint()),
+                |page, progress| page.opacity(progress).top(px(4.0 * (1.0 - progress))),
+            );
+
         div()
             .relative()
             .size_full()
@@ -834,12 +847,7 @@ impl Render for AhabApp {
                     .min_h_0()
                     .flex_col()
                     .overflow_hidden()
-                    .child(
-                        pages::render(current_page, self, cx)
-                            .flex_1()
-                            .min_w_0()
-                            .min_h_0(),
-                    ),
+                    .child(page),
             )
             .child(pages::render_overlay(current_page, self, cx))
             .child(shell::toast_layer(self.toast.as_ref(), palette))

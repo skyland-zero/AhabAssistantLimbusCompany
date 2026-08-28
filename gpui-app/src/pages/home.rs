@@ -1697,13 +1697,19 @@ fn task_card(
         .bg(rgb(SURFACE));
     root = root.child(header);
     if expanded && let Some(body) = body {
-        root = root.child(
-            div()
-                .bg(rgba((SURFACE_HOVER << 8) | 0x59))
-                .px_3()
-                .py(px(10.0))
-                .child(body),
-        );
+        let body = div()
+            .relative()
+            .bg(rgba((SURFACE_HOVER << 8) | 0x59))
+            .px_3()
+            .py(px(10.0))
+            .child(body)
+            .with_animation(
+                format!("task-details-{}", task_id(task)),
+                Animation::new(Duration::from_millis(150))
+                    .with_easing(gpui::ease_out_quint()),
+                |body, progress| body.opacity(progress).top(px(-4.0 * (1.0 - progress))),
+            );
+        root = root.child(body);
     }
     if executing {
         root = root.child(running_sweep());
