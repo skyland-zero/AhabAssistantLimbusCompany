@@ -3,16 +3,17 @@
 //! Asset identity, embedding, and dev/release resolution.
 //!
 //! Pages should request an [`Asset`] instead of joining paths. Fixed assets are
-//! embedded from the canonical `ui` tree so a release cannot depend on the
-//! checkout layout. [`AssetResolver::resolve`] additionally finds copied files
-//! for GPUI APIs that require a filesystem path (and for future large assets).
-//! No absolute application path is encoded in this module.
+//! embedded from the canonical `gpui-app/resources/assets` tree so a release
+//! cannot depend on the checkout layout. [`AssetResolver::resolve`]
+//! additionally finds copied files for GPUI APIs that require a filesystem path
+//! (and for future large assets). No absolute application path is encoded in
+//! this module.
 
 use std::{io, path::PathBuf, sync::Arc};
 
 use crate::model::Language;
 
-const UI_SRC: &str = env!("CARGO_MANIFEST_DIR");
+const APP_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SinnerAsset {
@@ -155,118 +156,119 @@ impl Asset {
         match self {
             Self::Logo => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/src/assets/logo.png"
+                "/resources/assets/logo.png"
             )),
             Self::TitleBanner => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/src/assets/limbus_title_banner.png"
+                "/resources/assets/limbus_title_banner.png"
             )),
             Self::Sinner(SinnerAsset::DonQuixote) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/don_quixote.png"
+                "/resources/assets/sinners/don_quixote.png"
             )),
             Self::Sinner(SinnerAsset::Faust) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/faust.png"
+                "/resources/assets/sinners/faust.png"
             )),
             Self::Sinner(SinnerAsset::Gregor) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/gregor.png"
+                "/resources/assets/sinners/gregor.png"
             )),
             Self::Sinner(SinnerAsset::Heathcliff) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/heathcliff.png"
+                "/resources/assets/sinners/heathcliff.png"
             )),
             Self::Sinner(SinnerAsset::HongLu) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/hong_lu.png"
+                "/resources/assets/sinners/hong_lu.png"
             )),
             Self::Sinner(SinnerAsset::Ishmael) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/ishmael.png"
+                "/resources/assets/sinners/ishmael.png"
             )),
             Self::Sinner(SinnerAsset::Meursault) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/meursault.png"
+                "/resources/assets/sinners/meursault.png"
             )),
             Self::Sinner(SinnerAsset::Outis) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/outis.png"
+                "/resources/assets/sinners/outis.png"
             )),
             Self::Sinner(SinnerAsset::Rodion) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/rodion.png"
+                "/resources/assets/sinners/rodion.png"
             )),
             Self::Sinner(SinnerAsset::Ryoshu) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/ryoshu.png"
+                "/resources/assets/sinners/ryoshu.png"
             )),
             Self::Sinner(SinnerAsset::Sinclair) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/sinclair.png"
+                "/resources/assets/sinners/sinclair.png"
             )),
             Self::Sinner(SinnerAsset::YiSang) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/sinners/yi_sang.png"
+                "/resources/assets/sinners/yi_sang.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Bleed) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/bleed.png"
+                "/resources/assets/status_effects/bleed.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Blunt) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/blunt.png"
+                "/resources/assets/status_effects/blunt.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Burn) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/burn.png"
+                "/resources/assets/status_effects/burn.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Charge) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/charge.png"
+                "/resources/assets/status_effects/charge.png"
             )),
             Self::StatusEffect(StatusEffectAsset::General) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/general.png"
+                "/resources/assets/status_effects/general.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Pierce) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/pierce.png"
+                "/resources/assets/status_effects/pierce.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Poise) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/poise.png"
+                "/resources/assets/status_effects/poise.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Rupture) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/rupture.png"
+                "/resources/assets/status_effects/rupture.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Sinking) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/sinking.png"
+                "/resources/assets/status_effects/sinking.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Slash) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/slash.png"
+                "/resources/assets/status_effects/slash.png"
             )),
             Self::StatusEffect(StatusEffectAsset::Tremor) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/public/status_effects/tremor.png"
+                "/resources/assets/status_effects/tremor.png"
             )),
             Self::Help(Language::ZhCn) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/src/content/help-zh.md"
+                "/resources/assets/content/help-zh.md"
             )),
             Self::Help(Language::EnUs) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../ui/src/content/help-en.md"
+                "/resources/assets/content/help-en.md"
             )),
         }
     }
 }
 
-/// Resolve assets from an optional override, the checked-out UI in debug
-/// builds, and conventional release resource directories near the executable.
+/// Resolve assets from an optional override, the checked-out GPUI resources
+/// in debug builds, and conventional release resource directories near the
+/// executable.
 #[derive(Clone, Debug)]
 pub struct AssetResolver {
     roots: Vec<PathBuf>,
@@ -326,7 +328,7 @@ impl AssetResolver {
 }
 
 fn embedded_if_available(asset: Asset) -> Option<&'static [u8]> {
-    // All assets currently shipped by the UI are fixed and embedded. Keeping
+    // All assets currently shipped by GPUI are fixed and embedded. Keeping
     // this helper separate allows a future large, downloaded asset to use only
     // the release resolver without changing callers.
     Some(asset.embedded())
@@ -338,11 +340,9 @@ fn default_roots() -> Vec<PathBuf> {
         roots.push(PathBuf::from(root));
     }
 
-    let manifest = PathBuf::from(UI_SRC);
+    let manifest = PathBuf::from(APP_ROOT);
     if cfg!(debug_assertions) {
-        roots.push(manifest.join("..").join("ui").join("public"));
-        roots.push(manifest.join("..").join("ui").join("src"));
-        roots.push(manifest.join("..").join("ui").join("src").join("assets"));
+        roots.push(manifest.join("resources").join("assets"));
     }
 
     if let Ok(executable) = std::env::current_exe()

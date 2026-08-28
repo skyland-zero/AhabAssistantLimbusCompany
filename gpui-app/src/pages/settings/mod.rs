@@ -1,9 +1,8 @@
 //! Settings page backed by the shared settings and Mock IPC state.
 //!
-//! The card stack mirrors `ui/src/pages/SettingsPage.tsx`: it is centered at
-//! the `max-w-2xl` width, keeps each setting in its own card, and exposes the
-//! same appearance, language, hotkey, simulator, system, update, and version
-//! states without introducing a second settings model.
+//! The card stack is centered at the `max-w-2xl` width, keeps each setting in
+//! its own card, and exposes appearance, language, hotkey, simulator, system,
+//! update, and version states without introducing a second settings model.
 
 mod cards;
 

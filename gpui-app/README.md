@@ -1,6 +1,6 @@
 # Ahab Assistant GPUI App
 
-这是一个与 `ui` 同级的独立 GPUI 原生应用，用于提供不依赖 WebView2 的 Windows 桌面界面。
+这是仓库内的独立 GPUI 原生应用，用于提供不依赖 WebView2 的 Windows 桌面界面。
 
 依赖直接指向 Zed 的最新 GitHub `main` 分支，而不是 crates.io 版本：
 
@@ -29,7 +29,7 @@ cargo +nightly run --release --manifest-path gpui-app/Cargo.toml
 cargo +nightly test --manifest-path gpui-app/Cargo.toml
 ```
 
-`Cargo.lock` 会记录实际使用的 Git commit。当前 GitHub main 使用了尚未在 stable 中稳定的 `std::hint::cold_path`，因此应用固定使用 nightly。应用会读取现有 `ui/public/sinners` 图片，不会复制资源。
+`Cargo.lock` 会记录实际使用的 Git commit。当前 GitHub main 使用了尚未在 stable 中稳定的 `std::hint::cold_path`，因此应用固定使用 nightly。GPUI 固定资源位于 `gpui-app/resources/assets`，并在编译期嵌入程序。
 
 ## Python sidecar
 
@@ -51,35 +51,19 @@ $env:AHAB_BACKEND_TOKEN = "your-token"
 
 ## 固定尺寸视觉回归
 
-截图产物写入被 Git 忽略的 `artifacts/visual/`，不污染 `ui/`：
+截图产物写入被 Git 忽略的 `artifacts/visual/`：
 
 ```powershell
 # GPUI release：每个组合会等待窗口、字体和资源完成加载后再截取 client area
 pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps1
 
-# Tauri/WebView2 reference：首次启动可能需要编译，脚本会轮询 CDP 并额外等待 2 秒
-pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_tauri_reference.ps1
-
-# 对齐共同物理像素区域并生成 JSON 差异报告
-python gpui-app/tools/visual_diff.py `
-  --reference artifacts/visual/reference-ui `
-  --gpui artifacts/visual/gpui `
-  --output artifacts/visual/pixel-diff.json
-
-# 动态交互状态：GPUI 通过 AHAB_VISUAL_STATE 覆盖，Tauri 通过真实 DOM 操作
+# 动态交互状态：GPUI 通过 AHAB_VISUAL_STATE 覆盖
 pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps1 `
   -OutputDirectory artifacts/visual/gpui-states `
   -States home-expanded,home-select,home-running,home-paused,home-after-completion,teams-editor,teams-delete,teams-select,settings-hotkey,settings-select,settings-latest,toolbox-running,resources-syncing,help-scrolled
-pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_tauri_states.ps1 `
-  -OutputDirectory artifacts/visual/reference-ui-states `
-  -States home-expanded,home-select,home-running,home-paused,home-after-completion,teams-editor,teams-delete,teams-select,settings-hotkey,settings-select,settings-latest,toolbox-running,resources-syncing,help-scrolled
-python gpui-app/tools/visual_diff.py `
-  --reference artifacts/visual/reference-ui-states `
-  --gpui artifacts/visual/gpui-states `
-  --output artifacts/visual/pixel-diff-states.json
 ```
 
-脚本通过 `AHAB_VISUAL_THEME`、`AHAB_VISUAL_LANGUAGE`、`AHAB_VISUAL_PAGE` 和 `AHAB_VISUAL_STATE` 启动 GPUI 的确定性参考状态；不会修改用户配置。窗口使用逻辑 client viewport `900×680` / `800×560`，当前验证机 DPI 为 `168`（175%），因此 GPUI client 截图为 `1575×1190` / `1400×980` 物理像素，WebView2 截图因 CSS 像素取整可能多一列。动态脚本会先轮询 Tauri WebView2 CDP，再等待页面与 Mock IPC 稳定后操作和截图。截图工具依赖 Pillow、pywin32 和 agent-browser。当前 `ui` Mock 的 Resources 请求名仍未与页面契约统一，故该动态参考的 Tauri 资源页为空，详见迁移计划。
+脚本通过 `AHAB_VISUAL_THEME`、`AHAB_VISUAL_LANGUAGE`、`AHAB_VISUAL_PAGE` 和 `AHAB_VISUAL_STATE` 启动 GPUI 的确定性状态；不会修改用户配置。窗口使用逻辑 client viewport `900×680` / `800×560`，截图工具依赖 Pillow 和 pywin32。
 
 ## 当前可操作范围
 
@@ -95,7 +79,7 @@ python gpui-app/tools/visual_diff.py `
 
 ## 测量建议
 
-与 Tauri 版本使用相同窗口尺寸和相同测试步骤，记录：
+使用固定窗口尺寸和相同测试步骤，记录：
 
 - 工作集
 - Private Bytes

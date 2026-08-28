@@ -1,7 +1,7 @@
 //! Theme-pack management page backed by the shared Mock IPC state.
 //!
-//! The layout mirrors `ui/src/pages/ThemePacksPage.tsx`: a compact action bar,
-//! an optional hard-mirror warning, and a single independently scrolling list.
+//! The layout provides a compact action bar, an optional hard-mirror warning,
+//! and a single independently scrolling list.
 //! The page deliberately keeps all mutations in `ThemePacksState`.
 
 use gpui::{Context, Div, KeyDownEvent, div, prelude::*, px};

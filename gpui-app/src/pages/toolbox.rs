@@ -1,7 +1,7 @@
 //! Native toolbox page backed by the shared tool IPC events.
 //!
-//! The card grid follows `ui/src/pages/ToolboxPage.tsx`: one column on narrow
-//! windows, two columns from the `md` breakpoint, and three on wide windows.
+//! The card grid uses one column on narrow windows, two columns from the `md`
+//! breakpoint, and three on wide windows.
 //! Tool actions continue to use `ToolboxState`, so this page stays on the
 //! canonical Mock IPC boundary.
 

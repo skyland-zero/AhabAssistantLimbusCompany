@@ -1,9 +1,9 @@
 """Capture a native Windows client area at a deterministic logical size.
 
 This intentionally captures the client area rather than the desktop so GPUI
-screenshots can be compared with the Tauri/WebView2 client viewport. The
-script expects Pillow and pywin32, both already used by this repository's
-Windows automation tooling.
+screenshots can be compared at a stable logical viewport. The script expects
+Pillow and pywin32, both already used by this repository's Windows automation
+tooling.
 """
 
 from __future__ import annotations

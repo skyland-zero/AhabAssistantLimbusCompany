@@ -1,7 +1,7 @@
 use gpui::{Svg, prelude::*, px, svg};
 
 /// The monochrome SVGs keep shell controls independent from a second icon
-/// dependency while preserving the Lucide-style line icon shape used by `ui`.
+/// dependency while preserving the Lucide-style line icon shape used by GPUI.
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
     Home,

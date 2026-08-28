@@ -137,7 +137,7 @@ impl AccentTokens {
     }
 }
 
-/// Metadata matching the five `ACCENT_PRESETS` entries in `ui/src/themes`.
+/// Metadata for the five supported accent presets.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AccentPreset {
     pub id: &'static str,

@@ -2,9 +2,9 @@
 
 //! Design tokens shared by the native GPUI controls.
 //!
-//! The values in this module are the sRGB values obtained from the CSS
-//! `oklch` declarations in `ui/src/index.css`. Keeping the conversion at the
-//! boundary means pages never need to approximate an `oklch` color themselves.
+//! The values in this module are the sRGB values obtained from the design
+//! token definitions. Keeping the conversion at the boundary means pages
+//! never need to approximate an `oklch` color themselves.
 //! [`Palette`] is a value object: callers derive a new value from persisted
 //! settings instead of mutating a second theme state.
 

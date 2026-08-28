@@ -1,8 +1,8 @@
 //! Resource status and synchronization page backed by the shared Mock IPC state.
 //!
-//! This follows `ui/src/pages/ResourcesPage.tsx`: a compact update toolbar,
-//! a responsive resource-card grid, and explicit synchronization progress,
-//! success, warning, loading, and empty states.
+//! The page provides a compact update toolbar, a responsive resource-card
+//! grid, and explicit synchronization progress, success, warning, loading,
+//! and empty states.
 
 use std::time::Duration;
 
