@@ -1665,9 +1665,6 @@ fn task_card(
         .border_1()
         .border_color(if executing { rgb(ACCENT) } else { rgba(0) })
         .bg(rgb(SURFACE));
-    if !enabled {
-        root = root.opacity(0.75).bg(rgba((SURFACE_HOVER << 8) | 0x30));
-    }
     root = root.child(header);
     if expanded && let Some(body) = body {
         root = root.child(
