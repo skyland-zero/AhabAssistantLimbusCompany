@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from module.device_manager import DeviceInfo, DeviceManager
+import module.device_manager as device_manager_module
+from module.device_manager import DeviceInfo, DeviceManager, DeviceTarget
 from module.rpc_dispatcher import RpcDispatcher
 
 
@@ -33,6 +34,37 @@ def test_device_ids_are_stable_and_do_not_contain_hwnd() -> None:
     assert target.info.id == "mumu:2"
     assert target.endpoint == "127.0.0.1:16448"
     assert target.info.id == "mumu:2"
+
+
+def test_connection_methods_identify_mumu_ipc_and_adb_paths() -> None:
+    manager = DeviceManager()
+
+    assert manager._connection_methods(DeviceManager._make_mumu_target(0)) == (
+        "MuMu IPC（NemuIpc）+ ADB 辅助",
+        "MuMu IPC（NemuIpc）",
+        "MuMu IPC（NemuIpc）",
+    )
+    assert manager._connection_methods(DeviceManager._make_adb_target("127.0.0.1:5555")) == (
+        "ADB（127.0.0.1:5555）",
+        "ADB screencap",
+        "ADB shell input + minitouch",
+    )
+
+
+def test_connection_methods_identify_windows_defaults(monkeypatch) -> None:
+    values = {"background_click": True, "win_input_type": "background"}
+    monkeypatch.setattr(
+        device_manager_module.cfg,
+        "get_value",
+        lambda key, default=None: values.get(key, default),
+    )
+    target = DeviceTarget(DeviceInfo("pc:limbus", "Limbus Company"), "pc")
+
+    assert DeviceManager._connection_methods(target) == (
+        "Windows 游戏窗口",
+        "默认窗口截图（PrintWindow）",
+        "Windows 后台输入（pywin32）",
+    )
 
 
 def test_dispatcher_uses_canonical_device_methods() -> None:

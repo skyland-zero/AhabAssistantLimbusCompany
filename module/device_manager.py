@@ -183,7 +183,7 @@ class DeviceManager:
             with self._lock:
                 self._active = session
             self._emit_status(device_id, "connected")
-            self._emit_notice("info", f"已连接设备：{target.info.name}")
+            self._emit_connection_details(session)
             return {"deviceId": device_id, "status": "connected"}
         except Exception as error:
             log.exception("连接设备失败：%s", device_id)
@@ -373,6 +373,41 @@ class DeviceManager:
 
     def _emit_notice(self, level: str, message: str) -> None:
         self._emit(self._notice_listeners, "app.notice", {"level": level, "message": message})
+
+    def _emit_connection_details(self, session: DeviceSession) -> None:
+        connection, screenshot, input_method = self._connection_methods(session.target)
+        self._emit_notice("info", f"已连接设备：{session.target.info.name}")
+        self._emit_notice("info", f"连接方式：{connection}")
+        self._emit_notice("info", f"截图方式：{screenshot}；输入方式：{input_method}")
+
+    @staticmethod
+    def _connection_methods(target: DeviceTarget) -> tuple[str, str, str]:
+        if target.kind == "mumu":
+            return (
+                "MuMu IPC（NemuIpc）+ ADB 辅助",
+                "MuMu IPC（NemuIpc）",
+                "MuMu IPC（NemuIpc）",
+            )
+
+        if target.kind == "adb":
+            endpoint = target.endpoint or "未知设备"
+            return (
+                f"ADB（{endpoint}）",
+                "ADB screencap",
+                "ADB shell input + minitouch",
+            )
+
+        screenshot = (
+            "默认窗口截图（PrintWindow）"
+            if bool(cfg.get_value("background_click", True))
+            else "默认窗口截图（GDI，失败回退 pyautogui）"
+        )
+        input_method = {
+            "background": "Windows 后台输入（pywin32）",
+            "foreground": "Windows 前台输入（pyautogui）",
+            "window_move": "Windows 窗口移动输入",
+        }.get(str(cfg.get_value("win_input_type", "background")), "Windows 后台输入（pywin32）")
+        return "Windows 游戏窗口", screenshot, input_method
 
     @staticmethod
     def _emit(listeners: list[StatusListener], event: str, payload: dict[str, Any]) -> None:
