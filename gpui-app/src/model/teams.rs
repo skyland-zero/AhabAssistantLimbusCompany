@@ -131,6 +131,8 @@ pub enum TeamPurpose {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[allow(non_snake_case)]
 pub struct TeamDetail {
+    #[serde(default = "schema_version")]
+    pub schemaVersion: u32,
     pub id: String,
     pub name: String,
     pub sinners: Vec<String>,
@@ -138,6 +140,10 @@ pub struct TeamDetail {
     pub accessoryScheme: String,
     pub enabled: bool,
     pub mirrorConfig: Option<TeamMirrorConfig>,
+}
+
+fn schema_version() -> u32 {
+    1
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -159,6 +165,7 @@ mod tests {
     #[test]
     fn team_config_round_trips_json() {
         let team = TeamDetail {
+            schemaVersion: 1,
             id: "t1".into(),
             name: "队伍".into(),
             sinners: vec!["faust".into()],

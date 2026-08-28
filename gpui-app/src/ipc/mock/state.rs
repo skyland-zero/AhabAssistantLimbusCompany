@@ -9,6 +9,7 @@ impl Default for MockState {
             execution: ExecutionStatusPayload::default(),
             teams: vec![
                 TeamDetail {
+                    schemaVersion: 1,
                     id: "team-1".into(),
                     name: "编队 1 (震颤)".into(),
                     sinners: vec![
@@ -32,6 +33,7 @@ impl Default for MockState {
                     }),
                 },
                 TeamDetail {
+                    schemaVersion: 1,
                     id: "team-2".into(),
                     name: "编队 2 (烧伤)".into(),
                     sinners: vec!["heathcliff".into(), "rodion".into(), "gregor".into()],
@@ -41,6 +43,7 @@ impl Default for MockState {
                     mirrorConfig: Some(TeamMirrorConfig::default()),
                 },
                 TeamDetail {
+                    schemaVersion: 1,
                     id: "team-3".into(),
                     name: "编队 3 (呼吸)".into(),
                     sinners: vec![

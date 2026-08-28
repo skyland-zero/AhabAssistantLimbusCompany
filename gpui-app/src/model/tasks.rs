@@ -230,6 +230,8 @@ impl Default for EnabledTasks {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[allow(non_snake_case)]
 pub struct TasksConfig {
+    #[serde(default = "schema_version")]
+    pub schemaVersion: u32,
     pub enabledTasks: EnabledTasks,
     pub set_windows: SetWindowsConfig,
     pub daily_task: DailyTaskConfig,
@@ -252,6 +254,7 @@ impl Default for ResonateWithAhabConfig {
 impl Default for TasksConfig {
     fn default() -> Self {
         Self {
+            schemaVersion: schema_version(),
             enabledTasks: Default::default(),
             set_windows: Default::default(),
             daily_task: DailyTaskConfig::mock_default(),
@@ -262,6 +265,10 @@ impl Default for TasksConfig {
             afterCompletion: Default::default(),
         }
     }
+}
+
+fn schema_version() -> u32 {
+    1
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]

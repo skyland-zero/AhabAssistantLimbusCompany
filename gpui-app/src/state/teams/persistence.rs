@@ -124,6 +124,7 @@ impl TeamsState {
         mirror.ignore_shop.truncate(5);
 
         editor.team = TeamDetail {
+            schemaVersion: 1,
             id,
             name: name.to_owned(),
             sinners,

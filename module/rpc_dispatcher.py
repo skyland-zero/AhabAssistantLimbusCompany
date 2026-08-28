@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from module.backend_application import BackendApplication
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.logger import log
 
@@ -33,15 +34,26 @@ class RpcDispatcher:
         *,
         version: str = "unknown",
         shutdown: Callable[[], None] | None = None,
+        application: BackendApplication | None = None,
     ) -> None:
-        self.device_manager = device_manager or get_device_manager()
+        # ``device_manager`` remains accepted for the small device-manager
+        # compatibility tests and for callers upgrading from the first
+        # sidecar prototype.  Production code passes the complete application
+        # context instead.
+        self.application = application or BackendApplication(
+            device_manager or get_device_manager(),
+            version=version,
+            shutdown=shutdown,
+        )
+        self.device_manager = self.application.device_manager
         self.version = version
         self._shutdown = shutdown
-        self._busy_checker: Callable[[], bool] = lambda: False
-        self.device_manager.set_busy_checker(lambda: self._busy_checker())
+        self._busy_checker: Callable[[], bool] = self.application.is_busy
+        self.application.set_busy_checker(self._busy_checker)
 
     def set_busy_checker(self, checker: Callable[[], bool]) -> None:
         self._busy_checker = checker
+        self.application.set_busy_checker(checker)
 
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         """Return a JSON-RPC response for one request object."""
@@ -55,6 +67,8 @@ class RpcDispatcher:
             return {"jsonrpc": "2.0", "id": request_id, "result": result}
         except RpcDispatchError as error:
             return self._error(request_id, error.code, error.message, error.data)
+        except (TypeError, ValueError) as error:
+            return self._error(request_id, -32602, str(error))
         except DeviceError as error:
             return self._error(request_id, -32020, str(error))
         except Exception as error:
@@ -62,33 +76,89 @@ class RpcDispatcher:
             return self._error(request_id, -32000, f"后端内部错误：{error}")
 
     def _call(self, method: str, params: Any) -> Any:
-        if method == "app.ping":
-            return "pong"
-        if method == "app.version":
-            return {"ui": "gpui", "backend": self.version}
-        if method == "app.shutdown":
-            if self._shutdown is not None:
-                self._shutdown()
-            return True
+        route_names = {
+            "app.ping": "app_ping",
+            "app.version": "app_version",
+            "app.checkUpdate": "app_check_update",
+            "app.shutdown": "app_shutdown",
+            "tasks.getConfig": "tasks_get_config",
+            "tasks.setConfig": "tasks_set_config",
+            "execution.getState": "execution_get_state",
+            "execution.start": "execution_start",
+            "execution.stop": "execution_stop",
+            "execution.pause": "execution_pause",
+            "execution.resume": "execution_resume",
+            "team.list": "team_list",
+            "team.save": "team_save",
+            "team.delete": "team_delete",
+            "sinner.list": "sinner_list",
+            "themePack.list": "theme_pack_list",
+            "themePack.updateAll": "theme_pack_update_all",
+            "themePack.resetWeights": "theme_pack_reset_weights",
+            "resource.status": "resource_status",
+            "resource.checkUpdate": "resource_check_update",
+            "resource.sync.start": "resource_sync_start",
+            "tool.start": "tool_start",
+            "tool.stop": "tool_stop",
+            "tool.screenshot": "tool_screenshot",
+            "hotkey.get": "hotkey_get",
+            "hotkey.set": "hotkey_set",
+            "systemSettings.get": "system_settings_get",
+            "systemSettings.set": "system_settings_set",
+            "device.list": "device.list",
+            "device.connect": "device.connect",
+            "device.disconnect": "device.disconnect",
+        }
+        route = route_names.get(method)
+        if route is None:
+            raise RpcDispatchError(-32601, f"Method not found: {method}")
+        if method in {
+            "app.ping",
+            "app.version",
+            "app.checkUpdate",
+            "app.shutdown",
+            "tasks.getConfig",
+            "execution.getState",
+            "execution.stop",
+            "execution.pause",
+            "execution.resume",
+            "team.list",
+            "sinner.list",
+            "themePack.list",
+            "themePack.resetWeights",
+            "resource.status",
+            "resource.checkUpdate",
+            "tool.screenshot",
+            "hotkey.get",
+            "systemSettings.get",
+            "device.list",
+            "device.disconnect",
+        }:
+            return self._call_without_params(route)
+        if route == "device.connect":
+            return self._device_connect(params)
+        if route == "device.list":
+            return self.application.device_manager.list_devices()
+        if route == "device.disconnect":
+            return self.application.device_manager.disconnect()
+        handler = getattr(self.application, route)
+        return handler(params)
 
-        if method == "device.list":
-            return self.device_manager.list_devices()
-        if method == "device.connect":
-            values = self._object_params(params, "device.connect")
-            device_id = values.get("id")
-            if not isinstance(device_id, str) or not device_id:
-                raise RpcDispatchError(-32602, "device.connect requires a non-empty string id")
-            return self.device_manager.connect(device_id)
-        if method == "device.disconnect":
-            return self.device_manager.disconnect()
+    def _call_without_params(self, route: str) -> Any:
+        if route == "device.list":
+            return self.application.device_manager.list_devices()
+        if route == "device.disconnect":
+            return self.application.device_manager.disconnect()
+        if route == "device.connect":
+            raise RpcDispatchError(-32602, "device.connect requires an object params value")
+        return getattr(self.application, route)()
 
-        if method == "execution.getState":
-            # Execution control is added in the next adapter layer.  Returning
-            # an explicit idle state keeps the sidecar handshake useful while
-            # the GPUI device path is being migrated.
-            return {"state": "idle", "currentTaskId": None}
-
-        raise RpcDispatchError(-32601, f"Method not found: {method}")
+    def _device_connect(self, params: Any) -> Any:
+        values = self._object_params(params, "device.connect")
+        device_id = values.get("id")
+        if not isinstance(device_id, str) or not device_id:
+            raise RpcDispatchError(-32602, "device.connect requires a non-empty string id")
+        return self.application.device_manager.connect(device_id)
 
     @staticmethod
     def _object_params(params: Any, method: str) -> dict[str, Any]:

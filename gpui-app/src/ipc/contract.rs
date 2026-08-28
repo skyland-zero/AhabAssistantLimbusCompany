@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub type RequestId = u64;
+pub const RPC_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RpcRequest {
@@ -95,13 +96,21 @@ impl RpcError {
 pub struct EventEnvelope {
     pub event: String,
     pub payload: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seq: Option<u64>,
 }
 impl EventEnvelope {
     pub fn new(event: impl Into<String>, payload: impl Into<Value>) -> Self {
         Self {
             event: event.into(),
             payload: payload.into(),
+            seq: None,
         }
+    }
+
+    pub fn with_sequence(mut self, sequence: u64) -> Self {
+        self.seq = Some(sequence);
+        self
     }
 }
 

@@ -88,6 +88,8 @@ pub enum UpdateSource {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[allow(non_snake_case)]
 pub struct SystemSettingsConfig {
+    #[serde(default = "schema_version")]
+    pub schemaVersion: u32,
     pub simulator: bool,
     pub simulator_type: u8,
     pub simulator_port: u16,
@@ -104,6 +106,7 @@ pub struct SystemSettingsConfig {
 impl Default for SystemSettingsConfig {
     fn default() -> Self {
         Self {
+            schemaVersion: schema_version(),
             simulator: true,
             simulator_type: 0,
             simulator_port: 16384,
@@ -118,6 +121,10 @@ impl Default for SystemSettingsConfig {
             mirrorchyan_cdk: String::new(),
         }
     }
+}
+
+fn schema_version() -> u32 {
+    1
 }
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct UpdateInfo {

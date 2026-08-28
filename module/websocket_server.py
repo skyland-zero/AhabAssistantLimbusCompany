@@ -10,6 +10,7 @@ from typing import Any
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
+from module.backend_application import BackendApplication
 from module.device_manager import DeviceManager
 from module.logger import log
 from module.rpc_dispatcher import RpcDispatcher
@@ -53,9 +54,11 @@ class WebSocketServer:
         device_manager: DeviceManager,
         *,
         token: str,
+        application: BackendApplication | None = None,
     ) -> None:
         self.dispatcher = dispatcher
         self.device_manager = device_manager
+        self.application = application or dispatcher.application
         self.token = token
         self.port: int | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -65,8 +68,7 @@ class WebSocketServer:
         self._request_tasks: set[asyncio.Task[Any]] = set()
         self._log_handler = _BroadcastLogHandler(self)
 
-        self.device_manager.add_status_listener(self._on_manager_event)
-        self.device_manager.add_notice_listener(self._on_manager_event)
+        self.application.add_event_listener(self._on_application_event)
 
     async def start(self, host: str = "127.0.0.1", port: int = 0) -> int:
         if self._server is not None:
@@ -108,25 +110,24 @@ class WebSocketServer:
                 task.cancel()
         self._request_tasks.clear()
         log.removeHandler(self._log_handler)
-        self.device_manager.remove_status_listener(self._on_manager_event)
-        self.device_manager.remove_notice_listener(self._on_manager_event)
+        self.application.remove_event_listener(self._on_application_event)
         self._loop = None
 
-    def publish(self, event: str, payload: dict[str, Any]) -> None:
+    def publish(self, event: str, payload: dict[str, Any], sequence: int | None = None) -> None:
         """Schedule an event broadcast; safe to call from worker threads."""
         loop = self._loop
         if loop is None or self._server is None:
             return
 
         def schedule() -> None:
-            task = asyncio.create_task(self._broadcast(event, payload))
+            task = asyncio.create_task(self._broadcast(event, payload, sequence))
             self._request_tasks.add(task)
             task.add_done_callback(self._request_tasks.discard)
 
         loop.call_soon_threadsafe(schedule)
 
-    def _on_manager_event(self, event: str, payload: dict[str, Any]) -> None:
-        self.publish(event, payload)
+    def _on_application_event(self, event: str, payload: dict[str, Any], sequence: int) -> None:
+        self.publish(event, payload, sequence)
 
     async def _handler(self, connection: ServerConnection) -> None:
         if not await self._authenticate(connection):
@@ -179,7 +180,12 @@ class WebSocketServer:
             except Exception:
                 pass
             return False
-        await connection.send(json.dumps({"type": "hello", "ok": True}, separators=(",", ":")))
+        await connection.send(
+            json.dumps(
+                {"type": "hello", "ok": True, "schemaVersion": 1},
+                separators=(",", ":"),
+            )
+        )
         return True
 
     async def _handle_request(
@@ -193,8 +199,10 @@ class WebSocketServer:
         except ConnectionClosed:
             pass
 
-    async def _broadcast(self, event: str, payload: dict[str, Any]) -> None:
+    async def _broadcast(self, event: str, payload: dict[str, Any], sequence: int | None = None) -> None:
         message = {"event": event, "payload": payload}
+        if sequence is not None:
+            message["seq"] = sequence
         clients = tuple(self._clients)
         if not clients:
             return

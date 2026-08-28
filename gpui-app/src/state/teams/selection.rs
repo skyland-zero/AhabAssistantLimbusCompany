@@ -31,6 +31,7 @@ impl TeamsState {
         self.close_select();
         let purpose = self.filter.purpose().unwrap_or(TeamPurpose::General);
         self.editor = Some(TeamEditorState::new(TeamDetail {
+            schemaVersion: 1,
             id: String::new(),
             name: String::new(),
             sinners: Vec::new(),

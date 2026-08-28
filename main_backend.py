@@ -29,6 +29,7 @@ async def _run(args: argparse.Namespace) -> None:
     from module.logger.my_log import Logger
 
     Logger()
+    from module.backend_application import BackendApplication
     from module.device_manager import get_device_manager
     from module.rpc_dispatcher import RpcDispatcher
     from module.websocket_server import WebSocketServer
@@ -48,12 +49,13 @@ async def _run(args: argparse.Namespace) -> None:
             pass
 
     manager = get_device_manager()
-    dispatcher = RpcDispatcher(
+    application = BackendApplication(
         manager,
         version=_version(),
         shutdown=stop_event.set,
     )
-    server = WebSocketServer(dispatcher, manager, token=args.token)
+    dispatcher = RpcDispatcher(application=application, version=_version())
+    server = WebSocketServer(dispatcher, manager, token=args.token, application=application)
     port = await server.start(args.host, args.port)
     sys.stdout.write(
         json.dumps(
@@ -74,7 +76,7 @@ async def _run(args: argparse.Namespace) -> None:
         if parent_task is not None:
             parent_task.cancel()
         await server.stop()
-        manager.close()
+        application.close()
 
 
 async def _watch_parent(parent_pid: int, stop_event: asyncio.Event) -> None:
