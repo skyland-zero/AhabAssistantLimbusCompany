@@ -207,13 +207,18 @@ pub fn title_bar(
         .flex()
         .items_center()
         .border_b_1()
-        .border_color(rgba(palette.input.rgba_hex()))
+        .border_color(rgba(titlebar_separator_hex(palette)))
         .bg(rgb(palette.card.rgb_hex()))
         .child(brand)
         .child(pages)
         .child(drag_spacer)
         .child(utilities)
         .child(controls)
+}
+
+fn titlebar_separator_hex(palette: Palette) -> u32 {
+    let alpha = u32::from(palette.input.alpha()) * 3 / 5;
+    (palette.input.rgb_hex() << 8) | alpha
 }
 
 struct NavItemConfig {
@@ -417,6 +422,7 @@ fn page_icon(page: Page) -> Icon {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::style::AccentId;
 
     #[test]
     fn primary_navigation_contains_six_pages_and_settings_is_secondary() {
@@ -431,5 +437,14 @@ mod tests {
         for page in Page::ALL {
             let _ = page_icon(page);
         }
+    }
+
+    #[test]
+    fn titlebar_separator_reduces_theme_input_contrast() {
+        let light = titlebar_separator_hex(Palette::light(AccentId::Crimson));
+        let dark = titlebar_separator_hex(Palette::dark(AccentId::Crimson));
+
+        assert_eq!(light & 0xff, 0x99);
+        assert_eq!(dark & 0xff, 0x16);
     }
 }
