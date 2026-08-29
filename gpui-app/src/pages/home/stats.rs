@@ -13,9 +13,48 @@ pub(super) fn overview(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .ml(px(10.0))
         .mr(px(4.0))
         .mt(px(10.0))
-        .child(current_run_card(app).flex_grow(2.0).flex_shrink(1.0))
+        .child(runtime_card(app, cx))
         .child(period_card(app, cx).flex_grow(1.0).flex_shrink(1.0))
-        .child(backend_status_card(app, cx).flex_grow(1.0).flex_shrink(1.0))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RuntimeCardView {
+    Backend,
+    CurrentRun,
+}
+
+impl RuntimeCardView {
+    fn animation_key(self) -> &'static str {
+        match self {
+            Self::Backend => "backend",
+            Self::CurrentRun => "current-run",
+        }
+    }
+}
+
+fn runtime_card_view(phase: BackendPhase) -> RuntimeCardView {
+    if phase == BackendPhase::Ready {
+        RuntimeCardView::CurrentRun
+    } else {
+        RuntimeCardView::Backend
+    }
+}
+
+fn runtime_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl IntoElement {
+    let view = runtime_card_view(app.backend_status.phase);
+    let card = match view {
+        RuntimeCardView::Backend => backend_status_card(app, cx),
+        RuntimeCardView::CurrentRun => current_run_card(app),
+    };
+
+    card.flex_grow(2.0)
+        .flex_shrink(1.0)
+        .id("runtime-status-card")
+        .with_animation(
+            format!("runtime-card-{}", view.animation_key()),
+            Animation::new(Duration::from_millis(150)).with_easing(gpui::ease_out_quint()),
+            |card, progress| card.opacity(progress),
+        )
 }
 
 fn backend_status_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
@@ -152,6 +191,31 @@ fn backend_status_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .h(px(STATS_CARD_HEIGHT))
         .min_w_0()
         .overflow_hidden()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_card_shows_current_run_only_after_backend_is_ready() {
+        assert_eq!(
+            runtime_card_view(BackendPhase::Ready),
+            RuntimeCardView::CurrentRun
+        );
+
+        for phase in [
+            BackendPhase::WaitingForFirstFrame,
+            BackendPhase::Starting,
+            BackendPhase::RetryWaiting,
+            BackendPhase::Failed,
+            BackendPhase::Disconnected,
+            BackendPhase::Restarting,
+            BackendPhase::Mock,
+        ] {
+            assert_eq!(runtime_card_view(phase), RuntimeCardView::Backend);
+        }
+    }
 }
 
 pub(super) fn daily_details_overlay(
