@@ -25,7 +25,7 @@ use crate::{
         BadgeTone, ButtonVariant, badge, button, card, empty_state,
         is_activation_key as team_activation_key, palette_rgb, render_rgb as rgb,
         render_rgba as rgba, scroll_area_with_id, select_option, select_popup, select_trigger,
-        svg_icon_bytes, switch,
+        settings_grid, svg_icon_bytes, switch,
     },
     i18n::paired as text,
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose},

@@ -31,7 +31,7 @@ use crate::{
     components::{
         BadgeTone, ButtonVariant, badge, button, card, current_render_palette, is_activation_key,
         palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_option,
-        select_popup, select_trigger, switch, switch_accent,
+        select_popup, select_trigger, settings_grid, switch, switch_accent,
     },
     i18n::{self, Key as I18nKey, paired as text},
     model::{

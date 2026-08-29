@@ -123,13 +123,13 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .min_h(px(240.)),
         );
     } else {
-        // A flex basis gives us the same one-column/sufficient-width-two-column
-        // behavior as xl:grid-cols-2 without requiring a second render API
-        // that exposes the window size.
+        // Keep cards readable in both languages while allowing two columns in
+        // the default window. The row falls back to one column when the
+        // available width cannot satisfy the 360px minimum.
         for team in teams {
             cards = cards.child(
                 team_card(app, cx, team, language)
-                    .flex_basis(px(600.))
+                    .flex_basis(px(360.))
                     .flex_grow(1.)
                     .flex_shrink(1.),
             );
