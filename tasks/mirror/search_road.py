@@ -1,9 +1,12 @@
 import heapq
+import os
+import threading
 import time
 from enum import Enum
 from time import sleep
 
 import cv2
+import numpy as np
 
 from module.automation import auto
 from module.config import cfg
@@ -14,6 +17,32 @@ from tasks.base.retry import retry
 # 道路网格参数基于 2560×1440 游戏截图标定。
 ROAD_COLUMN_GAP = 520
 ROAD_ROW_GAP = 437
+
+_NODE_MODEL_PATH = "./assets/model/best.onnx"
+_node_detector_lock = threading.Lock()
+_node_detector_session = None
+_node_detector_input_name = None
+_node_detector_signature = None
+
+
+def _get_node_detector():
+    """Create the ONNX session once and reload it only when the model changes."""
+    global _node_detector_input_name, _node_detector_session, _node_detector_signature
+
+    try:
+        model_stat = os.stat(_NODE_MODEL_PATH)
+        model_signature = (model_stat.st_mtime_ns, model_stat.st_size)
+    except OSError:
+        model_signature = None
+
+    with _node_detector_lock:
+        if _node_detector_session is None or model_signature != _node_detector_signature:
+            import onnxruntime as ort
+
+            _node_detector_session = ort.InferenceSession(_NODE_MODEL_PATH)
+            _node_detector_input_name = _node_detector_session.get_inputs()[0].name
+            _node_detector_signature = model_signature
+        return _node_detector_session, _node_detector_input_name
 
 
 class MirrorMap:
@@ -174,13 +203,11 @@ def search_road_default_distance():
     ]
 
     auto.mouse_to_blank()
-    while auto.take_screenshot() is None:
-        continue
     if retry() is False:
         return False
     # 判断中、下两个节点是否有权重3的节点，有的话直接选择进入
     node_weight = {}
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
         for road in three_roads[:2]:
             node_x = bus_position[0] + road[0]
             node_y = bus_position[1] + road[1]
@@ -196,7 +223,7 @@ def search_road_default_distance():
                 if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
                     return True
     # 如果中、下两个节点没有权重3的节点，查看所有节点的权重，选择权重最大的节点进入
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
         from tasks.base.retry import check_times
 
         while True:
@@ -219,7 +246,7 @@ def search_road_default_distance():
                 break
 
     node_list = []
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
         for road in three_roads[:2]:
             node_x = bus_position[0] + road[0]
             node_y = bus_position[1] + road[1]
@@ -249,8 +276,6 @@ def search_road_farthest_distance():
     auto.mouse_click_blank()
     if not auto.mouse_scroll():
         raise InputAttributeError("后台输入不支持滚轮操作!")
-    while auto.take_screenshot() is None:
-        continue
     if retry() is False:
         return False
     three_roads = [
@@ -283,7 +308,7 @@ def search_road_from_road_map(hard_mode=False):
         if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
             return True, True
 
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
         from tasks.base.retry import check_times
 
         change_times = 5
@@ -313,7 +338,18 @@ def search_road_from_road_map(hard_mode=False):
                 break
 
     bus_pos = auto.find_element("mirror/mybus_default_distance.png") or bus
-    all_nodes = identify_nodes(bus[0])
+    if bus_pos is None:
+        log.warning("未找到 Bus，无法识别镜牢地图")
+        return [], []
+    bus = bus or bus_pos
+
+    # YOLO 需要彩色帧；后续道路模板匹配直接复用这一帧并在查找层转灰度，
+    # 避免识别节点后再额外等待一次截图间隔。
+    map_screenshot = auto.take_screenshot(gray=False)
+    all_nodes = identify_nodes(bus_pos[0], screenshot=map_screenshot)
+    if not all_nodes:
+        log.warning("未识别到镜牢地图节点")
+        return [], []
     y_area = divide_the_area_by_y(all_nodes)
     reset_position = False
     bus_row = Row.MID
@@ -326,7 +362,7 @@ def search_road_from_road_map(hard_mode=False):
             bus_row = Row.TOP
     elif len(y_area) == 1:
         nodes_column = divide_the_area_by_x(all_nodes)
-        connections = identify_road(bus, nodes_column[:1], bus_row)
+        connections = identify_road(bus, nodes_column[:1], bus_row, screenshot=map_screenshot)
         # 没有 Bus 到首列的连线时，无法推导下一步方向。
         if not connections:
             return [], []
@@ -339,7 +375,7 @@ def search_road_from_road_map(hard_mode=False):
             set_y_position = 1100 * scale
         else:
             set_y_position = 250 * scale
-        if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True):
+        if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
             from tasks.base.retry import check_times
 
             while True:
@@ -365,13 +401,14 @@ def search_road_from_road_map(hard_mode=False):
                 bus_position = auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True)
                 if bus_position is None:
                     break
-        all_nodes = identify_nodes(bus[0])
+        map_screenshot = auto.take_screenshot(gray=False)
+        all_nodes = identify_nodes(bus[0], screenshot=map_screenshot)
         if not all_nodes:  # identify_nodes() 可能返回 None，无法继续按列分组。
             log.warning("调整地图位置后未识别到节点")
             return [], []
 
     nodes_column = divide_the_area_by_x(all_nodes)
-    connections = identify_road(bus, nodes_column, bus_row)
+    connections = identify_road(bus, nodes_column, bus_row, screenshot=map_screenshot)
 
     route_graph = RouteGraph(
         nodes_column,
@@ -400,10 +437,7 @@ def search_road_from_road_map(hard_mode=False):
 # risky_encounter 是精锐遭遇战（链式战），shop 是商店，abnormality_focused_encounter 是异想体集中遭遇战
 
 
-def identify_nodes(bus_x):
-    import numpy as np
-    import onnxruntime as ort
-
+def identify_nodes(bus_x, screenshot=None):
     model_input_height = 544
     model_input_width = 960
     confidence_threshold = 0.4
@@ -416,10 +450,19 @@ def identify_nodes(bus_x):
         "shop",
         "abnormality_focused_encounter",
     ]
-    if auto.take_screenshot(gray=False) is None:
-        return None
-    original = np.array(auto.screenshot)
-    session = ort.InferenceSession("./assets/model/best.onnx")
+    if screenshot is None:
+        screenshot = auto.take_screenshot(gray=False)
+        if screenshot is None:
+            return None
+    original = np.asarray(screenshot)
+    if original.ndim == 2:
+        original = cv2.cvtColor(original, cv2.COLOR_GRAY2BGR)
+    elif original.ndim == 3 and original.shape[2] == 4:
+        original = original[:, :, :3]
+    if original.ndim != 3 or original.shape[2] != 3:
+        raise ValueError(f"节点检测不支持的截图形状: {original.shape}")
+
+    session, input_name = _get_node_detector()
 
     # 等比例缩放并填充到模型输入尺寸；保留比例和偏移以便还原检测框坐标。
     height, width = original.shape[:2]
@@ -438,19 +481,37 @@ def identify_nodes(bus_x):
         swapRB=False,
     )
 
-    outputs = session.run(None, {session.get_inputs()[0].name: blob})[0]
-    outputs = cv2.transpose(outputs[0])
-    boxes = []
-    scores = []
-    class_ids = []
-    # 收集超过置信度阈值的候选框，供 NMS 去除重叠检测。
-    for output in outputs:
-        _, max_score, _, (_, class_id) = cv2.minMaxLoc(output[4:])
-        if max_score < confidence_threshold:
-            continue
-        boxes.append([output[0] - output[2] / 2, output[1] - output[3] / 2, output[2], output[3]])
-        scores.append(float(max_score))
-        class_ids.append(class_id)
+    outputs = np.asarray(session.run(None, {input_name: blob})[0])
+    outputs = outputs[0] if outputs.ndim == 3 else outputs
+    # 不同导出器可能产生 [C,N] 或 [N,C]，统一为每行一个候选框。
+    if outputs.ndim != 2:
+        raise ValueError(f"节点检测模型输出形状异常: {outputs.shape}")
+    output_columns = 4 + len(classes)
+    if outputs.shape[0] == output_columns and outputs.shape[1] != output_columns:
+        outputs = outputs.T
+    elif outputs.shape[1] != output_columns:
+        raise ValueError(f"节点检测模型类别维度异常: {outputs.shape}")
+
+    class_scores = outputs[:, 4:]
+    class_ids_array = np.argmax(class_scores, axis=1)
+    max_scores = class_scores[np.arange(class_scores.shape[0]), class_ids_array]
+    valid = max_scores >= confidence_threshold
+    candidate_outputs = outputs[valid]
+    if not len(candidate_outputs):
+        return None
+
+    candidate_class_ids = class_ids_array[valid]
+    candidate_scores = max_scores[valid]
+    boxes_array = np.column_stack(
+        (
+            candidate_outputs[:, 0] - candidate_outputs[:, 2] / 2,
+            candidate_outputs[:, 1] - candidate_outputs[:, 3] / 2,
+            candidate_outputs[:, 2],
+            candidate_outputs[:, 3],
+        )
+    )
+    boxes = boxes_array.tolist()
+    scores = candidate_scores.astype(float).tolist()
 
     result_boxes = cv2.dnn.NMSBoxes(
         boxes,
@@ -472,13 +533,15 @@ def identify_nodes(bus_x):
             int((y + box_height / 2 - pad_y) / image_scale),
         )
         if center[0] >= bus_x + ROAD_COLUMN_GAP * cfg.set_win_size / 1440 / 2 and 0 <= center[1] < height:
-            node_list.append([classes[class_ids[index]], center])
+            node_list.append([classes[int(candidate_class_ids[index])], center])
     return node_list
 
 
-def identify_road(bus_position, nodes_column, bus_row):
+def identify_road(bus_position, nodes_column, bus_row, screenshot=None):
     """返回相邻节点列中经模板确认的连接。"""
-    if not nodes_column or auto.take_screenshot() is None:
+    if not nodes_column:
+        return []
+    if screenshot is None and auto.take_screenshot() is None:
         return []
 
     scale = cfg.set_win_size / 1440
@@ -526,6 +589,7 @@ def identify_road(bus_position, nodes_column, bus_row):
                     f"mirror/road_in_mir/{template}.png",
                     my_crop=crop,
                     model="aggressive",
+                    screenshot_image=screenshot,
                 ):
                     connections.append((column_number, source_position, target_position))
 

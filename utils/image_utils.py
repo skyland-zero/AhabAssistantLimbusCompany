@@ -250,29 +250,40 @@ class ImageUtils:
 
     @staticmethod
     def match_template_with_multiple_targets(screenshot, template, threshold, min_dist=10):
-        # 获取模板的宽度和高度
+        """在一张截图中查找多个模板位置。
+
+        ``matchTemplate`` 的结果通常包含同一目标周围的大量相邻像素。
+        旧实现会对所有过阈值像素排序，复杂度和临时对象数量会随截图
+        大小快速增长。先把过阈值区域分成连通块，每块只取最高点，
+        再执行原有的最小距离抑制，可以保留目标级别的结果并避免全量排序。
+        """
         w, h = ImageUtils.get_image_info(template)
-        # 存储所有匹配位置的中心点
-        center_points = []
-        # 使用matchTemplate对图片进行模板匹配
         res = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
-        # 遍历所有超过阈值的区域
-        loc = np.where(res >= threshold)
-        points = zip(*loc[::-1])
-        # 对匹配结果进行排序，根据匹配度得分从高到低
-        sorted_points = sorted(points, key=lambda x: res[x[1], x[0]], reverse=True)
-        # 遍历排序后的匹配位置
-        if sorted_points:
-            for pt in sorted_points:
-                # 检查当前匹配点是否与已保留的匹配点太近
-                if all(np.linalg.norm(np.array(pt) - np.array(kept_pt)) > min_dist for kept_pt in center_points):
-                    # 如果没有太近的匹配点，保留当前匹配点
-                    center_points.append(pt)
-            # 计算每个匹配点的中心坐标
-            center_points = [(int(pt[0] + w / 2), int(pt[1] + h / 2)) for pt in center_points]
-            return center_points
-        log.debug(f"未找到匹配项，最高匹配度为：{np.max(res)}")
-        return []
+        match_mask = np.asarray(res >= threshold, dtype=np.uint8)
+        if not np.any(match_mask):
+            log.debug(f"未找到匹配项，最高匹配度为：{np.max(res)}")
+            return []
+
+        label_count, labels, stats, _ = cv2.connectedComponentsWithStats(match_mask, connectivity=8)
+        points = []
+        for label in range(1, label_count):
+            x, y, width, height, _ = stats[label]
+            component_mask = (labels[y : y + height, x : x + width] == label).astype(np.uint8)
+            component_result = res[y : y + height, x : x + width]
+            _, _, _, max_loc = cv2.minMaxLoc(component_result, mask=component_mask)
+            points.append((int(x + max_loc[0]), int(y + max_loc[1])))
+
+        points.sort(key=lambda point: float(res[point[1], point[0]]), reverse=True)
+        center_points = []
+        min_dist_squared = float(min_dist) ** 2
+        for point in points:
+            if all(
+                (point[0] - kept_point[0]) ** 2 + (point[1] - kept_point[1]) ** 2 > min_dist_squared
+                for kept_point in center_points
+            ):
+                center_points.append(point)
+
+        return [(int(point[0] + w / 2), int(point[1] + h / 2)) for point in center_points]
 
     @staticmethod
     def get_image_info(image_array):
@@ -284,18 +295,31 @@ class ImageUtils:
         return image_array.shape[::-1]
 
     @staticmethod
-    def feature_matching(template_img, target_img, min_matches=8):
-        # 读取图像并进行预处理
-
-        template = cv2.resize(template_img, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)
-        target = cv2.resize(target_img, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)
-
-        # 使用ORB特征检测器
+    def feature_descriptors(image):
+        """Return ORB descriptors for an image, using the same preprocessing as matching."""
+        resized = cv2.resize(image, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)
         orb = cv2.ORB_create(nfeatures=1000, scaleFactor=1.2, edgeThreshold=10)
+        return orb.detectAndCompute(resized, None)
 
-        # 检测关键点和描述符
-        kp1, des1 = orb.detectAndCompute(template, None)
-        kp2, des2 = orb.detectAndCompute(target, None)
+    @staticmethod
+    def feature_matching(
+        template_img,
+        target_img,
+        min_matches=8,
+        *,
+        template_features=None,
+        target_features=None,
+    ):
+        """Match ORB features, optionally reusing descriptors for a frame."""
+        if template_features is None:
+            template_features = ImageUtils.feature_descriptors(template_img)
+        if target_features is None:
+            target_features = ImageUtils.feature_descriptors(target_img)
+
+        kp1, des1 = template_features
+        kp2, des2 = target_features
+        if des1 is None or des2 is None or not kp1 or not kp2:
+            return False, 0
 
         # 使用FLANN匹配器
         FLANN_INDEX_LSH = 6
@@ -303,7 +327,10 @@ class ImageUtils:
         search_params = dict(checks=50)
         flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-        matches = flann.knnMatch(des1, des2, k=2)
+        try:
+            matches = flann.knnMatch(des1, des2, k=2)
+        except cv2.error:
+            return False, 0
 
         # 比率测试
         good_matches = []
@@ -320,9 +347,11 @@ class ImageUtils:
 
             # 计算单应性矩阵
             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            if M is None or mask is None:
+                return False, len(good_matches)
 
             # 计算匹配置信度评分
-            inlier_ratio = np.sum(mask) / len(mask)
+            inlier_ratio = np.count_nonzero(mask) / len(mask)
             if inlier_ratio < 0.3:  # 如果内点比例过低，认为匹配不可靠
                 return False, len(good_matches)
 

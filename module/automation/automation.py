@@ -3,9 +3,8 @@ import math
 import random
 import threading
 import time
-from ast import List
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List
 
 import cv2
 import numpy as np
@@ -47,6 +46,13 @@ class Automation(metaclass=SingletonMeta):
         self._screenshot_lock = threading.RLock()
         self._latest_screenshot = None
         self._latest_screenshot_monotonic = 0.0
+        # ``screenshot`` is the business thread's current frame.  Keep a
+        # monotonically increasing id so OCR/feature caches can never cross a
+        # physical screenshot boundary.
+        self._frame_id = 0
+        self._frame_dirty = True
+        self._screenshot_array_cache = {}
+        self._ocr_cache = {}
         self._input_lock = threading.RLock()
         self._interaction_gate = threading.Event()
         self._interaction_gate.set()
@@ -54,6 +60,7 @@ class Automation(metaclass=SingletonMeta):
         self.init_input()
 
         self.img_cache = {}
+        self._feature_frame_cache = {}
         self.last_screenshot_time = 0
         self.last_click_time = 0
         self.model = "clam"
@@ -169,10 +176,14 @@ class Automation(metaclass=SingletonMeta):
                 check_cancelled()
                 if gate_open and self._interaction_gate.is_set():
                     method = getattr(self.input_handler, method_name)
-                    return method(*args, **kwargs)
+                    self._mark_screenshot_dirty()
+                    result = method(*args, **kwargs)
+                    return result
                 if not gate_open:
                     method = getattr(self.input_handler, method_name)
-                    return method(*args, **kwargs)
+                    self._mark_screenshot_dirty()
+                    result = method(*args, **kwargs)
+                    return result
                 # gate_open 但等待输入锁期间门被关闭:重新等待
 
     def mouse_click(self, x, y, times=1):
@@ -207,8 +218,80 @@ class Automation(metaclass=SingletonMeta):
 
     def monitor_mouse_click(self, x, y, times=1):
         """由系统监控线程点击，不等待该监控线程设置的互斥门。"""
+        self._mark_screenshot_dirty()
         with self._input_lock:
-            return self.input_handler.mouse_click(x, y, times=times)
+            result = self.input_handler.mouse_click(x, y, times=times)
+        return result
+
+    def _mark_screenshot_dirty(self) -> None:
+        """Invalidate data derived from the current frame after an input action.
+
+        The old ``self.screenshot`` is intentionally retained for callers that
+        explicitly want to inspect the last frame.  Any subsequent screenshot
+        request still captures a new frame, while monitor callers cannot reuse
+        the old image through ``max_age``.
+        """
+        self._frame_dirty = True
+        self._latest_screenshot_monotonic = 0.0
+        getattr(self, "_screenshot_array_cache", {}).clear()
+        getattr(self, "_ocr_cache", {}).clear()
+        getattr(self, "_feature_frame_cache", {}).clear()
+
+    def _set_business_screenshot(self, screenshot: Image) -> None:
+        """Publish a newly captured business frame and invalidate old results."""
+        self.screenshot = screenshot
+        self._frame_id = getattr(self, "_frame_id", 0) + 1
+        self._frame_dirty = False
+        getattr(self, "_screenshot_array_cache", {}).clear()
+        getattr(self, "_ocr_cache", {}).clear()
+        getattr(self, "_feature_frame_cache", {}).clear()
+
+    @staticmethod
+    def _normalize_crop(crop):
+        if crop is None:
+            return None
+        return tuple(round(float(value), 4) for value in crop)
+
+    def _current_frame_key(self, screenshot=None):
+        """Return a cache key that changes for both new frames and new objects."""
+        if screenshot is None:
+            screenshot = getattr(self, "screenshot", None)
+            frame_id = getattr(self, "_frame_id", 0)
+        else:
+            frame_id = 0
+        return frame_id, id(screenshot)
+
+    def _get_screenshot_array(self, screenshot=None, *, gray=True):
+        """Convert a PIL/ndarray screenshot once per frame and color mode."""
+        source_is_current_frame = screenshot is None
+        if screenshot is None:
+            screenshot = self.screenshot
+        cache = getattr(self, "_screenshot_array_cache", None)
+        if cache is None:
+            cache = self._screenshot_array_cache = {}
+        frame_key = self._current_frame_key() if source_is_current_frame else self._current_frame_key(screenshot)
+        cache_key = (frame_key, gray)
+        if cache_key in cache:
+            return cache[cache_key]
+
+        image_array = np.asarray(screenshot)
+        if gray:
+            if image_array.ndim == 3:
+                if image_array.shape[2] == 4:
+                    image_array = cv2.cvtColor(image_array, cv2.COLOR_RGBA2GRAY)
+                elif image_array.shape[2] == 3:
+                    image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+                elif image_array.shape[2] == 1:
+                    image_array = image_array[:, :, 0]
+                else:
+                    raise ValueError(f"不支持的图像通道数: {image_array.shape[2]}")
+        elif image_array.ndim == 2:
+            image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2RGB)
+        elif image_array.ndim == 3 and image_array.shape[2] == 4:
+            image_array = image_array[:, :, :3]
+
+        cache[cache_key] = image_array
+        return image_array
 
     def _remember_screenshot(self, screenshot: Image | None) -> None:
         if screenshot is None:
@@ -220,6 +303,7 @@ class Automation(metaclass=SingletonMeta):
         """让监控线程在下一轮检查时获取新截图。"""
         with self._screenshot_lock:
             self._latest_screenshot_monotonic = 0.0
+        self._mark_screenshot_dirty()
 
     def take_monitor_screenshot(
         self,
@@ -427,7 +511,8 @@ class Automation(metaclass=SingletonMeta):
                     result = ScreenShot.take_screenshot(gray)
                     self._remember_screenshot(result)
                 if result:
-                    self.screenshot = result
+                    with self._screenshot_lock:
+                        self._set_business_screenshot(result)
                     self.last_screenshot_time = time.time()
                     return result
                 else:
@@ -457,7 +542,7 @@ class Automation(metaclass=SingletonMeta):
 
                         _, pid = win32process.GetWindowThreadProcessId(screen.handle.hwnd)
                         os.system(f"taskkill /F /PID {pid}")
-                except:
+                except Exception:
                     pass
                 from tasks.base.script_task_scheme import init_game
 
@@ -475,6 +560,7 @@ class Automation(metaclass=SingletonMeta):
         my_crop=None,
         min_dist=10,
         additional_stack=0,
+        screenshot_image=None,
     ):
         """
         查找元素，并根据指定的查找类型执行不同的查找策略。
@@ -488,6 +574,7 @@ class Automation(metaclass=SingletonMeta):
             my_crop: 用于限制图像或OCR识别范围的裁剪区域
             min_dist: 多目标图像查找时的NMS最小距离。
             additional_stack: 用于日志堆栈层级调整
+            screenshot_image: 可选的外部截图帧；提供后不会改写业务线程当前帧。
         Returns:
             查找到的元素位置，或者在图像计数查找时返回计数。
         """
@@ -496,7 +583,7 @@ class Automation(metaclass=SingletonMeta):
         # 如果不需要截图，则重试次数设置为1
         max_retries = 1 if not take_screenshot else max_retries
         for i in range(max_retries):
-            if take_screenshot:
+            if take_screenshot and screenshot_image is None:
                 # 截图并根据裁剪参数获取截图结果
                 while self.take_screenshot() is None:
                     continue
@@ -511,18 +598,34 @@ class Automation(metaclass=SingletonMeta):
                         model=model,
                         my_crop=my_crop,
                         additional_stack=additional_stack,
+                        screenshot_image=screenshot_image,
                     )
                 elif find_type == "text":
                     # 使用文本查找方法查找元素
-                    center = self.find_text_element(target, my_crop, additional_stack=additional_stack)
+                    center = self.find_text_element(
+                        target,
+                        my_crop,
+                        additional_stack=additional_stack,
+                        screenshot_image=screenshot_image,
+                    )
                 if center:
                     return center
             elif find_type in ["feature"]:
-                return self.find_feature_element(target, my_crop, additional_stack=additional_stack)
+                return self.find_feature_element(
+                    target,
+                    my_crop,
+                    additional_stack=additional_stack,
+                    screenshot_image=screenshot_image,
+                )
             elif find_type in ["image_with_multiple_targets"]:
                 # 使用多目标图像查找方法查找元素
                 return self.find_image_with_multiple_targets(
-                    target, threshold, my_crop=my_crop, min_dist=min_dist, additional_stack=additional_stack
+                    target,
+                    threshold,
+                    my_crop=my_crop,
+                    min_dist=min_dist,
+                    additional_stack=additional_stack,
+                    screenshot_image=screenshot_image,
                 )
             else:
                 raise ValueError("错误的类型")
@@ -531,18 +634,23 @@ class Automation(metaclass=SingletonMeta):
                 interruptible_sleep(1)  # 在重试前等待一定时间
         return None
 
-    def find_image_with_multiple_targets(self, target: str, threshold, my_crop=None, min_dist=10, additional_stack=0) -> List:
+    def find_image_with_multiple_targets(
+        self,
+        target: str,
+        threshold,
+        my_crop=None,
+        min_dist=10,
+        additional_stack=0,
+        screenshot_image=None,
+    ) -> List:
         """
         在当前截图中查找多个目标图像的位置
         """
         try:
-            template = ImageUtils.load_image(target)
-            if target.endswith("assets.png"):
-                bbox = ImageUtils.get_bbox(template)
-                template = ImageUtils.crop(template, bbox)
+            template, bbox = self._load_active_template(target)
             if template is None:
                 raise ValueError("读取图片失败")
-            screenshot = np.array(self.screenshot)
+            screenshot = self._get_screenshot_array(screenshot_image, gray=True)
             crop_offset = (0, 0)
             if my_crop:
                 crop_offset = (int(round(my_crop[0])), int(round(my_crop[1])))
@@ -577,28 +685,44 @@ class Automation(metaclass=SingletonMeta):
                 return ocr_dict[text]
         return False
 
-    def _run_ocr_for_text(self, my_crop=None, only_text=False, additional_stack=0):
-        if my_crop is not None:
-            cropped_image = self.screenshot.crop(my_crop)
-            ocr_result = ocr.run(cropped_image)
-        else:
-            ocr_result = ocr.run(self.screenshot)
+    def _run_ocr_for_text(self, my_crop=None, only_text=False, additional_stack=0, screenshot_image=None):
+        """Run OCR once for a frame/crop and reuse both text and coordinates."""
+        frame_key = self._current_frame_key(screenshot_image)
+        cache_key = (frame_key, self._normalize_crop(my_crop))
+        ocr_cache = getattr(self, "_ocr_cache", None)
+        if ocr_cache is None:
+            ocr_cache = self._ocr_cache = {}
 
-        if not ocr_result.txts:
-            return False if only_text else {}
+        cached = ocr_cache.get(cache_key)
+        if cached is None:
+            source_image = self.screenshot if screenshot_image is None else screenshot_image
+            if my_crop is not None:
+                if hasattr(source_image, "crop"):
+                    cropped_image = source_image.crop(my_crop)
+                else:
+                    cropped_image = ImageUtils.crop(np.asarray(source_image), my_crop)
+                ocr_result = ocr.run(cropped_image)
+            else:
+                ocr_result = ocr.run(source_image)
 
-        ocr_text_list = [ocr_result.txts[i] for i in range(len(ocr_result.txts))]
+            ocr_texts = getattr(ocr_result, "txts", None)
+            ocr_boxes = getattr(ocr_result, "boxes", None)
+            ocr_text_list = list(ocr_texts) if ocr_texts is not None else []
+            ocr_position_list = []
+            for box in ocr_boxes if ocr_boxes is not None else []:
+                x = (box[0][0] + box[2][0]) / 2
+                y = (box[0][1] + box[2][1]) / 2
+                ocr_position_list.append([x, y])
+            ocr_dict = {text: position for text, position in zip(ocr_text_list, ocr_position_list)}
+            cached = (ocr_dict, ocr_text_list)
+            ocr_cache[cache_key] = cached
+
+            if ocr_dict:
+                log.debug(f"识别到文本及其坐标：{ocr_dict}", stacklevel=additional_stack + 3)
+
+        ocr_dict, ocr_text_list = cached
         if only_text:
-            return ocr_text_list
-
-        ocr_position_list = []
-        for box in ocr_result.boxes:
-            x = (box[0][0] + box[2][0]) / 2
-            y = (box[0][1] + box[2][1]) / 2
-            ocr_position_list.append([x, y])
-
-        ocr_dict = {text: position for text, position in zip(ocr_text_list, ocr_position_list)}
-        log.debug(f"识别到文本及其坐标：{ocr_dict}", stacklevel=additional_stack + 3)
+            return ocr_text_list or False
         return ocr_dict
 
     def _find_target_in_ocr_dict(self, target, ocr_dict, all_text=False):
@@ -673,13 +797,26 @@ class Automation(metaclass=SingletonMeta):
 
         return False
 
-    def find_text_element(self, target, my_crop=None, all_text=False, only_text=False, additional_stack=0):
+    def find_text_element(
+        self,
+        target,
+        my_crop=None,
+        all_text=False,
+        only_text=False,
+        additional_stack=0,
+        screenshot_image=None,
+    ):
         """
         寻找文本元素所在的坐标位置。
 
         str/list 目标返回坐标；dict 目标返回 TextMatchResult。
         """
-        ocr_result = self._run_ocr_for_text(my_crop=my_crop, only_text=only_text, additional_stack=additional_stack)
+        ocr_result = self._run_ocr_for_text(
+            my_crop=my_crop,
+            only_text=only_text,
+            additional_stack=additional_stack,
+            screenshot_image=screenshot_image,
+        )
         if only_text:
             return ocr_result
         return self._find_target_in_ocr_dict(target, ocr_result, all_text=all_text)
@@ -688,26 +825,23 @@ class Automation(metaclass=SingletonMeta):
         """
         从屏幕截图中提取文字
         """
-        if my_crop is not None:
-            # 根据my_crop（为左上与右下四个坐标），截取self.screenshot的部分区域进行ocr
-            cropped_image = self.screenshot.crop(my_crop)
-            ocr_result = ocr.run(cropped_image)
-        else:
-            ocr_result = ocr.run(self.screenshot)
-        if ocr_result.txts:
-            ocr_text_list = [ocr_result.txts[i] for i in range(len(ocr_result.txts))]
-        else:
-            ocr_text_list = []
+        result = self._run_ocr_for_text(my_crop=my_crop, only_text=True)
+        return result if result is not False else []
 
-        return ocr_text_list
-
-    def find_feature_element(self, target, pic_crop=None, min_matches=8, additional_stack=0):
+    def find_feature_element(
+        self,
+        target,
+        pic_crop=None,
+        min_matches=8,
+        additional_stack=0,
+        screenshot_image=None,
+    ):
         """
         寻找特征元素所在的坐标位置
         """
         try:
-            template = ImageUtils.load_image(target, resize=False)
-            screenshot = np.array(self.screenshot)
+            template, template_features = self._load_feature_template(target)
+            screenshot = self._get_screenshot_array(screenshot_image, gray=True)
             if cfg.set_win_size < 1440:
                 screenshot = cv2.resize(
                     screenshot,
@@ -730,7 +864,27 @@ class Automation(metaclass=SingletonMeta):
                 elif cfg.set_win_size > 1440:
                     pic_crop = [int(i * cfg.set_win_size / 1440) for i in pic_crop]
                 screenshot = ImageUtils.crop(screenshot, pic_crop)
-            result, num_matches = ImageUtils.feature_matching(template, screenshot, min_matches)
+
+            target_cache_key = (
+                self._current_frame_key(screenshot_image),
+                self._normalize_crop(pic_crop),
+                screenshot.shape,
+            )
+            feature_frame_cache = getattr(self, "_feature_frame_cache", None)
+            if feature_frame_cache is None:
+                feature_frame_cache = self._feature_frame_cache = {}
+            target_features = feature_frame_cache.get(target_cache_key)
+            if target_features is None:
+                target_features = ImageUtils.feature_descriptors(screenshot)
+                feature_frame_cache[target_cache_key] = target_features
+
+            result, num_matches = ImageUtils.feature_matching(
+                template,
+                screenshot,
+                min_matches,
+                template_features=template_features,
+                target_features=target_features,
+            )
             log.debug(
                 f"匹配目标特征图片：{target.replace('./assets/images/', '')}结果{result}, 找到 {num_matches} 个匹配点",
                 stacklevel=additional_stack + 3,
@@ -747,11 +901,12 @@ class Automation(metaclass=SingletonMeta):
     def clear_img_cache(self) -> None:
         """清除图片缓存"""
         self.img_cache.clear()
+        getattr(self, "_feature_frame_cache", {}).clear()
         gc.collect()  # 强制垃圾回收，清理内存
         log.debug("图片缓存已清除", stacklevel=2)
 
     def _load_template_for_path(self, target: str, target_path: str, cacheable: bool):
-        cache_key = (target, target_path)
+        cache_key = ("template", target, target_path, cfg.set_win_size)
         if cacheable and cache_key in self.img_cache:
             cached = self.img_cache[cache_key]
             return cached["template"], cached["bbox"]
@@ -767,6 +922,51 @@ class Automation(metaclass=SingletonMeta):
         if cacheable:
             self.img_cache[cache_key] = {"template": template, "bbox": bbox}
         return template, bbox
+
+    def _load_active_template(self, target: str):
+        """Load a multi-target template once for the active resource state."""
+        cache_key = (
+            "multiple_template",
+            target,
+            cfg.set_win_size,
+            tuple(path_manager.pic_path),
+            path_manager.current_theme,
+            path_manager.current_language,
+        )
+        cached = self.img_cache.get(cache_key)
+        if cached is not None:
+            return cached["template"], cached["bbox"]
+
+        template = ImageUtils.load_image(target)
+        if template is None:
+            return None, None
+        bbox = None
+        if target.endswith("assets.png"):
+            bbox = ImageUtils.get_bbox(template)
+            template = ImageUtils.crop(template, bbox)
+        self.img_cache[cache_key] = {"template": template, "bbox": bbox}
+        return template, bbox
+
+    def _load_feature_template(self, target: str):
+        """Load and precompute ORB descriptors for a feature template."""
+        cache_key = (
+            "feature_template",
+            target,
+            cfg.set_win_size,
+            tuple(path_manager.pic_path),
+            path_manager.current_theme,
+            path_manager.current_language,
+        )
+        cached = self.img_cache.get(cache_key)
+        if cached is not None:
+            return cached["template"], cached["features"]
+
+        template = ImageUtils.load_image(target, resize=False)
+        if template is None:
+            return None, None
+        features = ImageUtils.feature_descriptors(template)
+        self.img_cache[cache_key] = {"template": template, "features": features}
+        return template, features
 
     @staticmethod
     def _is_valid_match(match_val, threshold) -> bool:
@@ -840,6 +1040,7 @@ class Automation(metaclass=SingletonMeta):
         model="clam",
         my_crop=None,
         additional_stack=0,
+        screenshot_image=None,
     ):
         """
         在当前截图中查找目标图像的位置
@@ -859,7 +1060,7 @@ class Automation(metaclass=SingletonMeta):
                 log.debug(f"无法加载图片: {target}", stacklevel=additional_stack + 3)
                 return None
 
-            screenshot = np.array(self.screenshot)
+            screenshot = self._get_screenshot_array(screenshot_image, gray=True)
             if my_crop:
                 screenshot = ImageUtils.crop(screenshot, my_crop)
 
@@ -906,7 +1107,7 @@ class Automation(metaclass=SingletonMeta):
         获取指定区域的彩色截图
         """
         self.take_screenshot(False)
-        screenshot = np.array(self.screenshot)
+        screenshot = self._get_screenshot_array(gray=False)
         screenshot = screenshot[:, :, ::-1]
         screenshot = ImageUtils.crop(screenshot, crop)
         return screenshot

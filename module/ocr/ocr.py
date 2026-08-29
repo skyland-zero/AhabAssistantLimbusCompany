@@ -26,6 +26,8 @@ class OCR(metaclass=SingletonMeta):
             },
             config_path=r"assets\config\default_rapidocr.yaml",
         )
+        # CLAHE 配置固定，避免每次 OCR 请求重复创建 OpenCV 对象。
+        self._clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
     def run(self, image: Image.Image | np.ndarray | str) -> RapidOCROutput:
         """执行OCR识别，支持Image对象、文件路径和np.ndarray对象"""
@@ -58,8 +60,7 @@ class OCR(metaclass=SingletonMeta):
                 raise ValueError(f"不支持的图像维度: {image_array.ndim}")
 
             # 自适应均衡化(均值化后更亮)
-            clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            processed_image = clahe.apply(img_cv_gray)
+            processed_image = self._clahe.apply(img_cv_gray)
             results = self.engine(processed_image)
             self.log_results(results)
             return results
