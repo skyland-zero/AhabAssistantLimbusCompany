@@ -122,6 +122,18 @@ fn ready_receiver(response: RpcResponse) -> Receiver<RpcResponse> {
     receiver
 }
 
+/// Describes whether starting the backend reused the shared owned-sidecar
+/// supervisor or produced a new client for an externally managed sidecar.
+///
+/// Owned sidecars must be restarted through the existing supervisor so every
+/// page keeps the same transport and an old child process is not left behind.
+/// External sidecars cannot be replaced by that supervisor, so a new client is
+/// handed back to the app after a successful connection.
+pub enum BackendAttach {
+    Reused,
+    New(BackendClient),
+}
+
 /// The one client handle shared by all GPUI pages.
 #[derive(Clone)]
 pub enum BackendClient {
@@ -140,6 +152,23 @@ impl BackendClient {
 
     pub fn unavailable(error: impl Into<String>) -> Self {
         Self::Sidecar(SidecarSupervisor::unavailable(error))
+    }
+
+    /// Start or reconnect the configured sidecar without changing the page
+    /// layer's transport contract.
+    ///
+    /// For a child owned by GPUI, the supervisor replaces its WebSocket client
+    /// in place. For an externally managed sidecar, the connection attempt
+    /// creates a new client that the app must install into all page gateways.
+    pub fn start_or_connect(&self) -> Result<BackendAttach, String> {
+        match self {
+            Self::Mock(_) => Err("mock backend does not start a sidecar".to_owned()),
+            Self::Sidecar(supervisor) if supervisor.restartable => {
+                supervisor.restart()?;
+                Ok(BackendAttach::Reused)
+            }
+            Self::Sidecar(_) => Ok(BackendAttach::New(Self::try_sidecar()?)),
+        }
     }
 
     pub fn is_sidecar(&self) -> bool {

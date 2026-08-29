@@ -27,7 +27,9 @@ use gpui::{
 };
 
 use crate::{
-    app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
+    app::{
+        ACCENT, AhabApp, BACKGROUND, BORDER, BackendPhase, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED,
+    },
     components::{
         BadgeTone, ButtonVariant, badge, button, card, current_render_palette, is_activation_key,
         palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area_with_handle,

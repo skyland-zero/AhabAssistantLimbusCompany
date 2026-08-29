@@ -103,6 +103,77 @@ impl Page {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum BackendPhase {
+    WaitingForFirstFrame,
+    Starting,
+    RetryWaiting,
+    Ready,
+    Failed,
+    Disconnected,
+    Restarting,
+    Mock,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct BackendStatus {
+    pub(crate) phase: BackendPhase,
+    pub(crate) retry_no: Option<u8>,
+    pub(crate) last_error: Option<String>,
+}
+
+impl BackendStatus {
+    pub(crate) fn waiting_for_first_frame() -> Self {
+        Self {
+            phase: BackendPhase::WaitingForFirstFrame,
+            retry_no: None,
+            last_error: None,
+        }
+    }
+
+    pub(crate) fn mock() -> Self {
+        Self {
+            phase: BackendPhase::Mock,
+            retry_no: None,
+            last_error: None,
+        }
+    }
+
+    pub(crate) fn can_manual_retry(&self) -> bool {
+        matches!(
+            self.phase,
+            BackendPhase::Failed | BackendPhase::Disconnected
+        )
+    }
+
+    pub(crate) fn is_ready(&self) -> bool {
+        self.phase == BackendPhase::Ready
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum BackendOperation {
+    Idle,
+    Connecting {
+        attempt_id: u64,
+        retry_no: u8,
+        recovery: bool,
+        terminal_phase: BackendPhase,
+    },
+    WaitingRetry {
+        attempt_id: u64,
+        retry_no: u8,
+        recovery: bool,
+        terminal_phase: BackendPhase,
+    },
+}
+
+impl BackendOperation {
+    pub(crate) fn is_idle(self) -> bool {
+        matches!(self, Self::Idle)
+    }
+}
+
 /// Root UI state. Home owns its task, execution, device, and log state so the
 /// page can evolve without scattering business state through render methods.
 pub struct AhabApp {
@@ -129,7 +200,10 @@ pub struct AhabApp {
     pub(crate) screenshot_pending_image_source: Option<Arc<Image>>,
     pub(crate) screenshot_pending_render_image: Option<Arc<RenderImage>>,
     pub(crate) screenshot_pending_image_revision: Option<u64>,
-    pub(crate) sidecar_restart_started: bool,
+    pub(crate) backend_status: BackendStatus,
+    pub(crate) backend_operation: BackendOperation,
+    pub(crate) backend_attempt_id: u64,
+    pub(crate) backend_epoch: u64,
 }
 
 impl AhabApp {
@@ -206,5 +280,51 @@ impl VisualState {
             Self::ResourcesSyncing => Page::Resources,
             Self::HelpScrolled => Page::Help,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_status_only_allows_manual_retry_after_failure() {
+        let mut status = BackendStatus::waiting_for_first_frame();
+        assert!(!status.can_manual_retry());
+
+        status.phase = BackendPhase::RetryWaiting;
+        assert!(!status.can_manual_retry());
+
+        status.phase = BackendPhase::Failed;
+        assert!(status.can_manual_retry());
+
+        status.phase = BackendPhase::Disconnected;
+        assert!(status.can_manual_retry());
+
+        status.phase = BackendPhase::Ready;
+        assert!(!status.can_manual_retry());
+    }
+
+    #[test]
+    fn backend_operations_are_busy_until_the_attempt_finishes() {
+        assert!(BackendOperation::Idle.is_idle());
+        assert!(
+            !BackendOperation::Connecting {
+                attempt_id: 1,
+                retry_no: 0,
+                recovery: false,
+                terminal_phase: BackendPhase::Failed,
+            }
+            .is_idle()
+        );
+        assert!(
+            !BackendOperation::WaitingRetry {
+                attempt_id: 1,
+                retry_no: 1,
+                recovery: false,
+                terminal_phase: BackendPhase::Failed,
+            }
+            .is_idle()
+        );
     }
 }

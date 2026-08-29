@@ -14,7 +14,7 @@ pub trait RpcClient {
     fn send(&mut self, request: RpcRequest) -> RpcResponse;
 }
 
-pub use backend::{BackendClient, decode_response};
+pub use backend::{BackendAttach, BackendClient, decode_response};
 pub use contract::{
     EventEnvelope, RequestId, RequestSequence, RpcCompletion, RpcError, RpcResponse,
 };

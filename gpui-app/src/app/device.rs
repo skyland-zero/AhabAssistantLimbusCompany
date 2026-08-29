@@ -21,47 +21,8 @@ impl AhabApp {
                 if this
                     .update(cx, |view, cx| {
                         let changed = view.poll_backend_events();
-                        if view.home.stop_timed_out() && !view.sidecar_restart_started {
-                            view.sidecar_restart_started = true;
-                            let rpc = view.home.rpc.clone();
-                            cx.spawn(async move |this, cx| {
-                                let result = cx
-                                    .background_executor()
-                                    .spawn(async move { rpc.restart_sidecar() })
-                                    .await;
-                                let _ = this.update(cx, |view, cx| {
-                                    view.sidecar_restart_started = false;
-                                    match result {
-                                        Ok(()) => {
-                                            view.home.reset_after_sidecar_restart();
-                                            view.show_toast(
-                                                crate::shell::ToastKind::Success,
-                                                "后端已重启，正在重新加载状态",
-                                                cx,
-                                            );
-                                            view.start_backend_hydration(cx);
-                                        }
-                                        Err(error) => {
-                                            // An externally managed sidecar
-                                            // cannot be killed or replaced by
-                                            // GPUI.  Mark this timeout as
-                                            // handled so the pump does not
-                                            // retry every five seconds while
-                                            // leaving the backend state intact.
-                                            view.home.mark_stop_timeout_handled();
-                                            view.show_toast(
-                                                crate::shell::ToastKind::Error,
-                                                format!("后端重启失败：{error}"),
-                                                cx,
-                                            );
-                                        }
-                                    }
-                                    cx.notify();
-                                });
-                            })
-                            .detach();
-                        }
-                        if changed || view.sidecar_restart_started {
+                        let recovering = view.maybe_recover_backend(cx);
+                        if changed || recovering {
                             cx.notify();
                         }
                     })

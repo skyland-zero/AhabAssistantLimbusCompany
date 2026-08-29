@@ -312,6 +312,10 @@ impl HomeState {
     }
 
     fn log_level(&mut self, level: LogLevel, message: &str) {
+        self.append_local_log(level, message.to_owned());
+    }
+
+    pub(crate) fn append_local_log(&mut self, level: LogLevel, message: impl Into<String>) {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_millis().min(i64::MAX as u128) as i64)
@@ -319,7 +323,7 @@ impl HomeState {
         self.push_log(LogEntryPayload {
             ts,
             level,
-            message: message.to_owned(),
+            message: message.into(),
         });
     }
 
@@ -394,5 +398,21 @@ mod tests {
         let frame = home.latest_screenshot.expect("binary preview frame");
         assert_eq!(frame.instanceId, "fixture");
         assert_eq!(frame.jpeg, vec![0xff, 0xd8, 0xff, 0xd9]);
+    }
+
+    #[test]
+    fn local_backend_logs_use_the_same_bounded_queue() {
+        let mut home = HomeState::default();
+        home.append_local_log(LogLevel::Error, "backend failed");
+
+        assert_eq!(home.logs.back().unwrap().message, "backend failed");
+        assert_eq!(home.logs.back().unwrap().level, LogLevel::Error);
+
+        for index in 0..301 {
+            home.append_local_log(LogLevel::Info, format!("log {index}"));
+        }
+
+        assert_eq!(home.logs.len(), 300);
+        assert_eq!(home.logs.front().unwrap().message, "log 1");
     }
 }
