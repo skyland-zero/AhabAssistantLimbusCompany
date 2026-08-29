@@ -230,14 +230,18 @@ class Automation(metaclass=SingletonMeta):
     ) -> Image | None:
         """获取监控截图，优先复用业务线程的最近帧且不覆盖业务截图。"""
         with self._screenshot_lock:
+            latest_screenshot = self._latest_screenshot
             if (
-                self._latest_screenshot is not None
+                latest_screenshot is not None
                 and max_age > 0
                 and time.monotonic() - self._latest_screenshot_monotonic <= max_age
+                # 业务截图通常是灰度图。灰度图无法通过 convert("RGB")
+                # 恢复颜色，因此彩色监控截图不能复用 L 模式缓存。
+                and (gray or latest_screenshot.mode != "L")
             ):
-                if gray and self._latest_screenshot.mode != "L":
-                    return self._latest_screenshot.convert("L")
-                return self._latest_screenshot
+                if gray and latest_screenshot.mode != "L":
+                    return latest_screenshot.convert("L")
+                return latest_screenshot
 
             screenshot = ScreenShot.take_screenshot(
                 gray,
