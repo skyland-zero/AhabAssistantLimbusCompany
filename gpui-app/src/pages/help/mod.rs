@@ -13,7 +13,10 @@ use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
     assets,
     components::style::current_render_palette,
-    components::{ButtonVariant, button, is_activation_key, palette_rgb, render_rgb as rgb},
+    components::{
+        ButtonVariant, button, is_activation_key, palette_rgb, render_rgb as rgb,
+        scroll_area_with_handle,
+    },
     i18n::{self, Key as I18nKey},
     model::Language,
 };
@@ -123,24 +126,19 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         )
         .child(toc_view);
 
-    let mut document = div()
-        .id("help-document-scroll")
-        .w_full()
-        .max_w(px(672.))
-        .mx_auto()
-        .overflow_y_scroll()
-        .scrollbar_width(px(6.))
-        .track_scroll(&app.help_scroll)
-        .flex()
-        .flex_col()
-        .gap_2()
-        .px_8()
-        .py_6()
-        .flex_1()
-        .min_w_0();
+    let mut document = div().w_full().flex().flex_col().gap_2().px_8().py_6();
     for block in blocks {
         document = document.child(render_block(block, cx));
     }
+
+    let scroll_handle = app.help_scroll.clone();
+    let document = scroll_area_with_handle(app, "help-document-scroll", document, scroll_handle)
+        .w_full()
+        .max_w(px(672.))
+        .mx_auto()
+        .scrollbar_width(px(6.))
+        .flex_1()
+        .min_w_0();
 
     div()
         .size_full()

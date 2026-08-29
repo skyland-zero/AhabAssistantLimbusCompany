@@ -85,7 +85,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_col()
         .bg(rgb(BACKGROUND))
         .child(
-            scroll_area_with_id("settings-scroll", div().w_full().p_4().child(stack))
+            scroll_area_with_id(app, "settings-scroll", div().w_full().p_4().child(stack))
                 .size_full()
                 .min_h_0(),
         )

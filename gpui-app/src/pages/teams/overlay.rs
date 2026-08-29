@@ -243,7 +243,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
                     .child(tabs),
             )
             .child(
-                scroll_area_with_id("team-editor-scroll", content)
+                scroll_area_with_id(app, "team-editor-scroll", content)
                     .flex_1()
                     .min_h_0()
                     .px_6()

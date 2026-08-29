@@ -126,7 +126,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_col()
         .bg(rgb(BACKGROUND))
         .child(
-            scroll_area_with_id("toolbox-scroll", content)
+            scroll_area_with_id(app, "toolbox-scroll", content)
                 .flex_1()
                 .min_h_0(),
         )

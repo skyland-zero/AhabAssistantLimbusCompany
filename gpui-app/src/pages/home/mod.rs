@@ -30,8 +30,9 @@ use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED},
     components::{
         BadgeTone, ButtonVariant, badge, button, card, current_render_palette, is_activation_key,
-        palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_option,
-        select_popup, select_trigger, settings_grid, switch, switch_accent,
+        palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area_with_handle,
+        scroll_area_with_id, select_option, select_popup, select_trigger, settings_grid, switch,
+        switch_accent,
     },
     i18n::{self, Key as I18nKey, paired as text},
     model::{
@@ -72,15 +73,16 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         ),
     ];
 
-    let task_list = div()
-        .id("home-task-scroll")
-        .overflow_y_scroll()
-        .flex_1()
-        .min_h_0()
-        .pl(px(10.0))
-        .pr(px(4.0))
-        .py(px(10.0))
-        .child(div().flex().flex_col().gap_2().pb_2().children(task_cards));
+    let task_list = scroll_area_with_id(
+        app,
+        "home-task-scroll",
+        div().flex().flex_col().gap_2().pb_2().children(task_cards),
+    )
+    .flex_1()
+    .min_h_0()
+    .pl(px(10.0))
+    .pr(px(4.0))
+    .py(px(10.0));
 
     let left_panel = div()
         .flex_1()

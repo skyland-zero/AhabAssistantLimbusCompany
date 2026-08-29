@@ -259,7 +259,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         );
     }
     root.child(
-        scroll_area_with_id("theme-packs-scroll", div().w_full().p_6().child(list))
+        scroll_area_with_id(app, "theme-packs-scroll", div().w_full().p_6().child(list))
             .flex_1()
             .min_h_0(),
     )

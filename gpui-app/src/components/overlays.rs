@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::{app::AhabApp, components::smooth_scroll::SmoothScrollController};
+
 pub fn dialog(title: impl Into<String>, body: impl IntoElement, actions: impl IntoElement) -> Div {
     dialog_with_palette(
         title,
@@ -75,18 +77,60 @@ pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
 }
 
 /// Scroll container with a caller-provided stable GPUI id for repeated lists.
-/// GPUI owns wheel/trackpad behavior; the thin scrollbar is a platform paint
-/// concern, so callers should keep this as the single scroll boundary.
-pub fn scroll_area_with_id(id: &'static str, child: impl IntoElement) -> Stateful<Div> {
-    scroll_area_with_palette(
+/// The app-owned controller smooths coarse wheel events while GPUI keeps
+/// native pixel-precise trackpad and scrollbar behavior.
+pub fn scroll_area_with_id(
+    app: &mut AhabApp,
+    id: &'static str,
+    child: impl IntoElement,
+) -> Stateful<Div> {
+    let controller = app.smooth_scroll_controller(id);
+    scroll_area_with_controller(
         id,
         child,
         &current_render_palette(),
         ControlState::default(),
+        controller,
+    )
+}
+
+pub fn scroll_area_with_handle(
+    app: &mut AhabApp,
+    id: &'static str,
+    child: impl IntoElement,
+    handle: gpui::ScrollHandle,
+) -> Stateful<Div> {
+    let controller = app.smooth_scroll_controller_with_handle(id, handle);
+    scroll_area_with_controller(
+        id,
+        child,
+        &current_render_palette(),
+        ControlState::default(),
+        controller,
     )
 }
 
 pub fn scroll_area_with_palette(
+    id: &'static str,
+    child: impl IntoElement,
+    palette: &Palette,
+    state: ControlState,
+) -> Stateful<Div> {
+    let area = scroll_area_base(id, child, palette, state);
+    area
+}
+
+fn scroll_area_with_controller(
+    id: &'static str,
+    child: impl IntoElement,
+    palette: &Palette,
+    state: ControlState,
+    controller: SmoothScrollController,
+) -> Stateful<Div> {
+    controller.attach(scroll_area_base(id, child, palette, state))
+}
+
+fn scroll_area_base(
     id: &'static str,
     child: impl IntoElement,
     palette: &Palette,

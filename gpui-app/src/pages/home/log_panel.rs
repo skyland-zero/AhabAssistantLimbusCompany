@@ -1,6 +1,7 @@
 use super::*;
 
 pub(super) fn logs_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    let scroll_handle = app.home_log_scroll.clone();
     let language = app.state.settings.language;
     let visible_logs: Vec<LogEntryPayload> = app
         .home
@@ -90,12 +91,16 @@ pub(super) fn logs_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .h_full()
             .child(logs_header)
             .child(
-                scroll_area_with_id("home-log-scroll", div().children(log_rows))
-                    .track_scroll(&app.home_log_scroll)
-                    .flex_1()
-                    .min_h_0()
-                    .px_3()
-                    .py_2(),
+                scroll_area_with_handle(
+                    app,
+                    "home-log-scroll",
+                    div().children(log_rows),
+                    scroll_handle,
+                )
+                .flex_1()
+                .min_h_0()
+                .px_3()
+                .py_2(),
             ),
     )
     .flex_1()

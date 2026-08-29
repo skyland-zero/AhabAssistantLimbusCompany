@@ -550,7 +550,7 @@ fn daily_details_body(
             .child(text("暂无每日数据", "No daily data").get(language))
             .into_any_element()
     } else {
-        scroll_area_with_id("stats-daily-scroll", table)
+        scroll_area_with_id(app, "stats-daily-scroll", table)
             .flex_1()
             .min_h_0()
             .into_any_element()

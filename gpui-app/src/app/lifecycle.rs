@@ -226,6 +226,7 @@ impl AhabApp {
             visual_state,
             help_scroll: gpui::ScrollHandle::new(),
             home_log_scroll: gpui::ScrollHandle::new(),
+            smooth_scroll: std::collections::HashMap::new(),
             toast: None,
             toast_generation: 0,
             home_log_revision_seen: 0,
