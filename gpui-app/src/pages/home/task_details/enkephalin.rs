@@ -37,15 +37,9 @@ pub fn enkephalin_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bo
             })
         },
     );
-    let advanced = div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(control_row(
-            text("葛朗台模式", "Dr. Grandet Mode").get(language),
-            detail,
-        ))
-        .child(
+    let advanced = div().flex().flex_col().gap_2().child(settings_grid(
+        vec![
+            control_row(text("葛朗台模式", "Dr. Grandet Mode").get(language), detail),
             div()
                 .pt_2()
                 .border_t_1()
@@ -63,7 +57,9 @@ pub fn enkephalin_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bo
                         .get(language),
                     ),
                 ),
-        );
+        ],
+        220.,
+    ));
     div()
         .flex()
         .flex_col()

@@ -276,6 +276,26 @@ pub(super) fn control_row(label: impl Into<String>, control: impl IntoElement) -
         .child(div().flex_none().child(control))
 }
 
+pub(super) fn settings_grid(children: impl IntoIterator<Item = Div>, min_width: f32) -> Div {
+    let mut grid = div().flex().flex_wrap().gap_2();
+    for child in children {
+        grid = grid.child(div().flex_1().min_w(px(min_width)).child(child));
+    }
+    grid
+}
+
+pub(super) fn adaptive_settings_grid(
+    language: Language,
+    children: impl IntoIterator<Item = Div>,
+) -> Div {
+    let min_width = if matches!(language, Language::ZhCn) {
+        160.
+    } else {
+        200.
+    };
+    settings_grid(children, min_width)
+}
+
 #[allow(dead_code)]
 pub(super) fn task_title(task: FixedTaskId, language: Language) -> &'static str {
     match task {

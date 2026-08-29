@@ -319,12 +319,12 @@ pub(super) fn mirror_card(
             MirrorOption::SimplePathfinding,
         ),
     ];
-    let mut options_view = div().flex().flex_col().gap_1();
+    let mut option_items = Vec::new();
     for (label, value, id, field) in options {
         let toggle = task_option_switch(label, value, id, busy, cx, move |home| {
             home.toggle_mirror_option(field);
         });
-        options_view = options_view.child(control_row(label, toggle));
+        option_items.push(control_row(label, toggle));
     }
     let progress = app.home.mirror_progress.as_ref().map(|progress| {
         div()
@@ -366,26 +366,19 @@ pub(super) fn mirror_card(
         .flex_col()
         .gap_2()
         .children(progress)
-        .child(control_row(
-            text("运行次数", "Run Count").get(language),
-            number,
-        ))
-        .child(control_row(
-            text("无限模式", "Infinite Mode").get(language),
-            infinite,
-        ))
-        .child(control_row(
-            text("困难镜牢", "Hard Mirror Dungeon").get(language),
-            hard,
+        .child(adaptive_settings_grid(
+            language,
+            vec![
+                control_row(text("运行次数", "Run Count").get(language), number),
+                control_row(text("无限模式", "Infinite Mode").get(language), infinite),
+                control_row(text("困难镜牢", "Hard Mirror Dungeon").get(language), hard),
+            ],
         ));
     let advanced = div()
-        .flex()
-        .flex_wrap()
-        .gap_2()
         .pt_2()
         .border_t_1()
         .border_color(rgb(BORDER))
-        .child(options_view);
+        .child(adaptive_settings_grid(language, option_items));
     let body = div()
         .flex()
         .flex_col()

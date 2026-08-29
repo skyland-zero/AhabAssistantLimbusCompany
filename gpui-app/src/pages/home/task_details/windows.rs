@@ -137,38 +137,37 @@ pub fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
     );
 
     let content = match tab {
-        TaskOptionsTab::General => div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(control_row(
-                text("窗口分辨率", "Window Resolution").get(language),
-                size_button,
-            ))
-            .child(control_row(
-                text("窗口位置", "Window Position").get(language),
-                position,
-            ))
-            .child(control_row(
-                text("结束后恢复窗口", "Restore Window on Finish").get(language),
-                restore_switch,
-            )),
-        TaskOptionsTab::Advanced => div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(control_row(
-                text("截图间隔", "Screenshot Interval").get(language),
-                screenshot_button,
-            ))
-            .child(control_row(
-                text("鼠标操作间隔", "Mouse Action Interval").get(language),
-                mouse_button,
-            ))
-            .child(control_row(
-                text("异步 PostMessage 输入", "Async PostMessage Input").get(language),
-                post_message,
-            )),
+        TaskOptionsTab::General => settings_grid(
+            vec![
+                control_row(
+                    text("窗口分辨率", "Window Resolution").get(language),
+                    size_button,
+                ),
+                control_row(text("窗口位置", "Window Position").get(language), position),
+                control_row(
+                    text("结束后恢复窗口", "Restore Window on Finish").get(language),
+                    restore_switch,
+                ),
+            ],
+            220.,
+        ),
+        TaskOptionsTab::Advanced => settings_grid(
+            vec![
+                control_row(
+                    text("截图间隔", "Screenshot Interval").get(language),
+                    screenshot_button,
+                ),
+                control_row(
+                    text("鼠标操作间隔", "Mouse Action Interval").get(language),
+                    mouse_button,
+                ),
+                control_row(
+                    text("异步 PostMessage 输入", "Async PostMessage Input").get(language),
+                    post_message,
+                ),
+            ],
+            220.,
+        ),
     };
     div()
         .flex()

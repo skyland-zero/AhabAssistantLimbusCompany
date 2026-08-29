@@ -81,37 +81,41 @@ pub fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -
         },
     ));
 
-    let general = div()
-        .flex()
-        .flex_col()
-        .gap_1()
-        .child(control_row(
-            text("经验本次数（0~99）", "EXP Dungeon Runs (0-99)").get(language),
-            exp_count,
-        ))
-        .child(control_row(
-            text("纽本次数（0~99）", "Thread Dungeon Runs (0-99)").get(language),
-            thread_count,
-        ))
-        .child(control_row(
-            text("默认日常编队", "Default Daily Team").get(language),
-            daily_team,
-        ))
-        .child(control_row(
-            text("连续作战", "Continuous Combat").get(language),
-            continuous,
-        ));
+    let general = settings_grid(
+        vec![
+            control_row(
+                text("经验本次数（0~99）", "EXP Dungeon Runs (0-99)").get(language),
+                exp_count,
+            ),
+            control_row(
+                text("纽本次数（0~99）", "Thread Dungeon Runs (0-99)").get(language),
+                thread_count,
+            ),
+            control_row(
+                text("默认日常编队", "Default Daily Team").get(language),
+                daily_team,
+            ),
+            control_row(
+                text("连续作战", "Continuous Combat").get(language),
+                continuous,
+            ),
+        ],
+        220.,
+    );
 
-    let mut advanced = div().flex().flex_col().gap_2();
-    advanced = advanced
-        .child(control_row(
-            text("经验本按属性配队", "Targeted EXP Lineups").get(language),
-            targeted_exp,
-        ))
-        .child(control_row(
-            text("纽本按星期配队", "Targeted Thread Lineups").get(language),
-            targeted_thread,
-        ));
+    let mut advanced = div().flex().flex_col().gap_2().child(settings_grid(
+        vec![
+            control_row(
+                text("经验本按属性配队", "Targeted EXP Lineups").get(language),
+                targeted_exp,
+            ),
+            control_row(
+                text("纽本按星期配队", "Targeted Thread Lineups").get(language),
+                targeted_thread,
+            ),
+        ],
+        220.,
+    ));
     if config.targeted_teaming_EXP || config.targeted_teaming_thread {
         advanced = advanced.child(
             div().text_size(px(11.)).text_color(rgb(TEXT_MUTED)).child(
@@ -122,7 +126,7 @@ pub fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -
                 .get(language),
             ),
         );
-        let mut selectors = div().flex().flex_wrap().gap_1();
+        let mut selectors = Vec::new();
         if config.targeted_teaming_EXP {
             for (label, index) in [
                 (text("经验斩击", "Mon/Tue (Slash)"), 0_u8),
@@ -130,7 +134,7 @@ pub fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -
                 (text("经验打击", "Fri/Sat (Blunt)"), 2),
                 (text("经验全属性", "Sun (All)"), 3),
             ] {
-                selectors = selectors.child(daily_team_select(
+                selectors.push(daily_team_select(
                     app,
                     label.get(language),
                     index,
@@ -150,7 +154,7 @@ pub fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -
                 (text("周六", "Sat (Envy)"), 9),
                 (text("周日", "Sun (Wrath)"), 10),
             ] {
-                selectors = selectors.child(daily_team_select(
+                selectors.push(daily_team_select(
                     app,
                     label.get(language),
                     index,
@@ -160,7 +164,7 @@ pub fn daily_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bool) -
                 ));
             }
         }
-        advanced = advanced.child(selectors);
+        advanced = advanced.child(adaptive_settings_grid(language, selectors));
     }
 
     div()
