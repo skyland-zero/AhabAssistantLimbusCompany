@@ -2,3 +2,4 @@
 channel = "nightly-2026-08-26"
 components = ["clippy", "rustfmt"]
 profile = "minimal"
+

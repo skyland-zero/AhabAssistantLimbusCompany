@@ -1,0 +1,40 @@
+upstream_remote = "origin"
+upstream_branch = "main"
+
+# These directories are regularly replaced by upstream changes. New direct
+# edits must be added to the explicit allowlist with a merge rationale.
+protected_prefixes = [
+    "module/automation/",
+    "module/config/",
+    "module/game_and_screen/",
+    "tasks/",
+    "utils/",
+]
+
+# The product intentionally removes the Qt desktop layer. Modify/delete
+# conflicts below this prefix are expected during an upstream sync.
+expected_deleted_prefixes = ["app/"]
+
+allowed_protected_files = [
+    "module/automation/automation.py",
+    "module/automation/input_handlers/simulator/mumu_control.py",
+    "module/automation/input_handlers/simulator/simulator_control.py",
+    "module/automation/screenshot.py",
+    "module/config/config.py",
+    "module/config/config_typing.py",
+    "module/config/theme_pack_catalog.py",
+    "module/game_and_screen/screen.py",
+    "tasks/base/make_enkephalin_module.py",
+    "tasks/base/retry.py",
+    "tasks/base/script_task_scheme.py",
+    "tasks/battle/battle.py",
+    "tasks/daily/luxcavation.py",
+    "tasks/teams/team_formation.py",
+    "tasks/tools/__init__.py",
+    "tasks/tools/infinite_battle.py",
+    "tasks/tools/production_module.py",
+    "tasks/tools/screenshot_module.py",
+    "tasks/tools/ui_style.py",
+    "utils/utils.py",
+]
+

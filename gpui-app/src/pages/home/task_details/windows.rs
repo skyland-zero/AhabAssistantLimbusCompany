@@ -12,19 +12,19 @@ pub fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
             current: config.set_win_position.clone(),
             options: vec![
                 (
-                    "0".to_owned(),
+                    "center".to_owned(),
                     text("屏幕居中", "Center").get(language).to_owned(),
                 ),
                 (
-                    "1".to_owned(),
+                    "left_top".to_owned(),
                     text("靠左对齐", "Align Left").get(language).to_owned(),
                 ),
                 (
-                    "2".to_owned(),
+                    "right_top".to_owned(),
                     text("靠右对齐", "Align Right").get(language).to_owned(),
                 ),
                 (
-                    "3".to_owned(),
+                    "free".to_owned(),
                     text("保持原位 (不移动)", "Keep Current (Do Not Move)")
                         .get(language)
                         .to_owned(),

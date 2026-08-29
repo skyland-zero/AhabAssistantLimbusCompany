@@ -3,7 +3,10 @@ mod execution;
 mod selection;
 mod stats;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    time::Instant,
+};
 
 use serde_json::json;
 
@@ -91,6 +94,8 @@ pub struct HomeState {
     pub after_completion_open: bool,
     pub after_completion_draft: Option<crate::model::AfterCompletionConfig>,
     pub last_event_sequence: u64,
+    pub(crate) stopping_since: Option<Instant>,
+    pub(crate) state_before_stopping: Option<ExecutionState>,
 }
 
 impl Default for HomeState {
@@ -157,6 +162,8 @@ impl HomeState {
             after_completion_open: false,
             after_completion_draft: None,
             last_event_sequence: 0,
+            stopping_since: None,
+            state_before_stopping: None,
         }
     }
 
@@ -365,7 +372,7 @@ mod tests {
         home.set_window_size(999);
         assert_eq!(home.tasks.set_windows.set_win_size, 1440);
         home.set_window_position("2");
-        assert_eq!(home.tasks.set_windows.set_win_position, "2");
+        assert_eq!(home.tasks.set_windows.set_win_position, "right_top");
         home.set_screenshot_interval(1.0);
         home.set_mouse_action_interval(0.1);
         assert_eq!(home.tasks.set_windows.screenshot_interval, 1.0);

@@ -15,6 +15,8 @@ pub trait RpcClient {
 }
 
 pub use backend::{BackendClient, decode_response};
-pub use contract::{EventEnvelope, RequestId, RequestSequence, RpcError, RpcResponse};
+pub use contract::{
+    EventEnvelope, RequestId, RequestSequence, RpcCompletion, RpcError, RpcResponse,
+};
 pub use gateway::RpcGateway;
 pub use mock::MockClient;

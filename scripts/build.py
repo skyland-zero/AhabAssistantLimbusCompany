@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -75,6 +76,22 @@ def stage_release(version: str) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+    # Embed the public verification key set in the shipped client.  Private
+    # signing material is never written to the release tree; CI supplies it
+    # through protected environment secrets when publishing a release.
+    public_keys = os.getenv("AALC_UPDATE_PUBLIC_KEYS", "").strip()
+    if public_keys:
+        try:
+            parsed_keys = json.loads(public_keys)
+        except json.JSONDecodeError as error:
+            raise ValueError("AALC_UPDATE_PUBLIC_KEYS must be a JSON object") from error
+        if not isinstance(parsed_keys, dict) or not parsed_keys:
+            raise ValueError("AALC_UPDATE_PUBLIC_KEYS must be a non-empty JSON object")
+        (RELEASE / "update_public_keys.json").write_text(
+            json.dumps(parsed_keys, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
 
 
 def archive_release(version: str) -> Path:

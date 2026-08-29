@@ -1,21 +1,132 @@
-use std::sync::mpsc::{self, Receiver};
-use std::thread;
+use std::sync::{
+    Arc, RwLock,
+    atomic::{AtomicBool, Ordering},
+    mpsc::{self, Receiver},
+};
 
 use serde_json::Value;
 
 use super::{
-    EventEnvelope, MockClient, RpcClient, RpcError, RpcRequest, RpcResponse,
+    EventEnvelope, MockClient, RpcClient, RpcCompletion, RpcError, RpcRequest, RpcResponse,
     websocket::WebSocketClient,
 };
 
+#[derive(Clone)]
+pub struct SidecarSupervisor {
+    client: Arc<RwLock<WebSocketClient>>,
+    restartable: bool,
+    restarting: Arc<AtomicBool>,
+}
+
+impl SidecarSupervisor {
+    fn try_new() -> Result<Self, String> {
+        let restartable = std::env::var_os("AHAB_BACKEND_URL").is_none();
+        Ok(Self {
+            client: Arc::new(RwLock::new(WebSocketClient::try_new()?)),
+            restartable,
+            restarting: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    fn unavailable(error: impl Into<String>) -> Self {
+        Self {
+            client: Arc::new(RwLock::new(WebSocketClient::failed(error))),
+            restartable: std::env::var_os("AHAB_BACKEND_URL").is_none(),
+            restarting: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn with_client<T>(
+        &self,
+        fallback: impl FnOnce() -> T,
+        call: impl FnOnce(&WebSocketClient) -> T,
+    ) -> T {
+        self.client
+            .read()
+            .map(|client| call(&client))
+            .unwrap_or_else(|_| fallback())
+    }
+
+    fn restarting_response(id: u64) -> RpcResponse {
+        RpcResponse::failure(id, RpcError::new(-32001, "Python sidecar 正在重启"))
+    }
+
+    pub fn restart(&self) -> Result<(), String> {
+        if !self.restartable {
+            return Err("外部 sidecar 不能由 GPUI 重启".to_owned());
+        }
+        if self.restarting.swap(true, Ordering::AcqRel) {
+            return Err("Python sidecar 已在重启".to_owned());
+        }
+        let result = WebSocketClient::try_new().and_then(|replacement| {
+            let mut client = self
+                .client
+                .write()
+                .map_err(|_| "sidecar supervisor lock poisoned".to_owned())?;
+            *client = replacement;
+            Ok(())
+        });
+        self.restarting.store(false, Ordering::Release);
+        result
+    }
+
+    fn is_connected(&self) -> bool {
+        !self.restarting.load(Ordering::Acquire)
+            && self.with_client(|| false, WebSocketClient::is_connected)
+    }
+
+    fn call(&self, method: &str, params: Option<Value>) -> RpcResponse {
+        if self.restarting.load(Ordering::Acquire) {
+            return Self::restarting_response(0);
+        }
+        self.with_client(
+            || RpcResponse::failure(0, RpcError::new(-32000, "sidecar 状态锁不可用")),
+            |client| client.request(method.to_owned(), params),
+        )
+    }
+
+    fn request_async(&self, method: &str, params: Option<Value>) -> Receiver<RpcResponse> {
+        if self.restarting.load(Ordering::Acquire) {
+            return ready_receiver(Self::restarting_response(0));
+        }
+        self.with_client(
+            || {
+                ready_receiver(RpcResponse::failure(
+                    0,
+                    RpcError::new(-32000, "sidecar 状态锁不可用"),
+                ))
+            },
+            |client| client.request_async(method.to_owned(), params),
+        )
+    }
+
+    fn submit(&self, method: &str, params: Option<Value>) {
+        if self.restarting.load(Ordering::Acquire) {
+            return;
+        }
+        self.with_client(|| (), |client| client.submit(method.to_owned(), params));
+    }
+
+    fn take_events(&self) -> Vec<EventEnvelope> {
+        self.with_client(Vec::new, WebSocketClient::take_events)
+    }
+
+    fn take_completions(&self) -> Vec<RpcCompletion> {
+        self.with_client(Vec::new, WebSocketClient::take_completions)
+    }
+}
+
+fn ready_receiver(response: RpcResponse) -> Receiver<RpcResponse> {
+    let (sender, receiver) = mpsc::channel();
+    let _ = sender.send(response);
+    receiver
+}
+
 /// The one client handle shared by all GPUI pages.
-///
-/// Keeping the transport choice here makes the page states usable in tests
-/// without allowing production code to silently substitute a mock backend.
 #[derive(Clone)]
 pub enum BackendClient {
     Mock(MockClient),
-    Sidecar(WebSocketClient),
+    Sidecar(SidecarSupervisor),
 }
 
 impl BackendClient {
@@ -24,14 +135,11 @@ impl BackendClient {
     }
 
     pub fn try_sidecar() -> Result<Self, String> {
-        Ok(Self::Sidecar(WebSocketClient::try_new()?))
+        Ok(Self::Sidecar(SidecarSupervisor::try_new()?))
     }
 
-    /// Keep a failed sidecar as a real transport boundary. Requests return a
-    /// structured error and the UI can expose retry/offline feedback instead
-    /// of rendering fabricated business data.
     pub fn unavailable(error: impl Into<String>) -> Self {
-        Self::Sidecar(WebSocketClient::failed(error))
+        Self::Sidecar(SidecarSupervisor::unavailable(error))
     }
 
     pub fn is_sidecar(&self) -> bool {
@@ -45,36 +153,49 @@ impl BackendClient {
     pub fn is_connected(&self) -> bool {
         match self {
             Self::Mock(_) => true,
-            Self::Sidecar(client) => client.is_connected(),
+            Self::Sidecar(supervisor) => supervisor.is_connected(),
+        }
+    }
+
+    pub fn restart_sidecar(&self) -> Result<(), String> {
+        match self {
+            Self::Mock(_) => Err("mock backend does not restart".to_owned()),
+            Self::Sidecar(supervisor) => supervisor.restart(),
         }
     }
 
     pub fn call(&self, method: &str, params: Option<Value>) -> RpcResponse {
         match self {
             Self::Mock(client) => client.call(method, params),
-            Self::Sidecar(client) => client.request(method.to_owned(), params),
+            Self::Sidecar(supervisor) => supervisor.call(method, params),
         }
     }
 
-    /// Submit a request on a worker thread. This is the API used by runtime
-    /// page actions; it never waits for the socket on the GPUI render thread.
     pub fn request_async(&self, method: &str, params: Option<Value>) -> Receiver<RpcResponse> {
-        let client = self.clone();
-        let method = method.to_owned();
-        let (sender, receiver) = mpsc::channel();
-        thread::Builder::new()
-            .name("AhabBackendRequest".into())
-            .spawn(move || {
-                let _ = sender.send(client.call(&method, params));
-            })
-            .expect("failed to start backend request thread");
-        receiver
+        match self {
+            Self::Mock(client) => ready_receiver(client.call(method, params)),
+            Self::Sidecar(supervisor) => supervisor.request_async(method, params),
+        }
+    }
+
+    pub fn submit(&self, method: &str, params: Option<Value>) {
+        match self {
+            Self::Mock(_) => {}
+            Self::Sidecar(supervisor) => supervisor.submit(method, params),
+        }
     }
 
     pub fn take_events(&self) -> Vec<EventEnvelope> {
         match self {
             Self::Mock(client) => client.take_events(),
-            Self::Sidecar(client) => client.take_events(),
+            Self::Sidecar(supervisor) => supervisor.take_events(),
+        }
+    }
+
+    pub fn take_completions(&self) -> Vec<RpcCompletion> {
+        match self {
+            Self::Mock(_) => Vec::new(),
+            Self::Sidecar(supervisor) => supervisor.take_completions(),
         }
     }
 }
@@ -87,20 +208,21 @@ impl From<MockClient> for BackendClient {
 
 impl From<WebSocketClient> for BackendClient {
     fn from(client: WebSocketClient) -> Self {
-        Self::Sidecar(client)
+        Self::Sidecar(SidecarSupervisor {
+            client: Arc::new(RwLock::new(client)),
+            restartable: false,
+            restarting: Arc::new(AtomicBool::new(false)),
+        })
     }
 }
 
 impl RpcClient for BackendClient {
     fn send(&mut self, request: RpcRequest) -> RpcResponse {
-        match self {
-            Self::Mock(client) => client.send(request),
-            Self::Sidecar(client) => client.send(request),
-        }
+        let RpcRequest { method, params, .. } = request;
+        self.call(&method, params)
     }
 }
 
-/// Decode a response returned by either transport at one shared boundary.
 pub fn decode_response(method: &str, response: RpcResponse) -> Result<Option<Value>, RpcError> {
     if let Some(error) = response.error {
         Err(error)

@@ -2,10 +2,10 @@ use super::*;
 
 impl TeamsState {
     pub fn update_mirror(&mut self, update: impl FnOnce(&mut TeamMirrorConfig)) {
-        if let Some(editor) = self.editor.as_mut() {
-            if let Some(config) = editor.team.mirrorConfig.as_mut() {
-                update(config);
-            }
+        if let Some(editor) = self.editor.as_mut()
+            && let Some(config) = editor.team.mirrorConfig.as_mut()
+        {
+            update(config);
         }
     }
 

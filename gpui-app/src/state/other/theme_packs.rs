@@ -12,11 +12,14 @@ impl ThemePacksState {
     }
 
     pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
+        let data = ThemePackState::default();
         let mut state = Self {
             rpc: RpcGateway::new(client),
-            data: ThemePackState::default(),
+            confirmed_packs: data.packs.clone(),
+            data,
             sort_by_weight: false,
             feedback: None,
+            persist_due: None,
         };
         if !state.rpc.is_sidecar() {
             state.reload();
@@ -25,10 +28,15 @@ impl ThemePacksState {
     }
 
     pub fn reload(&mut self) {
+        if self.rpc.is_sidecar() {
+            self.rpc.submit(method::THEME_PACK_LIST, None);
+            return;
+        }
         if let Some(value) = self.request(method::THEME_PACK_LIST, None)
             && let Ok(data) = serde_json::from_value(value)
         {
             self.data = data;
+            self.confirmed_packs = self.data.packs.clone();
         }
     }
 
@@ -110,13 +118,9 @@ impl ThemePacksState {
 
     pub fn reset_weights(&mut self) {
         if self.rpc.is_sidecar() {
-            let _ = self
-                .rpc
-                .request_async(method::THEME_PACK_RESET_WEIGHTS, None);
-            for pack in &mut self.data.packs {
-                pack.weight = 1;
-            }
-            self.feedback = Some("默认权重恢复请求已提交".to_owned());
+            self.persist_due = None;
+            self.rpc.submit(method::THEME_PACK_RESET_WEIGHTS, None);
+            self.feedback = Some("正在恢复默认权重".to_owned());
             return;
         }
         match self
@@ -144,12 +148,10 @@ impl ThemePacksState {
 
     fn persist_packs(&mut self, packs: Vec<ThemePack>) {
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(
-                method::THEME_PACK_UPDATE_ALL,
-                Some(json!({ "packs": packs.clone() })),
-            );
             self.data.packs = packs;
-            self.feedback = Some("主题包设置保存请求已提交".to_owned());
+            self.persist_due =
+                Some(std::time::Instant::now() + std::time::Duration::from_millis(200));
+            self.feedback = Some("主题包设置待保存".to_owned());
             return;
         }
         let result = self.rpc.request_value(
@@ -161,7 +163,53 @@ impl ThemePacksState {
             return;
         }
         self.data.packs = packs;
+        self.confirmed_packs = self.data.packs.clone();
         self.feedback = Some("主题包设置已保存".to_owned());
+    }
+
+    pub(crate) fn flush_debounced(&mut self) -> bool {
+        let Some(due) = self.persist_due else {
+            return false;
+        };
+        if std::time::Instant::now() < due {
+            return false;
+        }
+        self.persist_due = None;
+        self.rpc.submit(
+            method::THEME_PACK_UPDATE_ALL,
+            Some(json!({ "packs": self.data.packs.clone() })),
+        );
+        self.feedback = Some("正在保存主题包设置".to_owned());
+        true
+    }
+
+    pub(crate) fn apply_rpc_result(
+        &mut self,
+        method_name: &str,
+        result: Result<Option<serde_json::Value>, crate::ipc::RpcError>,
+    ) {
+        match (method_name, result) {
+            (_, Err(error)) => {
+                self.data.packs = self.confirmed_packs.clone();
+                self.feedback = Some(error.message);
+            }
+            (method::THEME_PACK_LIST | method::THEME_PACK_RESET_WEIGHTS, Ok(Some(value))) => {
+                if let Ok(data) = serde_json::from_value(value) {
+                    self.data = data;
+                    self.confirmed_packs = self.data.packs.clone();
+                    self.feedback = Some(if method_name == method::THEME_PACK_RESET_WEIGHTS {
+                        "已恢复默认权重".to_owned()
+                    } else {
+                        "主题包设置已刷新".to_owned()
+                    });
+                }
+            }
+            (method::THEME_PACK_UPDATE_ALL, Ok(_)) => {
+                self.confirmed_packs = self.data.packs.clone();
+                self.feedback = Some("主题包设置已保存".to_owned());
+            }
+            _ => {}
+        }
     }
 
     fn request(

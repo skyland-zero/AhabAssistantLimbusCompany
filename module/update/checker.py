@@ -11,7 +11,10 @@ import re
 import shutil
 import subprocess
 from enum import Enum
+from pathlib import Path
 from threading import Thread
+from urllib.parse import unquote, urlparse
+
 import requests  # 导入requests模块，用于发送HTTP请求
 from markdown_it import MarkdownIt
 from packaging.version import parse
@@ -20,6 +23,7 @@ from core.events import Event, mediator
 from core.i18n import tr
 from module.config import cfg
 from module.logger import log
+from module.update.signature import UpdateSignatureError
 from utils.utils import decrypt_string
 
 md_renderer = MarkdownIt("gfm-like", {"html": True})
@@ -287,7 +291,7 @@ class UpdateThread(Thread):
                         }
                         if self.code in cdk_error_messages:
                             self.error_msg = cdk_error_messages[self.code]
-                    except:
+                    except Exception:
                         self.error_msg = "Mirror酱API请求失败"
                     self.updateSignal.emit(UpdateStatus.FAILURE)
                     return None
@@ -316,56 +320,84 @@ def is_valid_url(url):
     返回:
     bool: 如果URL有效则返回True，否则返回False。
     """
-    from urllib.parse import urlparse
-
     try:
-        # 解析URL
         result = urlparse(url)
-        # 检查URL是否包含必要的组成部分
-        return all([result.scheme, result.netloc])
-    except:
-        # 解析异常时认为URL无效
+        return result.scheme.lower() == "https" and bool(result.hostname)
+    except (TypeError, ValueError):
         return False
 
 
-def update(assets_url):
+def update(assets_url, *, manifest_url=None, signature_url=None):
     """
     从给定的URL下载更新文件到本地。
     :param assets_url : 更新文件的URL。
     """
-    # 检查URL是否有效
     if not is_valid_url(assets_url):
         log.error("更新失败：获取的URL无效 ")
-        return
+        return False
 
-    # 提取文件名
-    file_name = assets_url.split("/")[-1]
-    if "7z" not in file_name:
-        file_name = "AALC.zip"
-    elif "AALC" in file_name:
-        file_name = "AALC.7z"
+    parsed_url = urlparse(assets_url)
+    remote_name = Path(unquote(parsed_url.path)).name
+    suffix = Path(remote_name).suffix.lower()
+    if suffix not in {".7z", ".zip"}:
+        log.error("更新失败：下载文件类型不受支持")
+        return False
+    file_name = remote_name or f"AALC{suffix}"
     log.info(f"正在下载 {file_name} ...")
 
+    temporary_paths: list[str] = []
     try:
-        # 第一步：仅发起一次流式下载请求，并在同一响应对象上完成大小读取与内容落盘。
-        with requests.get(assets_url, stream=True, timeout=10) as response:
-            response.raise_for_status()  # 检查 HTTP 请求是否成功
+        # Signed releases publish adjacent ``.manifest.json`` and ``.manifest.sig``
+        # assets.  Keep the legacy caller shape while allowing a staged rollout.
+        archive_stem = Path(file_name).stem
+        manifest_url = manifest_url or f"{assets_url.rsplit('/', 1)[0]}/{archive_stem}.manifest.json"
+        signature_url = signature_url or f"{assets_url.rsplit('/', 1)[0]}/{archive_stem}.manifest.sig"
+        metadata_urls = (manifest_url, signature_url)
+        if any(url and not is_valid_url(url) for url in metadata_urls):
+            log.error("更新失败：签名清单 URL 无效")
+            return False
 
-            # 第二步：读取总大小并准备本地临时文件路径。
+        with requests.get(assets_url, stream=True, timeout=10) as response:
+            response.raise_for_status()
             total_size = int(response.headers.get("content-length", 0))
+            max_size = int(os.getenv("AALC_UPDATE_MAX_BYTES", str(2 * 1024 * 1024 * 1024)))
+            if total_size > max_size:
+                raise ValueError("更新包超过大小限制")
             downloaded = 0
             os.makedirs("update_temp", exist_ok=True)
             file_path = os.path.join("update_temp", file_name)
+            temporary_path = f"{file_path}.download"
+            temporary_paths.append(temporary_path)
 
-            # 第三步：边下载边写入本地文件，并在可计算百分比时同步上报下载进度。
-            with open(file_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024):
+            with open(temporary_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=64 * 1024):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
+                        if downloaded > max_size:
+                            raise ValueError("更新包超过大小限制")
                         if total_size > 0:
                             progress = int(downloaded / total_size * 100)
                             mediator.update_progress.emit(progress)
+            os.replace(temporary_path, file_path)
+
+        require_signature = os.getenv("AALC_UPDATE_REQUIRE_SIGNATURE", "").strip().lower() in {"1", "true", "yes"}
+        for url, suffix in ((manifest_url, ".manifest.json"), (signature_url, ".manifest.sig")):
+            metadata_path = os.path.join("update_temp", f"{archive_stem}{suffix}")
+            metadata_temporary_path = f"{metadata_path}.download"
+            temporary_paths.append(metadata_temporary_path)
+            try:
+                with requests.get(url, timeout=10) as metadata_response:
+                    metadata_response.raise_for_status()
+                    if len(metadata_response.content) > 1024 * 1024:
+                        raise ValueError("更新签名清单过大")
+                    with open(metadata_temporary_path, "wb") as metadata_file:
+                        metadata_file.write(metadata_response.content)
+                os.replace(metadata_temporary_path, metadata_path)
+            except Exception:
+                if require_signature:
+                    raise
+                log.warning("未获取到可选的更新签名清单：%s", url)
 
         log.info("下载进度100%")
 
@@ -386,13 +418,24 @@ def update(assets_url):
             except Exception:
                 input("解压失败，按回车键重新解压. . .多次失败请手动下载更新")
                 return False
-        else:
-            mediator.download_complete.emit(file_name)
+        mediator.download_complete.emit(file_name)
+        return True
 
     except requests.exceptions.RequestException as e:
         log.error(f"下载失败，请检查网络: {e}")
     except OSError as e:
         log.error(f"文件操作失败: {e}")
+    except (ValueError, UpdateSignatureError) as e:
+        log.error(f"更新包校验失败: {e}")
+    finally:
+        for temporary_path in temporary_paths:
+            try:
+                os.remove(temporary_path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                log.debug("清理更新临时文件失败：%s", temporary_path, exc_info=True)
+    return False
 
 
 def start_update_thread(assets_url):

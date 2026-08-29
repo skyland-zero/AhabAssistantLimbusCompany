@@ -68,56 +68,61 @@ impl AhabApp {
         let settings_rpc = self.settings_page.rpc.clone();
         cx.spawn(async move |this, cx| {
             let tasks_request = home_rpc.request_async(method::TASKS_GET_CONFIG, None);
+            let devices_request = home_rpc.request_async(method::DEVICE_LIST, None);
+            let execution_request = home_rpc.request_async(method::EXECUTION_GET_STATE, None);
+            let stats_request = home_rpc.request_async(method::STATS_GET_SUMMARY, None);
+            let teams_request = teams_rpc.request_async(method::TEAM_LIST, None);
+            let sinners_request = teams_rpc.request_async(method::SINNER_LIST, None);
+            let themes_request = themes_rpc.request_async(method::THEME_PACK_LIST, None);
+            let resources_request = resources_rpc.request_async(method::RESOURCE_STATUS, None);
+            let hotkey_request = settings_rpc.request_async(method::HOTKEY_GET, None);
+            let system_request = settings_rpc.request_async(method::SYSTEM_SETTINGS_GET, None);
+
+            // Submit every read before awaiting the receivers.  The websocket
+            // worker can pipeline these requests and the sidecar read pool
+            // handles them concurrently, reducing first-paint hydration time
+            // without touching GPUI state from background threads.
             let tasks_response = cx
                 .background_executor()
-                .spawn(async move { tasks_request.recv().ok() })
-                .await;
-            let devices_request = home_rpc.request_async(method::DEVICE_LIST, None);
+                .spawn(async move { tasks_request.recv().ok() });
             let devices_response = cx
                 .background_executor()
-                .spawn(async move { devices_request.recv().ok() })
-                .await;
-            let execution_request = home_rpc.request_async(method::EXECUTION_GET_STATE, None);
+                .spawn(async move { devices_request.recv().ok() });
             let execution_response = cx
                 .background_executor()
-                .spawn(async move { execution_request.recv().ok() })
-                .await;
-            let stats_request = home_rpc.request_async(method::STATS_GET_SUMMARY, None);
+                .spawn(async move { execution_request.recv().ok() });
             let stats_response = cx
                 .background_executor()
-                .spawn(async move { stats_request.recv().ok() })
-                .await;
-
-            let teams_request = teams_rpc.request_async(method::TEAM_LIST, None);
+                .spawn(async move { stats_request.recv().ok() });
             let teams_response = cx
                 .background_executor()
-                .spawn(async move { teams_request.recv().ok() })
-                .await;
-            let sinners_request = teams_rpc.request_async(method::SINNER_LIST, None);
+                .spawn(async move { teams_request.recv().ok() });
             let sinners_response = cx
                 .background_executor()
-                .spawn(async move { sinners_request.recv().ok() })
-                .await;
-            let themes_request = themes_rpc.request_async(method::THEME_PACK_LIST, None);
+                .spawn(async move { sinners_request.recv().ok() });
             let themes_response = cx
                 .background_executor()
-                .spawn(async move { themes_request.recv().ok() })
-                .await;
-            let resources_request = resources_rpc.request_async(method::RESOURCE_STATUS, None);
+                .spawn(async move { themes_request.recv().ok() });
             let resources_response = cx
                 .background_executor()
-                .spawn(async move { resources_request.recv().ok() })
-                .await;
-            let hotkey_request = settings_rpc.request_async(method::HOTKEY_GET, None);
+                .spawn(async move { resources_request.recv().ok() });
             let hotkey_response = cx
                 .background_executor()
-                .spawn(async move { hotkey_request.recv().ok() })
-                .await;
-            let system_request = settings_rpc.request_async(method::SYSTEM_SETTINGS_GET, None);
+                .spawn(async move { hotkey_request.recv().ok() });
             let system_response = cx
                 .background_executor()
-                .spawn(async move { system_request.recv().ok() })
-                .await;
+                .spawn(async move { system_request.recv().ok() });
+
+            let tasks_response = tasks_response.await;
+            let devices_response = devices_response.await;
+            let execution_response = execution_response.await;
+            let stats_response = stats_response.await;
+            let teams_response = teams_response.await;
+            let sinners_response = sinners_response.await;
+            let themes_response = themes_response.await;
+            let resources_response = resources_response.await;
+            let hotkey_response = hotkey_response.await;
+            let system_response = system_response.await;
 
             let _ = this.update(cx, |view, cx| {
                 if let Some(response) = tasks_response
@@ -236,6 +241,7 @@ impl AhabApp {
             screenshot_pending_image_source: None,
             screenshot_pending_render_image: None,
             screenshot_pending_image_revision: None,
+            sidecar_restart_started: false,
         };
 
         if let Some(last_id) = app.state.settings.lastDeviceId.as_ref()

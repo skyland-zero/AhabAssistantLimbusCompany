@@ -2,11 +2,11 @@
 
 这是仓库内的独立 GPUI 原生应用，用于提供不依赖 WebView2 的 Windows 桌面界面。
 
-依赖直接指向 Zed 的最新 GitHub `main` 分支，而不是 crates.io 版本：
+依赖直接指向 Zed 的 GitHub 仓库，但固定在经过验证的 commit，而不是随构建时间漂移的 `main`：
 
 ```toml
-gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform" }
+gpui = { git = "https://github.com/zed-industries/zed", package = "gpui", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8" }
 ```
 
 ## 运行

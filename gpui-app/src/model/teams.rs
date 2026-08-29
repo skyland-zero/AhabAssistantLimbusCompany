@@ -141,18 +141,13 @@ pub struct TeamSummary {
     pub sinners: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TeamPurpose {
+    #[default]
     Mirror,
     Luxcavation,
     General,
-}
-
-impl Default for TeamPurpose {
-    fn default() -> Self {
-        Self::Mirror
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

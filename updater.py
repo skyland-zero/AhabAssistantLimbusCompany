@@ -7,6 +7,8 @@ from pathlib import Path, PurePosixPath
 
 import psutil
 
+from module.update.signature import UpdateSignatureError, verify_signed_manifest_files
+
 
 class UpdateManifestError(ValueError):
     """更新清单包含不能安全应用的内容。"""
@@ -34,9 +36,14 @@ class Updater:
         if self.file_name is None:
             self.download_file_path = None
             self.extract_folder_path = self.temp_path
+            self.manifest_path = None
+            self.signature_path = None
         else:
             self.download_file_path = os.path.join(self.temp_path, self.file_name)
             self.extract_folder_path = os.path.join(self.temp_path, self.file_name.rsplit(".", 1)[0])
+            archive_stem = Path(self.file_name).stem
+            self.manifest_path = os.path.join(self.temp_path, f"{archive_stem}.manifest.json")
+            self.signature_path = os.path.join(self.temp_path, f"{archive_stem}.manifest.sig")
 
         self._incremental_update_plan = None
 
@@ -213,6 +220,52 @@ class Updater:
             return
         self._incremental_update_plan = self._load_incremental_update_plan()
 
+    def validate_update_signature(self):
+        """Authenticate the downloaded archive before extraction/install."""
+        if not self.download_file_path or not self.manifest_path or not self.signature_path:
+            return None
+        manifest_path = self.manifest_path
+        signature_path = self.signature_path
+        # Accept the historical ``<archive>.manifest.*`` naming too, so a
+        # staged update can be rolled out without forcing a client-side rename.
+        candidates = [
+            (manifest_path, signature_path),
+            (
+                f"{self.download_file_path}.manifest.json",
+                f"{self.download_file_path}.manifest.sig",
+            ),
+        ]
+        selected = next(
+            ((manifest, signature) for manifest, signature in candidates if os.path.exists(manifest) or os.path.exists(signature)),
+            None,
+        )
+        if selected is None:
+            required = os.getenv("AALC_UPDATE_REQUIRE_SIGNATURE", "").strip().lower() in {"1", "true", "yes"}
+            if required:
+                raise UpdateSignatureError("更新包缺少签名清单")
+            return None
+        manifest_path, signature_path = selected
+        if not os.path.isfile(manifest_path) or not os.path.isfile(signature_path):
+            raise UpdateSignatureError("更新包的签名清单不完整")
+        # Only trust the key set already installed with the running updater.
+        # Reading a public-key file from the downloaded archive would let an
+        # attacker replace both the key and signature in one payload.
+        public_keys = None
+        key_path = Path(self.cover_folder_path) / "update_public_keys.json"
+        if key_path.is_file():
+            try:
+                public_keys = key_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as error:
+                raise UpdateSignatureError("无法读取更新公钥") from error
+        verified = verify_signed_manifest_files(
+            manifest_path,
+            signature_path,
+            self.download_file_path,
+            public_keys,
+        )
+        print(f"已验证更新包签名：{verified.version} ({verified.key_id})")
+        return verified
+
     def _get_extracted_updater_path(self):
         return os.path.join(self.extract_folder_path, self.updater_name)
 
@@ -264,11 +317,12 @@ class Updater:
                 continue  # 更新器自身位于 update_temp（安装根目录内），不能杀自己
             try:
                 exe_path = proc.exe()
-            except (psutil.AccessDenied, psutil.NoSuchProcess):
+            except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
                 continue
             # 覆盖 AALC 及安装目录内的附属进程（如 adb 服务），否则其可执行文件会被占用无法覆盖
             is_install_binary = os.path.normcase(exe_path).startswith(install_root)
-            if proc.info["name"] in self.process_names or any(name in proc.info["name"] for name in self.process_names) or is_install_binary:
+            process_name = proc.info.get("name") or ""
+            if process_name in self.process_names or any(name in process_name for name in self.process_names) or is_install_binary:
                 try:
                     proc.terminate()
                     try:
@@ -286,6 +340,8 @@ class Updater:
         """清理下载和解压的临时文件。"""
         print("开始清理...")
         self._cleanup_file(self.download_file_path, "下载文件")
+        self._cleanup_file(self.manifest_path, "更新清单")
+        self._cleanup_file(self.signature_path, "更新签名")
         self._cleanup_tree(self.extract_folder_path, "提取目录")
         self._cleanup_file(self.changes_file_path, "变更清单文件")
         print("清理完成")
@@ -314,6 +370,15 @@ class Updater:
 
     def run(self, apply_mode=False):
         """运行更新流程。"""
+        try:
+            # Authenticate the archive before extraction or process
+            # termination.  In apply mode the payload was extracted by the
+            # hand-off updater already, but the archive is still re-checked
+            # before any installation-side effects occur.
+            self.validate_update_signature()
+        except UpdateSignatureError as exc:
+            print(f"更新包签名无效，已取消更新: {exc}")
+            return False
         self._prepare_update_payload(apply_mode)
         try:
             self.validate_update_payload()

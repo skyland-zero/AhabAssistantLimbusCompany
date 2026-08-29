@@ -3,7 +3,7 @@ mod settings;
 mod theme_packs;
 mod toolbox;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use serde_json::json;
 
@@ -23,6 +23,8 @@ pub struct ThemePacksState {
     pub data: ThemePackState,
     pub sort_by_weight: bool,
     pub feedback: Option<String>,
+    pub(crate) confirmed_packs: Vec<ThemePack>,
+    pub(crate) persist_due: Option<Instant>,
 }
 
 pub struct ToolboxState {

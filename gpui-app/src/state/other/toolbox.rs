@@ -30,11 +30,8 @@ impl ToolboxState {
             method::TOOL_START
         };
         if self.rpc.is_sidecar() {
-            let _ = self
-                .rpc
-                .request_async(method_name, Some(json!({ "id": tool })));
-            self.running.insert(tool, !self.is_running(tool));
-            self.feedback = Some("工具请求已提交".to_owned());
+            self.rpc.submit(method_name, Some(json!({ "id": tool })));
+            self.feedback = Some("正在提交工具请求".to_owned());
             return;
         }
         let result = self
@@ -49,8 +46,8 @@ impl ToolboxState {
 
     pub fn screenshot(&mut self) {
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(method::TOOL_SCREENSHOT, None);
-            self.feedback = Some("截图请求已提交".to_owned());
+            self.rpc.submit(method::TOOL_SCREENSHOT, None);
+            self.feedback = Some("正在截图".to_owned());
             return;
         }
         match self.rpc.request_value(method::TOOL_SCREENSHOT, None) {
@@ -77,5 +74,33 @@ impl ToolboxState {
                 self.running.insert(status.toolId, status.running);
             }
         }
+    }
+
+    pub(crate) fn apply_rpc_result(
+        &mut self,
+        method_name: &str,
+        _params: Option<serde_json::Value>,
+        result: Result<Option<serde_json::Value>, crate::ipc::RpcError>,
+    ) {
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.feedback = Some(error.message);
+                return;
+            }
+        };
+        self.feedback = Some(match method_name {
+            method::TOOL_SCREENSHOT => {
+                let path = value
+                    .as_ref()
+                    .and_then(|value| value.get("path"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("未知路径");
+                format!("截图完成：{path}")
+            }
+            method::TOOL_START => "工具已启动".to_owned(),
+            method::TOOL_STOP => "工具已停止".to_owned(),
+            _ => return,
+        });
     }
 }

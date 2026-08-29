@@ -126,7 +126,7 @@ AALC 版本: {self.version}, 配置文件版本: {self.config.get("config_versio
 
 
 class Logger(metaclass=SingletonMeta):
-    def __init__(self):
+    def __init__(self, *, headless: bool = False):
         self.logger = logging.getLogger("AALC")
         self.logger.propagate = False  # 避免泄露到其他logger导致重复记录
 
@@ -178,7 +178,8 @@ class Logger(metaclass=SingletonMeta):
             self.logger.setLevel(logging.DEBUG)
             self.logger.addHandler(console_handler)
             self.logger.addHandler(debug_file_handler)
-            self.logger.addHandler(ui_log_handler)
+            if not headless:
+                self.logger.addHandler(ui_log_handler)
 
     def get_logger(self) -> logging.Logger:
         return self.logger

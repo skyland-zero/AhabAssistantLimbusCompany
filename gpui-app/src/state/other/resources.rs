@@ -38,7 +38,7 @@ impl ResourcesState {
 
     pub fn check_update(&mut self) {
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(method::RESOURCE_CHECK_UPDATE, None);
+            self.rpc.submit(method::RESOURCE_CHECK_UPDATE, None);
             self.feedback = Some("正在检查资源更新".to_owned());
             return;
         }
@@ -72,8 +72,8 @@ impl ResourcesState {
         self.sync_progress = Some(0);
         self.sync_finish_scheduled = false;
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(method::RESOURCE_SYNC_START, None);
-            self.feedback = Some("资源同步请求已提交".to_owned());
+            self.rpc.submit(method::RESOURCE_SYNC_START, None);
+            self.feedback = Some("正在启动资源同步".to_owned());
             return;
         }
         let result = self.rpc.request_value(method::RESOURCE_SYNC_START, None);
@@ -96,12 +96,58 @@ impl ResourcesState {
     pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {
         for event in events {
             if event.event == event::RESOURCE_SYNC_PROGRESS {
-                self.sync_progress = event
-                    .payload
-                    .get("progress")
-                    .and_then(|value| value.as_u64())
-                    .map(|progress| progress.min(100) as u8);
+                if let Some(error) = event.payload.get("error").and_then(|value| value.as_str()) {
+                    self.sync_progress = None;
+                    self.sync_finish_scheduled = false;
+                    self.feedback = Some(error.to_owned());
+                } else {
+                    self.sync_progress = event
+                        .payload
+                        .get("progress")
+                        .and_then(|value| value.as_u64())
+                        .map(|progress| progress.min(100) as u8);
+                }
             }
+        }
+    }
+
+    pub(crate) fn apply_rpc_result(
+        &mut self,
+        method_name: &str,
+        result: Result<Option<serde_json::Value>, crate::ipc::RpcError>,
+    ) {
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => {
+                if method_name == method::RESOURCE_SYNC_START {
+                    self.sync_progress = None;
+                }
+                self.feedback = Some(error.message);
+                return;
+            }
+        };
+        match method_name {
+            method::RESOURCE_CHECK_UPDATE | method::RESOURCE_STATUS => {
+                let groups = value
+                    .and_then(|value| serde_json::from_value::<Vec<ResourceGroup>>(value).ok())
+                    .unwrap_or_default();
+                let has_update = groups.iter().any(|group| {
+                    group
+                        .remoteVersion
+                        .as_ref()
+                        .is_some_and(|remote| remote != &group.localVersion)
+                });
+                self.groups = groups;
+                self.feedback = Some(if has_update {
+                    "发现资源更新".to_owned()
+                } else {
+                    "资源已是最新版本".to_owned()
+                });
+            }
+            method::RESOURCE_SYNC_START => {
+                self.feedback = Some("资源同步已启动".to_owned());
+            }
+            _ => {}
         }
     }
 

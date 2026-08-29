@@ -28,7 +28,7 @@ async def _run(args: argparse.Namespace) -> None:
     from module.logger import log
     from module.logger.my_log import Logger
 
-    Logger()
+    Logger(headless=True)
     from module.backend_application import BackendApplication
     from module.device_manager import get_device_manager
     from module.rpc_dispatcher import RpcDispatcher

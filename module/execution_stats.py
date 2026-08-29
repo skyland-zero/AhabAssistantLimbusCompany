@@ -8,13 +8,13 @@ current run, today's totals, this week's totals, and a compact daily history.
 from __future__ import annotations
 
 import json
-import os
 import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from zoneinfo import ZoneInfo
 
+from core.atomic_write import atomic_write_text
 
 STAT_KINDS = ("exp", "thread", "mirror")
 SCHEMA_VERSION = 1
@@ -283,15 +283,12 @@ class ExecutionStatsStore:
         if self.path is None:
             return
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.path.with_name(f".{self.path.name}.tmp")
             payload = {"schemaVersion": SCHEMA_VERSION, "daily": self._daily}
-            temporary.write_text(
+            atomic_write_text(
+                self.path,
                 json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-                encoding="utf-8",
             )
-            os.replace(temporary, self.path)
-        except OSError:
+        except (OSError, UnicodeError, TypeError, ValueError):
             # Statistics are observability data; never fail an automation run
             # because its optional history file cannot be written.
             return

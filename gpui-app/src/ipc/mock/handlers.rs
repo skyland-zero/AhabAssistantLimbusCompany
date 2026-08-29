@@ -35,12 +35,16 @@ impl MockState {
         let id = request.id;
         let result: Result<Value, RpcError> = (|| match request.method.as_str() {
             method::APP_PING => Ok(json!("pong")),
-            method::APP_VERSION => {
-                Ok(json!({"ui": env!("CARGO_PKG_VERSION"), "backend": "mock-1.0.0"}))
-            }
-            method::APP_CHECK_UPDATE => Ok(json!(UpdateInfo {
-                updateAvailable: false,
-                latest: env!("CARGO_PKG_VERSION").into()
+            method::APP_VERSION => Ok(json!({
+                "schemaVersion": 2,
+                "ui": env!("CARGO_PKG_VERSION"),
+                "backend": "mock-1.0.0"
+            })),
+            method::APP_CHECK_UPDATE => Ok(json!({
+                "schemaVersion": 2,
+                "status": "up_to_date",
+                "updateAvailable": false,
+                "latest": env!("CARGO_PKG_VERSION")
             })),
             method::STATS_GET_SUMMARY => Ok(serde_json::to_value(&self.stats).unwrap()),
             method::STATS_GET_DAILY_SUMMARY => Ok(serde_json::to_value(DailyStatsPayload {
@@ -64,7 +68,12 @@ impl MockState {
                     // A direct IPC caller must observe the same no-op behavior as
                     // HomeState: window settings and Ahab resonance are not
                     // executable tasks on their own.
-                    Ok(json!(true))
+                    Ok(json!({
+                        "accepted": false,
+                        "runId": null,
+                        "state": "idle",
+                        "reason": "没有选择可执行任务"
+                    }))
                 } else {
                     let task = request
                         .params
@@ -126,7 +135,11 @@ impl MockState {
                             },
                         );
                     }
-                    Ok(json!(true))
+                    Ok(json!({
+                        "accepted": true,
+                        "runId": "mock-run",
+                        "state": "running"
+                    }))
                 }
             }
             method::EXECUTION_STOP => {
@@ -136,7 +149,11 @@ impl MockState {
                 self.emit_stats();
                 let status = self.execution.clone();
                 self.emit(event::EXECUTION_STATUS, &status);
-                Ok(json!(true))
+                Ok(json!({
+                    "accepted": true,
+                    "runId": null,
+                    "state": "idle"
+                }))
             }
             method::EXECUTION_PAUSE => {
                 if self.execution.state != ExecutionState::Running {
@@ -147,7 +164,11 @@ impl MockState {
                     self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
-                    Ok(json!(true))
+                    Ok(json!({
+                        "accepted": true,
+                        "runId": "mock-run",
+                        "state": "paused"
+                    }))
                 }
             }
             method::EXECUTION_RESUME => {
@@ -159,7 +180,11 @@ impl MockState {
                     self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
-                    Ok(json!(true))
+                    Ok(json!({
+                        "accepted": true,
+                        "runId": "mock-run",
+                        "state": "running"
+                    }))
                 }
             }
             method::TEAM_LIST => Ok(serde_json::to_value(&self.teams).unwrap()),

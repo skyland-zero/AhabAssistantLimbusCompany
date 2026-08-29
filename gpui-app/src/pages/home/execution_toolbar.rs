@@ -76,6 +76,12 @@ pub(super) fn execution_toolbar(
             text("继续", "Resume").get(language),
             palette.success.rgb_hex(),
         )
+    } else if state == ExecutionState::Stopping {
+        (
+            ICON_LOADER,
+            text("停止中", "Stopping").get(language),
+            palette.warning.rgb_hex(),
+        )
     } else {
         (
             ICON_PAUSE,
@@ -91,15 +97,19 @@ pub(super) fn execution_toolbar(
         .text_size(px(12.0))
         .child(action_icon(pause_icon, 14., pause_icon_color))
         .child(pause_label);
-    if busy {
+    if busy && state != ExecutionState::Stopping {
         pause = pause.on_click(cx.listener(|view, _, _, cx| {
             view.home.pause_or_resume();
             cx.stop_propagation();
             cx.notify();
         }));
+    } else if state == ExecutionState::Stopping {
+        pause = pause.opacity(0.65).cursor_not_allowed();
     }
 
-    let (run_icon, run_label, run_variant) = if busy {
+    let (run_icon, run_label, run_variant) = if state == ExecutionState::Stopping {
+        (ICON_LOADER, "Stopping...", ButtonVariant::Destructive)
+    } else if busy {
         (ICON_SQUARE, "Stop!", ButtonVariant::Destructive)
     } else {
         (ICON_PLAY, "Link Start!", ButtonVariant::Default)
@@ -132,12 +142,14 @@ pub(super) fn execution_toolbar(
                 .child("F10"),
         );
     }
-    if busy {
+    if busy && state != ExecutionState::Stopping {
         run = run.on_click(cx.listener(|view, _, _, cx| {
             view.home.stop();
             cx.stop_propagation();
             cx.notify();
         }));
+    } else if state == ExecutionState::Stopping {
+        run = run.opacity(0.65).cursor_not_allowed();
     } else {
         run = run.on_click(cx.listener(|view, _, _, cx| {
             let language = view.state.settings.language;

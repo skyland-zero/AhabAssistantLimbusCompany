@@ -9,6 +9,7 @@ import win32con
 from playsound3 import playsound
 
 from core.events import mediator
+from core.execution_control import interruptible_sleep
 from core.i18n import noop
 from module.after_completion_types import ACTION_EXIT_EMULATOR
 from module.automation import auto
@@ -204,7 +205,7 @@ def init_game():
     else:
         game_process.start_game()
         while not screen.init_handle():
-            sleep(10)
+            interruptible_sleep(10)
         if cfg.set_windows:
             screen.set_win()
 
@@ -503,14 +504,14 @@ class my_script_task(Thread):
 
     基于标准库 threading.Thread 实现（核心层不依赖 Qt）：
     - isRunning() 为 QThread 时代调用点保留的别名；
-    - terminate() 在 Windows 上复刻旧 QThread.terminate 的硬终止语义，
-      并在终止后重置自动化模块的安全锁。
+    - terminate() 只发出协作取消请求，绝不强杀解释器线程。
     """
 
     def __init__(self):
         # 初始化，构造函数
         super().__init__(daemon=True)
         self.mutex = Lock()
+        self.cancel_event = Event()
 
     def isRunning(self) -> bool:
         """兼容旧 QThread 调用点的别名。"""
@@ -518,6 +519,12 @@ class my_script_task(Thread):
 
     def run(self):
         self.mutex.acquire()
+        from core.execution_control import bind_cancel_event, current_cancel_event
+
+        inherited_cancel_event = current_cancel_event()
+        owns_cancel_binding = inherited_cancel_event is None
+        if owns_cancel_binding:
+            bind_cancel_event(self.cancel_event)
 
         try:
             self._run()
@@ -541,32 +548,18 @@ class my_script_task(Thread):
         finally:
             retry_monitor.stop()
             self.mutex.release()
+            if owns_cancel_binding:
+                bind_cancel_event(None)
 
         mediator.script_finished.emit()
 
     def terminate(self):
-        """硬终止脚本线程（Windows）。
-
-        复刻旧 QThread.terminate 在 Windows 上的 TerminateThread 行为：
-        线程被立即杀掉，不执行任何清理；随后重置自动化模块的安全锁，
-        防止被杀线程持有的锁导致后续任务永久阻塞。
-        """
+        """Request cooperative cancellation without corrupting Python locks."""
         retry_monitor.stop()
-        try:
-            import ctypes
+        from core.execution_control import request_cancellation
 
-            THREAD_TERMINATE = 0x0001
-            kernel32 = ctypes.windll.kernel32
-            handle = kernel32.OpenThread(THREAD_TERMINATE, False, self.native_id)
-            if handle:
-                try:
-                    kernel32.TerminateThread(handle, 1)
-                finally:
-                    kernel32.CloseHandle(handle)
-        except Exception as e:
-            log.error(f"终止脚本线程失败: {e}")
-        # TerminateThread 不会释放被杀线程持有的 RLock,换新锁防止后续任务取锁永久阻塞
-        auto.reset_safety_locks()
+        self.cancel_event.set()
+        request_cancellation()
 
     """def stop(self):
         self.running=False

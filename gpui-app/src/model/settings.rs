@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    fs, io,
+    fs,
+    io::{self, Write},
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 pub const APP_SETTINGS_FILE: &str = "settings.json";
@@ -131,14 +133,33 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut temporary = path.to_path_buf();
-    let extension = temporary
-        .extension()
-        .and_then(|part| part.to_str())
-        .unwrap_or("tmp");
-    temporary.set_extension(format!("{extension}.tmp"));
-    fs::write(&temporary, bytes)?;
-    replace_file(&temporary, path)
+    static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("settings");
+    let temporary = parent.join(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(bytes)?;
+        file.flush()?;
+        file.sync_all()?;
+        drop(file);
+        replace_file(&temporary, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
 }
 
 #[cfg(not(windows))]

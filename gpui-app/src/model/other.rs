@@ -126,6 +126,7 @@ impl Default for SystemSettingsConfig {
 fn schema_version() -> u32 {
     1
 }
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct UpdateInfo {
     pub updateAvailable: bool,

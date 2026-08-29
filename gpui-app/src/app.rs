@@ -129,6 +129,7 @@ pub struct AhabApp {
     pub(crate) screenshot_pending_image_source: Option<Arc<Image>>,
     pub(crate) screenshot_pending_render_image: Option<Arc<RenderImage>>,
     pub(crate) screenshot_pending_image_revision: Option<u64>,
+    pub(crate) sidecar_restart_started: bool,
 }
 
 impl AhabApp {

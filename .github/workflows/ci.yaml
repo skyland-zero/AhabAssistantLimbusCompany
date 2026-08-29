@@ -27,10 +27,10 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.x"
 
@@ -62,10 +62,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - name: Setup UV for Python
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: |
@@ -75,7 +77,9 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pytest
-        run: uv run pytest -ra
+        run: |
+          uv run pytest -ra
+          uv run python scripts/check_upstream_boundary.py
 
   # 复用既有打包流程，只替换传入的构建版本号。测试不过就不打包。
   build:
@@ -83,6 +87,7 @@ jobs:
     uses: ./.github/workflows/reusable-build.yml
     with:
       version: ${{ needs.prepare-version.outputs.version }}
+    secrets: inherit
 
   publish-prerelease:
     name: Publish prerelease
@@ -96,12 +101,35 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download build artifact
-        uses: actions/download-artifact@main
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: AALC_${{ needs.prepare-version.outputs.version }}.7z
+          name: AALC_${{ needs.prepare-version.outputs.version }}
+          path: release
+
+      - name: Detect signed update metadata
+        id: signing
+        shell: bash
+        env:
+          AALC_UPDATE_SIGNING_KEY: ${{ secrets.AALC_UPDATE_SIGNING_KEY }}
+          AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
+        run: |
+          if [[ -n "${AALC_UPDATE_SIGNING_KEY:-}" && -n "${AALC_UPDATE_PUBLIC_KEYS:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download signed update metadata
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          AALC_UPDATE_SIGNING_KEY: ${{ secrets.AALC_UPDATE_SIGNING_KEY }}
+          AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: AALC_${{ needs.prepare-version.outputs.version }}_signature
           path: release
 
       - name: Generate release notes
@@ -186,7 +214,7 @@ jobs:
           PY
 
       - name: Create prerelease
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: ${{ needs.prepare-version.outputs.version }}
           tag_name: ${{ needs.prepare-version.outputs.version }}
@@ -196,6 +224,17 @@ jobs:
           generate_release_notes: false
           body_path: ${{ runner.temp }}/aalc-release-notes.md
           files: release/AALC_${{ needs.prepare-version.outputs.version }}.7z
+          fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload signed metadata to prerelease
+        if: steps.signing.outputs.enabled == 'true'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ needs.prepare-version.outputs.version }}
+          files: |
+            release/AALC_${{ needs.prepare-version.outputs.version }}.manifest.json
+            release/AALC_${{ needs.prepare-version.outputs.version }}.manifest.sig
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
 

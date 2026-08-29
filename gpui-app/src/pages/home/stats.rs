@@ -204,11 +204,13 @@ fn current_run_card(app: &AhabApp) -> Div {
     let state_text = match state {
         ExecutionState::Running => text("运行中", "Running").get(language),
         ExecutionState::Paused => text("已暂停", "Paused").get(language),
+        ExecutionState::Stopping => text("停止中", "Stopping").get(language),
         ExecutionState::Idle => text("待机", "Idle").get(language),
     };
     let state_tone = match state {
         ExecutionState::Running => BadgeTone::Success,
         ExecutionState::Paused => BadgeTone::Warning,
+        ExecutionState::Stopping => BadgeTone::Warning,
         ExecutionState::Idle => BadgeTone::Neutral,
     };
     let task_text = current_task
@@ -507,7 +509,7 @@ fn daily_details_body(
         );
 
     let table_header = daily_table_row(
-        &text("日期", "Date").get(language),
+        text("日期", "Date").get(language),
         text("经验本", "EXP").get(language),
         text("纽本", "Thread").get(language),
         text("镜牢", "Mirror").get(language),

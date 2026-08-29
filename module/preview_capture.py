@@ -53,7 +53,7 @@ def encode_screenshot_frame(
     image.save(buffer, format="JPEG", quality=quality)
     return {
         "instanceId": instance_id,
-        "jpeg": list(buffer.getvalue()),
+        "jpeg": buffer.getvalue(),
         "width": image.width,
         "height": image.height,
     }
@@ -143,11 +143,11 @@ class PreviewCapture:
     def _capture_current_screen() -> Any:
         from module.automation import auto
 
-        # This path shares Automation's screenshot lock with task screenshots,
-        # but max_age=0 deliberately bypasses the task screenshot throttle.
+        # Reuse a fresh business frame while automation is active. When idle,
+        # the monitor path captures independently at the preview rate.
         return auto.take_monitor_screenshot(
             gray=False,
-            max_age=0.0,
+            max_age=0.5,
             ensure_window_visible=False,
         )
 

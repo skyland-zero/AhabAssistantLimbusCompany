@@ -21,6 +21,7 @@ pub enum ExecutionState {
     Idle,
     Running,
     Paused,
+    Stopping,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

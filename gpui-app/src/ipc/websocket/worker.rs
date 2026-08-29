@@ -1,18 +1,33 @@
+use std::time::Instant;
+
 use super::*;
 
 pub(super) enum WorkerCommand {
-    Request(RpcRequest, Sender<RpcResponse>),
+    Request {
+        request: RpcRequest,
+        response_tx: Option<Sender<RpcResponse>>,
+        report_completion: bool,
+    },
     Shutdown,
+}
+
+struct PendingRequest {
+    method: String,
+    params: Option<Value>,
+    response_tx: Option<Sender<RpcResponse>>,
+    report_completion: bool,
+    deadline: Instant,
 }
 
 pub(super) fn run_worker(
     mut socket: tungstenite::WebSocket<TcpStream>,
     commands: Receiver<WorkerCommand>,
-    events: Arc<Mutex<Vec<EventEnvelope>>>,
+    events: Arc<Mutex<VecDeque<EventEnvelope>>>,
+    completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
     connected: Arc<AtomicBool>,
     error: Arc<Mutex<Option<String>>>,
 ) {
-    let mut pending: HashMap<RequestId, Sender<RpcResponse>> = HashMap::new();
+    let mut pending: HashMap<RequestId, PendingRequest> = HashMap::new();
     let mut fatal_error: Option<String> = None;
 
     loop {
@@ -26,8 +41,14 @@ pub(super) fn run_worker(
                 }
             };
             match command {
-                WorkerCommand::Request(request, response_tx) => {
+                WorkerCommand::Request {
+                    request,
+                    response_tx,
+                    report_completion,
+                } => {
                     let id = request.id;
+                    let method = request.method.clone();
+                    let params = request.params.clone();
                     match serde_json::to_string(&request)
                         .map_err(|error| error.to_string())
                         .and_then(|payload| {
@@ -36,13 +57,33 @@ pub(super) fn run_worker(
                                 .map_err(|error| error.to_string())
                         }) {
                         Ok(()) => {
-                            pending.insert(id, response_tx);
+                            pending.insert(
+                                id,
+                                PendingRequest {
+                                    method,
+                                    params,
+                                    response_tx,
+                                    report_completion,
+                                    deadline: Instant::now() + REQUEST_TIMEOUT,
+                                },
+                            );
                         }
                         Err(send_error) => {
-                            let _ = response_tx.send(RpcResponse::failure(
+                            let response = RpcResponse::failure(
                                 id,
                                 RpcError::new(-32000, format!("sidecar 写入失败：{send_error}")),
-                            ));
+                            );
+                            complete(
+                                PendingRequest {
+                                    method,
+                                    params,
+                                    response_tx,
+                                    report_completion,
+                                    deadline: Instant::now(),
+                                },
+                                response,
+                                &completions,
+                            );
                             fatal_error = Some(send_error);
                             break;
                         }
@@ -60,14 +101,19 @@ pub(super) fn run_worker(
         }
 
         match socket.read() {
+            Ok(Message::Binary(bytes)) => match decode_binary_event(bytes.as_ref()) {
+                Ok(event) => push_event(&events, event),
+                Err(parse_error) => {
+                    fatal_error = Some(format!("sidecar 二进制事件无效：{parse_error}"));
+                    break;
+                }
+            },
             Ok(message) => {
                 if let Some(text) = message_text(message) {
                     match serde_json::from_str::<Value>(&text) {
                         Ok(value) if value.get("event").and_then(Value::as_str).is_some() => {
-                            if let Ok(event) = serde_json::from_value::<EventEnvelope>(value)
-                                && let Ok(mut queue) = events.lock()
-                            {
-                                queue.push(event);
+                            if let Ok(event) = serde_json::from_value::<EventEnvelope>(value) {
+                                push_event(&events, event);
                             }
                         }
                         Ok(value) => {
@@ -75,7 +121,7 @@ pub(super) fn run_worker(
                                 match serde_json::from_value::<RpcResponse>(value) {
                                     Ok(response) => {
                                         if let Some(waiter) = pending.remove(&id) {
-                                            let _ = waiter.send(response);
+                                            complete(waiter, response, &completions);
                                         }
                                     }
                                     Err(parse_error) => {
@@ -93,10 +139,25 @@ pub(super) fn run_worker(
                     }
                 }
             }
-            Err(error) if is_read_timeout(&error) => {}
-            Err(error) => {
-                fatal_error = Some(format!("sidecar 连接断开：{error}"));
+            Err(read_error) if is_read_timeout(&read_error) => {}
+            Err(read_error) => {
+                fatal_error = Some(format!("sidecar 连接断开：{read_error}"));
                 break;
+            }
+        }
+
+        let now = Instant::now();
+        let expired: Vec<RequestId> = pending
+            .iter()
+            .filter_map(|(id, request)| (request.deadline <= now).then_some(*id))
+            .collect();
+        for id in expired {
+            if let Some(request) = pending.remove(&id) {
+                complete(
+                    request,
+                    RpcResponse::failure(id, RpcError::new(-32000, "sidecar 请求超时")),
+                    &completions,
+                );
             }
         }
     }
@@ -106,12 +167,74 @@ pub(super) fn run_worker(
     if let Ok(mut stored_error) = error.lock() {
         *stored_error = Some(message.clone());
     }
-    for (id, waiter) in pending {
-        let _ = waiter.send(RpcResponse::failure(
-            id,
-            RpcError::new(-32000, message.clone()),
-        ));
+    for (id, request) in pending {
+        complete(
+            request,
+            RpcResponse::failure(id, RpcError::new(-32000, message.clone())),
+            &completions,
+        );
     }
+}
+
+fn complete(
+    pending: PendingRequest,
+    response: RpcResponse,
+    completions: &Arc<Mutex<VecDeque<RpcCompletion>>>,
+) {
+    if let Some(waiter) = pending.response_tx {
+        let _ = waiter.send(response.clone());
+    }
+    if pending.report_completion
+        && let Ok(mut queue) = completions.lock()
+    {
+        if queue.len() >= MAX_EVENT_QUEUE {
+            queue.pop_front();
+        }
+        queue.push_back(RpcCompletion {
+            method: pending.method,
+            params: pending.params,
+            response,
+        });
+    }
+}
+
+fn push_event(events: &Arc<Mutex<VecDeque<EventEnvelope>>>, event: EventEnvelope) {
+    if let Ok(mut queue) = events.lock() {
+        if event.event == super::super::contract::event::SCREENSHOT_FRAME {
+            queue.retain(|queued| queued.event != super::super::contract::event::SCREENSHOT_FRAME);
+        }
+        if queue.len() >= MAX_EVENT_QUEUE {
+            queue.pop_front();
+        }
+        queue.push_back(event);
+    }
+}
+
+fn decode_binary_event(bytes: &[u8]) -> Result<EventEnvelope, String> {
+    let length_bytes: [u8; 4] = bytes
+        .get(..4)
+        .ok_or_else(|| "missing metadata length".to_owned())?
+        .try_into()
+        .map_err(|_| "invalid metadata length".to_owned())?;
+    let metadata_length = u32::from_be_bytes(length_bytes) as usize;
+    let metadata_end = 4usize
+        .checked_add(metadata_length)
+        .ok_or_else(|| "metadata length overflow".to_owned())?;
+    let metadata = bytes
+        .get(4..metadata_end)
+        .ok_or_else(|| "truncated metadata".to_owned())?;
+    let binary = bytes
+        .get(metadata_end..)
+        .ok_or_else(|| "missing binary payload".to_owned())?;
+    if binary.is_empty() {
+        return Err("empty binary payload".to_owned());
+    }
+    let event: EventEnvelope =
+        serde_json::from_slice(metadata).map_err(|error| error.to_string())?;
+    if event.event != super::super::contract::event::SCREENSHOT_FRAME {
+        return Err("unsupported binary event".to_owned());
+    }
+    Ok(event.with_binary(binary.to_vec()))
 }
 
 fn is_read_timeout(error: &TungsteniteError) -> bool {
@@ -128,8 +251,23 @@ fn is_read_timeout(error: &TungsteniteError) -> bool {
 pub(super) fn message_text(message: Message) -> Option<String> {
     match message {
         Message::Text(text) => Some(text.to_string()),
-        Message::Binary(bytes) => String::from_utf8(bytes.to_vec()).ok(),
-        Message::Close(_) => None,
+        Message::Binary(_) | Message::Close(_) => None,
         Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn binary_screenshot_frame_splits_metadata_and_jpeg() {
+        let metadata = br#"{"event":"screenshot.frame","payload":{"instanceId":"fixture","width":2,"height":1},"seq":7}"#;
+        let mut frame = (metadata.len() as u32).to_be_bytes().to_vec();
+        frame.extend_from_slice(metadata);
+        frame.extend_from_slice(&[0xff, 0xd8, 0xff, 0xd9]);
+        let event = decode_binary_event(&frame).expect("valid frame");
+        assert_eq!(event.seq, Some(7));
+        assert_eq!(event.binary.as_deref(), Some(&[0xff, 0xd8, 0xff, 0xd9][..]));
     }
 }

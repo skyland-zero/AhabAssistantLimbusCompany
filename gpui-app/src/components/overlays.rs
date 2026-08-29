@@ -116,8 +116,7 @@ pub fn scroll_area_with_palette(
     palette: &Palette,
     state: ControlState,
 ) -> Stateful<Div> {
-    let area = scroll_area_base(id, child, palette, state);
-    area
+    scroll_area_base(id, child, palette, state)
 }
 
 fn scroll_area_with_controller(

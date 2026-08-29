@@ -109,7 +109,7 @@ impl SettingsPageState {
 
     pub fn check_update(&mut self) {
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(method::APP_CHECK_UPDATE, None);
+            self.rpc.submit(method::APP_CHECK_UPDATE, None);
             self.feedback = Some("正在检查更新".to_owned());
             return;
         }
@@ -146,11 +146,11 @@ impl SettingsPageState {
 
     fn persist_hotkey(&mut self) {
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(
+            self.rpc.submit(
                 method::HOTKEY_SET,
                 Some(serde_json::to_value(&self.hotkey).expect("HotkeyConfig is serializable")),
             );
-            self.feedback = Some("设置保存请求已提交".to_owned());
+            self.feedback = Some("正在保存设置".to_owned());
             return;
         }
         let result = self.rpc.request_value(
@@ -162,14 +162,14 @@ impl SettingsPageState {
 
     fn persist_system(&mut self) {
         if self.rpc.is_sidecar() {
-            let _ = self.rpc.request_async(
+            self.rpc.submit(
                 method::SYSTEM_SETTINGS_SET,
                 Some(
                     serde_json::to_value(&self.system)
                         .expect("SystemSettingsConfig is serializable"),
                 ),
             );
-            self.feedback = Some("设置保存请求已提交".to_owned());
+            self.feedback = Some("正在保存设置".to_owned());
             return;
         }
         let result = self.rpc.request_value(
@@ -184,6 +184,73 @@ impl SettingsPageState {
             Ok(_) => "设置已保存".to_owned(),
             Err(error) => error.message,
         });
+    }
+
+    pub(crate) fn apply_rpc_result(
+        &mut self,
+        method_name: &str,
+        result: Result<Option<serde_json::Value>, crate::ipc::RpcError>,
+    ) {
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.feedback = Some(error.message);
+                match method_name {
+                    method::HOTKEY_SET => self.rpc.submit(method::HOTKEY_GET, None),
+                    method::SYSTEM_SETTINGS_SET => {
+                        self.rpc.submit(method::SYSTEM_SETTINGS_GET, None)
+                    }
+                    _ => {}
+                }
+                return;
+            }
+        };
+        match method_name {
+            method::APP_CHECK_UPDATE => {
+                let result = value.unwrap_or_default();
+                self.feedback = Some(
+                    match result.get("status").and_then(|value| value.as_str()) {
+                        Some("available") => format!(
+                            "发现新版本：{}",
+                            result
+                                .get("latest")
+                                .and_then(|value| value.as_str())
+                                .unwrap_or("未知")
+                        ),
+                        Some("up_to_date") => format!(
+                            "当前已是最新版本：{}",
+                            result
+                                .get("latest")
+                                .and_then(|value| value.as_str())
+                                .unwrap_or("未知")
+                        ),
+                        _ => result
+                            .get("error")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("更新检查失败")
+                            .to_owned(),
+                    },
+                );
+            }
+            method::HOTKEY_SET | method::SYSTEM_SETTINGS_SET => {
+                self.feedback = Some("设置已保存".to_owned());
+            }
+            method::HOTKEY_GET => {
+                if let Some(value) = value
+                    && let Ok(hotkey) = serde_json::from_value(value)
+                {
+                    self.hotkey = hotkey;
+                }
+            }
+            method::SYSTEM_SETTINGS_GET => {
+                if let Some(value) = value
+                    && let Ok(system) = serde_json::from_value(value)
+                {
+                    self.system = system;
+                }
+            }
+            _ => {}
+        }
     }
 
     fn request(

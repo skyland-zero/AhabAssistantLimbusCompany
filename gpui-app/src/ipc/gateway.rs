@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use super::{BackendClient, EventEnvelope, RpcError, RpcResponse, decode_response};
+use super::{BackendClient, EventEnvelope, RpcCompletion, RpcError, RpcResponse, decode_response};
 
 /// Application-facing RPC adapter.
 ///
@@ -54,6 +54,14 @@ impl RpcGateway {
         self.client.request_async(method, params)
     }
 
+    pub fn submit(&self, method: &str, params: Option<Value>) {
+        self.client.submit(method, params);
+    }
+
+    pub fn restart_sidecar(&self) -> Result<(), String> {
+        self.client.restart_sidecar()
+    }
+
     pub fn decode_response(method: &str, response: RpcResponse) -> Result<Option<Value>, RpcError> {
         decode_response(method, response)
     }
@@ -77,6 +85,10 @@ impl RpcGateway {
 
     pub fn take_events(&mut self) -> Vec<EventEnvelope> {
         self.client.take_events()
+    }
+
+    pub fn take_completions(&self) -> Vec<RpcCompletion> {
+        self.client.take_completions()
     }
 }
 

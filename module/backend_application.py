@@ -24,7 +24,18 @@ from module.execution_stats import ExecutionStatsStore
 from module.logger import log
 from module.preview_capture import PreviewCapture, encode_screenshot_frame
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+WINDOW_POSITIONS = frozenset({"free", "left_top", "right_top", "left_bottom", "right_bottom", "center"})
+LEGACY_WINDOW_POSITIONS = {
+    "0": "center",
+    "1": "left_top",
+    "2": "right_top",
+    "3": "free",
+    0: "center",
+    1: "left_top",
+    2: "right_top",
+    3: "free",
+}
 
 SINNER_IDS = (
     "yi_sang",
@@ -146,12 +157,16 @@ class BackendEventBus:
             self._sequence += 1
             sequence = self._sequence
             listeners = list(self._listeners)
-        value = dict(payload or {})
-        for listener in listeners:
-            try:
-                listener(event, value, sequence)
-            except Exception:
-                log.exception("sidecar 事件监听器执行失败：%s", event)
+            value = dict(payload or {})
+            # Listener callbacks are intentionally serialized with sequence
+            # allocation so another emitter cannot publish seq N+1 first.
+            for listener in listeners:
+                try:
+                    # A listener may enrich its local view; don't let that
+                    # mutate the payload observed by later subscribers.
+                    listener(event, dict(value), sequence)
+                except Exception:
+                    log.exception("sidecar 事件监听器执行失败：%s", event)
         return sequence
 
 
@@ -198,6 +213,7 @@ class BackendApplication:
         self._hotkey_listener: Any | None = None
         self._mediator_bindings: list[tuple[Any, Callable[..., Any]]] = []
         self._preview_capture = preview_capture or PreviewCapture(self.emit)
+        self._closed = False
         if stats_path is None:
             from module import CONFIG_PATH
 
@@ -283,7 +299,13 @@ class BackendApplication:
                 "resonate_with_Ahab": self._json_bool(raw.get("resonate_with_Ahab"), False),
             },
             "set_windows": {
-                key: self._json_bool(raw.get(key), default) if isinstance(default, bool) else raw.get(key, default)
+                key: (
+                    self._normalise_window_position(raw.get(key, default))
+                    if key == "set_win_position"
+                    else self._json_bool(raw.get(key), default)
+                    if isinstance(default, bool)
+                    else raw.get(key, default)
+                )
                 for key, default in {
                     "set_win_size": 1080,
                     "set_win_position": "free",
@@ -539,36 +561,32 @@ class BackendApplication:
             worker = threading.Thread(target=self._run_execution, args=(run_id,), name="AALCExecution", daemon=True)
             self._execution_thread = worker
             worker.start()
-            return {"accepted": True, "runId": run_id}
+            return {"accepted": True, "runId": run_id, "state": "running"}
 
     def execution_stop(self) -> dict[str, Any]:
+        worker = None
         with self._lock:
             if self._execution_state == "idle":
-                return {"accepted": False, "runId": None}
+                return {"accepted": False, "runId": None, "state": "idle"}
+            if self._execution_state == "stopping":
+                return {"accepted": True, "runId": self._execution_run_id, "state": "stopping"}
             self._execution_stop.set()
             worker = self._execution_worker
-            thread = self._execution_thread
             run_id = self._execution_run_id
-        if worker is not None and hasattr(worker, "terminate"):
-            # The legacy task has no complete cancellation injection point yet.
-            # Ask it to finish cooperatively first; use its existing hard-stop
-            # fallback only when it is still alive after a short grace period.
-            try:
-                if thread is not None:
-                    thread.join(timeout=0.2)
-                if thread is not None and thread.is_alive():
-                    worker.terminate()
-            except Exception:
-                log.exception("停止任务线程失败")
-        with self._lock:
-            if self._execution_state != "idle":
-                self._execution_state = "idle"
-                self._execution_task_id = None
-                self._execution_run_id = None
-                self._execution_worker = None
-                self.emit("execution.status", self._execution_payload(run_id=run_id))
-                self.emit("execution.stats", self.stats.finish_run(run_id))
-        return {"accepted": True, "runId": run_id}
+            self._execution_state = "stopping"
+            self.emit("execution.status", self._execution_payload())
+            self.emit("execution.stats", self.stats.set_state("stopping"))
+        # The event is the primary cancellation mechanism.  Notify the legacy
+        # worker as well so it can stop its retry monitor and wake any
+        # worker-owned cancellation hooks without resorting to thread killing.
+        if worker is not None:
+            terminate = getattr(worker, "terminate", None)
+            if callable(terminate):
+                try:
+                    terminate()
+                except Exception:
+                    log.debug("通知任务线程停止失败", exc_info=True)
+        return {"accepted": True, "runId": run_id, "state": "stopping"}
 
     def execution_pause(self) -> dict[str, Any]:
         with self._lock:
@@ -953,19 +971,38 @@ class BackendApplication:
 
             checker = UpdateThread(timeout=10, flag=False)
             checker.run()
-            latest = checker.new_version or self.version
+            if not checker.new_version:
+                return {
+                    "schemaVersion": SCHEMA_VERSION,
+                    "status": "failed",
+                    "error": checker.error_msg or "无法从更新源获取版本信息",
+                }
+            latest = checker.new_version
+            update_available = bool(latest != self.version and not checker.is_current_version_latest)
             return {
                 "schemaVersion": SCHEMA_VERSION,
-                "updateAvailable": bool(latest and latest != self.version and not checker.is_current_version_latest),
+                "status": "available" if update_available else "up_to_date",
+                "updateAvailable": update_available,
                 "latest": latest,
             }
         except Exception as error:
             log.warning("更新检查失败：%s", error)
-            return {"schemaVersion": SCHEMA_VERSION, "updateAvailable": False, "latest": self.version}
+            return {"schemaVersion": SCHEMA_VERSION, "status": "failed", "error": str(error)}
 
     def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
         self._preview_capture.close()
         self.execution_stop()
+        execution_thread = self._execution_thread
+        if execution_thread is not None and execution_thread is not threading.current_thread():
+            # Give cooperative cancellation a short grace period before
+            # closing device resources.  The thread is daemonized so process
+            # shutdown remains bounded even if legacy code is blocked in an
+            # external API; no interpreter-level hard kill is attempted.
+            execution_thread.join(timeout=2.0)
         for tool_id in tuple(self._tool_workers):
             try:
                 self.tool_stop({"id": tool_id})
@@ -984,6 +1021,9 @@ class BackendApplication:
             self.device_manager.remove_notice_listener(self._on_device_event)
         if hasattr(self.device_manager, "close"):
             self.device_manager.close()
+        flush = getattr(self.config, "flush", None)
+        if callable(flush):
+            flush()
 
     def is_busy(self) -> bool:
         with self._lock:
@@ -1006,8 +1046,10 @@ class BackendApplication:
     def _run_execution(self, run_id: str) -> None:
         worker = None
         try:
+            from core.execution_control import bind_cancel_event
             from tasks.base.script_task_scheme import my_script_task
 
+            bind_cancel_event(self._execution_stop)
             worker = my_script_task()
             with self._lock:
                 if self._execution_run_id != run_id:
@@ -1015,13 +1057,21 @@ class BackendApplication:
                 self._execution_worker = worker
             worker.start()
             worker.join()
-            if getattr(worker, "exception", None) is not None:
-                raise worker.exception
-            self.emit("app.notice", {"level": "info", "message": "所有任务已完成"})
+            worker_error = getattr(worker, "exception", None)
+            if worker_error is not None:
+                from module.my_error.my_error import userStopError
+
+                if not isinstance(worker_error, userStopError):
+                    raise worker_error
+            if not self._execution_stop.is_set():
+                self.emit("app.notice", {"level": "info", "message": "所有任务已完成"})
         except Exception as error:
             log.exception("任务执行失败")
             self.emit("app.notice", {"level": "error", "message": f"任务执行失败：{error}"})
         finally:
+            from core.execution_control import bind_cancel_event
+
+            bind_cancel_event(None)
             stats_payload = self.stats.finish_run(run_id)
             with self._lock:
                 if self._execution_run_id == run_id:
@@ -1054,6 +1104,14 @@ class BackendApplication:
             service.apply_sync_plan(check_result=result, sync_plan=plan, progress_callback=progress)
             self.emit("resource.sync.progress", {"scope": scope, "progress": 100, "runId": run_id})
         except Exception as error:
+            # Keep the GPUI progress indicator recoverable when a sync fails;
+            # app.notice is intentionally routed to the log surface, while
+            # this typed progress event lets the resources page clear its
+            # in-flight state without parsing user-facing text.
+            self.emit(
+                "resource.sync.progress",
+                {"scope": scope, "progress": 0, "runId": run_id, "error": str(error)},
+            )
             self.emit("app.notice", {"level": "error", "message": f"资源同步失败：{error}", "runId": run_id})
             log.exception("资源同步失败")
         finally:
@@ -1143,6 +1201,8 @@ class BackendApplication:
             return
         with self._lock:
             for key, value in updates.items():
+                if key == "set_win_position":
+                    value = self._canonical_window_position(value)
                 self._validate_config_value(key, value)
                 if hasattr(self.config, "unsaved_set_value"):
                     self.config.unsaved_set_value(key, copy.deepcopy(value), stacklevel=3)
@@ -1176,12 +1236,25 @@ class BackendApplication:
             return
         if isinstance(current, str) and not isinstance(value, str):
             raise ValueError(f"{key} requires a string")
+        if key == "set_win_position" and value not in WINDOW_POSITIONS:
+            raise ValueError(f"{key} contains an unknown position")
+
+    @staticmethod
+    def _canonical_window_position(value: Any) -> str:
+        value = LEGACY_WINDOW_POSITIONS.get(value, value)
+        if isinstance(value, str) and value in WINDOW_POSITIONS:
+            return value
+        raise ValueError("set_win_position contains an unknown position")
+
+    @staticmethod
+    def _normalise_window_position(value: Any) -> str:
+        try:
+            return BackendApplication._canonical_window_position(value)
+        except ValueError:
+            return "free"
 
     def _persist_config(self) -> None:
-        try:
-            self.config.save(instant=True)
-        except TypeError:
-            self.config.save()
+        self.config.save()
 
     def _execution_payload(self, *, run_id: str | None = None) -> dict[str, Any]:
         return {

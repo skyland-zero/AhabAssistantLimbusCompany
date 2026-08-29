@@ -13,11 +13,13 @@ jobs:
     steps:
       # 签出代码
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       # 配置 uv 
       - name: Setup UV for Python
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: |
@@ -29,33 +31,73 @@ jobs:
           uv sync --frozen
 
       - name: Setup Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly action
         with:
-          toolchain: nightly
-          components: rustfmt
+          toolchain: nightly-2026-08-26
+          components: rustfmt, clippy
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           workspaces: gpui-app
 
       - name: Run backend and GPUI tests
         run: |
           uv run pytest -q
-          cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
-          cargo +nightly test --manifest-path gpui-app/Cargo.toml
+          uv run python scripts/check_upstream_boundary.py
+          cargo fmt --manifest-path gpui-app/Cargo.toml -- --check
+          cargo check --manifest-path gpui-app/Cargo.toml --all-targets
+          cargo test --manifest-path gpui-app/Cargo.toml --all-targets
+          cargo clippy --manifest-path gpui-app/Cargo.toml --all-targets -- -D warnings
       
       # 构建并打包程序
       - name: build & bundle
+        env:
+          # The updater verifies manifests with the public key bundled into
+          # the package. Keep this input separate from the signing step so a
+          # signed build can never ship without its verification key.
+          AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
         run: |
           uv run python ./scripts/build.py --version ${{ inputs.version }}
 
+      - name: Detect signed update metadata
+        id: signing
+        shell: pwsh
+        env:
+          AALC_UPDATE_SIGNING_KEY: ${{ secrets.AALC_UPDATE_SIGNING_KEY }}
+          AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:AALC_UPDATE_SIGNING_KEY) -or [string]::IsNullOrWhiteSpace($env:AALC_UPDATE_PUBLIC_KEYS)) {
+            "enabled=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            "enabled=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
+      - name: Sign update manifest
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          AALC_UPDATE_SIGNING_KEY: ${{ secrets.AALC_UPDATE_SIGNING_KEY }}
+          AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
+        run: |
+          uv run python ./scripts/sign_update_manifest.py --archive "dist/AALC_${{ inputs.version }}.7z" --manifest "dist/AALC_${{ inputs.version }}.manifest.json" --signature "dist/AALC_${{ inputs.version }}.manifest.sig" --version "${{ inputs.version }}"
+
       # 上传打包结果
       - name: Upload build artifacts
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: AALC_${{ inputs.version }}
+          path: dist/AALC_${{ inputs.version }}.7z
+          if-no-files-found: error
+
+      - name: Upload signed update metadata
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          AALC_UPDATE_SIGNING_KEY: ${{ secrets.AALC_UPDATE_SIGNING_KEY }}
+          AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AALC_${{ inputs.version }}_signature
           path: |
-            dist/AALC_${{ inputs.version }}.7z
-            dist/AALC_${{ inputs.version }}.zip
-          archive: false
+            dist/AALC_${{ inputs.version }}.manifest.json
+            dist/AALC_${{ inputs.version }}.manifest.sig
+          if-no-files-found: error

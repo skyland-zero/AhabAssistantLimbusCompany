@@ -12,6 +12,7 @@ import numpy as np
 import psutil
 from PIL.Image import Image
 
+from core.execution_control import check_cancelled, interruptible_sleep, wait_for_event
 from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
 from utils.singletonmeta import SingletonMeta
@@ -162,8 +163,10 @@ class Automation(metaclass=SingletonMeta):
         输入，让业务流程自身的卡死兜底(如 check_times)得以继续运行。
         """
         while True:
-            gate_open = self._interaction_gate.wait(timeout=GATE_WAIT_TIMEOUT)
+            check_cancelled()
+            gate_open = wait_for_event(self._interaction_gate, GATE_WAIT_TIMEOUT)
             with self._input_lock:
+                check_cancelled()
                 if gate_open and self._interaction_gate.is_set():
                     method = getattr(self.input_handler, method_name)
                     return method(*args, **kwargs)
@@ -366,10 +369,10 @@ class Automation(metaclass=SingletonMeta):
         if self.last_click_time == 0:
             self.last_click_time = time.time()
         wait_time = max(0, interval - (time.time() - self.last_click_time))
-        time.sleep(wait_time)
+        interruptible_sleep(wait_time)
 
         # 计算传入的位置
-        self._interaction_gate.wait(timeout=GATE_WAIT_TIMEOUT)
+        wait_for_event(self._interaction_gate, GATE_WAIT_TIMEOUT)
         x, y = self.calculate_click_position(coordinates, offset)
 
         # 定义鼠标操作映射
@@ -408,12 +411,13 @@ class Automation(metaclass=SingletonMeta):
         screenshot_interval_time = cfg.screenshot_interval if cfg.screenshot_interval else 0.85
         while True:
             try:
+                check_cancelled()
                 if time.time() - self.last_screenshot_time < screenshot_interval_time:
                     wait_time = max(
                         screenshot_interval_time - (time.time() - self.last_screenshot_time),
                         0,
                     )
-                    time.sleep(wait_time)
+                    interruptible_sleep(wait_time)
 
                 with self._screenshot_lock:
                     result = ScreenShot.take_screenshot(gray)
@@ -425,8 +429,11 @@ class Automation(metaclass=SingletonMeta):
                 else:
                     return None
             except Exception as e:
+                # ``userStopError`` is an intentional control-flow signal;
+                # never turn cancellation into a retry loop.
+                check_cancelled()
                 log.error(f"截图失败:{e}")
-            time.sleep(1)
+            interruptible_sleep(1)
             if time.time() - start_time > 60:
                 log.error("截图超时，尝试重启游戏")
                 import os
@@ -517,7 +524,7 @@ class Automation(metaclass=SingletonMeta):
                 raise ValueError("错误的类型")
 
             if i < max_retries - 1:
-                time.sleep(1)  # 在重试前等待一定时间
+                interruptible_sleep(1)  # 在重试前等待一定时间
         return None
 
     def find_image_with_multiple_targets(self, target: str, threshold, my_crop=None, min_dist=10, additional_stack=0) -> List:

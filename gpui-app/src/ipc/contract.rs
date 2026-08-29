@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub type RequestId = u64;
-pub const RPC_SCHEMA_VERSION: u32 = 1;
+pub const RPC_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RpcRequest {
@@ -98,6 +98,15 @@ pub struct EventEnvelope {
     pub payload: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seq: Option<u64>,
+    #[serde(skip)]
+    pub binary: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RpcCompletion {
+    pub method: String,
+    pub params: Option<Value>,
+    pub response: RpcResponse,
 }
 impl EventEnvelope {
     pub fn new(event: impl Into<String>, payload: impl Into<Value>) -> Self {
@@ -105,11 +114,17 @@ impl EventEnvelope {
             event: event.into(),
             payload: payload.into(),
             seq: None,
+            binary: None,
         }
     }
 
     pub fn with_sequence(mut self, sequence: u64) -> Self {
         self.seq = Some(sequence);
+        self
+    }
+
+    pub fn with_binary(mut self, binary: Vec<u8>) -> Self {
+        self.binary = Some(binary);
         self
     }
 }

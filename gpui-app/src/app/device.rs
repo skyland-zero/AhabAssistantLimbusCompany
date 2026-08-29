@@ -1,6 +1,10 @@
 use gpui::Context;
 
 use super::AhabApp;
+use crate::ipc::{
+    RpcCompletion, RpcGateway,
+    contract::{event, method},
+};
 
 impl AhabApp {
     /// Start a lightweight GPUI-side event pump for unsolicited sidecar
@@ -16,7 +20,48 @@ impl AhabApp {
                     .await;
                 if this
                     .update(cx, |view, cx| {
-                        if view.poll_backend_events() {
+                        let changed = view.poll_backend_events();
+                        if view.home.stop_timed_out() && !view.sidecar_restart_started {
+                            view.sidecar_restart_started = true;
+                            let rpc = view.home.rpc.clone();
+                            cx.spawn(async move |this, cx| {
+                                let result = cx
+                                    .background_executor()
+                                    .spawn(async move { rpc.restart_sidecar() })
+                                    .await;
+                                let _ = this.update(cx, |view, cx| {
+                                    view.sidecar_restart_started = false;
+                                    match result {
+                                        Ok(()) => {
+                                            view.home.reset_after_sidecar_restart();
+                                            view.show_toast(
+                                                crate::shell::ToastKind::Success,
+                                                "后端已重启，正在重新加载状态",
+                                                cx,
+                                            );
+                                            view.start_backend_hydration(cx);
+                                        }
+                                        Err(error) => {
+                                            // An externally managed sidecar
+                                            // cannot be killed or replaced by
+                                            // GPUI.  Mark this timeout as
+                                            // handled so the pump does not
+                                            // retry every five seconds while
+                                            // leaving the backend state intact.
+                                            view.home.mark_stop_timeout_handled();
+                                            view.show_toast(
+                                                crate::shell::ToastKind::Error,
+                                                format!("后端重启失败：{error}"),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                    cx.notify();
+                                });
+                            })
+                            .detach();
+                        }
+                        if changed || view.sidecar_restart_started {
                             cx.notify();
                         }
                     })
@@ -31,13 +76,71 @@ impl AhabApp {
 
     pub(crate) fn poll_backend_events(&mut self) -> bool {
         let events = self.home.rpc.take_events();
-        if events.is_empty() {
-            return false;
+        let mut changed = false;
+        if !events.is_empty() {
+            let mut home_events = Vec::new();
+            let mut toolbox_events = Vec::new();
+            let mut resource_events = Vec::new();
+            for event_value in events {
+                match event_value.event.as_str() {
+                    event::TOOL_STATUS => toolbox_events.push(event_value),
+                    event::RESOURCE_SYNC_PROGRESS => resource_events.push(event_value),
+                    event::EXECUTION_STATUS
+                    | event::EXECUTION_MIRROR_PROGRESS
+                    | event::EXECUTION_STATS
+                    | event::SCREENSHOT_FRAME
+                    | event::PREVIEW_STATUS
+                    | event::DEVICE_STATUS
+                    | event::LOG_ENTRY
+                    | event::APP_NOTICE => home_events.push(event_value),
+                    _ => {}
+                }
+            }
+            self.home.apply_events(home_events);
+            self.toolbox.apply_events(toolbox_events);
+            self.resources.apply_events(resource_events);
+            changed = true;
         }
-        self.home.apply_events(events.clone());
-        self.toolbox.apply_events(events.clone());
-        self.resources.apply_events(events);
-        true
+
+        for completion in self.home.rpc.take_completions() {
+            self.apply_backend_completion(completion);
+            changed = true;
+        }
+        if self.theme_packs.flush_debounced() {
+            changed = true;
+        }
+        changed
+    }
+
+    fn apply_backend_completion(&mut self, completion: RpcCompletion) {
+        let method_name = completion.method.as_str();
+        let result = RpcGateway::decode_response(method_name, completion.response);
+        match method_name {
+            method::EXECUTION_START
+            | method::EXECUTION_STOP
+            | method::EXECUTION_PAUSE
+            | method::EXECUTION_RESUME
+            | method::TASKS_SET_CONFIG => self.home.apply_command_result(method_name, result),
+            method::APP_CHECK_UPDATE
+            | method::HOTKEY_GET
+            | method::HOTKEY_SET
+            | method::SYSTEM_SETTINGS_GET
+            | method::SYSTEM_SETTINGS_SET => {
+                self.settings_page.apply_rpc_result(method_name, result)
+            }
+            method::RESOURCE_STATUS
+            | method::RESOURCE_CHECK_UPDATE
+            | method::RESOURCE_SYNC_START => self.resources.apply_rpc_result(method_name, result),
+            method::TOOL_START | method::TOOL_STOP | method::TOOL_SCREENSHOT => self
+                .toolbox
+                .apply_rpc_result(method_name, completion.params, result),
+            method::THEME_PACK_LIST
+            | method::THEME_PACK_UPDATE_ALL
+            | method::THEME_PACK_RESET_WEIGHTS => {
+                self.theme_packs.apply_rpc_result(method_name, result)
+            }
+            _ => {}
+        }
     }
 
     pub fn select_device(&mut self, id: String, cx: &mut Context<Self>) {

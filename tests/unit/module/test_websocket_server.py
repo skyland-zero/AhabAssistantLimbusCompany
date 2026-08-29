@@ -38,7 +38,7 @@ async def _exercise_server() -> None:
         async with connect(f"ws://127.0.0.1:{port}") as client:
             await client.send(json.dumps({"type": "hello", "token": "secret"}))
             hello = json.loads(await client.recv())
-            assert hello == {"type": "hello", "ok": True, "schemaVersion": 1}
+            assert hello == {"type": "hello", "ok": True, "schemaVersion": 2}
 
             await client.send(
                 json.dumps(

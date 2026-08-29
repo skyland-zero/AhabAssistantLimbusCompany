@@ -23,6 +23,10 @@ pub(super) fn task_header(
             i18n::text(language, I18nKey::HomePaused).to_owned(),
             BadgeTone::Accent,
         ),
+        ExecutionState::Stopping => (
+            text("正在停止", "Stopping").get(language).to_owned(),
+            BadgeTone::Warning,
+        ),
         ExecutionState::Idle => (
             i18n::text(language, I18nKey::HomeIdle).to_owned(),
             BadgeTone::Neutral,

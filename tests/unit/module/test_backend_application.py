@@ -192,6 +192,16 @@ def test_event_bus_adds_ordered_sequence_to_application_events() -> None:
     app.close()
 
 
+def test_application_close_is_idempotent() -> None:
+    preview = FakePreviewCapture()
+    app = make_application(preview)
+
+    app.close()
+    app.close()
+
+    assert preview.close_count == 1
+
+
 def test_device_events_control_continuous_preview_lifecycle() -> None:
     preview = FakePreviewCapture()
     app = make_application(preview)
@@ -238,8 +248,8 @@ def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     ]
 
     assert all("error" not in response for response in responses)
-    assert responses[1]["result"]["schemaVersion"] == 1
-    assert responses[2]["result"]["schemaVersion"] == 1
+    assert responses[1]["result"]["schemaVersion"] == 2
+    assert responses[2]["result"]["schemaVersion"] == 2
     assert responses[5]["result"][0]["id"] == "yi_sang"
     assert responses[6]["result"]["packs"][0]["id"] == "alpha"
     app.close()
@@ -290,7 +300,7 @@ def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection
 
     team = app.team_list()[0]
 
-    assert team["schemaVersion"] == 1
+    assert team["schemaVersion"] == 2
     assert team["sinners"] == ["faust", "yi_sang"]
     assert team["enabled"] is True
     assert team["mirrorConfig"]["shopping_strategy"] is True
@@ -417,6 +427,19 @@ def test_tasks_get_config_normalizes_legacy_integer_booleans() -> None:
 
     assert config["mirror"]["hard_mirror"] is True
     assert config["mirror"]["no_weekly_bonuses"] is False
+    app.close()
+
+
+def test_window_position_uses_python_screen_names_and_accepts_legacy_values() -> None:
+    app = make_application()
+    app.config.values["set_win_position"] = "2"
+    app.config.config.set_win_position = "2"
+    app.config.config._values["set_win_position"] = "2"
+
+    assert app.tasks_get_config()["set_windows"]["set_win_position"] == "right_top"
+
+    app.tasks_set_config({"set_windows": {"set_win_position": "left_top"}})
+    assert app.config.values["set_win_position"] == "left_top"
     app.close()
 
 

@@ -10,7 +10,7 @@ use sidecar::SidecarGuard;
 use worker::{WorkerCommand, run_worker};
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     env,
     io::{BufRead, BufReader},
     net::{SocketAddr, TcpStream},
@@ -30,12 +30,16 @@ use tungstenite::{Error as TungsteniteError, Message};
 
 use super::{
     RpcClient,
-    contract::{EventEnvelope, RPC_SCHEMA_VERSION, RequestId, RpcError, RpcRequest, RpcResponse},
+    contract::{
+        EventEnvelope, RPC_SCHEMA_VERSION, RequestId, RpcCompletion, RpcError, RpcRequest,
+        RpcResponse,
+    },
 };
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const READ_POLL_TIMEOUT: Duration = Duration::from_millis(100);
+const MAX_EVENT_QUEUE: usize = 512;
 
 /// A local Python sidecar client.
 ///
@@ -52,7 +56,8 @@ struct ClientShared {
     next_id: AtomicU64,
     connected: Arc<AtomicBool>,
     error: Arc<Mutex<Option<String>>>,
-    events: Arc<Mutex<Vec<EventEnvelope>>>,
+    events: Arc<Mutex<VecDeque<EventEnvelope>>>,
+    completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
     commands: Mutex<Option<Sender<WorkerCommand>>>,
     _sidecar: Option<Arc<SidecarGuard>>,
 }
@@ -94,7 +99,8 @@ impl WebSocketClient {
                 next_id: AtomicU64::new(1),
                 connected: Arc::new(AtomicBool::new(false)),
                 error: Arc::new(Mutex::new(Some(error.into()))),
-                events: Arc::new(Mutex::new(Vec::new())),
+                events: Arc::new(Mutex::new(VecDeque::new())),
+                completions: Arc::new(Mutex::new(VecDeque::new())),
                 commands: Mutex::new(None),
                 _sidecar: None,
             }),
@@ -109,7 +115,14 @@ impl WebSocketClient {
         let Ok(mut events) = self.shared.events.lock() else {
             return Vec::new();
         };
-        std::mem::take(&mut *events)
+        events.drain(..).collect()
+    }
+
+    pub fn take_completions(&self) -> Vec<RpcCompletion> {
+        let Ok(mut completions) = self.shared.completions.lock() else {
+            return Vec::new();
+        };
+        completions.drain(..).collect()
     }
 
     pub fn request(&self, method: impl Into<String>, params: Option<Value>) -> RpcResponse {
@@ -119,6 +132,30 @@ impl WebSocketClient {
             params,
         );
         self.send_request(request)
+    }
+
+    pub fn request_async(
+        &self,
+        method: impl Into<String>,
+        params: Option<Value>,
+    ) -> Receiver<RpcResponse> {
+        let request = RpcRequest::new(
+            self.shared.next_id.fetch_add(1, Ordering::Relaxed),
+            method,
+            params,
+        );
+        let (sender, receiver) = mpsc::channel();
+        self.enqueue_request(request, Some(sender), false);
+        receiver
+    }
+
+    pub fn submit(&self, method: impl Into<String>, params: Option<Value>) {
+        let request = RpcRequest::new(
+            self.shared.next_id.fetch_add(1, Ordering::Relaxed),
+            method,
+            params,
+        );
+        self.enqueue_request(request, None, true);
     }
 
     fn connect_url(
@@ -169,10 +206,12 @@ impl WebSocketClient {
             .map_err(|error| format!("设置 sidecar 写入超时失败：{error}"))?;
 
         let (commands_tx, commands_rx) = mpsc::channel();
-        let events = Arc::new(Mutex::new(Vec::new()));
+        let events = Arc::new(Mutex::new(VecDeque::new()));
+        let completions = Arc::new(Mutex::new(VecDeque::new()));
         let connected_flag = Arc::new(AtomicBool::new(true));
         let error = Arc::new(Mutex::new(None));
         let worker_events = Arc::clone(&events);
+        let worker_completions = Arc::clone(&completions);
         let worker_connected = Arc::clone(&connected_flag);
         let worker_error = Arc::clone(&error);
 
@@ -183,6 +222,7 @@ impl WebSocketClient {
                     socket,
                     commands_rx,
                     worker_events,
+                    worker_completions,
                     worker_connected,
                     worker_error,
                 )
@@ -195,6 +235,7 @@ impl WebSocketClient {
                 connected: connected_flag,
                 error,
                 events,
+                completions,
                 commands: Mutex::new(Some(commands_tx)),
                 _sidecar: sidecar,
             }),
@@ -203,8 +244,33 @@ impl WebSocketClient {
 
     pub(crate) fn send_request(&self, request: RpcRequest) -> RpcResponse {
         let id = request.id;
+        let (response_tx, response_rx) = mpsc::channel();
+        self.enqueue_request(request, Some(response_tx), false);
+        match response_rx.recv_timeout(REQUEST_TIMEOUT) {
+            Ok(response) => response,
+            Err(error) => RpcResponse::failure(
+                id,
+                RpcError::new(-32000, format!("sidecar 请求超时或已断开：{error}")),
+            ),
+        }
+    }
+
+    fn enqueue_request(
+        &self,
+        request: RpcRequest,
+        response_tx: Option<Sender<RpcResponse>>,
+        report_completion: bool,
+    ) {
+        let id = request.id;
         if !self.is_connected() {
-            return self.unavailable_response(id);
+            let response = self.unavailable_response(id);
+            if let Some(sender) = response_tx {
+                let _ = sender.send(response.clone());
+            }
+            if report_completion {
+                self.push_completion(&request, response);
+            }
+            return;
         }
         let Some(commands) = self
             .shared
@@ -213,21 +279,54 @@ impl WebSocketClient {
             .ok()
             .and_then(|mut commands| commands.as_mut().cloned())
         else {
-            return self.unavailable_response(id);
+            let response = self.unavailable_response(id);
+            if let Some(sender) = response_tx {
+                let _ = sender.send(response.clone());
+            }
+            if report_completion {
+                self.push_completion(&request, response);
+            }
+            return;
         };
-        let (response_tx, response_rx) = mpsc::channel();
-        if let Err(error) = commands.send(WorkerCommand::Request(request, response_tx)) {
-            return RpcResponse::failure(
+        let method = request.method.clone();
+        let params = request.params.clone();
+        if let Err(error) = commands.send(WorkerCommand::Request {
+            request,
+            response_tx,
+            report_completion,
+        }) {
+            let response = RpcResponse::failure(
                 id,
                 RpcError::new(-32000, format!("sidecar 请求发送失败：{error}")),
             );
+            if let WorkerCommand::Request { response_tx, .. } = error.0
+                && let Some(sender) = response_tx
+            {
+                let _ = sender.send(response.clone());
+            }
+            if report_completion && let Ok(mut queue) = self.shared.completions.lock() {
+                if queue.len() >= MAX_EVENT_QUEUE {
+                    queue.pop_front();
+                }
+                queue.push_back(RpcCompletion {
+                    method,
+                    params,
+                    response,
+                });
+            }
         }
-        match response_rx.recv_timeout(REQUEST_TIMEOUT) {
-            Ok(response) => response,
-            Err(error) => RpcResponse::failure(
-                id,
-                RpcError::new(-32000, format!("sidecar 请求超时或已断开：{error}")),
-            ),
+    }
+
+    fn push_completion(&self, request: &RpcRequest, response: RpcResponse) {
+        if let Ok(mut queue) = self.shared.completions.lock() {
+            if queue.len() >= MAX_EVENT_QUEUE {
+                queue.pop_front();
+            }
+            queue.push_back(RpcCompletion {
+                method: request.method.clone(),
+                params: request.params.clone(),
+                response,
+            });
         }
     }
 

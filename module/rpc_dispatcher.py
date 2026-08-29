@@ -55,6 +55,29 @@ class RpcDispatcher:
         self._busy_checker = checker
         self.application.set_busy_checker(checker)
 
+    @staticmethod
+    def is_mutating(method: Any) -> bool:
+        return method in {
+            "app.shutdown",
+            "tasks.setConfig",
+            "execution.start",
+            "execution.stop",
+            "execution.pause",
+            "execution.resume",
+            "team.save",
+            "team.delete",
+            "themePack.updateAll",
+            "themePack.resetWeights",
+            "resource.sync.start",
+            "tool.start",
+            "tool.stop",
+            "tool.screenshot",
+            "hotkey.set",
+            "systemSettings.set",
+            "device.connect",
+            "device.disconnect",
+        }
+
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         """Return a JSON-RPC response for one request object."""
         request_id = request.get("id")

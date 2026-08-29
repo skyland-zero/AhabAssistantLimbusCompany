@@ -119,10 +119,10 @@ impl TeamsState {
     }
 
     pub fn set_editor_enabled(&mut self, enabled: bool) {
-        if let Some(editor) = self.editor.as_mut() {
-            if editor.team.purpose != TeamPurpose::Luxcavation {
-                editor.team.enabled = enabled;
-            }
+        if let Some(editor) = self.editor.as_mut()
+            && editor.team.purpose != TeamPurpose::Luxcavation
+        {
+            editor.team.enabled = enabled;
         }
     }
 

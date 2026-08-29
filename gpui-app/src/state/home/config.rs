@@ -229,9 +229,21 @@ impl HomeState {
     }
 
     pub fn set_window_position(&mut self, value: impl Into<String>) {
-        let value = value.into();
+        let value = match value.into().as_str() {
+            // Accept the short-lived numeric GPUI protocol values while
+            // writing only the Python screen module's canonical names.
+            "0" => "center",
+            "1" => "left_top",
+            "2" => "right_top",
+            "3" => "free",
+            value => value,
+        }
+        .to_owned();
         self.update_tasks(|tasks| {
-            if matches!(value.as_str(), "0" | "1" | "2" | "3") {
+            if matches!(
+                value.as_str(),
+                "free" | "left_top" | "right_top" | "left_bottom" | "right_bottom" | "center"
+            ) {
                 tasks.set_windows.set_win_position = value;
             }
         });

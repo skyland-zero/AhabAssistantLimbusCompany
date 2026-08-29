@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# This app intentionally follows the latest GPUI source on GitHub instead of a
-# crates.io release. Cargo.lock records the exact commit used for each build.
+# GPUI is pinned in the manifest as well as Cargo.lock so a lock regeneration
+# cannot silently move the UI framework.
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed", package = "gpui", default-features = false }
-gpui_platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", default-features = false }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8", package = "gpui", default-features = false }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8", package = "gpui_platform", default-features = false }
 image = { version = "0.25.10", default-features = false }
 raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }

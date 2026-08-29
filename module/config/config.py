@@ -10,6 +10,7 @@ import numpy as np
 from pydantic import BaseModel, ValidationError
 from ruamel.yaml import YAML, YAMLError
 
+from core.atomic_write import atomic_dump_yaml
 from module.after_completion_types import (
     LEGACY_AFTER_COMPLETION_TO_CONFIG,
     POWER_ACTION_NONE,
@@ -21,12 +22,28 @@ from utils.singletonmeta import SingletonMeta
 
 from .config_typing import ConfigModel, TeamSetting
 
+_LEGACY_WINDOW_POSITION = {
+    "0": "center",
+    "1": "left_top",
+    "2": "right_top",
+    "3": "free",
+    0: "center",
+    1: "left_top",
+    2: "right_top",
+    3: "free",
+}
+
 
 class Config(metaclass=SingletonMeta):
     def __init__(self, version_path, example_path, config_path, backup_path: str = "config_backup"):
         self.yaml = YAML()
         # 并发与延迟写控制
         self._lock = threading.RLock()
+        # ruamel.yaml instances are stateful and are not safe to use from the
+        # delayed writer and an explicit ``save(instant=True)`` concurrently.
+        # Serialize only the YAML render/replace section; config snapshots are
+        # still taken under ``_lock`` so callers do not block on disk I/O.
+        self._io_lock = threading.RLock()
         self._save_timer = None
         self._save_interval = 1.0  # 秒：在此时间窗口内的多次修改合并为一次写盘
         self._pending_save = False
@@ -230,6 +247,16 @@ class Config(metaclass=SingletonMeta):
                             loaded_config = ConfigModel(**self._defaults).model_dump()
                     else:
                         loaded_config = ConfigModel(**self._defaults).model_dump()
+                # GPUI briefly emitted numeric window-position values.  Keep
+                # old config files runnable after the Python screen module
+                # switched to its descriptive position names.
+                legacy_position = loaded_config.get("set_win_position")
+                if (
+                    isinstance(legacy_position, (str, int))
+                    and not isinstance(legacy_position, bool)
+                    and legacy_position in _LEGACY_WINDOW_POSITION
+                ):
+                    loaded_config["set_win_position"] = _LEGACY_WINDOW_POSITION[legacy_position]
                 if not isinstance(loaded_config.get("config_version", 0), int):
                     raise TypeError("配置文件版本号不是 int 类型")
                 if loaded_config.get("config_version", 0) < self.config.config_version:
@@ -244,9 +271,12 @@ class Config(metaclass=SingletonMeta):
                 else:
                     normalized_queue = self._normalize_team_queue(queue_in_loaded_config)
                 self._sync_legacy_team_state(normalized_queue)
-                # 成功加载后保存当前文件为备份
-                self.backup_config()
-                self._save_config()
+            # ``path`` is closed before replacing the live file.  This is
+            # required on Windows, where replacing an open file fails with
+            # ``WinError 5``.  Keep the backup/write outside the read context
+            # while preserving the existing load semantics.
+            self.backup_config()
+            self._save_config()
         except FileNotFoundError:
             if self.backup_path.exists():
                 backup_files = [f for f in self.backup_path.iterdir() if f.is_file() and f.suffix == ".yaml"]
@@ -316,15 +346,16 @@ class Config(metaclass=SingletonMeta):
 
     def _save_config(self) -> None:
         """保存到配置文件（立即写盘）"""
-        # 拷贝快照后在锁外写盘，避免长时间持锁
-        with self._lock:
-            snapshot = self.config.model_dump()
-        example_yaml = self._load_default_config()
-        # 从快照更新到yaml对象，保持注释不变
-        example_yaml.update(snapshot)
-
-        with open(self.config_path, "w", encoding="utf-8") as file:
-            self.yaml.dump(example_yaml, file)
+        with self._io_lock:
+            # Serialize the snapshot with the replacement.  Otherwise an
+            # older snapshot can wait on ``_io_lock`` and overwrite a newer
+            # explicit save that reached the lock first.
+            with self._lock:
+                snapshot = self.config.model_dump()
+            example_yaml = self._load_default_config()
+            # 从快照更新到yaml对象，保持注释不变
+            example_yaml.update(snapshot)
+            atomic_dump_yaml(self.yaml, self.config_path, example_yaml)
 
     def get_value(self, key: str, default: Any = None, *, config_obj: Optional[BaseModel] = None) -> Any:
         """获取配置项的值, 如果是可变对象，则返回其指针"""
@@ -333,7 +364,7 @@ class Config(metaclass=SingletonMeta):
         else:
             try:
                 value = getattr(self.config, key, default)
-            except:
+            except Exception:
                 value = default
         return value
 
@@ -486,6 +517,14 @@ class Config(metaclass=SingletonMeta):
             instant (bool): 是否立即保存（跳过延迟机制, 但会阻塞线程）
         """
         if instant:
+            with self._lock:
+                self._pending_save = False
+                if self._save_timer is not None:
+                    try:
+                        self._save_timer.cancel()
+                    except Exception:
+                        pass
+                    self._save_timer = None
             self._save_config()
         else:
             self._schedule_save()
@@ -517,13 +556,14 @@ class Config(metaclass=SingletonMeta):
         """后台写盘线程：收到事件后把当前config写入文件"""
         while True:
             self._writer_event.wait()
+            # Clear before rendering.  If another mutation schedules a write
+            # while the disk operation is in progress, its event remains set
+            # and the next loop immediately persists the newer snapshot.
+            self._writer_event.clear()
             try:
                 self._save_config()
             except Exception as e:
                 log.error(f"配置保存失败，错误信息：{e}")
-
-            # 等待下一次
-            self._writer_event.clear()
 
     def just_load_config(self, path: Optional[Path | str] = None) -> None:
         """仅加载配置文件，不保存"""
@@ -577,18 +617,25 @@ class Config(metaclass=SingletonMeta):
 
     def backup_config(self) -> None:
         """备份当前配置到备份目录"""
-        if not self.backup_path.exists():
-            self.backup_path.mkdir(parents=True, exist_ok=True)
-        now_time = localtime(time())
-        files = [f for f in self.backup_path.iterdir() if f.is_file() and f.suffix == ".yaml"]
-        if files:
-            files.sort(key=lambda f: f.stat().st_birthtime)
-            # 确保上次保存的文件日期不同于今天，避免重复备份
-            latest_time = localtime(files[-1].stat().st_birthtime)
-            if latest_time.tm_mday != now_time.tm_mday:
+        with self._io_lock:
+            with self._lock:
+                snapshot = self.config.model_dump()
+            if not self.backup_path.exists():
+                self.backup_path.mkdir(parents=True, exist_ok=True)
+            now_time = localtime(time())
+            files = [f for f in self.backup_path.iterdir() if f.is_file() and f.suffix == ".yaml"]
+            backup_file = None
+            if files:
+                files.sort(key=lambda f: f.stat().st_birthtime)
+                # 确保上次保存的文件日期不同于今天，避免重复备份
+                latest_time = localtime(files[-1].stat().st_birthtime)
+                if latest_time.tm_mday != now_time.tm_mday:
+                    backup_file = self.backup_path / f"config_{strftime('%Y%m%d_%H%M%S', now_time)}.yaml"
+            else:
                 backup_file = self.backup_path / f"config_{strftime('%Y%m%d_%H%M%S', now_time)}.yaml"
-                with open(backup_file, "w", encoding="utf-8") as f:
-                    self.yaml.dump(self.config.model_dump(), f)
+            if backup_file is not None:
+                atomic_dump_yaml(self.yaml, backup_file, snapshot)
+
             # 删除旧备份文件，保留最近的10个
             files = [f for f in self.backup_path.iterdir() if f.is_file() and f.suffix == ".yaml"]
             files.sort(key=lambda f: f.stat().st_birthtime)
@@ -599,10 +646,6 @@ class Config(metaclass=SingletonMeta):
                 except Exception as e:
                     log.error(f"删除旧备份文件 {files[0]} 失败: {e}")
                     break
-        else:
-            backup_file = self.backup_path / f"config_{strftime('%Y%m%d_%H%M%S', now_time)}.yaml"
-            with open(backup_file, "w", encoding="utf-8") as f:
-                self.yaml.dump(self.config.model_dump(), f)
 
     def unsaved_del_key(self, key: str, *, config_obj: Optional[BaseModel | dict] = None) -> None:
         """仅删除配置项 不保存"""
@@ -657,6 +700,7 @@ def migrate_legacy_team_setting_data(data: dict) -> dict:
 class Theme_pack_list(metaclass=SingletonMeta):
     def __init__(self, example_path, theme_pack_list_path, theme_pack_weight_path):
         self.yaml = YAML()
+        self._io_lock = threading.RLock()
         # 读取默认配置作为同步模板
         default_config = self._load_default_config(example_path)
         # 获取用户的配置文件路径
@@ -702,8 +746,7 @@ class Theme_pack_list(metaclass=SingletonMeta):
         if not source_path.exists():
             return
 
-        with open(source_path, "r", encoding="utf-8") as file:
-            source_config = self.yaml.load(file) or {}
+        source_config = self.load_config(str(source_path)) or {}
         self.save_config(path=str(target_path), config_data=source_config)
 
     def create_team_weight_config(self, team_num: int) -> None:
@@ -787,13 +830,14 @@ class Theme_pack_list(metaclass=SingletonMeta):
 
     def load_config(self, path: str):
         """纯加载函数：从 path 读取并返回配置内容"""
-        try:
-            with open(path, "r", encoding="utf-8") as file:
-                return self.yaml.load(file) or {}
-        except FileNotFoundError:
-            return None
-        except Exception as e:
-            sys.exit(f"配置文件{path}加载错误: {e}")
+        with self._io_lock:
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    return self.yaml.load(file) or {}
+            except FileNotFoundError:
+                return None
+            except Exception as e:
+                sys.exit(f"配置文件{path}加载错误: {e}")
 
     @staticmethod
     def _update_config(config: dict, new_config: dict) -> None:
@@ -822,11 +866,10 @@ class Theme_pack_list(metaclass=SingletonMeta):
         """保存配置到指定路径，config_data是要保存的配置内容，path是保存路径"""
         config_data = self.config if config_data is None else config_data
 
-        # 确保父目录存在,如果不存在则自动创建
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-
-        with open(path, "w", encoding="utf-8") as file:
-            self.yaml.dump(config_data, file)
+        with self._io_lock:
+            # 确保父目录存在,如果不存在则自动创建
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            atomic_dump_yaml(self.yaml, path, config_data)
 
     def get_value(self, key, default=None):
         """获取配置项的值，如果是可变对象，则返回其拷贝"""
