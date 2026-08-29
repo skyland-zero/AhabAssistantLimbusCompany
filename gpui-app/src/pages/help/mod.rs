@@ -7,7 +7,7 @@
 
 use std::process::Command;
 
-use gpui::{Context, Div, FontWeight, KeyDownEvent, div, prelude::*, px};
+use gpui::{Context, Div, FontWeight, KeyDownEvent, div, point, prelude::*, px};
 
 use crate::{
     app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
@@ -24,6 +24,8 @@ use crate::{
 mod parser;
 
 use parser::{HelpBlock, InlinePart, parse_help, parse_inline};
+
+const HELP_SCROLL_ID: &'static str = "help-document-scroll";
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
@@ -85,14 +87,14 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         control = control
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.set_language(candidate);
-                view.help_scroll = gpui::ScrollHandle::new();
+                view.help_scroll.set_offset(point(px(0.), px(0.)));
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
                 if is_activation_key(event) {
                     window.prevent_default();
                     view.set_language(candidate);
-                    view.help_scroll = gpui::ScrollHandle::new();
+                    view.help_scroll.set_offset(point(px(0.), px(0.)));
                     cx.notify();
                 }
             }));
@@ -132,7 +134,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     }
 
     let scroll_handle = app.help_scroll.clone();
-    let document = scroll_area_with_handle(app, "help-document-scroll", document, scroll_handle)
+    let document = scroll_area_with_handle(app, HELP_SCROLL_ID, document, scroll_handle)
         .w_full()
         .max_w(px(672.))
         .mx_auto()

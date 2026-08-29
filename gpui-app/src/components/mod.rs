@@ -14,7 +14,6 @@ pub mod icon;
 pub mod keyboard;
 pub mod layout;
 pub mod overlays;
-pub mod smooth_scroll;
 pub mod style;
 pub mod text_input;
 

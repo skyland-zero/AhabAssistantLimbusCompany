@@ -1,10 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use gpui::{Image, RenderImage, ScrollHandle};
 
 use crate::{
     app_inputs::{SettingsInputs, TeamInputs},
-    components::smooth_scroll::SmoothScrollController,
     i18n::{self, Key as I18nKey},
     shell,
     state::{
@@ -190,7 +189,6 @@ pub struct AhabApp {
     visual_state: Option<VisualState>,
     pub help_scroll: ScrollHandle,
     pub home_log_scroll: ScrollHandle,
-    pub(crate) smooth_scroll: HashMap<&'static str, SmoothScrollController>,
     pub toast: Option<shell::Toast>,
     toast_generation: u64,
     home_log_revision_seen: u64,
@@ -204,26 +202,6 @@ pub struct AhabApp {
     pub(crate) backend_operation: BackendOperation,
     pub(crate) backend_attempt_id: u64,
     pub(crate) backend_epoch: u64,
-}
-
-impl AhabApp {
-    pub(crate) fn smooth_scroll_controller(&mut self, id: &'static str) -> SmoothScrollController {
-        self.smooth_scroll
-            .entry(id)
-            .or_insert_with(SmoothScrollController::new)
-            .clone()
-    }
-
-    pub(crate) fn smooth_scroll_controller_with_handle(
-        &mut self,
-        id: &'static str,
-        handle: ScrollHandle,
-    ) -> SmoothScrollController {
-        self.smooth_scroll
-            .entry(id)
-            .or_insert_with(|| SmoothScrollController::with_handle(handle))
-            .clone()
-    }
 }
 
 /// Deterministic transient states used by the visual-regression harness. These
