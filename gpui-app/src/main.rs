@@ -74,7 +74,7 @@ fn main() {
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.bind_keys(components::text_input::key_bindings());
 
-        let bounds = Bounds::centered(None, size(px(900.), px(680.)), cx);
+        let bounds = Bounds::centered(None, size(px(860.), px(680.)), cx);
         match cx.open_window(
             WindowOptions {
                 // `appears_transparent` hides the native Windows titlebar while

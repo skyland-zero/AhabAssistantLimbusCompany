@@ -53,7 +53,7 @@ def EXP_luxcavation(combat_count: int = 1):
         if auto.take_screenshot() is None:
             continue
         if auto.find_element("teams/identify_assets.png"):
-            break
+            return True
         if (
             auto.find_element("home/first_prompt_assets.png", model="clam")
             and auto.find_element("home/back_assets.png", model="normal")
@@ -91,7 +91,7 @@ def EXP_luxcavation(combat_count: int = 1):
                         if select_team:
                             break
                     if select_team:
-                        break
+                        return True
                     log.debug(f"经验本第 {lv_idx + 1} 关 3 次尝试均未进入编队，降级尝试下一关")
         if auto.click_element("home/luxcavation_assets.png"):
             continue
@@ -120,7 +120,7 @@ def EXP_luxcavation(combat_count: int = 1):
             auto.model = "aggressive"
         if loop_count < 0:
             log.error("无法进入经验本,不能进行下一步,此次经验本无效")
-            break
+            return False
 
 
 def thread_luxcavation(combat_count: int = 1):
@@ -147,7 +147,7 @@ def thread_luxcavation(combat_count: int = 1):
         if auto.take_screenshot() is None:
             continue
         if auto.find_element("teams/identify_assets.png"):
-            break
+            return True
         if (
             auto.find_element("home/first_prompt_assets.png", model="clam")
             and auto.find_element("home/back_assets.png", model="normal")
@@ -183,7 +183,8 @@ def thread_luxcavation(combat_count: int = 1):
                 level = sorted([(x, y) for x, y in level if x >= min_x], key=lambda p: p[1], reverse=True)
                 if level:
                     log.debug(f"纽本检测到 {len(level)} 个关卡入口: {level}")
-                    _click_level_targets(level, "纽本")
+                    if _click_level_targets(level, "纽本"):
+                        return True
                 else:
                     # 处理下方所有关卡未解锁的情况
                     level = None
@@ -213,7 +214,8 @@ def thread_luxcavation(combat_count: int = 1):
                         continue
 
                     log.debug(f"纽本(滑动后)检测到 {len(level)} 个关卡入口: {level}")
-                    _click_level_targets(level, "纽本(滑动后)")
+                    if _click_level_targets(level, "纽本(滑动后)"):
+                        return True
 
             else:
                 log.debug("纽本未找到关卡消耗锚点")
@@ -247,4 +249,4 @@ def thread_luxcavation(combat_count: int = 1):
             auto.model = "aggressive"
         if loop_count < 0:
             log.error("无法进入纽本,不能进行下一步,此次纽本无效")
-            break
+            return False

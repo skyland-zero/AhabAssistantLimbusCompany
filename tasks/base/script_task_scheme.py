@@ -57,13 +57,17 @@ def onetime_EXP_process(combat_count: int = 1):
         team = cfg.get_value(f"EXP_day_{calculate_the_teams()}")
     else:
         team = cfg.daily_teams
-    EXP_luxcavation(combat_count)
+    if EXP_luxcavation(combat_count) is False:
+        return False
     select_battle_team(team)
     if battle.to_battle() is False:
         return False
-    battle.fight(combat_count=combat_count)
+    if battle.fight(combat_count=combat_count) is False:
+        return False
     back_init_menu()
     make_enkephalin_module()
+    mediator.task_completed.emit("exp", combat_count)
+    return True
 
 
 @begin_and_finish_time_log(task_name="一次纽本")
@@ -73,13 +77,17 @@ def onetime_thread_process(combat_count: int = 1):
         team = cfg.get_value(f"thread_day_{get_day_of_week()}")
     else:
         team = cfg.daily_teams
-    thread_luxcavation(combat_count)
+    if thread_luxcavation(combat_count) is False:
+        return False
     select_battle_team(team)
     if battle.to_battle() is False:
         return False
-    battle.fight(combat_count=combat_count)
+    if battle.fight(combat_count=combat_count) is False:
+        return False
     back_init_menu()
     make_enkephalin_module()
+    mediator.task_completed.emit("thread", combat_count)
+    return True
 
 
 @begin_and_finish_time_log(task_name="一次镜牢")
@@ -366,6 +374,7 @@ def Mirror_task():
         if mirror_result:
             cfg.rotate_team_queue()
             mir_times -= 1
+            mediator.task_completed.emit("mirror", 1)
             if cfg.hard_mirror and cfg.auto_hard_mirror:
                 chance = cfg.hard_mirror_chance - 1
                 cfg.set_value("hard_mirror_chance", chance)

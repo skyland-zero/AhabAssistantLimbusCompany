@@ -1,6 +1,7 @@
 mod config;
 mod execution;
 mod selection;
+mod stats;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -9,9 +10,10 @@ use serde_json::json;
 use crate::{
     ipc::{EventEnvelope, MockClient, RpcGateway},
     model::{
-        AfterExitAction, AfterPowerAction, ConnectionStatus, DeviceInfo, DeviceStatusPayload,
-        ExecutionState, ExecutionStatusPayload, FixedTaskId, LogEntryPayload, LogLevel,
-        MirrorProgressPayload, PreviewStatus, PreviewStatusPayload, ScreenshotFrame, TasksConfig,
+        AfterExitAction, AfterPowerAction, ConnectionStatus, DailyStatsPayload, DeviceInfo,
+        DeviceStatusPayload, ExecutionState, ExecutionStatsPayload, ExecutionStatusPayload,
+        FixedTaskId, LogEntryPayload, LogLevel, MirrorProgressPayload, PreviewStatus,
+        PreviewStatusPayload, ScreenshotFrame, TasksConfig,
     },
 };
 
@@ -63,6 +65,12 @@ pub struct HomeState {
     pub rpc: RpcGateway,
     pub tasks: TasksConfig,
     pub execution: ExecutionStatusPayload,
+    pub stats: ExecutionStatsPayload,
+    pub daily_stats: Option<DailyStatsPayload>,
+    pub stats_details_open: bool,
+    pub stats_details_loading: bool,
+    pub stats_details_error: Option<String>,
+    pub stats_selected_date: Option<String>,
     pub logs: VecDeque<LogEntryPayload>,
     pub log_revision: u64,
     pub devices: Vec<DeviceInfo>,
@@ -123,6 +131,12 @@ impl HomeState {
             rpc,
             tasks,
             execution: ExecutionStatusPayload::default(),
+            stats: ExecutionStatsPayload::default(),
+            daily_stats: None,
+            stats_details_open: false,
+            stats_details_loading: false,
+            stats_details_error: None,
+            stats_selected_date: None,
             logs: VecDeque::new(),
             log_revision: 0,
             devices,

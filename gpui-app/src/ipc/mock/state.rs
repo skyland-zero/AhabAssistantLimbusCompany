@@ -7,6 +7,10 @@ impl Default for MockState {
             sequence: crate::ipc::contract::RequestSequence::default(),
             tasks: TasksConfig::default(),
             execution: ExecutionStatusPayload::default(),
+            stats: ExecutionStatsPayload {
+                schemaVersion: 1,
+                ..ExecutionStatsPayload::default()
+            },
             teams: vec![
                 TeamDetail {
                     schemaVersion: 1,

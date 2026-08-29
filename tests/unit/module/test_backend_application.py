@@ -169,13 +169,14 @@ class FakeThemeStore:
         self.config = config_data
 
 
-def make_application(preview_capture=None) -> BackendApplication:
+def make_application(preview_capture=None, stats_path=None) -> BackendApplication:
     return BackendApplication(
         FakeDeviceManager(),
         version="test",
         config=FakeConfig(),
         theme_list=FakeThemeStore(),
         preview_capture=preview_capture,
+        stats_path=stats_path,
     )
 
 
@@ -241,6 +242,33 @@ def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     assert responses[2]["result"]["schemaVersion"] == 1
     assert responses[5]["result"][0]["id"] == "yi_sang"
     assert responses[6]["result"]["packs"][0]["id"] == "alpha"
+    app.close()
+
+
+def test_stats_rpc_exposes_period_and_daily_summaries(tmp_path) -> None:
+    app = make_application(stats_path=tmp_path / "runtime_stats.json")
+    app.stats.start_run("run-1", {"exp": 2, "thread": 1, "mirror": 1})
+    app._execution_run_id = "run-1"
+    app._on_task_completed("exp", 2)
+    app._on_task_completed("mirror", 1)
+    dispatcher = RpcDispatcher(application=app, version="test")
+
+    summary = dispatcher.dispatch(
+        {"jsonrpc": "2.0", "id": 1, "method": "stats.getSummary"}
+    )
+    assert summary["result"]["currentRun"]["completed"]["exp"] == 2
+    assert summary["result"]["today"]["mirror"] == 1
+
+    daily = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "stats.getDailySummary",
+            "params": {"dateFrom": "2026-01-01", "dateTo": "2026-01-02"},
+        }
+    )
+    assert daily["result"]["days"]
+    assert daily["result"]["days"][0]["date"] == "2026-01-02"
     app.close()
 
 

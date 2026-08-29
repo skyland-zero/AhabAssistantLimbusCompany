@@ -42,6 +42,8 @@ async def _exercise_real_sidecar() -> None:
             methods = [
                 "app.ping",
                 "app.version",
+                "stats.getSummary",
+                "stats.getDailySummary",
                 "tasks.getConfig",
                 "execution.getState",
                 "team.list",
@@ -63,9 +65,12 @@ async def _exercise_real_sidecar() -> None:
                 for _ in methods
             ]
             assert all("error" not in response for response in responses), responses
-            assert responses[0]["result"] == "pong"
-            assert responses[2]["result"]["schemaVersion"] == 1
-            assert responses[6]["result"]["schemaVersion"] == 1
+            responses_by_id = {response["id"]: response["result"] for response in responses}
+            assert responses_by_id[1] == "pong"
+            assert responses_by_id[3]["schemaVersion"] == 1
+            assert responses_by_id[4]["schemaVersion"] == 1
+            assert responses_by_id[5]["schemaVersion"] == 1
+            assert responses_by_id[9]["schemaVersion"] == 1
 
             await client.send(
                 json.dumps(

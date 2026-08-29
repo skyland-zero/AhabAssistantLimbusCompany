@@ -26,6 +26,11 @@ impl MockState {
         }
     }
 
+    fn emit_stats(&mut self) {
+        let stats = self.stats.clone();
+        self.emit(event::EXECUTION_STATS, &stats);
+    }
+
     pub(super) fn handle(&mut self, request: RpcRequest) -> RpcResponse {
         let id = request.id;
         let result: Result<Value, RpcError> = (|| match request.method.as_str() {
@@ -37,6 +42,15 @@ impl MockState {
                 updateAvailable: false,
                 latest: env!("CARGO_PKG_VERSION").into()
             })),
+            method::STATS_GET_SUMMARY => Ok(serde_json::to_value(&self.stats).unwrap()),
+            method::STATS_GET_DAILY_SUMMARY => Ok(serde_json::to_value(DailyStatsPayload {
+                schemaVersion: 1,
+                dateFrom: String::new(),
+                dateTo: String::new(),
+                days: Vec::new(),
+                updatedAt: 0,
+            })
+            .unwrap()),
             method::TASKS_GET_CONFIG => Ok(serde_json::to_value(&self.tasks).unwrap()),
             method::TASKS_SET_CONFIG => {
                 self.tasks = Self::params(request.params, "tasks.setConfig requires TasksConfig")?;
@@ -60,6 +74,41 @@ impl MockState {
                         state: ExecutionState::Running,
                         currentTaskId: task,
                     };
+                    let infinite =
+                        self.tasks.enabledTasks.mirror && self.tasks.mirror.infinite_dungeons;
+                    self.stats = ExecutionStatsPayload {
+                        schemaVersion: 1,
+                        currentRun: CurrentRunStats {
+                            runId: Some("mock-run".into()),
+                            state: ExecutionState::Running,
+                            currentTaskId: self.execution.currentTaskId,
+                            startedAt: Some(0),
+                            targets: StatCounts {
+                                exp: if self.tasks.enabledTasks.daily_task {
+                                    self.tasks.daily_task.set_EXP_count.into()
+                                } else {
+                                    0
+                                },
+                                thread: if self.tasks.enabledTasks.daily_task {
+                                    self.tasks.daily_task.set_thread_count.into()
+                                } else {
+                                    0
+                                },
+                                mirror: if self.tasks.enabledTasks.mirror && !infinite {
+                                    self.tasks.mirror.set_mirror_count.into()
+                                } else {
+                                    0
+                                },
+                            },
+                            completed: StatCounts::default(),
+                            isMirrorInfinite: infinite,
+                            updatedAt: Some(0),
+                        },
+                        today: self.stats.today.clone(),
+                        week: self.stats.week.clone(),
+                        updatedAt: 0,
+                    };
+                    self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
                     if self.tasks.enabledTasks.mirror {
@@ -82,6 +131,9 @@ impl MockState {
             }
             method::EXECUTION_STOP => {
                 self.execution = ExecutionStatusPayload::default();
+                self.stats.currentRun.state = ExecutionState::Idle;
+                self.stats.currentRun.currentTaskId = None;
+                self.emit_stats();
                 let status = self.execution.clone();
                 self.emit(event::EXECUTION_STATUS, &status);
                 Ok(json!(true))
@@ -91,6 +143,8 @@ impl MockState {
                     Err(RpcError::new(-32011, "execution is not running"))
                 } else {
                     self.execution.state = ExecutionState::Paused;
+                    self.stats.currentRun.state = ExecutionState::Paused;
+                    self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
                     Ok(json!(true))
@@ -101,6 +155,8 @@ impl MockState {
                     Err(RpcError::new(-32012, "execution is not paused"))
                 } else {
                     self.execution.state = ExecutionState::Running;
+                    self.stats.currentRun.state = ExecutionState::Running;
+                    self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
                     Ok(json!(true))

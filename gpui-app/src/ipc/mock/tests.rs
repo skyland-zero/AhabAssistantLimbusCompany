@@ -29,7 +29,21 @@ fn execution_has_deterministic_state_transitions() {
             .unwrap()["state"],
         "idle"
     );
-    assert_eq!(client.take_events().len(), 5);
+    let events = client.take_events();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|item| item.event == event::EXECUTION_STATUS)
+            .count(),
+        4
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|item| item.event == event::EXECUTION_STATS)
+            .count(),
+        4
+    );
 }
 
 #[test]

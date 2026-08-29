@@ -110,6 +110,10 @@ class EventBus:
     mirror_signal = Event("mirror_signal")  # (当前次数, 总次数)
     mirror_bar_kill_signal = Event("mirror_bar_kill_signal")
 
+    # ---- 运行统计 ----
+    # (kind: exp/thread/mirror, count: successful dungeon completions)
+    task_completed = Event("task_completed")
+
     # ---- 快捷键监听 ----
     hotkey_listener_stop_signal = Event("hotkey_listener_stop_signal")
     hotkey_listener_start_signal = Event("hotkey_listener_start_signal")

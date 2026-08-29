@@ -129,6 +129,8 @@ pub mod method {
     pub const APP_PING: &str = "app.ping";
     pub const APP_VERSION: &str = "app.version";
     pub const APP_CHECK_UPDATE: &str = "app.checkUpdate";
+    pub const STATS_GET_SUMMARY: &str = "stats.getSummary";
+    pub const STATS_GET_DAILY_SUMMARY: &str = "stats.getDailySummary";
     pub const TASKS_GET_CONFIG: &str = "tasks.getConfig";
     pub const TASKS_SET_CONFIG: &str = "tasks.setConfig";
     pub const EXECUTION_GET_STATE: &str = "execution.getState";
@@ -163,6 +165,7 @@ pub mod event {
     pub const PREVIEW_STATUS: &str = "preview.status";
     pub const EXECUTION_STATUS: &str = "execution.status";
     pub const EXECUTION_MIRROR_PROGRESS: &str = "execution.mirrorProgress";
+    pub const EXECUTION_STATS: &str = "execution.stats";
     pub const TOOL_STATUS: &str = "tool.status";
     pub const DEVICE_STATUS: &str = "device.status";
     pub const LOG_ENTRY: &str = "log.entry";

@@ -33,6 +33,7 @@ struct MockState {
     sequence: super::contract::RequestSequence,
     tasks: TasksConfig,
     execution: ExecutionStatusPayload,
+    stats: ExecutionStatsPayload,
     teams: Vec<TeamDetail>,
     sinners: Vec<SinnerInfo>,
     packs: ThemePackState,

@@ -2,6 +2,7 @@
 
 pub mod other;
 pub mod settings;
+pub mod stats;
 pub mod tasks;
 pub mod teams;
 
@@ -12,6 +13,9 @@ pub use other::{
     ToolStatusPayload, UpdateInfo, UpdateSource,
 };
 pub use settings::{AppSettings, Language, ThemeMode};
+pub use stats::{
+    CurrentRunStats, DailyStatEntry, DailyStatsPayload, ExecutionStatsPayload, StatCounts,
+};
 pub use tasks::{
     AfterCompletionConfig, AfterExitAction, AfterPowerAction, BuyEnkephalinConfig, DailyTaskConfig,
     EnabledTasks, ExecutionState, ExecutionStatusPayload, FixedTaskId, GetRewardConfig,

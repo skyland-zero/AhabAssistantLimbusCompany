@@ -20,6 +20,7 @@ from typing import Any
 
 from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
+from module.execution_stats import ExecutionStatsStore
 from module.logger import log
 from module.preview_capture import PreviewCapture, encode_screenshot_frame
 
@@ -172,6 +173,7 @@ class BackendApplication:
         theme_list: Any | None = None,
         resource_service: Any | None = None,
         preview_capture: PreviewCapture | None = None,
+        stats_path: str | Path | None = None,
     ) -> None:
         self.version = version
         self.events = BackendEventBus()
@@ -196,6 +198,11 @@ class BackendApplication:
         self._hotkey_listener: Any | None = None
         self._mediator_bindings: list[tuple[Any, Callable[..., Any]]] = []
         self._preview_capture = preview_capture or PreviewCapture(self.emit)
+        if stats_path is None:
+            from module import CONFIG_PATH
+
+            stats_path = Path(CONFIG_PATH).with_name("runtime_stats.json")
+        self.stats = ExecutionStatsStore(stats_path)
 
         self.device_manager = device_manager or get_device_manager()
         if hasattr(self.device_manager, "set_busy_checker"):
@@ -250,6 +257,19 @@ class BackendApplication:
         if self._shutdown is not None:
             self._shutdown()
         return True
+
+    def stats_get_summary(self) -> dict[str, Any]:
+        return self.stats.summary()
+
+    def stats_get_daily_summary(self, params: Any = None) -> dict[str, Any]:
+        values = params if isinstance(params, Mapping) else {}
+        date_from = values.get("dateFrom")
+        date_to = values.get("dateTo")
+        if date_from is not None and not isinstance(date_from, str):
+            raise ValueError("dateFrom must be a YYYY-MM-DD string")
+        if date_to is not None and not isinstance(date_to, str):
+            raise ValueError("dateTo must be a YYYY-MM-DD string")
+        return self.stats.daily_summary(date_from=date_from, date_to=date_to)
 
     def tasks_get_config(self) -> dict[str, Any]:
         raw = self._config_snapshot()
@@ -507,6 +527,14 @@ class BackendApplication:
             self._execution_task_id = task_id
             self._execution_run_id = run_id
             self._execution_stop.clear()
+            self.emit(
+                "execution.stats",
+                self.stats.start_run(
+                    run_id,
+                    self._execution_targets(tasks),
+                    current_task_id=task_id,
+                ),
+            )
             self.emit("execution.status", self._execution_payload())
             worker = threading.Thread(target=self._run_execution, args=(run_id,), name="AALCExecution", daemon=True)
             self._execution_thread = worker
@@ -539,6 +567,7 @@ class BackendApplication:
                 self._execution_run_id = None
                 self._execution_worker = None
                 self.emit("execution.status", self._execution_payload(run_id=run_id))
+                self.emit("execution.stats", self.stats.finish_run(run_id))
         return {"accepted": True, "runId": run_id}
 
     def execution_pause(self) -> dict[str, Any]:
@@ -549,6 +578,7 @@ class BackendApplication:
             self._execution_state = "paused"
             payload = self._execution_payload()
             self.emit("execution.status", payload)
+            self.emit("execution.stats", self.stats.set_state("paused"))
             return {"accepted": True, "runId": self._execution_run_id}
 
     def execution_resume(self) -> dict[str, Any]:
@@ -559,6 +589,7 @@ class BackendApplication:
             self._execution_state = "running"
             payload = self._execution_payload()
             self.emit("execution.status", payload)
+            self.emit("execution.stats", self.stats.set_state("running"))
             return {"accepted": True, "runId": self._execution_run_id}
 
     def team_list(self) -> list[dict[str, Any]]:
@@ -991,6 +1022,7 @@ class BackendApplication:
             log.exception("任务执行失败")
             self.emit("app.notice", {"level": "error", "message": f"任务执行失败：{error}"})
         finally:
+            stats_payload = self.stats.finish_run(run_id)
             with self._lock:
                 if self._execution_run_id == run_id:
                     self._execution_state = "idle"
@@ -998,6 +1030,7 @@ class BackendApplication:
                     self._execution_run_id = None
                     self._execution_thread = None
                     self._execution_worker = None
+                    self.emit("execution.stats", stats_payload)
                     self.emit("execution.status", self._execution_payload(run_id=run_id))
 
     def _run_resource_sync(self, run_id: str, scope: str) -> None:
@@ -1158,6 +1191,19 @@ class BackendApplication:
             "schemaVersion": SCHEMA_VERSION,
         }
 
+    @staticmethod
+    def _execution_targets(tasks: Mapping[str, Any]) -> dict[str, Any]:
+        enabled = tasks.get("enabledTasks", {})
+        daily = tasks.get("daily_task", {})
+        mirror = tasks.get("mirror", {})
+        infinite = bool(mirror.get("infinite_dungeons", False))
+        return {
+            "exp": int(daily.get("set_EXP_count", 0)) if enabled.get("daily_task") else 0,
+            "thread": int(daily.get("set_thread_count", 0)) if enabled.get("daily_task") else 0,
+            "mirror": int(mirror.get("set_mirror_count", 0)) if enabled.get("mirror") and not infinite else 0,
+            "mirrorInfinite": infinite and bool(enabled.get("mirror")),
+        }
+
     def _on_device_event(self, event: str, payload: dict[str, Any]) -> None:
         self.emit(event, payload)
         if event != "device.status":
@@ -1189,6 +1235,7 @@ class BackendApplication:
 
             bindings = (
                 (mediator.mirror_signal, self._on_mirror_signal),
+                (mediator.task_completed, self._on_task_completed),
                 (mediator.warning, self._on_core_warning),
                 (mediator.hdr_warning, self._on_hdr_warning),
                 (mediator.update_progress, self._on_update_progress),
@@ -1214,6 +1261,17 @@ class BackendApplication:
                 "runId": self._execution_run_id,
             },
         )
+
+    def _on_task_completed(self, kind: Any, count: Any = 1) -> None:
+        run_id = self._execution_run_id
+        if run_id is None:
+            return
+        try:
+            payload = self.stats.record_completion(str(kind), int(count), run_id=run_id)
+        except (TypeError, ValueError):
+            return
+        if payload is not None:
+            self.emit("execution.stats", payload)
 
     def _on_core_warning(self, message: Any) -> None:
         self.emit("app.notice", {"level": "warn", "message": str(message)})

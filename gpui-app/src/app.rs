@@ -17,6 +17,7 @@ mod interaction;
 mod lifecycle;
 mod render;
 mod settings;
+mod stats;
 mod team_editor;
 
 // Keep the existing page-facing imports stable while the palette lives with

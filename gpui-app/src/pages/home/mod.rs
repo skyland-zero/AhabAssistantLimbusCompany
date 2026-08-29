@@ -11,6 +11,7 @@ mod execution_toolbar;
 mod log_panel;
 mod panel;
 mod shared;
+mod stats;
 mod task_details;
 mod tasks;
 
@@ -76,7 +77,8 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .overflow_y_scroll()
         .flex_1()
         .min_h_0()
-        .px(px(14.0))
+        .pl(px(10.0))
+        .pr(px(4.0))
         .py(px(10.0))
         .child(div().flex().flex_col().gap_2().pb_2().children(task_cards));
 
@@ -88,6 +90,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_col()
         .border_r_1()
         .border_color(rgba(0))
+        .child(stats::overview(app, cx))
         .child(task_list)
         .child(execution::execution_toolbar(app, cx, busy, execution_state));
 
@@ -120,6 +123,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .left_0()
         .right_0()
         .bottom_0()
+        .child(stats::daily_details_overlay(app, cx))
         .child(execution::after_completion_editor(
             app,
             cx,

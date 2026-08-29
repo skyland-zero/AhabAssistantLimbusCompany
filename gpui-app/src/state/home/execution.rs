@@ -141,6 +141,11 @@ impl HomeState {
                         self.mirror_progress = Some(progress);
                     }
                 }
+                crate::ipc::contract::event::EXECUTION_STATS => {
+                    if let Ok(stats) = serde_json::from_value(event.payload) {
+                        self.stats = stats;
+                    }
+                }
                 crate::ipc::contract::event::SCREENSHOT_FRAME => {
                     if let Ok(frame) = serde_json::from_value::<ScreenshotFrame>(event.payload)
                         && (frame.instanceId == "default"

@@ -82,6 +82,11 @@ impl AhabApp {
                 .background_executor()
                 .spawn(async move { execution_request.recv().ok() })
                 .await;
+            let stats_request = home_rpc.request_async(method::STATS_GET_SUMMARY, None);
+            let stats_response = cx
+                .background_executor()
+                .spawn(async move { stats_request.recv().ok() })
+                .await;
 
             let teams_request = teams_rpc.request_async(method::TEAM_LIST, None);
             let teams_response = cx
@@ -135,6 +140,12 @@ impl AhabApp {
                     && let Ok(execution) = serde_json::from_value(value)
                 {
                     view.home.execution = execution;
+                }
+                if let Some(response) = stats_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::STATS_GET_SUMMARY, response)
+                {
+                    view.home.apply_stats_summary(value);
                 }
                 if let Some(response) = teams_response
                     && let Ok(Some(value)) =
