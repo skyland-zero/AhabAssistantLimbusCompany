@@ -119,22 +119,19 @@ pub fn appearance_card(
     let body = div()
         .flex()
         .flex_col()
-        .gap(px(16.))
+        .gap(px(12.))
         .px_3p5()
         .pb_3p5()
-        .child(setting_line(
-            text("主题模式", "Theme Mode").get(language),
-            modes,
-        ))
-        .child(separator())
-        .child(setting_line(
-            text("强调色", "Accent Color").get(language),
-            accents,
-        ))
-        .child(separator())
-        .child(setting_line(
-            text("语言 / Language", "Language / 语言").get(language),
-            languages,
+        .child(settings_grid(
+            vec![
+                setting_line(text("主题模式", "Theme Mode").get(language), modes),
+                setting_line(text("强调色", "Accent Color").get(language), accents),
+                setting_line(
+                    text("语言 / Language", "Language / 语言").get(language),
+                    languages,
+                ),
+            ],
+            240.,
         ));
     settings_card(text("外观", "Appearance").get(language), body)
 }

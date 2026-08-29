@@ -18,7 +18,7 @@ use crate::{
     components::{
         ButtonVariant, TextInput, action_button, button, card, is_activation_key, palette_rgb,
         render_rgb as rgb, scroll_area_with_id, select_option, select_popup, select_trigger,
-        svg_icon, switch,
+        settings_grid, svg_icon, switch,
     },
     i18n::paired as text,
     model::{Language, ThemeMode, UpdateSource},

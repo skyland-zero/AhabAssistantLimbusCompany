@@ -129,32 +129,36 @@ pub fn update_card(
     let mut body = div()
         .flex()
         .flex_col()
-        .gap(px(14.))
+        .gap(px(12.))
         .px_3p5()
         .pb_3p5()
-        .child(setting_row(
-            text("参与预览版渠道", "Pre-release Channel").get(language),
-            text(
-                "接收测试版与预发布版更新推送",
-                "Receive beta and preview update notifications",
-            )
-            .get(language),
-            setting_switch(
-                cx,
-                SystemBool::Prerelease,
-                system.update_prerelease_enable,
-                "settings-prerelease",
-            ),
-        ))
-        .child(separator())
-        .child(setting_row(
-            text("更新源选择", "Update Mirror").get(language),
-            text(
-                "选择检查与下载更新使用的镜像服务",
-                "Select mirror service for downloads",
-            )
-            .get(language),
-            source,
+        .child(settings_grid(
+            vec![
+                setting_row(
+                    text("参与预览版渠道", "Pre-release Channel").get(language),
+                    text(
+                        "接收测试版与预发布版更新推送",
+                        "Receive beta and preview update notifications",
+                    )
+                    .get(language),
+                    setting_switch(
+                        cx,
+                        SystemBool::Prerelease,
+                        system.update_prerelease_enable,
+                        "settings-prerelease",
+                    ),
+                ),
+                setting_row(
+                    text("更新源选择", "Update Mirror").get(language),
+                    text(
+                        "选择检查与下载更新使用的镜像服务",
+                        "Select mirror service for downloads",
+                    )
+                    .get(language),
+                    source,
+                ),
+            ],
+            280.,
         ));
 
     if system.update_source == UpdateSource::MirrorChyan {
@@ -209,21 +213,22 @@ pub fn about_card(_app: &mut AhabApp, cx: &mut Context<AhabApp>, language: Langu
     let body = div()
         .flex()
         .flex_col()
-        .gap(px(14.))
+        .gap(px(12.))
         .px_3p5()
         .pb_3p5()
-        .child(setting_line(
-            text("版本", "Version").get(language),
-            div()
-                .font_family("Consolas")
-                .text_size(px(12.))
-                .text_color(rgb(TEXT_MUTED))
-                .child(format!("v{}", env!("CARGO_PKG_VERSION"))),
-        ))
-        .child(separator())
-        .child(setting_line(
-            text("开源地址", "Repository").get(language),
-            repo,
+        .child(settings_grid(
+            vec![
+                setting_line(
+                    text("版本", "Version").get(language),
+                    div()
+                        .font_family("Consolas")
+                        .text_size(px(12.))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(format!("v{}", env!("CARGO_PKG_VERSION"))),
+                ),
+                setting_line(text("开源地址", "Repository").get(language), repo),
+            ],
+            240.,
         ));
     settings_card(text("关于", "About").get(language), body)
 }
