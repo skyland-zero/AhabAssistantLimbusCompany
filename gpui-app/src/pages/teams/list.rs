@@ -179,9 +179,10 @@ fn team_card(
     team: TeamDetail,
     language: Language,
 ) -> Div {
+    let is_luxcavation = team.purpose == TeamPurpose::Luxcavation;
     let config = team.mirrorConfig.clone().unwrap_or_default();
     let discarded = discard_count(&config);
-    let has_starlight = config.opening_bonus.iter().any(|level| *level > 0);
+    let has_starlight = !is_luxcavation && config.opening_bonus.iter().any(|level| *level > 0);
     let team_id = team.id.clone();
     let edit_team = team.clone();
     let edit_team_for_key = edit_team.clone();
@@ -244,7 +245,7 @@ fn team_card(
     }
 
     let scheme = normalized_scheme(&team.accessoryScheme);
-    let header = div()
+    let mut header = div()
         .flex()
         .items_center()
         .gap_2()
@@ -259,16 +260,16 @@ fn team_card(
         .child(badge(
             purpose_label(team.purpose, language),
             BadgeTone::Neutral,
-        ))
-        .child(scheme_badge(scheme, language));
-    let header = if team.enabled {
-        header
-    } else {
-        header.child(badge(
-            text("已停用", "Disabled").get(language),
-            BadgeTone::Neutral,
-        ))
-    };
+        ));
+    if !is_luxcavation {
+        header = header.child(scheme_badge(scheme, language));
+        if !team.enabled {
+            header = header.child(badge(
+                text("已停用", "Disabled").get(language),
+                BadgeTone::Neutral,
+            ));
+        }
+    }
 
     let mut details = div()
         .flex()
@@ -293,13 +294,13 @@ fn team_card(
                 .child(text("已配星光", "Starlight ready").get(language)),
         );
     }
-    if config.second_system {
+    if !is_luxcavation && config.second_system {
         details = details.child(badge(
             text("第二体系", "2nd system").get(language),
             BadgeTone::Neutral,
         ));
     }
-    if discarded > 0 {
+    if !is_luxcavation && discarded > 0 {
         details = details.child(badge(
             if matches!(language, Language::ZhCn) {
                 format!("舍弃 {} 项", discarded)
@@ -309,13 +310,13 @@ fn team_card(
             BadgeTone::Danger,
         ));
     }
-    if config.defense_for_solo {
+    if !is_luxcavation && config.defense_for_solo {
         details = details.child(badge(
             text("良秀单通", "Solo pass").get(language),
             BadgeTone::Accent,
         ));
     }
-    if config.use_team_code {
+    if !is_luxcavation && config.use_team_code {
         details = details.child(badge(
             text("编队码", "Team code").get(language),
             BadgeTone::Neutral,
@@ -341,6 +342,10 @@ fn team_card(
             .child(div().flex().flex_none().gap_1().child(edit).child(delete)),
     )
     .p_3()
-    .opacity(if team.enabled { 1. } else { 0.6 })
+    .opacity(if is_luxcavation || team.enabled {
+        1.
+    } else {
+        0.6
+    })
     .hover(|style| style.bg(palette_rgb(current_render_palette().secondary)))
 }

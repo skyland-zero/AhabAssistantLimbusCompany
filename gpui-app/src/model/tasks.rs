@@ -53,9 +53,9 @@ pub struct AfterCompletionConfig {
 impl Default for AfterCompletionConfig {
     fn default() -> Self {
         Self {
-            actions: vec![AfterExitAction::ExitGame],
+            actions: Vec::new(),
             powerAction: AfterPowerAction::None,
-            keepAfterCompletion: true,
+            keepAfterCompletion: false,
         }
     }
 }
@@ -76,7 +76,7 @@ impl Default for SetWindowsConfig {
     fn default() -> Self {
         Self {
             set_win_size: 1080,
-            set_win_position: "0".into(),
+            set_win_position: "free".into(),
             set_reduce_miscontact: true,
             screenshot_interval: 0.5,
             mouse_action_interval: 0.3,
@@ -112,11 +112,11 @@ pub struct DailyTaskConfig {
 impl Default for DailyTaskConfig {
     fn default() -> Self {
         Self {
-            set_EXP_count: 3,
-            set_thread_count: 3,
+            set_EXP_count: 1,
+            set_thread_count: 0,
             daily_teams: 1,
-            use_continuous_combat: true,
-            use_continuous_combat_select: 3,
+            use_continuous_combat: false,
+            use_continuous_combat_select: 1,
             targeted_teaming_EXP: false,
             EXP_day_1_2: 1,
             EXP_day_3_4: 1,
@@ -155,7 +155,7 @@ impl Default for BuyEnkephalinConfig {
     fn default() -> Self {
         Self {
             set_lunacy_to_enkephalin: 2,
-            Dr_Grandet_mode: true,
+            Dr_Grandet_mode: false,
             skip_enkephalin: false,
         }
     }
@@ -183,7 +183,7 @@ pub struct MirrorConfig {
 impl Default for MirrorConfig {
     fn default() -> Self {
         Self {
-            set_mirror_count: 3,
+            set_mirror_count: 1,
             infinite_dungeons: false,
             hard_mirror: false,
             no_weekly_bonuses: false,
@@ -292,10 +292,14 @@ mod tests {
     fn defaults_match_mock_contract() {
         let cfg = TasksConfig::default();
         assert_eq!(cfg.set_windows.set_win_size, 1080);
-        assert_eq!(cfg.daily_task.set_EXP_count, 3);
-        assert_eq!(cfg.mirror.set_mirror_count, 3);
+        assert_eq!(cfg.set_windows.set_win_position, "free");
+        assert_eq!(cfg.daily_task.set_EXP_count, 1);
+        assert_eq!(cfg.daily_task.set_thread_count, 0);
+        assert!(!cfg.daily_task.use_continuous_combat);
+        assert_eq!(cfg.mirror.set_mirror_count, 1);
         assert!(cfg.enabledTasks.resonate_with_Ahab);
-        assert_eq!(cfg.afterCompletion.actions, vec![AfterExitAction::ExitGame]);
+        assert!(cfg.afterCompletion.actions.is_empty());
+        assert!(!cfg.afterCompletion.keepAfterCompletion);
     }
     #[test]
     fn task_config_round_trips_json() {

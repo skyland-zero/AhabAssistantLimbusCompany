@@ -62,8 +62,13 @@ pub(crate) fn combat_editor(
                             TeamSelectConfig {
                                 select: TeamSelect::SecondSystemFloor,
                                 current: config.second_system_setting.to_string(),
-                                options: (2..=5)
-                                    .map(|floor| (floor.to_string(), floor_label(floor, language)))
+                                options: (0..=1)
+                                    .map(|value| {
+                                        (
+                                            value.to_string(),
+                                            second_system_setting_label(value, language).to_owned(),
+                                        )
+                                    })
                                     .collect(),
                                 id: "combat-second-system-floor".to_owned(),
                                 width: 180.,

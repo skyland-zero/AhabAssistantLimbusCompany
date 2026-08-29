@@ -117,13 +117,21 @@ impl MockState {
                         team.id = format!("team-{}", self.next_team_id);
                         self.next_team_id += 1;
                     }
+                    if team.purpose == TeamPurpose::Luxcavation {
+                        team.enabled = false;
+                        team.mirrorConfig = None;
+                    } else if team.mirrorConfig.is_none()
+                        && let Some(existing) = self.teams.iter().find(|entry| entry.id == team.id)
+                    {
+                        team.mirrorConfig = existing.mirrorConfig.clone();
+                    }
                     if let Some(existing) = self.teams.iter_mut().find(|entry| entry.id == team.id)
                     {
-                        *existing = team;
+                        *existing = team.clone();
                     } else {
-                        self.teams.push(team);
+                        self.teams.push(team.clone());
                     }
-                    Ok(json!(true))
+                    Ok(json!(team))
                 }
             }
             method::TEAM_DELETE => {

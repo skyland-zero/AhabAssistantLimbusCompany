@@ -173,6 +173,7 @@ pub(super) fn after_level_label(value: u8, language: Language) -> &'static str {
         0 => text("停止", "Stop").get(language),
         1 => text("继续", "Continue").get(language),
         2 => text("升级", "Enhance").get(language),
+        3 => text("跳过商店", "Skip shop").get(language),
         _ => text("停止", "Stop").get(language),
     }
 }
@@ -186,10 +187,18 @@ pub(super) fn fixed_team_use_label(value: u8, language: Language) -> &'static st
     }
 }
 
-pub(super) fn floor_label(floor: u8, language: Language) -> String {
+pub(super) fn second_system_setting_label(value: u8, language: Language) -> &'static str {
     match language {
-        Language::ZhCn => format!("第 {floor} 层"),
-        Language::EnUs => format!("Floor {floor}"),
+        Language::ZhCn => match value {
+            0 => "主体系四级前",
+            1 => "主体系四级后",
+            _ => "主体系四级前",
+        },
+        Language::EnUs => match value {
+            0 => "Before main system tier 4",
+            1 => "After main system tier 4",
+            _ => "Before main system tier 4",
+        },
     }
 }
 

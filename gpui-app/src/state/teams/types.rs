@@ -21,6 +21,10 @@ impl TeamEditorTab {
         Self::Advanced,
     ];
 
+    pub const fn is_available(self, purpose: TeamPurpose) -> bool {
+        !matches!(purpose, TeamPurpose::Luxcavation) || matches!(self, Self::Basic)
+    }
+
     #[allow(dead_code)]
     pub const fn label(self) -> &'static str {
         match self {
@@ -108,6 +112,8 @@ pub struct TeamsState {
     pub delete_target: Option<TeamDetail>,
     pub open_select: Option<TeamSelect>,
     pub feedback: Option<String>,
+    pub saving: bool,
+    pub deleting: bool,
 }
 
 /// Named bool fields keep the page readable and prevent ad-hoc JSON patches.

@@ -39,8 +39,8 @@ impl Default for MockState {
                     sinners: vec!["heathcliff".into(), "rodion".into(), "gregor".into()],
                     purpose: TeamPurpose::Luxcavation,
                     accessoryScheme: "burn".into(),
-                    enabled: true,
-                    mirrorConfig: Some(TeamMirrorConfig::default()),
+                    enabled: false,
+                    mirrorConfig: None,
                 },
                 TeamDetail {
                     schemaVersion: 1,

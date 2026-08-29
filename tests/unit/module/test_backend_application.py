@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from module.backend_application import BackendApplication
+from module.config import TeamSetting
 from module.device_manager import DeviceManager, DeviceSession
 from module.rpc_dispatcher import RpcDispatcher
 
@@ -243,6 +244,109 @@ def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     app.close()
 
 
+def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection() -> None:
+    app = make_application()
+    app.config.config.teams = {
+        "1": TeamSetting(
+            team_number=1,
+            chosen_sinners=[1, 1] + [0] * 10,
+            sinner_order=[2, 1] + [0] * 10,
+            shopping_strategy=True,
+            shopping_strategy_select=5,
+            reward_cards=True,
+            opening_items=True,
+            opening_items_system=3,
+        )
+    }
+    app.config.values["teams_active_queue"] = [1]
+
+    team = app.team_list()[0]
+
+    assert team["schemaVersion"] == 1
+    assert team["sinners"] == ["faust", "yi_sang"]
+    assert team["enabled"] is True
+    assert team["mirrorConfig"]["shopping_strategy"] is True
+    assert team["mirrorConfig"]["shopping_strategy_select"] == 5
+    assert team["mirrorConfig"]["reward_cards"] is True
+    assert team["mirrorConfig"]["opening_items_system"] == 3
+    app.close()
+
+
+def test_team_save_allocates_id_and_isolates_luxcavation_from_mirror_queue() -> None:
+    app = make_application()
+    app.config.config.teams = {
+        "1": TeamSetting(
+            team_number=1,
+            purpose="mirror",
+            shopping_strategy=True,
+            shopping_strategy_select=4,
+            chosen_sinners=[1] + [0] * 11,
+            sinner_order=[1] + [0] * 11,
+        )
+    }
+    app.config.values["teams_active_queue"] = [1]
+
+    created = app.team_save(
+        {
+            "id": "",
+            "name": "经验本队伍",
+            "purpose": "luxcavation",
+            "sinners": ["faust", "yi_sang"],
+            "mirrorConfig": None,
+            "enabled": False,
+        }
+    )
+
+    assert created["id"] == "team-2"
+    assert created["purpose"] == "luxcavation"
+    assert created["enabled"] is False
+    assert created["mirrorConfig"] is None
+    assert app.config.config.teams["2"].purpose == "luxcavation"
+    assert app.config.config.teams["2"].shopping_strategy is False
+
+    converted = app.team_save(
+        {
+            "id": "team-1",
+            "name": "经验本改用途",
+            "purpose": "luxcavation",
+            "mirrorConfig": None,
+            "enabled": True,
+        }
+    )
+    assert converted["enabled"] is False
+    assert converted["mirrorConfig"] is None
+    assert app.config.config.teams["1"].shopping_strategy is True
+    assert app.config.values["teams_active_queue"] == []
+    app.close()
+
+
+def test_team_save_rejects_duplicate_and_unknown_sinners() -> None:
+    app = make_application()
+    common = {
+        "id": "",
+        "name": "invalid",
+        "purpose": "mirror",
+        "mirrorConfig": None,
+        "enabled": False,
+    }
+
+    try:
+        app.team_save({**common, "sinners": ["faust", "faust"]})
+    except ValueError as error:
+        assert "重复人格" in str(error)
+    else:
+        raise AssertionError("duplicate sinner should be rejected")
+    app.config.config.teams.clear()
+    with_unknown = {**common, "sinners": ["not-a-sinner"]}
+    try:
+        app.team_save(with_unknown)
+    except ValueError as error:
+        assert "未知人格" in str(error)
+    else:
+        raise AssertionError("unknown sinner should be rejected")
+    app.close()
+
+
 def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> None:
     app = make_application()
     dispatcher = RpcDispatcher(application=app, version="test")
@@ -276,14 +380,24 @@ def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> 
     app.close()
 
 
+def test_tasks_get_config_normalizes_legacy_integer_booleans() -> None:
+    app = make_application()
+    app.config.values["hard_mirror"] = 1
+    app.config.values["no_weekly_bonuses"] = 0
+
+    config = app.tasks_get_config()
+
+    assert config["mirror"]["hard_mirror"] is True
+    assert config["mirror"]["no_weekly_bonuses"] is False
+    app.close()
+
+
 def test_execution_and_tool_entries_reject_missing_active_device() -> None:
     app = make_application()
     app.config.values["mirror"] = True
     dispatcher = RpcDispatcher(application=app, version="test")
 
-    execution = dispatcher.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "execution.start"}
-    )
+    execution = dispatcher.dispatch({"jsonrpc": "2.0", "id": 1, "method": "execution.start"})
     tool = dispatcher.dispatch(
         {
             "jsonrpc": "2.0",

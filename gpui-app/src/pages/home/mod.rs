@@ -186,11 +186,11 @@ mod tests {
         let config = crate::model::AfterCompletionConfig::default();
         assert_eq!(
             after_completion_summary(&config, Language::ZhCn),
-            "退出游戏 (默认)"
+            "什么也不干 (本次)"
         );
         assert_eq!(
             after_completion_summary(&config, Language::EnUs),
-            "Exit Game (Default)"
+            "Do nothing (This run)"
         );
     }
 

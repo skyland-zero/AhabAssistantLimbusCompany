@@ -5,6 +5,20 @@ use serde::{Deserialize, Serialize};
 pub struct TeamMirrorConfig {
     pub team_system: u8,
     pub shop_strategy: u8,
+    #[serde(default)]
+    pub reward_cards: bool,
+    #[serde(default)]
+    pub reward_cards_select: u8,
+    #[serde(default)]
+    pub shopping_strategy: bool,
+    #[serde(default)]
+    pub shopping_strategy_select: u8,
+    #[serde(default)]
+    pub opening_items: bool,
+    #[serde(default)]
+    pub opening_items_select: u8,
+    #[serde(default)]
+    pub opening_items_system: u8,
     pub discard_systems: DiscardSystems,
     pub do_not_heal: bool,
     pub do_not_buy: bool,
@@ -67,6 +81,13 @@ impl Default for TeamMirrorConfig {
         Self {
             team_system: 0,
             shop_strategy: 0,
+            reward_cards: false,
+            reward_cards_select: 0,
+            shopping_strategy: false,
+            shopping_strategy_select: 0,
+            opening_items: false,
+            opening_items_select: 0,
+            opening_items_system: 0,
             discard_systems: Default::default(),
             do_not_heal: false,
             do_not_buy: false,
@@ -85,11 +106,11 @@ impl Default for TeamMirrorConfig {
             max_normal_refresh: 1,
             second_system: false,
             second_system_select: 0,
-            second_system_setting: 2,
-            second_system_fuse_IV: true,
-            second_system_buy: true,
-            second_system_select_reward: true,
-            second_system_power_up: true,
+            second_system_setting: 0,
+            second_system_fuse_IV: false,
+            second_system_buy: false,
+            second_system_select_reward: false,
+            second_system_power_up: false,
             avoid_skill_3: false,
             prioritize_skill_3: false,
             re_formation_each_floor: false,
@@ -128,6 +149,12 @@ pub enum TeamPurpose {
     General,
 }
 
+impl Default for TeamPurpose {
+    fn default() -> Self {
+        Self::Mirror
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[allow(non_snake_case)]
 pub struct TeamDetail {
@@ -136,6 +163,7 @@ pub struct TeamDetail {
     pub id: String,
     pub name: String,
     pub sinners: Vec<String>,
+    #[serde(default)]
     pub purpose: TeamPurpose,
     pub accessoryScheme: String,
     pub enabled: bool,
@@ -176,5 +204,26 @@ mod tests {
         };
         let json = serde_json::to_string(&team).unwrap();
         assert_eq!(serde_json::from_str::<TeamDetail>(&json).unwrap(), team);
+    }
+
+    #[test]
+    fn old_mirror_payloads_default_new_python_fields() {
+        let mut value = serde_json::to_value(TeamMirrorConfig::default()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        for key in [
+            "reward_cards",
+            "reward_cards_select",
+            "shopping_strategy",
+            "shopping_strategy_select",
+            "opening_items",
+            "opening_items_select",
+            "opening_items_system",
+        ] {
+            object.remove(key);
+        }
+        let config: TeamMirrorConfig = serde_json::from_value(value).unwrap();
+        assert!(!config.reward_cards);
+        assert_eq!(config.shopping_strategy_select, 0);
+        assert_eq!(config.opening_items_system, 0);
     }
 }

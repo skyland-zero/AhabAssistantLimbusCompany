@@ -114,4 +114,64 @@ mod tests {
         state.confirm_delete().unwrap();
         assert_eq!(state.teams.len(), initial);
     }
+
+    #[test]
+    fn luxcavation_teams_have_no_mirror_editor_or_queue_toggle() {
+        let mut state = TeamsState::default();
+        state.set_filter(TeamFilter::Luxcavation);
+        state.open_new();
+        state.editor.as_mut().unwrap().team.name = "经验本".into();
+        assert_eq!(state.editor.as_ref().unwrap().team.mirrorConfig, None);
+        assert!(!state.editor.as_ref().unwrap().team.enabled);
+
+        state.set_editor_tab(TeamEditorTab::Shop);
+        assert_eq!(state.editor.as_ref().unwrap().tab, TeamEditorTab::Basic);
+        state.set_mirror_bool(MirrorBool::SecondSystem, true);
+        assert_eq!(state.editor.as_ref().unwrap().team.mirrorConfig, None);
+
+        let (_, payload) = state.prepare_save().unwrap();
+        assert!(payload["mirrorConfig"].is_null());
+        assert_eq!(payload["enabled"], false);
+        state.fail_save("test".to_owned());
+    }
+
+    #[test]
+    fn switching_from_luxcavation_initializes_mirror_editor_defaults() {
+        let mut state = TeamsState::default();
+        state.set_filter(TeamFilter::Luxcavation);
+        state.open_new();
+        state.set_editor_purpose(TeamPurpose::Mirror);
+
+        assert_eq!(
+            state.editor.as_ref().unwrap().team.mirrorConfig,
+            Some(TeamMirrorConfig::default())
+        );
+        state.set_mirror_bool(MirrorBool::SecondSystem, true);
+        assert!(state.editor.as_ref().unwrap().mirror_config().second_system);
+    }
+
+    #[test]
+    fn canonical_save_response_replaces_editor_with_backend_team() {
+        let mut state = TeamsState::default();
+        let initial = state.teams.len();
+        state.open_new();
+        state.editor.as_mut().unwrap().team.name = "后端队伍".into();
+        let (submitted, _) = state.prepare_save().unwrap();
+        let saved = TeamDetail {
+            schemaVersion: 1,
+            id: "team-42".into(),
+            name: "后端队伍".into(),
+            sinners: vec!["faust".into()],
+            purpose: TeamPurpose::General,
+            accessoryScheme: "burn".into(),
+            enabled: true,
+            mirrorConfig: Some(TeamMirrorConfig::default()),
+        };
+        state.apply_saved_team(&submitted, saved);
+
+        assert_eq!(state.teams.len(), initial + 1);
+        assert_eq!(state.teams.last().unwrap().id, "team-42");
+        assert!(state.editor.is_none());
+        assert!(!state.saving);
+    }
 }

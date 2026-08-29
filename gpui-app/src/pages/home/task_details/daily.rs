@@ -201,9 +201,11 @@ fn daily_team_select(
         .teams
         .teams
         .iter()
+        .filter_map(|team| {
+            let number = team_number_from_id(&team.id)?;
+            Some((number.to_string(), team.name.clone()))
+        })
         .take(99)
-        .enumerate()
-        .map(|(team_index, team)| ((team_index + 1).to_string(), team.name.clone()))
         .collect::<Vec<_>>();
     if options.is_empty() {
         options.push((
@@ -247,5 +249,22 @@ fn daily_team_select(
                     .child(label),
             )
             .child(select)
+    }
+}
+
+fn team_number_from_id(id: &str) -> Option<u8> {
+    let number = id.strip_prefix("team-")?.parse::<u8>().ok()?;
+    (1..=99).contains(&number).then_some(number)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::team_number_from_id;
+
+    #[test]
+    fn daily_team_ids_use_backend_numbers() {
+        assert_eq!(team_number_from_id("team-7"), Some(7));
+        assert_eq!(team_number_from_id("team-100"), None);
+        assert_eq!(team_number_from_id("team-invalid"), None);
     }
 }

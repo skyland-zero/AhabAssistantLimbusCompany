@@ -3,12 +3,9 @@ use super::*;
 impl TeamsState {
     pub fn update_mirror(&mut self, update: impl FnOnce(&mut TeamMirrorConfig)) {
         if let Some(editor) = self.editor.as_mut() {
-            update(
-                editor
-                    .team
-                    .mirrorConfig
-                    .get_or_insert_with(Default::default),
-            );
+            if let Some(config) = editor.team.mirrorConfig.as_mut() {
+                update(config);
+            }
         }
     }
 
@@ -86,11 +83,11 @@ impl TeamsState {
     pub fn set_mirror_u8(&mut self, field: MirrorU8, value: u8) {
         self.update_mirror(|config| match field {
             MirrorU8::ShopStrategy => config.shop_strategy = value.min(2),
-            MirrorU8::AfterLevelIvSelect => config.after_level_IV_select = value.min(2),
+            MirrorU8::AfterLevelIvSelect => config.after_level_IV_select = value.min(3),
             MirrorU8::MaxKeywordRefresh => config.max_keyword_refresh = value.min(10),
             MirrorU8::MaxNormalRefresh => config.max_normal_refresh = value.min(10),
             MirrorU8::SecondSystemSelect => config.second_system_select = value.min(9),
-            MirrorU8::SecondSystemStartFloor => config.second_system_setting = value.clamp(2, 5),
+            MirrorU8::SecondSystemStartFloor => config.second_system_setting = value.min(1),
             MirrorU8::DefenseTurns => config.defense_for_solo_turns = value.clamp(1, 5),
             MirrorU8::SkillReplacementMode => config.skill_replacement_mode = value.min(1),
             MirrorU8::FixedTeamUseSelect => config.fixed_team_use_select = value.min(2),
@@ -124,7 +121,7 @@ impl TeamsState {
         let costs = [10_u32, 10, 20, 20, 30, 30, 40, 40, 50, 60];
         self.editor
             .as_ref()
-            .map(TeamEditorState::mirror_config)
+            .and_then(|editor| editor.team.mirrorConfig.as_ref())
             .map(|config| {
                 config
                     .opening_bonus

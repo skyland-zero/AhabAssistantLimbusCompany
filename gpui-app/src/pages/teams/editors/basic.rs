@@ -7,6 +7,7 @@ pub(crate) fn basic_editor(
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
+    let is_luxcavation = team.purpose == TeamPurpose::Luxcavation;
     let name_input = app.team_inputs.name.clone();
     let code_input = app.team_inputs.code.clone();
 
@@ -80,6 +81,11 @@ pub(crate) fn basic_editor(
             }));
         systems = systems.child(control);
     }
+    let systems_field = if is_luxcavation {
+        div().into_any_element()
+    } else {
+        field_block(text("饰品体系", "Gift System").get(language), systems).into_any_element()
+    };
 
     let mut sinners = div().flex().flex_wrap().gap_2();
     for sinner in app.teams.sinners.clone() {
@@ -88,15 +94,32 @@ pub(crate) fn basic_editor(
         let path = sinner_path(&id);
         let key_id = id.clone();
         let palette = current_render_palette();
+        let name_label = div()
+            .id(format!("team-sinner-name-{id}"))
+            .flex()
+            .items_center()
+            .justify_center()
+            .w_full()
+            .h(px(22.))
+            .flex_none()
+            .px_1()
+            .rounded_sm()
+            .bg(palette_rgb(palette.card))
+            .text_center()
+            .text_size(px(11.))
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(rgb(TEXT))
+            .child(sinner.name);
         let mut control = div()
             .id(format!("team-sinner-{id}"))
-            .w(px(64.))
-            .h(px(96.))
+            .w(px(76.))
+            .h(px(124.))
             .flex()
             .flex_col()
             .items_center()
-            .justify_center()
-            .gap_1()
+            .justify_between()
+            .pt_2()
+            .pb_2()
             .rounded_lg()
             .tab_index(0)
             .border_1()
@@ -127,8 +150,9 @@ pub(crate) fn basic_editor(
         control = control.child(
             div()
                 .relative()
-                .w(px(48.))
-                .h(px(48.))
+                .w(px(56.))
+                .h(px(56.))
+                .flex_none()
                 .child(img(path).size_full())
                 .child(
                     selected
@@ -147,16 +171,9 @@ pub(crate) fn basic_editor(
                         .unwrap_or_else(div),
                 ),
         );
-        control = control.child(
-            div()
-                .w_full()
-                .px_1()
-                .truncate()
-                .text_center()
-                .text_size(px(10.))
-                .text_color(rgb(TEXT))
-                .child(sinner.name),
-        );
+        // Keep the name outside the avatar container so both selected and
+        // unselected sinners use the same readable caption below the image.
+        control = control.child(name_label);
         sinners = sinners.child(control);
     }
 
@@ -251,6 +268,7 @@ pub(crate) fn basic_editor(
     .p_3()
     .flex_basis(px(300.))
     .flex_grow(1.);
+
     let fixed_card = card(
         div()
             .flex()
@@ -290,6 +308,28 @@ pub(crate) fn basic_editor(
     .flex_basis(px(300.))
     .flex_grow(1.);
 
+    let mirror_basic_cards = if is_luxcavation {
+        div().into_any_element()
+    } else {
+        div()
+            .flex()
+            .flex_wrap()
+            .gap_3()
+            .child(team_code_card)
+            .child(fixed_card)
+            .into_any_element()
+    };
+
+    let enabled_field = if is_luxcavation {
+        div().into_any_element()
+    } else {
+        control_row(
+            text("队伍启用", "Team Enabled").get(language),
+            enabled_switch,
+        )
+        .into_any_element()
+    };
+
     div()
         .flex()
         .flex_col()
@@ -302,10 +342,7 @@ pub(crate) fn basic_editor(
                 .child(name_field.flex_basis(px(220.)).flex_grow(1.))
                 .child(purpose_field.flex_basis(px(140.)).flex_grow(1.)),
         )
-        .child(field_block(
-            text("饰品体系", "Gift System").get(language),
-            systems,
-        ))
+        .child(systems_field)
         .child(field_block(
             if matches!(language, Language::ZhCn) {
                 format!("人格顺序（{} / 12）", team.sinners.len())
@@ -335,16 +372,6 @@ pub(crate) fn basic_editor(
                     .child(clear_sinners),
             ),
         ))
-        .child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_3()
-                .child(team_code_card)
-                .child(fixed_card),
-        )
-        .child(control_row(
-            text("队伍启用", "Team Enabled").get(language),
-            enabled_switch,
-        ))
+        .child(mirror_basic_cards)
+        .child(enabled_field)
 }

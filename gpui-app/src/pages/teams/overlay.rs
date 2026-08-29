@@ -39,7 +39,11 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
     };
 
     let team = editor.team.clone();
-    let tab = editor.tab;
+    let tab = if editor.tab.is_available(team.purpose) {
+        editor.tab
+    } else {
+        TeamEditorTab::Basic
+    };
     let config = editor.mirror_config();
     let feedback = app.teams.feedback.clone();
     let starlight_cost = app.teams.starlight_cost();
@@ -53,6 +57,9 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .rounded_md()
         .bg(palette_rgb(current_render_palette().muted));
     for candidate in TeamEditorTab::ALL {
+        if !candidate.is_available(team.purpose) {
+            continue;
+        }
         let active = candidate == tab;
         let mut control = div()
             .id(format!("team-editor-tab-{candidate:?}"))
@@ -147,7 +154,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .as_ref()
         .map(|input| input.read(cx).text())
         .unwrap_or_else(|| team.name.clone());
-    let can_save = !current_name.trim().is_empty();
+    let can_save = !current_name.trim().is_empty() && !app.teams.saving;
     let mut save = button(
         text("保存队伍", "Save Team").get(language),
         ButtonVariant::Default,

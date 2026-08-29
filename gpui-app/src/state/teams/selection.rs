@@ -30,6 +30,7 @@ impl TeamsState {
     pub fn open_new(&mut self) {
         self.close_select();
         let purpose = self.filter.purpose().unwrap_or(TeamPurpose::General);
+        let is_luxcavation = purpose == TeamPurpose::Luxcavation;
         self.editor = Some(TeamEditorState::new(TeamDetail {
             schemaVersion: 1,
             id: String::new(),
@@ -37,8 +38,8 @@ impl TeamsState {
             sinners: Vec::new(),
             purpose,
             accessoryScheme: "burn".into(),
-            enabled: true,
-            mirrorConfig: Some(TeamMirrorConfig::default()),
+            enabled: !is_luxcavation,
+            mirrorConfig: (!is_luxcavation).then(TeamMirrorConfig::default),
         }));
         self.feedback = None;
     }
@@ -56,7 +57,11 @@ impl TeamsState {
 
     pub fn set_editor_tab(&mut self, tab: TeamEditorTab) {
         if let Some(editor) = self.editor.as_mut() {
-            editor.tab = tab;
+            editor.tab = if tab.is_available(editor.team.purpose) {
+                tab
+            } else {
+                TeamEditorTab::Basic
+            };
         }
         self.close_select();
     }
@@ -83,12 +88,27 @@ impl TeamsState {
 
     pub fn set_editor_purpose(&mut self, purpose: TeamPurpose) {
         if let Some(editor) = self.editor.as_mut() {
+            let was_luxcavation = editor.team.purpose == TeamPurpose::Luxcavation;
             editor.team.purpose = purpose;
+            if purpose == TeamPurpose::Luxcavation {
+                editor.team.enabled = false;
+                editor.team.mirrorConfig = None;
+            } else if was_luxcavation {
+                editor.team.enabled = true;
+                editor.team.mirrorConfig = Some(TeamMirrorConfig::default());
+            }
+            if !editor.tab.is_available(purpose) {
+                editor.tab = TeamEditorTab::Basic;
+            }
         }
+        self.close_select();
     }
 
     pub fn set_editor_scheme(&mut self, scheme: impl Into<String>, system: u8) {
         if let Some(editor) = self.editor.as_mut() {
+            if editor.team.purpose == TeamPurpose::Luxcavation {
+                return;
+            }
             editor.team.accessoryScheme = scheme.into();
             editor
                 .team
@@ -100,7 +120,9 @@ impl TeamsState {
 
     pub fn set_editor_enabled(&mut self, enabled: bool) {
         if let Some(editor) = self.editor.as_mut() {
-            editor.team.enabled = enabled;
+            if editor.team.purpose != TeamPurpose::Luxcavation {
+                editor.team.enabled = enabled;
+            }
         }
     }
 

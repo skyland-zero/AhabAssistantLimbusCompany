@@ -114,6 +114,7 @@ pub(crate) fn shop_editor(
                             ("0".to_owned(), after_level_label(0, language).to_owned()),
                             ("1".to_owned(), after_level_label(1, language).to_owned()),
                             ("2".to_owned(), after_level_label(2, language).to_owned()),
+                            ("3".to_owned(), after_level_label(3, language).to_owned()),
                         ],
                         id: "shop-after-level-iv-action".to_owned(),
                         width: 180.,

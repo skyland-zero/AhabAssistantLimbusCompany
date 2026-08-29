@@ -107,18 +107,14 @@ fn delete_confirmation(
                             .px_3()
                             .py_0()
                             .on_click(cx.listener(|view, _, _, cx| {
-                                if let Err(error) = view.teams.confirm_delete() {
-                                    view.teams.feedback = Some(error);
-                                }
+                                view.confirm_delete(cx);
                                 cx.notify();
                             }));
                             confirm = confirm.on_key_down(cx.listener(
                                 |view, event: &KeyDownEvent, window, cx| {
                                     if team_activation_key(event) {
                                         window.prevent_default();
-                                        if let Err(error) = view.teams.confirm_delete() {
-                                            view.teams.feedback = Some(error);
-                                        }
+                                        view.confirm_delete(cx);
                                         cx.notify();
                                     }
                                 },
