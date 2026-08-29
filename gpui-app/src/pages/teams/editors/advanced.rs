@@ -218,54 +218,55 @@ pub(crate) fn advanced_editor(
         .flex()
         .flex_col()
         .gap_4()
-        .child(
-            card(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(control_row(
-                        text("观测 E.G.O 饰品", "Observe E.G.O Gifts").get(language),
-                        observe_switch,
-                    ))
-                    .child(
-                        div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                            text(
-                                "输入名称后点击添加；重复名称不会重复加入。",
-                                "Enter a gift name and click Add; duplicates are ignored.",
-                            )
-                            .get(language),
+        .child(settings_grid(
+            vec![
+                card(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(control_row(
+                            text("观测 E.G.O 饰品", "Observe E.G.O Gifts").get(language),
+                            observe_switch,
+                        ))
+                        .child(
+                            div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                                text(
+                                    "输入名称后点击添加；重复名称不会重复加入。",
+                                    "Enter a gift name and click Add; duplicates are ignored.",
+                                )
+                                .get(language),
+                            ),
+                        )
+                        .child(observe_content),
+                )
+                .p_3()
+                .flex_none(),
+                card(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(control_row(
+                            text("使用队伍专属主题包权重", "Use Custom Theme Pack Weight")
+                                .get(language),
+                            custom_weight,
+                        ))
+                        .child(
+                            div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                                text(
+                                    "保存后由镜牢执行器读取该队伍的主题包权重。",
+                                    "The Mirror executor reads this team's pack weights after Save.",
+                                )
+                                .get(language),
+                            ),
                         ),
-                    )
-                    .child(observe_content),
-            )
-            .p_3()
-            .flex_none(),
-        )
-        .child(
-            card(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(control_row(
-                        text("使用队伍专属主题包权重", "Use Custom Theme Pack Weight")
-                            .get(language),
-                        custom_weight,
-                    ))
-                    .child(
-                        div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                            text(
-                                "保存后由镜牢执行器读取该队伍的主题包权重。",
-                                "The Mirror executor reads this team's pack weights after Save.",
-                            )
-                            .get(language),
-                        ),
-                    ),
-            )
-            .p_3()
-            .flex_none(),
-        )
+                )
+                .p_3()
+                .flex_none(),
+            ],
+            220.,
+        ))
         .child(
             card(
                 div()

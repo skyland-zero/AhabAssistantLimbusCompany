@@ -280,13 +280,10 @@ pub(crate) fn combat_editor(
             }),
     );
 
-    div().flex().flex_col().gap_4().child(second_system).child(
-        div()
-            .flex()
-            .gap_3()
-            .flex_wrap()
-            .child(preferences)
-            .child(defense)
-            .child(replacement),
-    )
+    div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(second_system)
+        .child(settings_grid(vec![preferences, defense, replacement], 220.))
 }

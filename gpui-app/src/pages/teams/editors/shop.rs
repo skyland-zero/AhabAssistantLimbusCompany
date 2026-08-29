@@ -45,13 +45,14 @@ pub(crate) fn shop_editor(
             config.do_not_enhance,
         ),
     ];
-    let mut restriction_rows = div().flex().flex_wrap().gap_3();
+    let mut restriction_items = Vec::new();
     for (index, (label, field, value)) in restrictions.into_iter().enumerate() {
-        restriction_rows = restriction_rows.child(control_row(
+        restriction_items.push(control_row(
             label.get(language),
             mirror_switch(app, cx, field, value, format!("shop-restriction-{index}")),
         ));
     }
+    let restriction_rows = settings_grid(restriction_items, 180.);
 
     let fusions = [
         (
@@ -80,13 +81,14 @@ pub(crate) fn shop_editor(
             config.aggressive_save_systems,
         ),
     ];
-    let mut fusion_rows = div().flex().flex_col().gap_2();
+    let mut fusion_items = Vec::new();
     for (index, (label, field, value)) in fusions.into_iter().enumerate() {
-        fusion_rows = fusion_rows.child(control_row(
+        fusion_items.push(control_row(
             label.get(language),
             mirror_switch(app, cx, field, value, format!("fusion-{index}")),
         ));
     }
+    let fusion_rows = settings_grid(fusion_items, 180.);
 
     let after_level = card(
         div()
@@ -276,13 +278,5 @@ pub(crate) fn shop_editor(
             text("合成策略", "Fusion Strategy").get(language),
             fusion_rows,
         ))
-        .child(
-            div()
-                .flex()
-                .gap_3()
-                .flex_wrap()
-                .child(after_level)
-                .child(refresh)
-                .child(ignore),
-        )
+        .child(settings_grid(vec![after_level, refresh, ignore], 220.))
 }
