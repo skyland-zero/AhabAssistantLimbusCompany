@@ -169,7 +169,7 @@ def capture_client(hwnd: int, output: Path) -> dict[str, object]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--title", default="Ahab Assistant · Limbus Company")
+    parser.add_argument("--title", default="AALC·gpui")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--pid", type=int, help="restrict lookup to a specific process")
     parser.add_argument("--logical-width", type=int, required=True)

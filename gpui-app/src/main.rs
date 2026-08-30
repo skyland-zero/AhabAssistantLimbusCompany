@@ -70,7 +70,7 @@ fn main() {
     shell::start_tray();
 
     application().run(|cx: &mut App| {
-        cx.set_app_identity("com.kiyi671.ahab-gpui-app", "AALC · GPUI");
+        cx.set_app_identity("com.kiyi671.ahab-gpui-app", shell::NATIVE_APP_TITLE);
         cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
@@ -82,7 +82,7 @@ fn main() {
                 // `appears_transparent` hides the native Windows titlebar while
                 // retaining the platform window controls and resize frame.
                 titlebar: Some(TitlebarOptions {
-                    title: Some("AALC · GPUI".into()),
+                    title: Some(shell::NATIVE_APP_TITLE.into()),
                     appears_transparent: true,
                     ..Default::default()
                 }),

@@ -205,7 +205,7 @@ pub fn is_window_minimized(window: &gpui::Window) -> bool {
 }
 
 fn focus_existing_window() {
-    let title = wide("AALC · GPUI");
+    let title = wide(super::NATIVE_APP_TITLE);
     let window = unsafe { FindWindowW(ptr::null(), title.as_ptr()) };
     if !window.is_null() {
         unsafe {
@@ -267,7 +267,7 @@ unsafe fn tray_thread() {
         guid_item: [0; 16],
         h_balloon_icon: ptr::null_mut(),
     };
-    copy_wide("AALC · GPUI", &mut icon_data.sz_tip);
+    copy_wide(super::NATIVE_APP_TITLE, &mut icon_data.sz_tip);
     if Shell_NotifyIconW(NIM_ADD, &icon_data) == 0 {
         let _ = DestroyWindow(window);
         return;
@@ -315,7 +315,7 @@ unsafe extern "system" fn tray_window_proc(
                 0
             }
             ID_EXIT => {
-                let title = wide("AALC · GPUI");
+                let title = wide(super::NATIVE_APP_TITLE);
                 let main_window = FindWindowW(ptr::null(), title.as_ptr());
                 if !main_window.is_null() {
                     let _ = PostMessageW(main_window, WM_CLOSE, 0, 0);
@@ -360,7 +360,7 @@ unsafe fn show_tray_menu(owner: HWND) {
 }
 
 unsafe fn show_main_window() {
-    let title = wide("AALC · GPUI");
+    let title = wide(super::NATIVE_APP_TITLE);
     let window = FindWindowW(ptr::null(), title.as_ptr());
     if !window.is_null() {
         let _ = ShowWindow(window, SW_SHOWNORMAL);
@@ -369,7 +369,7 @@ unsafe fn show_main_window() {
 }
 
 unsafe fn hide_main_window() {
-    let title = wide("AALC · GPUI");
+    let title = wide(super::NATIVE_APP_TITLE);
     let window = FindWindowW(ptr::null(), title.as_ptr());
     if !window.is_null() {
         let _ = ShowWindow(window, SW_HIDE);

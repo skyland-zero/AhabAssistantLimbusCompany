@@ -1,3 +1,5 @@
+#pragma code_page(65001)
+
 1 ICON "app-icon.ico"
 
 1 VERSIONINFO
@@ -13,9 +15,9 @@ BEGIN
     BEGIN
         BLOCK "080404b0"
         BEGIN
-            VALUE "FileDescription", "AALC · GPUI\0"
+            VALUE "FileDescription", "AALC·gpui\0"
             VALUE "FileVersion", "0.1.0\0"
-            VALUE "ProductName", "AALC · GPUI\0"
+            VALUE "ProductName", "AALC·gpui\0"
             VALUE "ProductVersion", "0.1.0\0"
             VALUE "LegalCopyright", "Copyright 2024-2025\0"
         END

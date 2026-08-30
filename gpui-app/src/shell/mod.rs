@@ -3,6 +3,8 @@ mod toast;
 #[cfg(target_os = "windows")]
 mod windows;
 
+pub(crate) const NATIVE_APP_TITLE: &str = "AALC·gpui";
+
 pub use title_bar::title_bar;
 pub use toast::{Toast, ToastKind, toast_layer};
 
