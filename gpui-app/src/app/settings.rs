@@ -1,7 +1,7 @@
 use gpui::{AppContext, Context, Window};
 
 use super::AhabApp;
-use crate::{components::TextInput, model::Language, state::SystemU16};
+use crate::{components::TextInput, model::Language};
 
 impl AhabApp {
     pub fn ensure_settings_input(&mut self, cx: &mut Context<Self>) {
@@ -25,38 +25,6 @@ impl AhabApp {
                 Some(cx.new(move |cx| {
                     TextInput::new_masked_with_palette(spt, placeholder, palette, cx)
                 }));
-        }
-        if self.settings_inputs.port.is_none() {
-            let value = self.settings_page.system.simulator_port.to_string();
-            let input =
-                cx.new(move |cx| TextInput::new_with_palette(value, "ADB port", palette, cx));
-            let subscription = cx.observe(&input, |view, input, cx| {
-                if let Ok(value) = input.read(cx).text().parse::<u16>()
-                    && value != view.settings_page.system.simulator_port
-                {
-                    view.settings_page
-                        .set_system_u16(SystemU16::SimulatorPort, value);
-                    cx.notify();
-                }
-            });
-            self.settings_inputs.port = Some(input);
-            self.settings_inputs.subscriptions.push(subscription);
-        }
-        if self.settings_inputs.timeout.is_none() {
-            let value = self.settings_page.system.start_emulator_timeout.to_string();
-            let input =
-                cx.new(move |cx| TextInput::new_with_palette(value, "Timeout", palette, cx));
-            let subscription = cx.observe(&input, |view, input, cx| {
-                if let Ok(value) = input.read(cx).text().parse::<u16>()
-                    && value != view.settings_page.system.start_emulator_timeout
-                {
-                    view.settings_page
-                        .set_system_u16(SystemU16::StartTimeout, value);
-                    cx.notify();
-                }
-            });
-            self.settings_inputs.timeout = Some(input);
-            self.settings_inputs.subscriptions.push(subscription);
         }
     }
 

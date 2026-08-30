@@ -54,7 +54,6 @@ pub struct SettingsPageState {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingsSelect {
     UpdateSource,
-    SimulatorType,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -65,20 +64,12 @@ pub enum HotkeyTarget {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SystemBool {
-    Simulator,
     MemoryProtection,
     MinimizeToTray,
     Autostart,
     KeepScreenAwake,
     HdrWarning,
     Prerelease,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SystemU16 {
-    SimulatorType,
-    SimulatorPort,
-    StartTimeout,
 }
 
 #[cfg(test)]
@@ -188,6 +179,18 @@ mod tests {
         assert_eq!(state.hotkey.startStop, "Ctrl+F10");
         state.set_wxpusher_spt("SPT_saved".into());
         assert_eq!(state.system.wxpusher_spt, "SPT_saved");
+        let patch = state.visible_system_settings_patch();
+        for key in [
+            "simulator",
+            "simulator_type",
+            "simulator_port",
+            "start_emulator_timeout",
+        ] {
+            assert!(
+                patch.get(key).is_none(),
+                "legacy setting leaked into patch: {key}"
+            );
+        }
         state.test_notification("SPT_unsaved".into());
         assert_eq!(state.feedback.as_deref(), Some("测试通知已发送"));
     }

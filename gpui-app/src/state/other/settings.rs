@@ -57,25 +57,12 @@ impl SettingsPageState {
 
     pub fn set_system_bool(&mut self, field: SystemBool, value: bool) {
         match field {
-            SystemBool::Simulator => self.system.simulator = value,
             SystemBool::MemoryProtection => self.system.memory_protection = value,
             SystemBool::MinimizeToTray => self.system.minimize_to_tray = value,
             SystemBool::Autostart => self.system.autostart = value,
             SystemBool::KeepScreenAwake => self.system.experimental_keep_screen_awake = value,
             SystemBool::HdrWarning => self.system.experimental_hdr_warning = value,
             SystemBool::Prerelease => self.system.update_prerelease_enable = value,
-        }
-        self.persist_system();
-    }
-
-    pub fn set_system_u16(&mut self, field: SystemU16, value: u16) {
-        self.open_select = None;
-        match field {
-            SystemU16::SimulatorType => {
-                self.system.simulator_type = value.min(u16::from(u8::MAX)) as u8
-            }
-            SystemU16::SimulatorPort => self.system.simulator_port = value,
-            SystemU16::StartTimeout => self.system.start_emulator_timeout = value,
         }
         self.persist_system();
     }
@@ -180,22 +167,28 @@ impl SettingsPageState {
     }
 
     fn persist_system(&mut self) {
+        let params = Some(self.visible_system_settings_patch());
         if self.rpc.is_sidecar() {
-            self.rpc.submit(
-                method::SYSTEM_SETTINGS_SET,
-                Some(
-                    serde_json::to_value(&self.system)
-                        .expect("SystemSettingsConfig is serializable"),
-                ),
-            );
+            self.rpc.submit(method::SYSTEM_SETTINGS_SET, params);
             self.feedback = Some("正在保存设置".to_owned());
             return;
         }
-        let result = self.rpc.request_value(
-            method::SYSTEM_SETTINGS_SET,
-            Some(serde_json::to_value(&self.system).expect("SystemSettingsConfig is serializable")),
-        );
+        let result = self.rpc.request_value(method::SYSTEM_SETTINGS_SET, params);
         self.set_feedback(result);
+    }
+
+    pub(crate) fn visible_system_settings_patch(&self) -> serde_json::Value {
+        serde_json::json!({
+            "memory_protection": self.system.memory_protection,
+            "minimize_to_tray": self.system.minimize_to_tray,
+            "autostart": self.system.autostart,
+            "experimental_keep_screen_awake": self.system.experimental_keep_screen_awake,
+            "experimental_hdr_warning": self.system.experimental_hdr_warning,
+            "update_prerelease_enable": self.system.update_prerelease_enable,
+            "update_source": self.system.update_source,
+            "mirrorchyan_cdk": self.system.mirrorchyan_cdk,
+            "wxpusher_spt": self.system.wxpusher_spt,
+        })
     }
 
     fn set_feedback(&mut self, result: Result<Option<serde_json::Value>, crate::ipc::RpcError>) {

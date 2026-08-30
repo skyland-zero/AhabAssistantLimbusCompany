@@ -203,6 +203,13 @@ impl TextInput {
     }
 
     fn index_for_mouse_position(&self, position: Point<gpui::Pixels>) -> usize {
+        // When the field is empty, `last_layout` contains the placeholder text.
+        // Its byte offsets do not belong to `self.content`; using them as a
+        // selection offset makes the first typed character slice past the end
+        // of the actual value and abort the native input process.
+        if self.content.is_empty() {
+            return 0;
+        }
         let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         else {
             return self.content.len();

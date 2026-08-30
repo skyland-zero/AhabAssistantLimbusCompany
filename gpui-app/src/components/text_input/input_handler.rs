@@ -2,6 +2,22 @@ use super::*;
 
 use gpui::{EntityInputHandler, Point, UTF16Selection, point};
 
+fn clamp_range_to_content(content: &str, range: Range<usize>) -> Range<usize> {
+    let length = content.len();
+    let mut start = range.start.min(length);
+    let mut end = range.end.min(length);
+    while start > 0 && !content.is_char_boundary(start) {
+        start -= 1;
+    }
+    while end > 0 && !content.is_char_boundary(end) {
+        end -= 1;
+    }
+    if end < start {
+        end = start;
+    }
+    start..end
+}
+
 impl EntityInputHandler for TextInput {
     fn text_for_range(
         &mut self,
@@ -54,6 +70,7 @@ impl EntityInputHandler for TextInput {
             .map(|range| self.range_from_utf16(range))
             .or_else(|| self.marked_range.clone())
             .unwrap_or_else(|| self.selected_range.clone());
+        let range = clamp_range_to_content(&self.content, range);
         self.content =
             (self.content[..range.start].to_owned() + new_text + &self.content[range.end..]).into();
         let end = range.start + new_text.len();
@@ -78,6 +95,7 @@ impl EntityInputHandler for TextInput {
             .map(|range| self.range_from_utf16(range))
             .or_else(|| self.marked_range.clone())
             .unwrap_or_else(|| self.selected_range.clone());
+        let range = clamp_range_to_content(&self.content, range);
         self.content =
             (self.content[..range.start].to_owned() + new_text + &self.content[range.end..]).into();
         self.marked_range =
@@ -114,9 +132,27 @@ impl EntityInputHandler for TextInput {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<usize> {
+        if self.content.is_empty() {
+            return Some(0);
+        }
         let bounds = self.last_bounds?;
         let line = self.last_layout.as_ref()?;
         let utf8_index = line.index_for_x(point.x - bounds.left())?;
         Some(self.offset_to_utf16(utf8_index))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clamp_range_to_content;
+
+    #[test]
+    fn stale_empty_selection_is_clamped_before_text_replacement() {
+        assert_eq!(clamp_range_to_content("", 0..18), 0..0);
+    }
+
+    #[test]
+    fn invalid_utf8_boundaries_are_clamped_to_character_boundaries() {
+        assert_eq!(clamp_range_to_content("你好", 1..4), 0..3);
     }
 }

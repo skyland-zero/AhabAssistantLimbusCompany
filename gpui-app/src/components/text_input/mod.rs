@@ -161,10 +161,10 @@ pub fn key_bindings() -> [KeyBinding; 12] {
         KeyBinding::new("right", Right, None),
         KeyBinding::new("shift-left", SelectLeft, None),
         KeyBinding::new("shift-right", SelectRight, None),
-        KeyBinding::new("cmd-a", SelectAll, None),
-        KeyBinding::new("cmd-v", Paste, None),
-        KeyBinding::new("cmd-c", Copy, None),
-        KeyBinding::new("cmd-x", Cut, None),
+        KeyBinding::new("secondary-a", SelectAll, None),
+        KeyBinding::new("secondary-v", Paste, None),
+        KeyBinding::new("secondary-c", Copy, None),
+        KeyBinding::new("secondary-x", Cut, None),
         KeyBinding::new("home", Home, None),
         KeyBinding::new("end", End, None),
     ]
@@ -173,9 +173,23 @@ pub fn key_bindings() -> [KeyBinding; 12] {
 #[cfg(test)]
 mod tests {
     use super::key_bindings;
+    use gpui::AsKeystroke;
 
     #[test]
     fn standard_key_bindings_cover_the_input_actions() {
-        assert_eq!(key_bindings().len(), 12);
+        let bindings = key_bindings();
+        assert_eq!(bindings.len(), 12);
+        for (binding, key) in bindings[6..10].iter().zip(["a", "v", "c", "x"]) {
+            let keystroke = binding
+                .keystrokes()
+                .first()
+                .expect("standard input binding has one keystroke")
+                .as_keystroke();
+            assert_eq!(keystroke.key, key);
+            #[cfg(target_os = "macos")]
+            assert!(keystroke.modifiers.platform);
+            #[cfg(not(target_os = "macos"))]
+            assert!(keystroke.modifiers.control);
+        }
     }
 }

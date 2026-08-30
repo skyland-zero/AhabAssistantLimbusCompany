@@ -1,5 +1,12 @@
 use super::*;
 
+use gpui::deferred;
+
+use crate::{
+    components::{select_option, select_popup, select_trigger},
+    state::SettingsSelect,
+};
+
 pub fn update_card(
     app: &mut AhabApp,
     cx: &mut Context<AhabApp>,

@@ -1,28 +1,25 @@
 //! Settings page backed by the shared settings and sidecar IPC state.
 //!
 //! The card stack is centered at the `max-w-2xl` width, keeps each setting in
-//! its own card, and exposes appearance, language, hotkey, simulator, system,
+//! its own card, and exposes appearance, language, hotkey, system,
 //! update, and version states without introducing a second settings model.
 
 mod cards;
 
 use std::process::Command;
 
-use gpui::{
-    Context, Div, FontWeight, KeyDownEvent, deferred, div, prelude::*, px, rgb as gpui_rgb,
-};
+use gpui::{Context, Div, FontWeight, KeyDownEvent, div, prelude::*, px, rgb as gpui_rgb};
 
 use crate::{
     app::{AhabApp, BACKGROUND, SURFACE, TEXT, TEXT_MUTED},
     components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette},
     components::{
         ButtonVariant, TextInput, action_button, button, card, is_activation_key, palette_rgb,
-        render_rgb as rgb, scroll_area_with_id, select_option, select_popup, select_trigger,
-        svg_icon, switch,
+        render_rgb as rgb, scroll_area_with_id, svg_icon, switch,
     },
     i18n::paired as text,
     model::{Language, ThemeMode, UpdateSource},
-    state::{HotkeyTarget, SettingsSelect, SystemBool, SystemU16},
+    state::{HotkeyTarget, SystemBool},
 };
 
 const REPO_URL: &str = "https://github.com/KIYI671/AhabAssistantLimbusCompany";
@@ -52,7 +49,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     stack = stack
         .child(cards::appearance_card(app, cx, theme, language, &accent))
         .child(cards::hotkey_card(app, cx, &hotkey, language))
-        .child(cards::simulator_card(app, cx, &system, language))
         .child(cards::system_card(app, cx, &system, language))
         .child(cards::experimental_card(app, cx, &system, language))
         .child(cards::update_card(app, cx, &system, cdk_input, language))
@@ -181,13 +177,6 @@ fn segmented_group() -> Div {
         .p_1()
 }
 
-fn separator() -> Div {
-    div()
-        .h(px(1.))
-        .w_full()
-        .bg(palette_rgb(current_render_palette().border))
-}
-
 fn setting_switch(
     cx: &mut Context<AhabApp>,
     field: SystemBool,
@@ -206,119 +195,6 @@ fn setting_switch(
             cx.notify();
         }
     }))
-}
-
-fn select_system_u16(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
-    field: SystemU16,
-    value: u16,
-    label: impl Into<String>,
-    options: Vec<(u16, String)>,
-    id: &'static str,
-) -> Div {
-    let select = SettingsSelect::SimulatorType;
-    let open = app.settings_page.is_select_open(select);
-    let palette = current_render_palette();
-    let values: Vec<u16> = options.iter().map(|(candidate, _)| *candidate).collect();
-    let next = cycle_value(&values, value, 1);
-    let mut trigger = select_trigger(label, open, &palette)
-        .id(id)
-        .on_click(cx.listener(move |view, _, _, cx| {
-            if open {
-                view.settings_page.close_select();
-            } else {
-                view.settings_page.toggle_select(select);
-            }
-            cx.stop_propagation();
-            cx.notify();
-        }));
-    let values_for_key = values.clone();
-    trigger = trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-        let key = event.keystroke.key.to_ascii_lowercase();
-        match key.as_str() {
-            "left" | "arrowleft" => {
-                window.prevent_default();
-                view.settings_page
-                    .set_system_u16(field, cycle_value(&values_for_key, value, -1));
-                cx.notify();
-            }
-            "right" | "arrowright" => {
-                window.prevent_default();
-                view.settings_page.set_system_u16(field, next);
-                cx.notify();
-            }
-            "home" => {
-                window.prevent_default();
-                if let Some(first) = values_for_key.first() {
-                    view.settings_page.set_system_u16(field, *first);
-                }
-                cx.notify();
-            }
-            "end" => {
-                window.prevent_default();
-                if let Some(last) = values_for_key.last() {
-                    view.settings_page.set_system_u16(field, *last);
-                }
-                cx.notify();
-            }
-            "enter" | "space" | "arrowdown" => {
-                window.prevent_default();
-                view.settings_page.toggle_select(select);
-                cx.notify();
-            }
-            "escape" => {
-                window.prevent_default();
-                view.settings_page.close_select();
-                cx.notify();
-            }
-            _ => {}
-        }
-    }));
-
-    let mut option_list = div().flex().flex_col().gap_1();
-    for (candidate, option_label) in options {
-        let selected = candidate == value;
-        let mut option = select_option(option_label, selected, &palette)
-            .id(format!("{id}-option-{candidate}"))
-            .on_click(cx.listener(move |view, _, _, cx| {
-                view.settings_page.set_system_u16(field, candidate);
-                cx.stop_propagation();
-                cx.notify();
-            }));
-        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-            if is_activation_key(event) {
-                window.prevent_default();
-                view.settings_page.set_system_u16(field, candidate);
-                cx.notify();
-            }
-        }));
-        option_list = option_list.child(option);
-    }
-
-    let mut root = div().relative().w(px(180.)).child(trigger);
-    if open {
-        // Simulator Selects also sit inside settings-scroll; keep the menu on
-        // the floating layer instead of letting later rows paint over it.
-        let popup = select_popup(option_list, &palette).on_mouse_down_out(cx.listener(
-            move |view, _, _, cx| {
-                view.settings_page.close_select();
-                cx.notify();
-            },
-        ));
-        root = root.child(deferred(popup).priority(10));
-    }
-    root
-}
-
-fn cycle_value(options: &[u16], current: u16, direction: i8) -> u16 {
-    if options.is_empty() {
-        return current;
-    }
-    let index = options.iter().position(|candidate| *candidate == current);
-    let index = index.unwrap_or(0) as isize;
-    let next = (index + isize::from(direction)).rem_euclid(options.len() as isize);
-    options[next as usize]
 }
 
 fn localized_feedback(feedback: &str, language: Language) -> String {
@@ -420,14 +296,6 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(combo.as_deref(), Some("Ctrl+Shift+F10"));
-    }
-
-    #[test]
-    fn discrete_settings_cycle_with_keyboard_boundaries() {
-        let options = [16384, 5555, 62001];
-        assert_eq!(cycle_value(&options, 16384, -1), 62001);
-        assert_eq!(cycle_value(&options, 62001, 1), 16384);
-        assert_eq!(cycle_value(&options, 9999, 1), 5555);
     }
 
     #[test]
