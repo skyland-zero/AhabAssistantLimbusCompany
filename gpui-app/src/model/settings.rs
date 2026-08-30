@@ -222,6 +222,16 @@ mod tests {
         assert_eq!(migrated.language, Language::ZhCn);
     }
     #[test]
+    fn new_accent_id_round_trips_without_a_schema_migration() {
+        let settings = AppSettings {
+            accentId: "limbus-brass".into(),
+            ..AppSettings::default()
+        };
+        let json = settings.to_json().unwrap();
+        assert_eq!(AppSettings::from_json(&json).unwrap(), settings);
+    }
+
+    #[test]
     fn right_panel_width_is_bounded_for_version_zero_and_one() {
         for version in [0, 1] {
             for (width, expected) in [(100, MIN_RIGHT_PANEL_WIDTH), (900, MAX_RIGHT_PANEL_WIDTH)] {

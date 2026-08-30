@@ -50,6 +50,38 @@ mod tests {
     }
 
     #[test]
+    fn accent_presets_cover_all_ids_without_changing_legacy_values() {
+        assert_eq!(ACCENT_PRESETS.len(), AccentId::ALL.len());
+        assert_eq!(ACCENT_PRESETS[0].id, "crimson");
+        assert_eq!(ACCENT_PRESETS[4].id, "violet");
+        assert_eq!(ACCENT_PRESETS[5].id, "limbus-brass");
+        for (accent, light_brand, dark_brand) in [
+            (AccentId::Crimson, 0xc8354f, 0xe05a72),
+            (AccentId::Blue, 0x2563eb, 0x60a5fa),
+            (AccentId::Amber, 0xd97706, 0xfbbf24),
+            (AccentId::Emerald, 0x059669, 0x34d399),
+            (AccentId::Violet, 0x7c3aed, 0xa78bfa),
+        ] {
+            assert_eq!(Palette::light(accent).brand.rgb_hex(), light_brand);
+            assert_eq!(Palette::dark(accent).brand.rgb_hex(), dark_brand);
+        }
+    }
+
+    #[test]
+    fn limbus_brass_has_scheme_specific_tokens_and_foregrounds() {
+        let light = Palette::light(AccentId::LimbusBrass);
+        let dark = Palette::dark(AccentId::LimbusBrass);
+        assert_eq!(light.brand.rgb_hex(), 0x7a5517);
+        assert_eq!(light.brand_hover.rgb_hex(), 0x5e3f10);
+        assert_eq!(light.brand_light.rgb_hex(), 0xf4e5c2);
+        assert_eq!(light.brand_foreground.rgb_hex(), 0xfafafa);
+        assert_eq!(dark.brand.rgb_hex(), 0xd1aa52);
+        assert_eq!(dark.brand_hover.rgb_hex(), 0xad8434);
+        assert_eq!(dark.brand_light.rgb_hex(), 0x4a381d);
+        assert_eq!(dark.brand_foreground.rgb_hex(), 0x17120a);
+    }
+
+    #[test]
     fn compatibility_constants_use_the_light_root_tokens() {
         let palette = Palette::default();
         assert_eq!(BACKGROUND, palette.background.rgb_hex());

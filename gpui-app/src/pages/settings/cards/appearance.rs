@@ -1,5 +1,39 @@
 use super::*;
 
+use gpui::{AnyView, App, Render, Window};
+
+use crate::theme::Palette;
+
+struct AccentTooltip {
+    label: String,
+    palette: Palette,
+}
+
+impl Render for AccentTooltip {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .rounded_sm()
+            .border_1()
+            .border_color(palette_rgb(self.palette.input))
+            .bg(palette_rgb(self.palette.popover))
+            .text_color(palette_rgb(self.palette.popover_foreground))
+            .text_size(px(11.))
+            .child(self.label.clone())
+    }
+}
+
+fn accent_tooltip(label: String, palette: Palette) -> impl Fn(&mut Window, &mut App) -> AnyView {
+    move |_window, cx| {
+        cx.new(|_| AccentTooltip {
+            label: label.clone(),
+            palette,
+        })
+        .into()
+    }
+}
+
 pub fn appearance_card(
     _app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
@@ -44,7 +78,8 @@ pub fn appearance_card(
         modes = modes.child(control);
     }
 
-    let dark_accent = matches!(current_render_palette().scheme, ColorScheme::Dark);
+    let palette = current_render_palette();
+    let dark_accent = matches!(palette.scheme, ColorScheme::Dark);
     let mut accents = div().flex().items_center().gap_2();
     for preset in ACCENT_PRESETS {
         let selected = accent == preset.id;
@@ -53,6 +88,12 @@ pub fn appearance_card(
         } else {
             preset.light.brand.rgb_hex()
         };
+        let tooltip_label = format!("{} / {}", preset.name, preset.name_en);
+        let toast_label = match language {
+            Language::ZhCn => preset.name,
+            Language::EnUs => preset.name_en,
+        };
+        let message = format!("{}: {toast_label}", text("强调色", "Accent").get(language));
         let mut control = div()
             .id(format!("settings-accent-{}", preset.id))
             .w(px(24.))
@@ -60,7 +101,9 @@ pub fn appearance_card(
             .rounded_full()
             .tab_index(0)
             .cursor_pointer()
-            .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
+            .aria_label(tooltip_label.clone())
+            .tooltip(accent_tooltip(tooltip_label, palette))
+            .focus_visible(|style| style.border_color(palette_rgb(palette.ring)))
             .bg(gpui_rgb(color));
         if selected {
             control = control.border_2().border_color(rgb(TEXT)).opacity(1.);
@@ -68,17 +111,18 @@ pub fn appearance_card(
             control = control.opacity(0.7);
         }
         let id = preset.id;
+        let key_message = message.clone();
         control = control
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.set_accent(id);
-                view.show_toast(crate::shell::ToastKind::Info, format!("Accent: {id}"), cx);
+                view.show_toast(crate::shell::ToastKind::Info, message.clone(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
                 if is_activation_key(event) {
                     window.prevent_default();
                     view.set_accent(id);
-                    view.show_toast(crate::shell::ToastKind::Info, format!("Accent: {id}"), cx);
+                    view.show_toast(crate::shell::ToastKind::Info, key_message.clone(), cx);
                     cx.notify();
                 }
             }));

@@ -38,7 +38,7 @@ pub enum ColorScheme {
     Dark,
 }
 
-/// The five accent identifiers accepted by the persisted UI settings.
+/// The six accent identifiers accepted by the persisted UI settings.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum AccentId {
     #[default]
@@ -47,15 +47,17 @@ pub enum AccentId {
     Amber,
     Emerald,
     Violet,
+    LimbusBrass,
 }
 
 impl AccentId {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Crimson,
         Self::Blue,
         Self::Amber,
         Self::Emerald,
         Self::Violet,
+        Self::LimbusBrass,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -65,6 +67,7 @@ impl AccentId {
             Self::Amber => "amber",
             Self::Emerald => "emerald",
             Self::Violet => "violet",
+            Self::LimbusBrass => "limbus-brass",
         }
     }
 
@@ -75,6 +78,7 @@ impl AccentId {
             Self::Amber => "琥珀",
             Self::Emerald => "翠绿",
             Self::Violet => "紫罗兰",
+            Self::LimbusBrass => "边狱黄铜",
         }
     }
 
@@ -85,6 +89,7 @@ impl AccentId {
             Self::Amber => "Amber",
             Self::Emerald => "Emerald",
             Self::Violet => "Violet",
+            Self::LimbusBrass => "Limbus Brass",
         }
     }
 
@@ -96,6 +101,7 @@ impl AccentId {
             "amber" => Self::Amber,
             "emerald" => Self::Emerald,
             "violet" => Self::Violet,
+            "limbus-brass" => Self::LimbusBrass,
             "crimson" => Self::Crimson,
             _ => Self::Crimson,
         }
@@ -123,21 +129,35 @@ impl AccentTokens {
             (AccentId::Emerald, ColorScheme::Dark) => Self::new(0x34d399, 0x10b981, 0x14332a),
             (AccentId::Violet, ColorScheme::Light) => Self::new(0x7c3aed, 0x6d28d9, 0xede9fe),
             (AccentId::Violet, ColorScheme::Dark) => Self::new(0xa78bfa, 0x8b5cf6, 0x2b2247),
+            (AccentId::LimbusBrass, ColorScheme::Light) => {
+                Self::new_with_foreground(0x7a5517, 0x5e3f10, 0xf4e5c2, 0xfafafa)
+            }
+            (AccentId::LimbusBrass, ColorScheme::Dark) => {
+                Self::new_with_foreground(0xd1aa52, 0xad8434, 0x4a381d, 0x17120a)
+            }
         }
     }
 
     const fn new(brand: u32, brand_hover: u32, brand_light: u32) -> Self {
+        Self::new_with_foreground(brand, brand_hover, brand_light, 0xfafafa)
+    }
+
+    const fn new_with_foreground(
+        brand: u32,
+        brand_hover: u32,
+        brand_light: u32,
+        brand_foreground: u32,
+    ) -> Self {
         Self {
             brand: ColorToken::rgb(brand),
             brand_hover: ColorToken::rgb(brand_hover),
             brand_light: ColorToken::rgb(brand_light),
-            // This is the --color-brand-foreground fallback from index.css.
-            brand_foreground: ColorToken::rgb(0xfafafa),
+            brand_foreground: ColorToken::rgb(brand_foreground),
         }
     }
 }
 
-/// Metadata for the five supported accent presets.
+/// Metadata for the six supported accent presets.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AccentPreset {
     pub id: &'static str,
@@ -148,7 +168,7 @@ pub struct AccentPreset {
 }
 
 /// Accent metadata retained as a static table for settings controls.
-pub const ACCENT_PRESETS: [AccentPreset; 5] = [
+pub const ACCENT_PRESETS: [AccentPreset; 6] = [
     AccentPreset {
         id: "crimson",
         name: "赤红",
@@ -183,5 +203,12 @@ pub const ACCENT_PRESETS: [AccentPreset; 5] = [
         name_en: "Violet",
         light: AccentTokens::for_scheme(AccentId::Violet, ColorScheme::Light),
         dark: AccentTokens::for_scheme(AccentId::Violet, ColorScheme::Dark),
+    },
+    AccentPreset {
+        id: "limbus-brass",
+        name: "边狱黄铜",
+        name_en: "Limbus Brass",
+        light: AccentTokens::for_scheme(AccentId::LimbusBrass, ColorScheme::Light),
+        dark: AccentTokens::for_scheme(AccentId::LimbusBrass, ColorScheme::Dark),
     },
 ];
