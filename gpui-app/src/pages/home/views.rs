@@ -1,12 +1,8 @@
 use gpui::{AppContext, Context, Entity};
 
-use crate::{
-    app::{AhabApp, HomeInvalidation},
-    model::FixedTaskId,
-};
+use crate::app::{AhabApp, HomeInvalidation};
 
 use super::{
-    cards::RunningSweepView,
     log_panel::LogPanelView,
     panel::PreviewView,
     stats::{StatsSnapshot, StatsView},
@@ -19,7 +15,6 @@ pub(crate) struct HomeViewRefs {
     stats: Entity<StatsView>,
     preview: Entity<PreviewView>,
     logs: Entity<LogPanelView>,
-    running_sweeps: [Entity<RunningSweepView>; 6],
 }
 
 impl HomeViewRefs {
@@ -28,21 +23,11 @@ impl HomeViewRefs {
         let stats = cx.new(|_| StatsView::new(root.clone()));
         let preview = cx.new(|_| PreviewView::new());
         let logs = cx.new(|_| LogPanelView::new(root.clone()));
-        let running_sweeps = [
-            FixedTaskId::SetWindows,
-            FixedTaskId::DailyTask,
-            FixedTaskId::GetReward,
-            FixedTaskId::BuyEnkephalin,
-            FixedTaskId::Mirror,
-            FixedTaskId::ResonateWithAhab,
-        ]
-        .map(|task| cx.new(|_| RunningSweepView::new(task)));
 
         Self {
             stats,
             preview,
             logs,
-            running_sweeps,
         }
     }
 
@@ -133,17 +118,5 @@ impl HomeViewRefs {
 
     pub(super) fn logs_view(&self) -> Entity<LogPanelView> {
         self.logs.clone()
-    }
-
-    pub(super) fn running_sweep(&self, task: FixedTaskId) -> Entity<RunningSweepView> {
-        let index = match task {
-            FixedTaskId::SetWindows => 0,
-            FixedTaskId::DailyTask => 1,
-            FixedTaskId::GetReward => 2,
-            FixedTaskId::BuyEnkephalin => 3,
-            FixedTaskId::Mirror => 4,
-            FixedTaskId::ResonateWithAhab => 5,
-        };
-        self.running_sweeps[index].clone()
     }
 }

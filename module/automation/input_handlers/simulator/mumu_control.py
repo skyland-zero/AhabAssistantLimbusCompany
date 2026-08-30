@@ -232,7 +232,7 @@ class MumuControl(AbstractInput):
                 if MumuControl.connection_device is controller:
                     MumuControl.connection_device = None
 
-    def __init__(self, instance_number=0, display_id=0):
+    def __init__(self, instance_number=0, display_id=0, *, auto_start=True):
         self.install_path = None
         self.nemu_folder = None
         self.mumu_version = None
@@ -240,6 +240,10 @@ class MumuControl(AbstractInput):
         self.multi_instance_number = instance_number
         self.port = None
         self.device = None
+        # ADB is only needed by the optional game-lifecycle helpers.  Keep the
+        # connection lazy so selecting a MuMu target can use NemuIpc alone.
+        self._adb_connected = False
+        self._auto_start = auto_start
 
         self.lib = None
         self._ev = asyncio.new_event_loop()
@@ -267,8 +271,8 @@ class MumuControl(AbstractInput):
             log.debug(f"MumuControl.__init__: exe_path 已初始化 -> {self.exe_path}")
         else:
             log.warning("MumuControl.__init__: exe_path 未初始化, 将由 start() 异常 fallback 重试")
-        self.start()
-        self.adb_connect()
+        if self._auto_start:
+            self.start()
 
     def adb_connect(self, _depth=0):
         _ADB_MAX_DEPTH = 3
@@ -278,9 +282,11 @@ class MumuControl(AbstractInput):
         for attempt in range(3):
             try:
                 port = self.get_mumu_adb_port()
+                self.port = port
                 log.debug(f"尝试 ADB 连接 (轮次{_depth + 1}/{_ADB_MAX_DEPTH}, 尝试{attempt + 1}/3): {port}")
                 msg = adb.connect(port)
                 if "connected" in msg:
+                    self._adb_connected = True
                     log.debug(f"成功连接至:{port},连接信息: {msg}")
                     return
                 elif "bad port" in msg:
@@ -294,13 +300,19 @@ class MumuControl(AbstractInput):
         self.adb_connect(_depth + 1)
 
     def adb_disconnect(self):
+        # Do not query MuMu's ADB endpoint during ordinary NemuIpc cleanup when
+        # this controller never opened an ADB transport.
+        if not getattr(self, "_adb_connected", False) and self.device is None:
+            return
         try:
             for _ in range(3):
-                port = self.get_mumu_adb_port()
+                port = getattr(self, "port", None) or self.get_mumu_adb_port()
+                self.port = port
                 msg = adb.disconnect(port)
                 # Connected to 127.0.0.1:59865
                 # Already connected to 127.0.0.1:59865
                 if "disconnected" in msg:
+                    self._adb_connected = False
                     log.debug(f"成功断开连接于:{port},连接信息: {msg}")
                     break
                 # bad port number '598265' in '127.0.0.1:598265'
@@ -312,7 +324,9 @@ class MumuControl(AbstractInput):
     def _ensure_adb_device(self):
         if self.device is None:
             self.adb_connect()
-            self.device = adb.device(self.get_mumu_adb_port())
+            # adb_connect() already resolved and cached the endpoint; avoid a
+            # second MuMuManager invocation on the first lifecycle operation.
+            self.device = adb.device(getattr(self, "port", None) or self.get_mumu_adb_port())
         return self.device
 
     def start_game(self):
@@ -464,8 +478,36 @@ class MumuControl(AbstractInput):
             self.start()
             return self.get_mumu_adb_port(multi_instance_number, _depth + 1)
 
+    def is_running(self) -> bool:
+        """Return whether MuMu reports the selected instance as started."""
+        return self.get_launch_status() == "start_finished"
+
+    def can_attach_without_launch(self) -> bool:
+        """Whether the existing instance can be attached without restarting it.
+
+        The legacy application disables MuMu's background-keepalive mode because
+        it can leave the emulator in a state where automation stops receiving
+        input.  Preserve that policy: an instance with keepalive enabled still
+        goes through the existing restart path, while the normal already-running
+        case attaches directly through NemuIpc.
+        """
+        return self.is_running() and not self.get_app_keptlive()
+
+    def attach_existing(self) -> None:
+        """Load NemuIpc and attach to an already-running MuMu instance."""
+        if self.lib is None:
+            self.load_dll()
+        self.connect()
+
     def start(self):
         try:
+            if self.can_attach_without_launch():
+                log.debug(
+                    "MuMu 实例已在运行，跳过 control launch 和启动等待，直接连接 NemuIpc"
+                )
+                self.attach_existing()
+                return
+
             log.debug(f"开始启动MUMU模拟器实例编号{self.multi_instance_number}")
             keptlive = self.get_app_keptlive()
             if keptlive:
@@ -493,7 +535,6 @@ class MumuControl(AbstractInput):
                     break
             else:
                 log.warning(f"start: 模拟器启动等待超时 ({cfg.start_emulator_timeout}s), 状态可能仍为未启动")
-            self.port = self.get_mumu_adb_port()
             self.load_dll()
             log.debug(f"MUMU模拟器编号{self.multi_instance_number}启动完成")
             self.connect()

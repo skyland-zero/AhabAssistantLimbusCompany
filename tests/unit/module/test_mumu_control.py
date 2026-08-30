@@ -69,3 +69,27 @@ def test_start_game_has_bounded_retries(monkeypatch) -> None:
 
     assert adb_connect_calls == 3
     assert all(device.start_calls == 1 for device in created_devices)
+
+
+def test_adb_disconnect_is_lazy_before_first_adb_use() -> None:
+    controller = _controller_without_connect()
+    controller._adb_connected = False
+    controller.get_mumu_adb_port = lambda: pytest.fail("lazy cleanup queried the ADB port")
+
+    controller.adb_disconnect()
+
+
+def test_start_attaches_to_a_running_instance_without_launch(monkeypatch) -> None:
+    controller = object.__new__(mumu_module.MumuControl)
+    attached = 0
+
+    def attach_existing() -> None:
+        nonlocal attached
+        attached += 1
+
+    monkeypatch.setattr(controller, "can_attach_without_launch", lambda: True)
+    monkeypatch.setattr(controller, "attach_existing", attach_existing)
+
+    controller.start()
+
+    assert attached == 1

@@ -75,7 +75,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps
 - 页面旧 token 会通过 render-time Palette 跟随浅色/深色和强调色；全局 Toast、日志复制和自动滚动已接入。
 - 使用 `Ctrl-Q` 退出。
 
-Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、连接设备后的持续实时预览、资源同步进度和任务镜牢进度已纳入事件泵。实时预览默认以 1 FPS、最长边 540 像素的 JPEG 推送，并在断开设备后清理画面；主控台把流光、统计、实时画面和日志拆成独立子视图，只刷新收到事件的子树。
+Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、连接设备后的持续实时预览、资源同步进度和任务镜牢进度已纳入事件泵。实时预览默认约每 2 秒以最长边 540 像素的 JPEG 推送，并在断开设备后清理画面；主控台把统计、实时画面和日志拆成独立子视图，只刷新收到事件的子树，任务运行状态通过标题栏主控台圆点提示。
 
 ## 测量建议
 

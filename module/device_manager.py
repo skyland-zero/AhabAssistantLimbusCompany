@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import threading
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
@@ -77,9 +78,14 @@ class DeviceManager:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
+        self._status_lock = threading.RLock()
         self._targets: dict[str, DeviceTarget] = {}
         self._active: DeviceSession | None = None
         self._connecting = False
+        self._connect_generation = 0
+        self._connect_cancel: threading.Event | None = None
+        self._connect_thread: threading.Thread | None = None
+        self._pending_session: DeviceSession | None = None
         self._status_listeners: list[StatusListener] = []
         self._notice_listeners: list[StatusListener] = []
         self._busy_checker: Callable[[], bool] = lambda: False
@@ -193,15 +199,30 @@ class DeviceManager:
         if self._busy_checker():
             raise DeviceError("任务运行期间不能切换设备")
 
-        with self._lock:
-            if self._connecting:
-                raise DeviceError("已有设备连接任务正在进行")
-            if self._active and self._active.target.info.id == device_id:
-                active_session = self._active
-            else:
-                active_session = None
+        with self._status_lock:
+            with self._lock:
+                if self._connecting:
+                    raise DeviceError("已有设备连接任务正在进行")
+                if self._active and self._active.target.info.id == device_id:
+                    active_session = self._active
+                else:
+                    active_session = None
+                if active_session is None:
+                    self._connecting = True
+                    self._connect_generation += 1
+                    generation = self._connect_generation
+                    cancel = threading.Event()
+                    self._connect_cancel = cancel
+                    run_id = uuid.uuid4().hex
+                else:
+                    generation = 0
+                    cancel = None
+                    run_id = None
             if active_session is None:
-                self._connecting = True
+                # Publish the transition after installing the request state,
+                # but without holding the manager lock while preview listeners
+                # stop their worker.
+                self._emit_status(device_id, "connecting", run_id=run_id)
 
         if active_session is not None:
             # Rebind the compatibility layer even when the selected id is
@@ -218,38 +239,228 @@ class DeviceManager:
                 "alreadyConnected": True,
             }
 
-        self._emit_status(device_id, "connecting")
         session: DeviceSession | None = None
+        background_started = False
         try:
             target = self._resolve_target(device_id)
-            self._disconnect_active(restore_config=False)
-            session = self._open_target(target)
-            self._activate_runtime(session)
-            with self._lock:
-                self._active = session
-            self._emit_status(device_id, "connected")
-            self._emit_connection_details(session)
+            with self._status_lock:
+                self._disconnect_active(restore_config=False)
+
+            if target.kind == "mumu":
+                # Constructing a MuMu controller with auto_start disabled is
+                # cheap: it only resolves the installation.  This lets us
+                # decide whether the instance is already running before doing
+                # any launch/wait work.
+                session = self._open_target(target, auto_start=False)
+                controller = session.controller
+                if controller is None:
+                    raise DeviceError("MuMu 设备缺少控制器")
+
+                if not controller.can_attach_without_launch():
+                    with self._status_lock:
+                        with self._lock:
+                            if not self._connection_is_current_locked(generation, cancel):
+                                raise DeviceError("设备连接已取消")
+                            self._pending_session = session
+                            thread = threading.Thread(
+                                target=self._run_mumu_connection,
+                                args=(target, session, device_id, run_id, generation, cancel),
+                                name="AALCMumuConnect",
+                                daemon=True,
+                            )
+                            self._connect_thread = thread
+                        try:
+                            thread.start()
+                        except Exception:
+                            with self._lock:
+                                if self._pending_session is session:
+                                    self._pending_session = None
+                            raise
+                    background_started = True
+                    return {
+                        "deviceId": device_id,
+                        "status": "connecting",
+                        "accepted": True,
+                        "runId": run_id,
+                    }
+
+                controller.attach_existing()
+            else:
+                session = self._open_target(target)
+
+            if not self._finish_connection(
+                session,
+                device_id,
+                run_id,
+                generation,
+                cancel,
+            ):
+                raise DeviceError("设备连接已取消")
             return {"deviceId": device_id, "status": "connected"}
         except Exception as error:
             log.exception("连接设备失败：%s", device_id)
-            if session is not None:
-                try:
-                    self._cleanup_session(session)
-                except Exception:
-                    log.exception("清理失败的设备连接时出错")
-            try:
-                self._disconnect_active(restore_config=False)
-            except Exception:
-                log.exception("清理失败的设备连接时出错")
-            self._restore_runtime_config()
-            self._emit_status(device_id, "disconnected")
-            self._emit_notice("error", f"连接设备失败：{error}")
+            self._fail_connection(session, device_id, run_id, generation, cancel, error)
             if isinstance(error, DeviceError):
                 raise
             raise DeviceError(f"连接设备失败：{error}") from error
         finally:
+            if not background_started:
+                self._reset_connection_state(generation, cancel)
+
+    def _run_mumu_connection(
+        self,
+        target: DeviceTarget,
+        session: DeviceSession,
+        device_id: str,
+        run_id: str,
+        generation: int,
+        cancel: threading.Event,
+    ) -> None:
+        """Start a cold MuMu instance without holding up the RPC worker."""
+        try:
+            if cancel.is_set():
+                self._cleanup_session(session)
+                return
+
+            controller = session.controller
+            if controller is None:
+                raise DeviceError("MuMu 设备缺少控制器")
+            controller.start()
+
+            if cancel.is_set():
+                self._cleanup_session(session)
+                return
+
+            if not self._finish_connection(
+                session,
+                device_id,
+                run_id,
+                generation,
+                cancel,
+            ):
+                self._cleanup_session(session)
+                return
+        except Exception as error:
+            log.exception("后台连接 MuMu 失败：%s", target.info.id)
+            self._fail_connection(session, device_id, run_id, generation, cancel, error)
+
+    def _finish_connection(
+        self,
+        session: DeviceSession,
+        device_id: str,
+        run_id: str,
+        generation: int,
+        cancel: threading.Event,
+    ) -> bool:
+        """Publish a connected session only if it is still the current request."""
+        with self._status_lock:
             with self._lock:
+                if not self._connection_is_current_locked(generation, cancel):
+                    current = False
+                else:
+                    # Keep activation serialized with disconnect/cancel so a stale
+                    # worker can never leave the global automation binding behind.
+                    self._activate_runtime(session)
+                    self._active = session
+                    self._pending_session = None
+                    self._connecting = False
+                    self._connect_cancel = None
+                    self._connect_thread = None
+                    current = True
+            if current:
+                # Keep status ordering serialized, but do not hold the manager
+                # lock while preview listeners perform their own cleanup.
+                self._emit_status(device_id, "connected", run_id=run_id)
+                self._emit_connection_details(session)
+
+        if not current:
+            # The caller owns cleanup for a stale session.  Keeping it here
+            # would make the synchronous path clean the same controller twice
+            # after it turns the false result into DeviceError.
+            return False
+        return True
+
+    def _fail_connection(
+        self,
+        session: DeviceSession | None,
+        device_id: str,
+        run_id: str | None,
+        generation: int,
+        cancel: threading.Event | None,
+        error: Exception,
+    ) -> None:
+        """Clean up a failed connection and report it if it is still current."""
+        current = False
+        pending: DeviceSession | None = None
+        if cancel is not None:
+            with self._status_lock:
+                with self._lock:
+                    current = self._connection_is_current_locked(generation, cancel)
+                    if current:
+                        pending = self._pending_session
+                        self._pending_session = None
+                        self._connecting = False
+                        self._connect_cancel = None
+                        self._connect_thread = None
+
+                if current:
+                    # Keep failure ordering consistent with the successful
+                    # path and with an explicit disconnect.  Cleanup follows
+                    # this event so preview consumers stop before controller
+                    # teardown, and no later connected event can overtake it.
+                    self._restore_runtime_config()
+                    self._emit_status(device_id, "disconnected", run_id=run_id)
+                    self._emit_notice("error", f"连接设备失败：{error}")
+
+        cleanup = session or pending
+        if cleanup is not None:
+            try:
+                self._cleanup_session(cleanup)
+            except Exception:
+                log.exception("清理失败的设备连接时出错")
+
+    def _connection_is_current_locked(
+        self,
+        generation: int,
+        cancel: threading.Event | None,
+    ) -> bool:
+        return (
+            cancel is not None
+            and self._connecting
+            and not cancel.is_set()
+            and self._connect_generation == generation
+            and self._connect_cancel is cancel
+        )
+
+    def _reset_connection_state(
+        self,
+        generation: int,
+        cancel: threading.Event | None,
+    ) -> None:
+        with self._lock:
+            if self._connect_generation != generation or self._connect_cancel is not cancel:
+                return
+            self._connecting = False
+            self._connect_cancel = None
+            self._connect_thread = None
+            self._pending_session = None
+
+    def _cancel_pending_connection(self) -> threading.Thread | None:
+        """Cancel a cold-start worker and return it for bounded joining."""
+        with self._status_lock:
+            with self._lock:
+                cancel = self._connect_cancel
+                if not self._connecting or cancel is None:
+                    return None
+                cancel.set()
+                self._connect_generation += 1
+                thread = self._connect_thread
                 self._connecting = False
+                self._connect_cancel = None
+                self._connect_thread = None
+                self._pending_session = None
+            self._restore_runtime_config()
+            return thread
 
     def disconnect(self) -> dict[str, Any]:
         """Release the active target without closing a game or emulator."""
@@ -268,24 +479,32 @@ class DeviceManager:
     def _release_active(self, *, check_busy: bool, notice: bool) -> dict[str, Any]:
         if check_busy and self._busy_checker():
             raise DeviceError("任务运行期间不能断开设备")
-        with self._lock:
-            active_id = self._active.target.info.id if self._active else None
+        with self._status_lock:
+            pending_thread = self._cancel_pending_connection()
+            with self._lock:
+                active_id = self._active.target.info.id if self._active else None
 
-        # Stop consumers before tearing down the controller. BackendApplication
-        # maps this event to PreviewCapture.stop(), preventing a completed
-        # task's preview loop from racing the connection cleanup.
-        self._emit_status(None, "disconnected")
-        self._disconnect_active(restore_config=True)
+            # Stop consumers before tearing down the controller. BackendApplication
+            # maps this event to PreviewCapture.stop(), preventing a completed
+            # task's preview loop from racing the connection cleanup.
+            self._emit_status(None, "disconnected")
+            self._disconnect_active(restore_config=True)
+        if pending_thread is not None and pending_thread is not threading.current_thread():
+            pending_thread.join(timeout=2.0)
         if notice and active_id:
             self._emit_notice("info", "设备已断开连接")
         return {"status": "disconnected"}
 
     def close(self) -> None:
         """Best-effort shutdown hook for the sidecar process."""
-        try:
-            self._disconnect_active(restore_config=True)
-        except Exception:
-            log.exception("关闭设备管理器时清理连接失败")
+        with self._status_lock:
+            pending_thread = self._cancel_pending_connection()
+            try:
+                self._disconnect_active(restore_config=True)
+            except Exception:
+                log.exception("关闭设备管理器时清理连接失败")
+        if pending_thread is not None and pending_thread is not threading.current_thread():
+            pending_thread.join(timeout=2.0)
 
     def _resolve_target(self, device_id: str) -> DeviceTarget:
         with self._lock:
@@ -320,7 +539,7 @@ class DeviceManager:
             self._targets[device_id] = target
         return target
 
-    def _open_target(self, target: DeviceTarget) -> DeviceSession:
+    def _open_target(self, target: DeviceTarget, *, auto_start: bool = True) -> DeviceSession:
         if target.kind == "pc":
             if not self._valid_hwnd(target.hwnd):
                 raise DeviceError("未找到有效的 Limbus Company 游戏窗口")
@@ -332,7 +551,11 @@ class DeviceManager:
             self._set_target_runtime_config(target)
             from module.automation.input_handlers.simulator.mumu_control import MumuControl
 
-            return DeviceSession(target, MumuControl(instance_number=target.instance_number))
+            if auto_start:
+                controller = MumuControl(instance_number=target.instance_number)
+            else:
+                controller = MumuControl(instance_number=target.instance_number, auto_start=False)
+            return DeviceSession(target, controller)
 
         if target.endpoint is None:
             raise DeviceError("ADB 设备地址缺失")
@@ -448,9 +671,18 @@ class DeviceManager:
     def _restore_runtime_config(self) -> None:
         self._set_runtime_config(**self._runtime_snapshot)
 
-    def _emit_status(self, device_id: str | None, status: str) -> None:
+    def _emit_status(
+        self,
+        device_id: str | None,
+        status: str,
+        *,
+        run_id: str | None = None,
+    ) -> None:
         payload = {"deviceId": device_id, "status": status}
-        self._emit(self._status_listeners, "device.status", payload)
+        if run_id:
+            payload["runId"] = run_id
+        with self._status_lock:
+            self._emit(self._status_listeners, "device.status", payload)
 
     def _emit_notice(self, level: str, message: str) -> None:
         self._emit(self._notice_listeners, "app.notice", {"level": level, "message": message})

@@ -1,4 +1,9 @@
-use gpui::{Context, Div, Window, WindowControlArea, div, img, prelude::*, px, rgb, rgba};
+use std::time::Duration;
+
+use gpui::{
+    Animation, AnimationExt, Context, Div, Window, WindowControlArea, div, img, prelude::*, px,
+    rgb, rgba,
+};
 
 use crate::{
     app::{AhabApp, Page},
@@ -275,14 +280,30 @@ fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElemen
         } else {
             rgba(0)
         };
-        item = item.child(
-            div()
-                .w(px(6.))
-                .h(px(6.))
-                .rounded_full()
-                .bg(dot_color)
-                .flex_none(),
-        );
+        let status_dot = div()
+            .w(px(6.))
+            .h(px(6.))
+            .rounded_full()
+            .bg(dot_color)
+            .flex_none();
+        let status_dot: gpui::AnyElement = if is_busy {
+            status_dot
+                .with_animation(
+                    "titlebar-console-status-breathe",
+                    Animation::new(Duration::from_millis(1400))
+                        .repeat()
+                        .with_max_fps(12.0),
+                    |dot, progress| {
+                        let opacity =
+                            0.40 + 0.60 * (0.5 + 0.5 * (progress * std::f32::consts::TAU).sin());
+                        dot.opacity(opacity)
+                    },
+                )
+                .into_any_element()
+        } else {
+            status_dot.into_any_element()
+        };
+        item = item.child(status_dot);
     }
 
     if active {

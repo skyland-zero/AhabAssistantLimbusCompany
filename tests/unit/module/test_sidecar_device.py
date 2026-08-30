@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import numpy as np
@@ -203,6 +204,260 @@ def test_reconnecting_same_selected_id_rebinds_existing_session(monkeypatch) -> 
     assert result["alreadyConnected"] is True
     assert rebound == [session]
     assert manager.active_session is session
+
+
+def test_running_mumu_uses_fast_ipc_attach(monkeypatch) -> None:
+    import module.automation.input_handlers.simulator.mumu_control as mumu_module
+
+    class FakeMumu:
+        connection_device = None
+
+        def __init__(self, *, instance_number: int, auto_start: bool = True) -> None:
+            self.instance_number = instance_number
+            self.auto_start = auto_start
+            self.attach_calls = 0
+            self.start_calls = 0
+            self.disconnect_calls = 0
+            self.adb_disconnect_calls = 0
+            created.append(self)
+
+        def can_attach_without_launch(self) -> bool:
+            return True
+
+        def attach_existing(self) -> None:
+            self.attach_calls += 1
+
+        def start(self) -> None:
+            self.start_calls += 1
+
+        def disconnect(self) -> None:
+            self.disconnect_calls += 1
+
+        def adb_disconnect(self) -> None:
+            self.adb_disconnect_calls += 1
+
+    manager = DeviceManager()
+    target = DeviceManager._make_mumu_target(0)
+    manager._targets[target.info.id] = target
+    created: list[FakeMumu] = []
+    activated: list[DeviceSession] = []
+
+    monkeypatch.setattr(mumu_module, "MumuControl", FakeMumu)
+    monkeypatch.setattr(manager, "_set_runtime_config", lambda **values: None)
+    monkeypatch.setattr(manager, "_activate_runtime", activated.append)
+
+    result = manager.connect(target.info.id)
+
+    assert result == {"deviceId": "mumu:0", "status": "connected"}
+    assert len(created) == 1
+    assert created[0].auto_start is False
+    assert created[0].attach_calls == 1
+    assert created[0].start_calls == 0
+    assert activated == [manager.active_session]
+
+    manager.close()
+
+
+def test_cold_mumu_start_is_accepted_and_finishes_in_background(monkeypatch) -> None:
+    import module.automation.input_handlers.simulator.mumu_control as mumu_module
+
+    started = threading.Event()
+    release = threading.Event()
+
+    class FakeMumu:
+        connection_device = None
+
+        def __init__(self, *, instance_number: int, auto_start: bool = True) -> None:
+            self.instance_number = instance_number
+            self.auto_start = auto_start
+            self.start_calls = 0
+            self.disconnect_calls = 0
+            self.adb_disconnect_calls = 0
+
+        def can_attach_without_launch(self) -> bool:
+            return False
+
+        def start(self) -> None:
+            self.start_calls += 1
+            started.set()
+            release.wait(timeout=2)
+
+        def disconnect(self) -> None:
+            self.disconnect_calls += 1
+
+        def adb_disconnect(self) -> None:
+            self.adb_disconnect_calls += 1
+
+    manager = DeviceManager()
+    target = DeviceManager._make_mumu_target(1)
+    manager._targets[target.info.id] = target
+    connected = threading.Event()
+    events: list[tuple[str, dict[str, Any]]] = []
+    manager.add_status_listener(
+        lambda event, payload: (
+            events.append((event, payload)),
+            connected.set() if payload.get("status") == "connected" else None,
+        )
+    )
+    activated: list[DeviceSession] = []
+
+    monkeypatch.setattr(mumu_module, "MumuControl", FakeMumu)
+    monkeypatch.setattr(manager, "_set_runtime_config", lambda **values: None)
+    monkeypatch.setattr(manager, "_activate_runtime", activated.append)
+
+    result = manager.connect(target.info.id)
+
+    assert result["deviceId"] == target.info.id
+    assert result["status"] == "connecting"
+    assert result["accepted"] is True
+    assert isinstance(result["runId"], str) and result["runId"]
+    assert started.wait(timeout=1)
+    assert manager.active_session is None
+    assert events == [
+        (
+            "device.status",
+            {
+                "deviceId": target.info.id,
+                "status": "connecting",
+                "runId": result["runId"],
+            },
+        )
+    ]
+
+    release.set()
+    assert connected.wait(timeout=1)
+    assert manager.active_session is not None
+    assert activated == [manager.active_session]
+    assert events[-1] == (
+        "device.status",
+        {
+            "deviceId": target.info.id,
+            "status": "connected",
+            "runId": result["runId"],
+        },
+    )
+
+    manager.close()
+
+
+def test_cold_mumu_failure_reports_disconnected_asynchronously(monkeypatch) -> None:
+    import module.automation.input_handlers.simulator.mumu_control as mumu_module
+
+    failed = threading.Event()
+
+    class FakeMumu:
+        connection_device = None
+
+        def __init__(self, *, instance_number: int, auto_start: bool = True) -> None:
+            self.disconnect_calls = 0
+            self.adb_disconnect_calls = 0
+
+        def can_attach_without_launch(self) -> bool:
+            return False
+
+        def start(self) -> None:
+            raise RuntimeError("simulated MuMu launch failure")
+
+        def disconnect(self) -> None:
+            self.disconnect_calls += 1
+
+        def adb_disconnect(self) -> None:
+            self.adb_disconnect_calls += 1
+
+    manager = DeviceManager()
+    target = DeviceManager._make_mumu_target(2)
+    manager._targets[target.info.id] = target
+    statuses: list[dict[str, Any]] = []
+    notices: list[dict[str, Any]] = []
+    manager.add_status_listener(
+        lambda _event, payload: (statuses.append(payload), failed.set() if payload["status"] == "disconnected" else None)
+    )
+    manager.add_notice_listener(lambda _event, payload: notices.append(payload))
+
+    monkeypatch.setattr(mumu_module, "MumuControl", FakeMumu)
+    monkeypatch.setattr(manager, "_set_runtime_config", lambda **values: None)
+    monkeypatch.setattr(manager, "_activate_runtime", lambda _session: None)
+
+    result = manager.connect(target.info.id)
+
+    assert result["accepted"] is True
+    assert failed.wait(timeout=1)
+    assert manager.active_session is None
+    assert statuses[0]["status"] == "connecting"
+    assert statuses[-1]["status"] == "disconnected"
+    assert any("simulated MuMu launch failure" in notice["message"] for notice in notices)
+
+    manager.close()
+
+
+def test_disconnect_cancels_pending_mumu_without_late_connected_event(monkeypatch) -> None:
+    import module.automation.input_handlers.simulator.mumu_control as mumu_module
+
+    started = threading.Event()
+    release = threading.Event()
+    cancellation_started = threading.Event()
+    created: list[Any] = []
+
+    class FakeMumu:
+        connection_device = None
+
+        def __init__(self, *, instance_number: int, auto_start: bool = True) -> None:
+            self.disconnect_calls = 0
+            self.adb_disconnect_calls = 0
+            created.append(self)
+
+        def can_attach_without_launch(self) -> bool:
+            return False
+
+        def start(self) -> None:
+            started.set()
+            release.wait(timeout=2)
+
+        def disconnect(self) -> None:
+            self.disconnect_calls += 1
+
+        def adb_disconnect(self) -> None:
+            self.adb_disconnect_calls += 1
+
+    manager = DeviceManager()
+    target = DeviceManager._make_mumu_target(3)
+    manager._targets[target.info.id] = target
+    statuses: list[str] = []
+    manager.add_status_listener(lambda _event, payload: statuses.append(payload["status"]))
+    monkeypatch.setattr(mumu_module, "MumuControl", FakeMumu)
+    monkeypatch.setattr(manager, "_set_runtime_config", lambda **values: None)
+    monkeypatch.setattr(manager, "_activate_runtime", lambda _session: None)
+
+    original_cancel = manager._cancel_pending_connection
+
+    def cancel_pending() -> threading.Thread | None:
+        thread = original_cancel()
+        cancellation_started.set()
+        return thread
+
+    monkeypatch.setattr(manager, "_cancel_pending_connection", cancel_pending)
+    result = manager.connect(target.info.id)
+    assert result["accepted"] is True
+    assert started.wait(timeout=1)
+
+    disconnect_result: dict[str, Any] = {}
+    disconnect_thread = threading.Thread(
+        target=lambda: disconnect_result.update(manager.disconnect()),
+        daemon=True,
+    )
+    disconnect_thread.start()
+    assert cancellation_started.wait(timeout=1)
+    release.set()
+    disconnect_thread.join(timeout=1)
+
+    assert not disconnect_thread.is_alive()
+    assert disconnect_result == {"status": "disconnected"}
+    assert manager.active_session is None
+    assert statuses == ["connecting", "disconnected"]
+    assert created[0].disconnect_calls == 1
+    assert created[0].adb_disconnect_calls == 1
+
+    manager.close()
 
 
 def test_selected_device_kind_overrides_legacy_simulator_mode(monkeypatch) -> None:
