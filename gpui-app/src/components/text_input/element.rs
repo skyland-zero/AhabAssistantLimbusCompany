@@ -62,6 +62,8 @@ impl Element for TextElement {
         let content = input.content.clone();
         let display_text = if content.is_empty() {
             input.placeholder.clone()
+        } else if input.masked {
+            "*".repeat(content.len()).into()
         } else {
             content.clone()
         };

@@ -378,6 +378,9 @@ class ConfigModel(BaseModel):
     mirrorchyan_cdk: str
     """Mirror酱 CDK"""
 
+    wxpusher_spt: str
+    """WxPusher 个人 SPT"""
+
     image_resource_sync: bool
     """是否启用图片资源自动同步"""
 

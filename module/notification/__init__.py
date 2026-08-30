@@ -1,24 +1,31 @@
-"""系统通知模块（Windows Toast）。
+"""Core notification package with lazy Windows Toast compatibility exports.
 
-核心层实现：不依赖 PySide6 与 UI 层。
-文案翻译通过 core.i18n 的可插拔钩子完成，
-“关闭 AALC”按钮通过 core.events.mediator.kill_signal 通知宿主程序退出。
+WxPusher is headless and cross-platform, so importing its service must not
+eagerly load the optional Windows Toast implementation or its platform-only
+dependencies.  The legacy Toast names remain available through ``__getattr__``.
 """
 
-from .toast import (
-    APPID,
-    APPNAME,
-    ICONPATH,
-    TemplateToast,
-    send_toast,
-    unregister_toast,
-)
+_TOAST_EXPORTS = {"APPID", "APPNAME", "ICONPATH", "TemplateToast", "send_toast", "unregister_toast"}
+_WXPUSHER_EXPORTS = {
+    "NotificationMessage",
+    "NotificationQueue",
+    "NotificationSender",
+    "NotificationService",
+    "WxPusherClient",
+    "WxPusherError",
+}
 
-__all__ = [
-    "APPID",
-    "APPNAME",
-    "ICONPATH",
-    "TemplateToast",
-    "send_toast",
-    "unregister_toast",
-]
+
+def __getattr__(name: str):
+    if name in _TOAST_EXPORTS:
+        from . import toast
+
+        return getattr(toast, name)
+    if name in _WXPUSHER_EXPORTS:
+        from . import wxpusher
+
+        return getattr(wxpusher, name)
+    raise AttributeError(name)
+
+
+__all__ = sorted(_TOAST_EXPORTS | _WXPUSHER_EXPORTS)

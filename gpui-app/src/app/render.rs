@@ -116,6 +116,7 @@ impl AhabApp {
             self.team_inputs.keyword_refresh.as_ref(),
             self.team_inputs.normal_refresh.as_ref(),
             self.settings_inputs.cdk.as_ref(),
+            self.settings_inputs.wxpusher_spt.as_ref(),
             self.settings_inputs.port.as_ref(),
             self.settings_inputs.timeout.as_ref(),
         ]

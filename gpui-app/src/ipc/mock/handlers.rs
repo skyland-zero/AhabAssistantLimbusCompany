@@ -78,7 +78,8 @@ impl MockState {
                     let task = request
                         .params
                         .and_then(|value| value.get("taskId").cloned())
-                        .and_then(|value| serde_json::from_value(value).ok());
+                        .and_then(|value| serde_json::from_value(value).ok())
+                        .or_else(|| first_executable_task(&self.tasks));
                     self.execution = ExecutionStatusPayload {
                         state: ExecutionState::Running,
                         currentTaskId: task,
@@ -298,6 +299,22 @@ impl MockState {
                     merge_json(&self.system_settings, request.params, "systemSettings.set")?;
                 Ok(json!(true))
             }
+            method::NOTIFICATION_TEST => {
+                let value: Value =
+                    Self::params(request.params, "notification.test requires {spt}")?;
+                let spt = match value.get("spt") {
+                    Some(Value::String(value)) => value.trim(),
+                    Some(_) => return Err(RpcError::invalid_params("SPT 必须是字符串")),
+                    None => self.system_settings.wxpusher_spt.trim(),
+                };
+                if spt.is_empty() {
+                    return Err(RpcError::invalid_params("SPT 未配置"));
+                }
+                if spt.len() <= 4 || !spt.starts_with("SPT_") {
+                    return Err(RpcError::invalid_params("SPT 格式无效"));
+                }
+                Ok(json!({"accepted": true}))
+            }
             method::DEVICE_LIST => Ok(serde_json::to_value(&self.devices).unwrap()),
             method::DEVICE_CONNECT => {
                 let value: Value = Self::params(request.params, "device.connect requires {id}")?;
@@ -337,8 +354,22 @@ impl MockState {
 }
 
 fn has_executable_task(tasks: &TasksConfig) -> bool {
+    first_executable_task(tasks).is_some()
+}
+
+fn first_executable_task(tasks: &TasksConfig) -> Option<FixedTaskId> {
     let enabled = &tasks.enabledTasks;
-    enabled.daily_task || enabled.get_reward || enabled.buy_enkephalin || enabled.mirror
+    if enabled.daily_task {
+        Some(FixedTaskId::DailyTask)
+    } else if enabled.get_reward {
+        Some(FixedTaskId::GetReward)
+    } else if enabled.buy_enkephalin {
+        Some(FixedTaskId::BuyEnkephalin)
+    } else if enabled.mirror {
+        Some(FixedTaskId::Mirror)
+    } else {
+        None
+    }
 }
 
 fn merge_json<T: Serialize + serde::de::DeserializeOwned>(

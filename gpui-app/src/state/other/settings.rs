@@ -107,6 +107,25 @@ impl SettingsPageState {
         self.persist_system();
     }
 
+    pub fn set_wxpusher_spt(&mut self, spt: String) {
+        self.system.wxpusher_spt = spt.trim().to_owned();
+        self.persist_system();
+    }
+
+    pub fn test_notification(&mut self, spt: String) {
+        let params = Some(serde_json::json!({"spt": spt}));
+        if self.rpc.is_sidecar() {
+            self.rpc.submit(method::NOTIFICATION_TEST, params);
+            self.feedback = Some("正在发送测试通知".to_owned());
+            return;
+        }
+        let result = self.rpc.request_value(method::NOTIFICATION_TEST, params);
+        self.feedback = Some(match result {
+            Ok(_) => "测试通知已发送".to_owned(),
+            Err(error) => error.message,
+        });
+    }
+
     pub fn check_update(&mut self) {
         if self.rpc.is_sidecar() {
             self.rpc.submit(method::APP_CHECK_UPDATE, None);
@@ -234,6 +253,9 @@ impl SettingsPageState {
             }
             method::HOTKEY_SET | method::SYSTEM_SETTINGS_SET => {
                 self.feedback = Some("设置已保存".to_owned());
+            }
+            method::NOTIFICATION_TEST => {
+                self.feedback = Some("测试通知已发送".to_owned());
             }
             method::HOTKEY_GET => {
                 if let Some(value) = value

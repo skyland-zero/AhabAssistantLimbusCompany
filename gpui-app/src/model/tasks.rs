@@ -114,7 +114,7 @@ impl Default for DailyTaskConfig {
     fn default() -> Self {
         Self {
             set_EXP_count: 1,
-            set_thread_count: 0,
+            set_thread_count: 3,
             daily_teams: 1,
             use_continuous_combat: false,
             use_continuous_combat_select: 1,
@@ -295,7 +295,7 @@ mod tests {
         assert_eq!(cfg.set_windows.set_win_size, 1080);
         assert_eq!(cfg.set_windows.set_win_position, "free");
         assert_eq!(cfg.daily_task.set_EXP_count, 1);
-        assert_eq!(cfg.daily_task.set_thread_count, 0);
+        assert_eq!(cfg.daily_task.set_thread_count, 3);
         assert!(!cfg.daily_task.use_continuous_combat);
         assert_eq!(cfg.mirror.set_mirror_count, 1);
         assert!(cfg.enabledTasks.resonate_with_Ahab);

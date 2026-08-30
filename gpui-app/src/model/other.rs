@@ -102,6 +102,8 @@ pub struct SystemSettingsConfig {
     pub update_prerelease_enable: bool,
     pub update_source: UpdateSource,
     pub mirrorchyan_cdk: String,
+    #[serde(default)]
+    pub wxpusher_spt: String,
 }
 impl Default for SystemSettingsConfig {
     fn default() -> Self {
@@ -119,6 +121,7 @@ impl Default for SystemSettingsConfig {
             update_prerelease_enable: false,
             update_source: UpdateSource::GitHub,
             mirrorchyan_cdk: String::new(),
+            wxpusher_spt: String::new(),
         }
     }
 }
@@ -221,6 +224,7 @@ mod tests {
         let settings = SystemSettingsConfig::default();
         assert!(settings.simulator && settings.memory_protection);
         assert_eq!(settings.simulator_port, 16384);
+        assert!(settings.wxpusher_spt.is_empty());
         assert_eq!(
             serde_json::to_string(&UpdateSource::GitHub).unwrap(),
             "\"GitHub\""

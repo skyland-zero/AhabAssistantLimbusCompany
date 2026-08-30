@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+from types import ModuleType
 from typing import Any
 
 from module.backend_application import BackendApplication
@@ -90,6 +92,7 @@ class FakeConfig:
             "update_prerelease_enable": False,
             "update_source": "GitHub",
             "mirrorchyan_cdk": "",
+            "wxpusher_spt": "",
         }
         self.values = values
         self.config = FakeConfigModel(values)
@@ -169,7 +172,35 @@ class FakeThemeStore:
         self.config = config_data
 
 
-def make_application(preview_capture=None, stats_path=None) -> BackendApplication:
+class FakeNotificationService:
+    def __init__(self) -> None:
+        self.tests: list[str] = []
+        self.completions: list[tuple[str, str, int]] = []
+        self.finals: list[tuple[str, dict[str, Any]]] = []
+        self.failures: list[tuple[str, str]] = []
+        self.closed = False
+
+    def send_test(self, spt: str) -> dict[str, Any]:
+        self.tests.append(spt)
+        return {"code": 1000}
+
+    def enqueue_completion(self, spt: str, kind: str, count: int) -> bool:
+        self.completions.append((spt, kind, count))
+        return True
+
+    def enqueue_final(self, spt: str, current_run: dict[str, Any]) -> bool:
+        self.finals.append((spt, current_run))
+        return True
+
+    def enqueue_failure(self, spt: str, error: str) -> bool:
+        self.failures.append((spt, error))
+        return True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def make_application(preview_capture=None, stats_path=None, notifications=None) -> BackendApplication:
     return BackendApplication(
         FakeDeviceManager(),
         version="test",
@@ -177,6 +208,7 @@ def make_application(preview_capture=None, stats_path=None) -> BackendApplicatio
         theme_list=FakeThemeStore(),
         preview_capture=preview_capture,
         stats_path=stats_path,
+        notifications=notifications,
     )
 
 
@@ -255,6 +287,135 @@ def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     app.close()
 
 
+def test_system_settings_persist_wxpusher_spt_and_test_unsaved_value() -> None:
+    notifications = FakeNotificationService()
+    app = make_application(notifications=notifications)
+    dispatcher = RpcDispatcher(application=app, version="test")
+    app.config.values["wxpusher_spt"] = "SPT_saved-value"
+
+    settings = dispatcher.dispatch({"jsonrpc": "2.0", "id": 1, "method": "systemSettings.get"})
+    assert settings["result"]["wxpusher_spt"] == "SPT_saved-value"
+
+    saved = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "systemSettings.set",
+            "params": {"wxpusher_spt": "SPT_new-value"},
+        }
+    )
+    assert saved["result"] is True
+    assert app.config.values["wxpusher_spt"] == "SPT_new-value"
+
+    tested = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "notification.test",
+            "params": {"spt": "SPT_unsaved-value"},
+        }
+    )
+    assert tested["result"] == {"accepted": True}
+    assert notifications.tests == ["SPT_unsaved-value"]
+    assert app.config.values["wxpusher_spt"] == "SPT_new-value"
+    app.close()
+
+
+def test_notification_test_rejects_invalid_spt_without_echoing_secret() -> None:
+    app = make_application(notifications=FakeNotificationService())
+    dispatcher = RpcDispatcher(application=app, version="test")
+
+    response = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "notification.test",
+            "params": {"spt": "not-a-real-secret"},
+        }
+    )
+
+    assert response["error"]["code"] == -32602
+    assert "not-a-real-secret" not in response["error"]["message"]
+    app.close()
+
+
+def test_task_completion_notifications_batch_progress_and_skip_manual_stop(tmp_path) -> None:
+    notifications = FakeNotificationService()
+    app = make_application(
+        stats_path=tmp_path / "runtime_stats.json",
+        notifications=notifications,
+    )
+    app.config.values["wxpusher_spt"] = "SPT_progress-value"
+    app.stats.start_run("run-1", {"exp": 3, "thread": 2, "mirror": 1})
+    app._execution_run_id = "run-1"
+    app._execution_state = "running"
+
+    app._on_task_completed("exp", 3)
+    app._on_task_completed("mirror", 1)
+    assert notifications.completions == [
+        ("SPT_progress-value", "exp", 3),
+        ("SPT_progress-value", "mirror", 1),
+    ]
+
+    app._execution_stop.set()
+    app._on_task_completed("thread", 2)
+    assert len(notifications.completions) == 2
+
+    app._execution_stop.clear()
+    app._queue_run_notification("run-1", "final")
+    assert notifications.finals[0][0] == "SPT_progress-value"
+    assert notifications.finals[0][1]["completed"] == {"exp": 3, "thread": 2, "mirror": 1}
+
+    app._queue_run_notification("run-1", "failure", "safe failure")
+    assert notifications.failures == [("SPT_progress-value", "safe failure")]
+    app.close()
+
+
+def test_run_execution_queues_final_failure_and_skips_manual_stop_notifications(monkeypatch, tmp_path) -> None:
+    class FakeWorker:
+        def __init__(self, exception=None) -> None:
+            self.exception = exception
+
+        def start(self) -> None:
+            return None
+
+        def join(self) -> None:
+            return None
+
+    worker = FakeWorker()
+    fake_tasks = ModuleType("tasks.base.script_task_scheme")
+    fake_tasks.my_script_task = lambda: worker
+    monkeypatch.setitem(sys.modules, "tasks.base.script_task_scheme", fake_tasks)
+
+    notifications = FakeNotificationService()
+    app = make_application(stats_path=tmp_path / "normal.json", notifications=notifications)
+    app.config.values["wxpusher_spt"] = "SPT_run-value"
+    app.stats.start_run("normal", {"exp": 1, "thread": 0, "mirror": 0})
+    app._execution_run_id = "normal"
+    app._execution_state = "running"
+    app._run_execution("normal")
+    assert len(notifications.finals) == 1
+    assert notifications.failures == []
+
+    worker.exception = RuntimeError("failure SPT_run-value")
+    app.stats.start_run("failed", {"exp": 1, "thread": 0, "mirror": 0})
+    app._execution_run_id = "failed"
+    app._execution_state = "running"
+    app._run_execution("failed")
+    assert len(notifications.failures) == 1
+    assert "SPT_run-value" not in notifications.failures[0][1]
+
+    worker.exception = None
+    app.stats.start_run("stopped", {"exp": 1, "thread": 0, "mirror": 0})
+    app._execution_run_id = "stopped"
+    app._execution_state = "running"
+    app._execution_stop.set()
+    app._run_execution("stopped")
+    assert len(notifications.finals) == 1
+    assert len(notifications.failures) == 1
+    app.close()
+
+
 def test_stats_rpc_exposes_period_and_daily_summaries(tmp_path) -> None:
     app = make_application(stats_path=tmp_path / "runtime_stats.json")
     app.stats.start_run("run-1", {"exp": 2, "thread": 1, "mirror": 1})
@@ -280,6 +441,47 @@ def test_stats_rpc_exposes_period_and_daily_summaries(tmp_path) -> None:
     assert daily["result"]["days"]
     assert daily["result"]["days"][0]["date"] == "2026-01-02"
     app.close()
+
+
+def test_task_started_bridges_current_task_to_status_and_stats(tmp_path) -> None:
+    from core.events import mediator
+
+    app = make_application(stats_path=tmp_path / "runtime_stats.json")
+    app.stats.start_run("run-1", {"exp": 1, "mirror": 1})
+    app._execution_state = "running"
+    app._execution_run_id = "run-1"
+    events = []
+    app.add_event_listener(lambda event, payload, sequence: events.append((event, payload, sequence)))
+
+    try:
+        mediator.task_started.emit("daily_task")
+        mediator.task_started.emit("mirror")
+        mediator.task_started.emit("unknown")
+
+        status_tasks = [
+            payload["currentTaskId"]
+            for event, payload, _ in events
+            if event == "execution.status"
+        ]
+        stats_tasks = [
+            payload["currentRun"]["currentTaskId"]
+            for event, payload, _ in events
+            if event == "execution.stats"
+        ]
+        assert status_tasks == ["daily_task", "mirror"]
+        assert stats_tasks == ["daily_task", "mirror"]
+
+        app._execution_state = "stopping"
+        mediator.task_started.emit("get_reward")
+        assert [
+            payload["currentTaskId"]
+            for event, payload, _ in events
+            if event == "execution.status"
+        ] == ["daily_task", "mirror"]
+    finally:
+        app._execution_state = "idle"
+        app._execution_run_id = None
+        app.close()
 
 
 def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection() -> None:
@@ -427,6 +629,30 @@ def test_tasks_get_config_normalizes_legacy_integer_booleans() -> None:
 
     assert config["mirror"]["hard_mirror"] is True
     assert config["mirror"]["no_weekly_bonuses"] is False
+    app.close()
+
+
+def test_tasks_get_config_uses_three_thread_runs_when_value_is_missing() -> None:
+    app = make_application()
+    app.config.values.pop("set_thread_count")
+
+    assert app.tasks_get_config()["daily_task"]["set_thread_count"] == 3
+    app.close()
+
+
+def test_tasks_get_config_preserves_explicit_zero_thread_runs() -> None:
+    app = make_application()
+    app.config.values["set_thread_count"] = 0
+
+    assert app.tasks_get_config()["daily_task"]["set_thread_count"] == 0
+    app.close()
+
+
+def test_tasks_get_config_preserves_other_saved_thread_run_values() -> None:
+    app = make_application()
+    app.config.values["set_thread_count"] = 7
+
+    assert app.tasks_get_config()["daily_task"]["set_thread_count"] == 7
     app.close()
 
 

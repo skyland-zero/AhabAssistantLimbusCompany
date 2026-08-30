@@ -415,4 +415,57 @@ mod tests {
         assert_eq!(home.logs.len(), 300);
         assert_eq!(home.logs.front().unwrap().message, "log 1");
     }
+
+    #[test]
+    fn execution_task_changes_follow_status_and_stats_events() {
+        let mut home = HomeState::default();
+        let status_event = |seq, task| {
+            EventEnvelope::new(
+                crate::ipc::contract::event::EXECUTION_STATUS,
+                json!({"state":"running","currentTaskId":task}),
+            )
+            .with_sequence(seq)
+        };
+        let stats_event = |seq, task| {
+            let mut stats = ExecutionStatsPayload::default();
+            stats.currentRun.state = ExecutionState::Running;
+            stats.currentRun.currentTaskId = Some(task);
+            EventEnvelope::new(
+                crate::ipc::contract::event::EXECUTION_STATS,
+                serde_json::to_value(stats).unwrap(),
+            )
+            .with_sequence(seq)
+        };
+
+        home.apply_events(vec![
+            status_event(1, "daily_task"),
+            stats_event(2, FixedTaskId::DailyTask),
+            status_event(3, "get_reward"),
+            stats_event(4, FixedTaskId::GetReward),
+            status_event(5, "mirror"),
+            stats_event(6, FixedTaskId::Mirror),
+        ]);
+
+        assert_eq!(home.execution.currentTaskId, Some(FixedTaskId::Mirror));
+        assert_eq!(
+            home.stats.currentRun.currentTaskId,
+            Some(FixedTaskId::Mirror)
+        );
+
+        home.apply_events(vec![
+            EventEnvelope::new(
+                crate::ipc::contract::event::EXECUTION_STATUS,
+                json!({"state":"idle","currentTaskId":null}),
+            )
+            .with_sequence(7),
+            EventEnvelope::new(
+                crate::ipc::contract::event::EXECUTION_STATS,
+                serde_json::to_value(ExecutionStatsPayload::default()).unwrap(),
+            )
+            .with_sequence(8),
+        ]);
+
+        assert_eq!(home.execution.currentTaskId, None);
+        assert_eq!(home.stats.currentRun.currentTaskId, None);
+    }
 }

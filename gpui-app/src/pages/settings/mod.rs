@@ -38,6 +38,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let hotkey = app.settings_page.hotkey.clone();
     let system = app.settings_page.system.clone();
     let cdk_input = app.settings_inputs.cdk.clone();
+    let wxpusher_spt_input = app.settings_inputs.wxpusher_spt.clone();
     let feedback = app.settings_page.feedback.clone();
 
     let mut stack = div()
@@ -55,6 +56,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(cards::system_card(app, cx, &system, language))
         .child(cards::experimental_card(app, cx, &system, language))
         .child(cards::update_card(app, cx, &system, cdk_input, language))
+        .child(cards::notification_card(
+            app,
+            cx,
+            wxpusher_spt_input,
+            language,
+        ))
         .child(cards::about_card(app, cx, language))
         .child(
             div()
@@ -317,6 +324,8 @@ fn localized_feedback(feedback: &str, language: Language) -> String {
     }
     match feedback {
         "设置已保存" => "Settings saved".to_owned(),
+        "正在发送测试通知" => "Sending test notification".to_owned(),
+        "测试通知已发送" => "Test notification sent".to_owned(),
         "已请求打开 GitHub 仓库" => "GitHub repository opened".to_owned(),
         "未知" => "Unknown".to_owned(),
         _ => feedback.to_owned(),

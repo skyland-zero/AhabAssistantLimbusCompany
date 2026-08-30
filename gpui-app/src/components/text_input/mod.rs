@@ -57,6 +57,7 @@ pub struct TextInput {
     is_selecting: bool,
     palette: Palette,
     disabled: bool,
+    masked: bool,
 }
 
 impl TextInput {
@@ -77,6 +78,28 @@ impl TextInput {
         palette: Palette,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::new_with_palette_and_mask(content, placeholder, palette, false, cx)
+    }
+
+    /// Construct an input that stores the real value but paints asterisks.
+    /// The mask keeps one byte per source byte so cursor and selection offsets
+    /// remain valid for the ASCII credentials used by settings forms.
+    pub fn new_masked_with_palette(
+        content: impl Into<SharedString>,
+        placeholder: impl Into<SharedString>,
+        palette: Palette,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::new_with_palette_and_mask(content, placeholder, palette, true, cx)
+    }
+
+    fn new_with_palette_and_mask(
+        content: impl Into<SharedString>,
+        placeholder: impl Into<SharedString>,
+        palette: Palette,
+        masked: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let content = content.into();
         let end = content.len();
         Self {
@@ -91,6 +114,7 @@ impl TextInput {
             is_selecting: false,
             palette,
             disabled: false,
+            masked,
         }
     }
 

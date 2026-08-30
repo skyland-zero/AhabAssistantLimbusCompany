@@ -426,21 +426,22 @@ def script_task() -> None | int:
     task_list = []
     # 执行日常刷本任务
     if cfg.daily_task:
-        task_list.append(Daily_task_wrapper(get_reward=get_reward))
+        task_list.append(("daily_task", Daily_task_wrapper(get_reward=get_reward)))
 
     # 执行奖励领取任务
     if cfg.get_reward:
-        task_list.append(to_get_reward)
+        task_list.append(("get_reward", to_get_reward))
 
     # 执行狂气换饼任务
     if cfg.buy_enkephalin:
-        task_list.append(Buy_enkephalin)
+        task_list.append(("buy_enkephalin", Buy_enkephalin))
 
     # 执行镜牢任务
     if cfg.mirror:
-        task_list.append(Mirror_task)
+        task_list.append(("mirror", Mirror_task))
 
-    for task in task_list:
+    for task_id, task in task_list:
+        mediator.task_started.emit(task_id)
         task()
 
     if cfg.set_reduce_miscontact and not simulator_runtime:

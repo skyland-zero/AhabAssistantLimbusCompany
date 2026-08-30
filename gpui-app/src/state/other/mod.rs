@@ -164,5 +164,9 @@ mod tests {
         state.capture(HotkeyTarget::StartStop);
         state.finish_capture(Some("Ctrl+F10".into()));
         assert_eq!(state.hotkey.startStop, "Ctrl+F10");
+        state.set_wxpusher_spt("SPT_saved".into());
+        assert_eq!(state.system.wxpusher_spt, "SPT_saved");
+        state.test_notification("SPT_unsaved".into());
+        assert_eq!(state.feedback.as_deref(), Some("测试通知已发送"));
     }
 }

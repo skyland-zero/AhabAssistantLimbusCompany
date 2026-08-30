@@ -177,7 +177,7 @@ pub(super) fn task_card(
         root = root.child(body);
     }
     if executing {
-        root = root.child(running_sweep());
+        root = root.child(running_sweep(task));
     }
     root
 }
@@ -216,7 +216,7 @@ pub(super) fn task_icon(label: &'static str, executing: bool) -> Div {
         .child(action_icon(task_icon_data(label), 16., color))
 }
 
-pub(super) fn running_sweep() -> Div {
+pub(super) fn running_sweep(task: FixedTaskId) -> Div {
     let palette = current_render_palette();
     let is_dark = matches!(palette.scheme, crate::components::style::ColorScheme::Dark);
     let track_color = rgba((palette.brand.rgb_hex() << 8) | if is_dark { 0x38 } else { 0x28 });
@@ -240,7 +240,7 @@ pub(super) fn running_sweep() -> Div {
                 .rounded_full()
                 .bg(core_color)
                 .with_animation(
-                    "home-task-sweep",
+                    format!("home-task-sweep-{}", task_id(task)),
                     Animation::new(Duration::from_millis(1300)).repeat(),
                     |element, progress| element.top(relative(progress * 1.45 - 0.45)),
                 ),

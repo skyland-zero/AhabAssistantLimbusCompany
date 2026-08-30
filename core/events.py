@@ -111,6 +111,8 @@ class EventBus:
     mirror_bar_kill_signal = Event("mirror_bar_kill_signal")
 
     # ---- 运行统计 ----
+    # (task_id: daily_task/get_reward/buy_enkephalin/mirror)
+    task_started = Event("task_started")
     # (kind: exp/thread/mirror, count: successful dungeon completions)
     task_completed = Event("task_completed")
 

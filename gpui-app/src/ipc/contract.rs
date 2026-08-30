@@ -170,6 +170,7 @@ pub mod method {
     pub const HOTKEY_SET: &str = "hotkey.set";
     pub const SYSTEM_SETTINGS_GET: &str = "systemSettings.get";
     pub const SYSTEM_SETTINGS_SET: &str = "systemSettings.set";
+    pub const NOTIFICATION_TEST: &str = "notification.test";
     pub const DEVICE_LIST: &str = "device.list";
     pub const DEVICE_CONNECT: &str = "device.connect";
     pub const DEVICE_DISCONNECT: &str = "device.disconnect";

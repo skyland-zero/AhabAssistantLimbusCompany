@@ -121,6 +121,23 @@ class ExecutionStatsStore:
                 self._current["updatedAt"] = self._timestamp()
             return self.snapshot()
 
+    def set_current_task(
+        self,
+        task_id: str,
+        *,
+        run_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            if self._current["runId"] is None:
+                return None
+            if self._current["state"] != "running":
+                return None
+            if run_id is not None and self._current["runId"] != run_id:
+                return None
+            self._current["currentTaskId"] = task_id
+            self._current["updatedAt"] = self._timestamp()
+            return self.snapshot()
+
     def finish_run(self, run_id: str | None) -> dict[str, Any]:
         with self._lock:
             if run_id is not None and self._current["runId"] == run_id:

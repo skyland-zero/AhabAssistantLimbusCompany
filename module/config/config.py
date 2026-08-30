@@ -21,6 +21,7 @@ from module.logger import log
 from utils.singletonmeta import SingletonMeta
 
 from .config_typing import ConfigModel, TeamSetting
+from .redaction import redact_config_value, register_secret, register_secrets
 
 _LEGACY_WINDOW_POSITION = {
     "0": "center",
@@ -66,6 +67,7 @@ class Config(metaclass=SingletonMeta):
 
         # 加载实际配置，此方法会根据实际配置覆盖默认配置
         self._load_config()
+        register_secrets(self.config.model_dump())
         log.debug(f"配置文件已加载，版本号：{self.version}, 配置版本: {self.get_value('config_version', '未知')}")
         # 进程退出前确保落盘
         atexit.register(self.flush)
@@ -265,6 +267,7 @@ class Config(metaclass=SingletonMeta):
                     self._old_version_cfg_upgrade(saved_version, loaded_config)
                 # 使用更新后的配置初始化 Config 对象
                 self.config = ConfigModel(**{**self._defaults, **loaded_config})
+                register_secrets(self.config.model_dump())
                 queue_in_loaded_config = loaded_config.get("teams_active_queue")
                 if queue_in_loaded_config is None:
                     normalized_queue = self._normalize_team_queue(self.migrate_legacy_team_queue())
@@ -573,6 +576,7 @@ class Config(metaclass=SingletonMeta):
                 loaded_config = self.yaml.load(file)
             if loaded_config:
                 self.config = ConfigModel(**{**self._defaults, **loaded_config})
+                register_secrets(self.config.model_dump())
                 queue_in_loaded_config = loaded_config.get("teams_active_queue")
                 if queue_in_loaded_config is None:
                     normalized_queue = self._normalize_team_queue(self.migrate_legacy_team_queue())
@@ -599,9 +603,10 @@ class Config(metaclass=SingletonMeta):
         else:
             setattr(self.config, key, value)
 
-        # 防止 cdk 泄露
-        if key == "mirrorchyan_cdk":
-            value = "已加密"
+        # Credentials must never appear in config-change logs.
+        if key in {"mirrorchyan_cdk", "wxpusher_spt"}:
+            register_secret(value)
+        value = redact_config_value(key, value)
         if config_obj:
             if isinstance(config_obj, dict):
                 value_obj: BaseModel | None | Any = config_obj.get(key, None)

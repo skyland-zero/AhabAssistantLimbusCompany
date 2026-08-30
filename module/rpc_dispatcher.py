@@ -74,6 +74,7 @@ class RpcDispatcher:
             "tool.screenshot",
             "hotkey.set",
             "systemSettings.set",
+            "notification.test",
             "device.connect",
             "device.disconnect",
         }
@@ -130,6 +131,7 @@ class RpcDispatcher:
             "hotkey.set": "hotkey_set",
             "systemSettings.get": "system_settings_get",
             "systemSettings.set": "system_settings_set",
+            "notification.test": "notification_test",
             "device.list": "device.list",
             "device.connect": "device.connect",
             "device.disconnect": "device.disconnect",

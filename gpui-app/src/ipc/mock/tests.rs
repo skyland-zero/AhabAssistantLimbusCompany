@@ -47,6 +47,26 @@ fn execution_has_deterministic_state_transitions() {
 }
 
 #[test]
+fn execution_start_reports_the_first_enabled_task() {
+    let client = MockClient::default();
+
+    assert!(!client.call(method::EXECUTION_START, None).is_error());
+
+    let events = client.take_events();
+    let status = events
+        .iter()
+        .find(|item| item.event == event::EXECUTION_STATUS)
+        .expect("execution status event");
+    let stats = events
+        .iter()
+        .find(|item| item.event == event::EXECUTION_STATS)
+        .expect("execution stats event");
+
+    assert_eq!(status.payload["currentTaskId"], "daily_task");
+    assert_eq!(stats.payload["currentRun"]["currentTaskId"], "daily_task");
+}
+
+#[test]
 fn execution_start_stays_idle_when_only_non_executable_settings_are_enabled() {
     for ahab_enabled in [false, true] {
         let client = MockClient::default();
@@ -118,6 +138,7 @@ fn config_and_team_calls_round_trip() {
     let client = MockClient::default();
     let config = client.call(method::TASKS_GET_CONFIG, None).result.unwrap();
     assert_eq!(config["set_windows"]["set_win_size"], 1080);
+    assert_eq!(config["daily_task"]["set_thread_count"], 3);
     let team = json!({"id":"", "name":"test", "sinners":[], "purpose":"general", "accessoryScheme":"", "enabled":true, "mirrorConfig":null});
     assert!(!client.call(method::TEAM_SAVE, Some(team)).is_error());
     assert_eq!(
@@ -130,4 +151,35 @@ fn config_and_team_calls_round_trip() {
             .len(),
         4
     );
+}
+
+#[test]
+fn notification_test_accepts_unsaved_spt_without_persisting_it() {
+    let client = MockClient::default();
+    let response = client.call(
+        method::NOTIFICATION_TEST,
+        Some(json!({"spt": "SPT_unsaved-test-value"})),
+    );
+    assert!(!response.is_error());
+    assert_eq!(response.result.unwrap()["accepted"], true);
+    assert!(
+        client
+            .call(method::SYSTEM_SETTINGS_GET, None)
+            .result
+            .unwrap()["wxpusher_spt"]
+            .as_str()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn notification_test_rejects_missing_or_invalid_spt_without_echoing_it() {
+    let client = MockClient::default();
+    let missing = client.call(method::NOTIFICATION_TEST, Some(json!({"spt": ""})));
+    assert_eq!(missing.error.unwrap().message, "SPT 未配置");
+    let invalid = client.call(method::NOTIFICATION_TEST, Some(json!({"spt": "secret"})));
+    let error = invalid.error.unwrap();
+    assert_eq!(error.message, "SPT 格式无效");
+    assert!(!error.message.contains("secret"));
 }

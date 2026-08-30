@@ -13,6 +13,7 @@ from ruamel.yaml import YAML
 from core.events import Event
 from core.i18n import tr
 from module import CONFIG_PATH, VERSION_PATH
+from module.config.redaction import redact_mapping, redact_text
 from utils.singletonmeta import SingletonMeta
 
 
@@ -36,6 +37,28 @@ class TranslationFormatter(colorlog.ColoredFormatter):
             record.pathname = os.path.basename(record.pathname)
 
         return super().format(record)
+
+
+class SecretRedactionFilter(logging.Filter):
+    """Mask registered credentials in every local and streamed log record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+            redacted = redact_text(message)
+            if redacted != message:
+                record.msg = redacted
+                record.args = ()
+            if record.exc_info:
+                _, error, traceback = record.exc_info
+                error_message = redact_text(error)
+                if error_message != str(error):
+                    record.exc_info = (Exception, Exception(error_message), traceback)
+                    record.exc_text = None
+        except Exception:
+            # Redaction must never interfere with the application logger.
+            pass
+        return True
 
 
 class UILogDispatcher:
@@ -106,7 +129,7 @@ class SettingConcurrentRotatingFileHandler(ConcurrentRotatingFileHandler):
             config = config_data
 
         self.version = version
-        self.config = config
+        self.config = redact_mapping(config)
 
     def do_open(self, mode: str | None = None):
         stream = super().do_open(mode)
@@ -120,7 +143,7 @@ AALC 版本: {self.version}, 配置文件版本: {self.config.get("config_versio
 游戏分辨率: {self.config.get("set_win_size")}, 截图间隔: {self.config.get("screenshot_interval")}, 鼠标间隔 {self.config.get("mouse_action_interval")}
 详细内容: {self.config}"""
             except Exception as e:
-                msg = f"新文件创建, 但读取配置文件内容时发生错误: {e}"
+                msg = f"新文件创建, 但读取配置文件内容时发生错误: {redact_text(e)}"
             stream.write(msg + "\n")
         return stream
 
@@ -129,6 +152,7 @@ class Logger(metaclass=SingletonMeta):
     def __init__(self, *, headless: bool = False):
         self.logger = logging.getLogger("AALC")
         self.logger.propagate = False  # 避免泄露到其他logger导致重复记录
+        self.logger.addFilter(SecretRedactionFilter())
 
         # 移除其它第三方库给root logger添加的StreamHandler，避免重复输出
         _root_logger = logging.getLogger()

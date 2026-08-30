@@ -86,9 +86,8 @@ impl AhabApp {
             | method::HOTKEY_GET
             | method::HOTKEY_SET
             | method::SYSTEM_SETTINGS_GET
-            | method::SYSTEM_SETTINGS_SET => {
-                self.settings_page.apply_rpc_result(method_name, result)
-            }
+            | method::SYSTEM_SETTINGS_SET
+            | method::NOTIFICATION_TEST => self.settings_page.apply_rpc_result(method_name, result),
             method::RESOURCE_STATUS
             | method::RESOURCE_CHECK_UPDATE
             | method::RESOURCE_SYNC_START => self.resources.apply_rpc_result(method_name, result),

@@ -22,6 +22,7 @@ pub struct TeamInputs {
 #[derive(Default)]
 pub struct SettingsInputs {
     pub cdk: Option<Entity<TextInput>>,
+    pub wxpusher_spt: Option<Entity<TextInput>>,
     pub port: Option<Entity<TextInput>>,
     pub timeout: Option<Entity<TextInput>>,
     pub subscriptions: Vec<Subscription>,

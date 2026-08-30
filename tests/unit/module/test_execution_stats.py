@@ -5,7 +5,6 @@ from zoneinfo import ZoneInfo
 
 from module.execution_stats import ExecutionStatsStore, game_day
 
-
 SEOUL = ZoneInfo("Asia/Seoul")
 
 
@@ -52,3 +51,18 @@ def test_completion_from_another_run_is_ignored(tmp_path) -> None:
 
     assert store.record_completion("exp", 1, run_id="run-2") is None
     assert store.summary()["today"] == {"exp": 0, "thread": 0, "mirror": 0}
+
+
+def test_current_task_updates_only_for_the_active_run(tmp_path) -> None:
+    store = ExecutionStatsStore(tmp_path / "runtime_stats.json")
+    store.start_run("run-1", {"mirror": 1})
+
+    assert store.set_current_task("mirror", run_id="run-2") is None
+    assert store.summary()["currentRun"]["currentTaskId"] is None
+
+    payload = store.set_current_task("mirror", run_id="run-1")
+    assert payload is not None
+    assert payload["currentRun"]["currentTaskId"] == "mirror"
+
+    store.finish_run("run-1")
+    assert store.set_current_task("mirror", run_id="run-1") is None

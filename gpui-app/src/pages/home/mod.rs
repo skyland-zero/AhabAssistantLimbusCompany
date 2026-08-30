@@ -47,9 +47,9 @@ use crate::{
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let busy = app.home.is_busy();
     let execution_state = app.home.execution.state;
-    // The mock start call intentionally leaves currentTaskId optional. Use
-    // the first executable selection for the presentation only so the
-    // running sweep still exercises the same visual state as the React page.
+    // Keep a compatibility fallback for older sidecars that may omit
+    // currentTaskId while running. New sidecars and the mock report it
+    // explicitly and update it before each top-level task starts.
     let current_task = app.home.execution.currentTaskId.or_else(|| {
         (execution_state == ExecutionState::Running)
             .then(|| panel::first_executable_task(&app.home))

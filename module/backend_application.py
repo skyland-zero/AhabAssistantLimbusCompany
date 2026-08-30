@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from module.config.redaction import redact_text
 from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.execution_stats import ExecutionStatsStore
@@ -132,6 +133,7 @@ TEAM_MIRROR_ACTION_FIELDS = (
     "second_system_select_reward",
     "second_system_power_up",
 )
+EXECUTABLE_TASK_IDS = ("daily_task", "get_reward", "buy_enkephalin", "mirror")
 
 
 class BackendEventBus:
@@ -189,6 +191,7 @@ class BackendApplication:
         resource_service: Any | None = None,
         preview_capture: PreviewCapture | None = None,
         stats_path: str | Path | None = None,
+        notifications: Any | None = None,
     ) -> None:
         self.version = version
         self.events = BackendEventBus()
@@ -219,6 +222,11 @@ class BackendApplication:
 
             stats_path = Path(CONFIG_PATH).with_name("runtime_stats.json")
         self.stats = ExecutionStatsStore(stats_path)
+        if notifications is None:
+            from module.notification.wxpusher import NotificationService
+
+            notifications = NotificationService()
+        self.notifications = notifications
 
         self.device_manager = device_manager or get_device_manager()
         if hasattr(self.device_manager, "set_busy_checker"):
@@ -320,7 +328,7 @@ class BackendApplication:
                 key: self._json_bool(raw.get(key), default) if isinstance(default, bool) else raw.get(key, default)
                 for key, default in {
                     "set_EXP_count": 1,
-                    "set_thread_count": 0,
+                    "set_thread_count": 3,
                     "daily_teams": 1,
                     "use_continuous_combat": False,
                     "use_continuous_combat_select": 1,
@@ -545,6 +553,8 @@ class BackendApplication:
             task_id = None
             if isinstance(params, Mapping) and isinstance(params.get("taskId"), str):
                 task_id = params["taskId"]
+            if task_id not in EXECUTABLE_TASK_IDS:
+                task_id = next((name for name in EXECUTABLE_TASK_IDS if enabled.get(name)), None)
             self._execution_state = "running"
             self._execution_task_id = task_id
             self._execution_run_id = run_id
@@ -933,8 +943,12 @@ class BackendApplication:
             "update_prerelease_enable",
             "update_source",
             "mirrorchyan_cdk",
+            "wxpusher_spt",
         )
         result = {key: self._config_value(key, None) for key in keys}
+        # Old injected/config snapshots may not have the newly introduced
+        # credential field; keep the Rust model's string contract stable.
+        result["wxpusher_spt"] = self._config_value("wxpusher_spt", "") or ""
         result["schemaVersion"] = SCHEMA_VERSION
         return result
 
@@ -953,9 +967,26 @@ class BackendApplication:
             "update_prerelease_enable",
             "update_source",
             "mirrorchyan_cdk",
+            "wxpusher_spt",
         }
         self._apply_config_updates({key: value for key, value in values.items() if key in allowed})
         return True
+
+    def notification_test(self, params: Any) -> dict[str, Any]:
+        values = self._require_mapping(params, "notification.test")
+        spt = values.get("spt", self._config_value("wxpusher_spt", ""))
+        if not isinstance(spt, str):
+            raise ValueError("SPT 必须是字符串")
+        normalized_spt = spt.strip()
+        if not normalized_spt:
+            raise ValueError("SPT 未配置")
+        if len(normalized_spt) <= 4 or not normalized_spt.startswith("SPT_"):
+            raise ValueError("SPT 格式无效")
+        try:
+            self.notifications.send_test(normalized_spt)
+        except Exception as error:
+            raise ValueError(redact_text(error, (spt,))) from error
+        return {"accepted": True}
 
     def app_check_update(self) -> dict[str, Any]:
         """Run the existing framework-free update checker synchronously.
@@ -1003,6 +1034,12 @@ class BackendApplication:
             # shutdown remains bounded even if legacy code is blocked in an
             # external API; no interpreter-level hard kill is attempted.
             execution_thread.join(timeout=2.0)
+        close_notifications = getattr(self.notifications, "close", None)
+        if callable(close_notifications):
+            try:
+                close_notifications()
+            except Exception:
+                log.exception("关闭通知服务失败")
         for tool_id in tuple(self._tool_workers):
             try:
                 self.tool_stop({"id": tool_id})
@@ -1045,6 +1082,9 @@ class BackendApplication:
 
     def _run_execution(self, run_id: str) -> None:
         worker = None
+        completed_normally = False
+        failure_message: str | None = None
+        manual_stop = False
         try:
             from core.execution_control import bind_cancel_event
             from tasks.base.script_task_scheme import my_script_task
@@ -1061,17 +1101,33 @@ class BackendApplication:
             if worker_error is not None:
                 from module.my_error.my_error import userStopError
 
-                if not isinstance(worker_error, userStopError):
+                manual_stop = isinstance(worker_error, userStopError)
+                if not manual_stop:
                     raise worker_error
-            if not self._execution_stop.is_set():
+            manual_stop = manual_stop or self._execution_stop.is_set()
+            if not manual_stop:
+                completed_normally = True
                 self.emit("app.notice", {"level": "info", "message": "所有任务已完成"})
         except Exception as error:
-            log.exception("任务执行失败")
-            self.emit("app.notice", {"level": "error", "message": f"任务执行失败：{error}"})
+            manual_stop = manual_stop or self._execution_stop.is_set()
+            if not manual_stop:
+                failure_message = redact_text(
+                    error,
+                    (self._config_value("wxpusher_spt", ""),),
+                )
+                # The sanitized message is sufficient for the sidecar event;
+                # avoid logging an unsanitized traceback that could contain a
+                # credential supplied by a legacy task/plugin.
+                log.error("任务执行失败：%s", failure_message)
+                self.emit("app.notice", {"level": "error", "message": f"任务执行失败：{failure_message}"})
         finally:
             from core.execution_control import bind_cancel_event
 
             bind_cancel_event(None)
+            if completed_normally:
+                self._queue_run_notification(run_id, "final")
+            elif failure_message is not None:
+                self._queue_run_notification(run_id, "failure", failure_message)
             stats_payload = self.stats.finish_run(run_id)
             with self._lock:
                 if self._execution_run_id == run_id:
@@ -1236,6 +1292,8 @@ class BackendApplication:
             return
         if isinstance(current, str) and not isinstance(value, str):
             raise ValueError(f"{key} requires a string")
+        if key == "wxpusher_spt" and value.strip() and not value.strip().startswith("SPT_"):
+            raise ValueError("SPT 格式无效")
         if key == "set_win_position" and value not in WINDOW_POSITIONS:
             raise ValueError(f"{key} contains an unknown position")
 
@@ -1308,6 +1366,7 @@ class BackendApplication:
 
             bindings = (
                 (mediator.mirror_signal, self._on_mirror_signal),
+                (mediator.task_started, self._on_task_started),
                 (mediator.task_completed, self._on_task_completed),
                 (mediator.warning, self._on_core_warning),
                 (mediator.hdr_warning, self._on_hdr_warning),
@@ -1335,16 +1394,53 @@ class BackendApplication:
             },
         )
 
+    def _on_task_started(self, task_id: Any) -> None:
+        if not isinstance(task_id, str) or task_id not in EXECUTABLE_TASK_IDS:
+            return
+        with self._lock:
+            run_id = self._execution_run_id
+            if self._execution_state != "running" or run_id is None:
+                return
+            if self._execution_task_id == task_id:
+                return
+            stats_payload = self.stats.set_current_task(task_id, run_id=run_id)
+            if stats_payload is None:
+                return
+            self._execution_task_id = task_id
+            self.emit("execution.stats", stats_payload)
+            self.emit("execution.status", self._execution_payload())
+
     def _on_task_completed(self, kind: Any, count: Any = 1) -> None:
         run_id = self._execution_run_id
         if run_id is None:
             return
         try:
-            payload = self.stats.record_completion(str(kind), int(count), run_id=run_id)
+            amount = int(count)
+            payload = self.stats.record_completion(str(kind), amount, run_id=run_id)
         except (TypeError, ValueError):
             return
         if payload is not None:
             self.emit("execution.stats", payload)
+            if self._execution_state == "running" and not self._execution_stop.is_set():
+                self._queue_notification("enqueue_completion", str(kind), amount)
+
+    def _queue_run_notification(self, run_id: str, outcome: str, error: str | None = None) -> None:
+        current_run = self.stats.summary().get("currentRun", {})
+        if current_run.get("runId") != run_id:
+            return
+        if outcome == "final":
+            self._queue_notification("enqueue_final", current_run)
+        elif outcome == "failure" and error is not None:
+            self._queue_notification("enqueue_failure", error)
+
+    def _queue_notification(self, operation: str, *args: Any) -> None:
+        spt = self._config_value("wxpusher_spt", "")
+        if not isinstance(spt, str) or not spt.strip():
+            return
+        try:
+            getattr(self.notifications, operation)(spt, *args)
+        except Exception as error:
+            log.warning("任务通知入队失败：%s", redact_text(error, (spt,)))
 
     def _on_core_warning(self, message: Any) -> None:
         self.emit("app.notice", {"level": "warn", "message": str(message)})

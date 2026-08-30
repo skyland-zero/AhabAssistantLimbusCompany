@@ -15,6 +15,17 @@ impl AhabApp {
             self.settings_inputs.cdk =
                 Some(cx.new(move |cx| TextInput::new_with_palette(cdk, placeholder, palette, cx)));
         }
+        if self.settings_inputs.wxpusher_spt.is_none() {
+            let spt = self.settings_page.system.wxpusher_spt.clone();
+            let placeholder = match self.state.settings.language {
+                Language::ZhCn => "WxPusher SPT（可选）",
+                Language::EnUs => "WxPusher SPT (optional)",
+            };
+            self.settings_inputs.wxpusher_spt =
+                Some(cx.new(move |cx| {
+                    TextInput::new_masked_with_palette(spt, placeholder, palette, cx)
+                }));
+        }
         if self.settings_inputs.port.is_none() {
             let value = self.settings_page.system.simulator_port.to_string();
             let input =
@@ -52,6 +63,13 @@ impl AhabApp {
     pub fn save_settings_cdk(&mut self, cx: &mut Context<Self>) {
         if let Some(input) = self.settings_inputs.cdk.as_ref() {
             self.settings_page.set_cdk(input.read(cx).text());
+        }
+        cx.notify();
+    }
+
+    pub fn save_settings_wxpusher_spt(&mut self, cx: &mut Context<Self>) {
+        if let Some(input) = self.settings_inputs.wxpusher_spt.as_ref() {
+            self.settings_page.set_wxpusher_spt(input.read(cx).text());
         }
         cx.notify();
     }
