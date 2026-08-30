@@ -24,37 +24,34 @@ pub fn hotkey_card(
         .flex()
         .flex_col()
         .gap(px(12.))
-        .px_3p5()
-        .pb_3p5()
-        .child(settings_grid(
-            vec![
-                setting_line(
-                    text("启用全局热键", "Enable Global Hotkeys").get(language),
-                    enable,
+        .px_4()
+        .pb_4()
+        .child(settings_list(vec![
+            setting_line(
+                text("启用全局热键", "Enable Global Hotkeys").get(language),
+                enable,
+            ),
+            setting_line(
+                text("启动 / 停止热键", "Start / Stop Hotkey").get(language),
+                hotkey_capture(
+                    app,
+                    cx,
+                    HotkeyTarget::StartStop,
+                    hotkey.startStop.clone(),
+                    language,
                 ),
-                setting_line(
-                    text("启动 / 停止热键", "Start / Stop Hotkey").get(language),
-                    hotkey_capture(
-                        app,
-                        cx,
-                        HotkeyTarget::StartStop,
-                        hotkey.startStop.clone(),
-                        language,
-                    ),
+            ),
+            setting_line(
+                text("暂停 / 继续热键", "Pause / Resume Hotkey").get(language),
+                hotkey_capture(
+                    app,
+                    cx,
+                    HotkeyTarget::PauseResume,
+                    hotkey.pauseResume.clone().unwrap_or_default(),
+                    language,
                 ),
-                setting_line(
-                    text("暂停 / 继续热键", "Pause / Resume Hotkey").get(language),
-                    hotkey_capture(
-                        app,
-                        cx,
-                        HotkeyTarget::PauseResume,
-                        hotkey.pauseResume.clone().unwrap_or_default(),
-                        language,
-                    ),
-                ),
-            ],
-            296.,
-        ));
+            ),
+        ]));
     settings_card(text("全局热键", "Global Hotkeys").get(language), body)
 }
 

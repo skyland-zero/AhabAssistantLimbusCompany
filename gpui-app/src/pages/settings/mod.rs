@@ -18,7 +18,7 @@ use crate::{
     components::{
         ButtonVariant, TextInput, action_button, button, card, is_activation_key, palette_rgb,
         render_rgb as rgb, scroll_area_with_id, select_option, select_popup, select_trigger,
-        settings_grid, svg_icon, switch,
+        svg_icon, switch,
     },
     i18n::paired as text,
     model::{Language, ThemeMode, UpdateSource},
@@ -43,7 +43,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
     let mut stack = div()
         .w_full()
-        .max_w(px(672.))
+        .max_w(px(720.))
         .mx_auto()
         .flex()
         .flex_col()
@@ -106,8 +106,10 @@ fn settings_card(title: &'static str, body: Div) -> Div {
             .flex_col()
             .child(
                 div()
-                    .px_3p5()
-                    .py_2p5()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(palette_rgb(current_render_palette().input))
                     .text_size(px(14.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(TEXT))
@@ -115,9 +117,15 @@ fn settings_card(title: &'static str, body: Div) -> Div {
             )
             .child(body),
     )
-    .px_0()
-    .py(px(24.))
-    .gap(px(44.))
+    .p_0()
+}
+
+fn settings_list(children: impl IntoIterator<Item = Div>) -> Div {
+    let mut list = div().w_full().flex().flex_col().gap(px(12.));
+    for child in children {
+        list = list.child(child);
+    }
+    list
 }
 
 fn setting_row(label: &'static str, detail: &'static str, control: impl IntoElement) -> Div {
@@ -142,7 +150,7 @@ fn setting_row(label: &'static str, detail: &'static str, control: impl IntoElem
         .justify_between()
         .gap_4()
         .child(copy)
-        .child(control)
+        .child(div().flex_none().child(control))
 }
 
 fn setting_line(label: &'static str, control: impl IntoElement) -> Div {
@@ -154,12 +162,13 @@ fn setting_line(label: &'static str, control: impl IntoElement) -> Div {
         .child(
             div()
                 .min_w_0()
+                .flex_1()
                 .text_size(px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(rgb(TEXT))
                 .child(label),
         )
-        .child(control)
+        .child(div().flex_none().child(control))
 }
 
 fn segmented_group() -> Div {

@@ -59,8 +59,8 @@ pub fn notification_card(
         .flex()
         .flex_col()
         .gap(px(12.))
-        .px_3p5()
-        .pb_3p5()
+        .px_4()
+        .pb_4()
         .child(setting_row(
             text("WxPusher SPT", "WxPusher SPT").get(language),
             text(
