@@ -7,11 +7,11 @@
 use gpui::{Context, Div, KeyDownEvent, div, prelude::*, px};
 
 use crate::{
-    app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
     components::style::current_render_palette,
     components::{
-        ButtonVariant, action_button, empty_state, is_activation_key, palette_rgb,
-        render_rgb as rgb, scroll_area_with_id, svg_icon, switch,
+        ButtonVariant, action_button, card, empty_state, is_activation_key, page_root,
+        page_toolbar, palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon, switch,
     },
     i18n::paired as text,
     model::{Language, ThemePack},
@@ -175,11 +175,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .items_center()
         .justify_between()
         .gap_3()
-        .border_b_1()
-        .border_color(rgb(BORDER))
-        .bg(rgb(SURFACE))
-        .px_5()
-        .py(px(10.))
         .child(
             div()
                 .flex()
@@ -200,27 +195,27 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
     let warning = if app.theme_packs.data.hardMirrorActive {
         Some(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .border_b_1()
-                .border_color(rgb(BORDER))
-                .bg(palette_rgb(current_render_palette().warning_light))
-                .px_6()
-                .py_2()
-                .text_size(px(12.))
-                .text_color(palette_rgb(current_render_palette().warning))
-                .child(svg_icon(
-                    ICON_ALERT,
-                    14.,
-                    current_render_palette().warning.rgb_hex(),
-                ))
-                .child(text(
-                    "困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重",
-                    "Hard Mirror Dungeon cycle active: recommend raising high-tier pack weights",
-                )
-                .get(language)),
+            card(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_size(px(12.))
+                    .text_color(palette_rgb(current_render_palette().warning))
+                    .child(svg_icon(
+                        ICON_ALERT,
+                        14.,
+                        current_render_palette().warning.rgb_hex(),
+                    ))
+                    .child(text(
+                        "困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重",
+                        "Hard Mirror Dungeon cycle active: recommend raising high-tier pack weights",
+                    )
+                    .get(language)),
+            )
+            .w_full()
+            .p_3()
+            .bg(palette_rgb(current_render_palette().warning_light)),
         )
     } else {
         None
@@ -243,27 +238,25 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         rows
     };
 
-    let mut root = div()
-        .size_full()
-        .flex()
-        .flex_col()
-        .bg(rgb(BACKGROUND))
-        .child(toolbar);
+    let mut root = page_root().child(page_toolbar(toolbar));
     if let Some(warning) = warning {
         root = root.child(warning);
     }
     if let Some(feedback) = feedback {
         root = root.child(
-            div()
-                .px_6()
-                .py_2()
-                .text_size(px(12.))
-                .text_color(palette_rgb(current_render_palette().success))
-                .child(localized_feedback(&feedback, language)),
+            card(
+                div()
+                    .text_size(px(12.))
+                    .text_color(palette_rgb(current_render_palette().success))
+                    .child(localized_feedback(&feedback, language)),
+            )
+            .w_full()
+            .p_3()
+            .bg(palette_rgb(current_render_palette().success_light)),
         );
     }
     root.child(
-        scroll_area_with_id(app, "theme-packs-scroll", div().w_full().p_6().child(list))
+        scroll_area_with_id(app, "theme-packs-scroll", div().w_full().child(list))
             .flex_1()
             .min_h_0(),
     )

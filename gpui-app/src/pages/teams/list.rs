@@ -136,8 +136,8 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         }
     }
 
-    let mut root = div().flex().flex_col().flex_1().min_h_0();
-    root = root.child(
+    let mut root = page_root().flex_1().min_h_0();
+    root = root.child(page_toolbar(
         div()
             .flex()
             .items_center()
@@ -145,29 +145,25 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .gap_3()
             .flex_wrap()
             .flex_none()
-            .px_4()
-            .py_2()
-            .bg(palette_rgb(current_render_palette().card))
             .child(filter_bar)
             .child(new_team),
-    );
+    ));
     if let Some(feedback) = app.teams.feedback.clone() {
         root = root.child(
-            div()
-                .flex_none()
-                .mx_4()
-                .mt_2()
-                .px_3()
-                .py_2()
-                .rounded_md()
-                .bg(palette_rgb(current_render_palette().success_light))
-                .text_size(px(11.))
-                .text_color(palette_rgb(current_render_palette().success))
-                .child(localized_feedback(&feedback, language)),
+            card(
+                div()
+                    .flex_none()
+                    .text_size(px(11.))
+                    .text_color(palette_rgb(current_render_palette().success))
+                    .child(localized_feedback(&feedback, language)),
+            )
+            .w_full()
+            .p_3()
+            .bg(palette_rgb(current_render_palette().success_light)),
         );
     }
     root.child(
-        scroll_area_with_id(app, "teams-list-scroll", div().p_4().child(cards))
+        scroll_area_with_id(app, "teams-list-scroll", div().w_full().child(cards))
             .flex_1()
             .min_h_0(),
     )

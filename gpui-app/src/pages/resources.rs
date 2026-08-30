@@ -9,11 +9,12 @@ use std::time::Duration;
 use gpui::{Context, Div, div, prelude::*, px, relative};
 
 use crate::{
-    app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    app::{ACCENT, AhabApp, BORDER, TEXT, TEXT_MUTED},
     components::style::GREEN,
     components::{
         BadgeTone, ButtonVariant, action_button, badge, card, empty_state, is_activation_key,
-        loading, render_rgb as rgb, scroll_area_with_id, settings_grid, svg_icon,
+        loading, page_root, page_toolbar, render_rgb as rgb, scroll_area_with_id, settings_grid,
+        svg_icon,
     },
     i18n::paired as text,
     model::{Language, ResourceGroup},
@@ -137,11 +138,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .items_center()
         .justify_between()
         .gap_3()
-        .border_b_1()
-        .border_color(rgb(BORDER))
-        .bg(rgb(SURFACE))
-        .px_5()
-        .py(px(10.))
         .child(toolbar_status)
         .child(
             div()
@@ -157,9 +153,10 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .map(|group| resource_card(group, progress, language))
         .collect();
     let has_groups = !cards.is_empty();
-    // Two resource cards fit in the default window while the 380px minimum
-    // lets the layout fall back to one column at the smallest window size.
-    let grid = settings_grid(cards, 380.).w_full().max_w(px(768.));
+    // Keep the resource cards aligned with the full-width toolbar. The 380px
+    // minimum still lets the layout fall back to one column at the smallest
+    // window size.
+    let grid = settings_grid(cards, 380.).w_full();
 
     let body = if has_groups {
         div().w_full().child(grid)
@@ -178,28 +175,25 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         ))
     };
 
-    let mut content = div().w_full().p_6().child(body);
+    let mut content = div().w_full().flex().flex_col().gap_3().child(body);
     if let Some(feedback) = feedback {
         content = content.child(
-            div()
-                .mt_4()
-                .text_size(px(12.))
-                .text_color(rgb(GREEN))
-                .child(localized_feedback(&feedback, language)),
+            card(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(GREEN))
+                    .child(localized_feedback(&feedback, language)),
+            )
+            .w_full()
+            .p_3(),
         );
     }
 
-    div()
-        .size_full()
-        .flex()
-        .flex_col()
-        .bg(rgb(BACKGROUND))
-        .child(toolbar)
-        .child(
-            scroll_area_with_id(app, "resources-scroll", content)
-                .flex_1()
-                .min_h_0(),
-        )
+    page_root().child(page_toolbar(toolbar)).child(
+        scroll_area_with_id(app, "resources-scroll", content)
+            .flex_1()
+            .min_h_0(),
+    )
 }
 
 fn resource_card(group: ResourceGroup, progress: Option<u8>, language: Language) -> Div {

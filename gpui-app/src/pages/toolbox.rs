@@ -8,11 +8,11 @@
 use gpui::{Context, Div, Svg, div, prelude::*, px, svg};
 
 use crate::{
-    app::{ACCENT, AhabApp, BACKGROUND, TEXT, TEXT_MUTED},
+    app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
     components::style::{DANGER, GREEN, current_render_palette},
     components::{
         BadgeTone, ButtonVariant, action_button, badge, card, empty_state, is_activation_key,
-        palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon,
+        page_root, palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon,
     },
     i18n::{Localized, paired as text},
     model::{Language, ToolId},
@@ -97,39 +97,37 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         ))
     };
 
-    let mut content = div().w_full().p_6().child(body).child(
-        div()
-            .mt_4()
-            .text_size(px(12.))
-            .text_color(rgb(TEXT_MUTED))
-            .child(
+    let mut content = div().w_full().flex().flex_col().gap_3().child(body).child(
+        card(
+            div().text_size(px(12.)).text_color(rgb(TEXT_MUTED)).child(
                 text(
                     "工具请求通过 Python sidecar 执行",
                     "Tool requests are executed by the Python sidecar",
                 )
                 .get(language),
             ),
+        )
+        .w_full()
+        .p_3(),
     );
     if let Some(feedback) = feedback {
         content = content.child(
-            div()
-                .mt_2()
-                .text_size(px(12.))
-                .text_color(rgb(GREEN))
-                .child(localized_feedback(&feedback, language)),
+            card(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(GREEN))
+                    .child(localized_feedback(&feedback, language)),
+            )
+            .w_full()
+            .p_3(),
         );
     }
 
-    div()
-        .size_full()
-        .flex()
-        .flex_col()
-        .bg(rgb(BACKGROUND))
-        .child(
-            scroll_area_with_id(app, "toolbox-scroll", content)
-                .flex_1()
-                .min_h_0(),
-        )
+    page_root().child(
+        scroll_area_with_id(app, "toolbox-scroll", content)
+            .flex_1()
+            .min_h_0(),
+    )
 }
 
 fn tool_card(

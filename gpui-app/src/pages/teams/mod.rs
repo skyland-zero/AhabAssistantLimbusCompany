@@ -23,9 +23,9 @@ use crate::{
     components::style::{ColorToken, current_render_palette},
     components::{
         BadgeTone, ButtonVariant, badge, button, card, empty_state,
-        is_activation_key as team_activation_key, palette_rgb, render_rgb as rgb,
-        render_rgba as rgba, scroll_area_with_id, select_option, select_popup, select_trigger,
-        settings_grid, svg_icon_bytes, switch,
+        is_activation_key as team_activation_key, page_root, page_toolbar, palette_rgb,
+        render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_option, select_popup,
+        select_trigger, settings_grid, svg_icon_bytes, switch,
     },
     i18n::paired as text,
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose},

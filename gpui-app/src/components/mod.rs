@@ -22,7 +22,7 @@ pub use base::*;
 pub use controls::*;
 pub use icon::{svg_icon, svg_icon_bytes};
 pub use keyboard::is_activation_key;
-pub use layout::settings_grid;
+pub use layout::{page_root, page_toolbar, settings_grid};
 pub use overlays::*;
 pub use style::{current_render_palette, palette_rgb, render_rgb, render_rgba};
 pub use text_input::TextInput;

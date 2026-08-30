@@ -106,6 +106,22 @@ pub fn scroll_area_with_handle(
     .track_scroll(&handle)
 }
 
+/// Scroll container whose direct children are tracked individually by GPUI.
+///
+/// `ScrollHandle::scroll_to_top_of_item` indexes only direct children of the
+/// tracked element. Pages that need stable section anchors should use this
+/// constructor instead of wrapping all sections in one extra `Div`.
+pub fn scroll_area_with_handle_children(
+    _app: &mut AhabApp,
+    id: &'static str,
+    children: impl IntoIterator<Item = Div>,
+    handle: gpui::ScrollHandle,
+) -> Stateful<Div> {
+    scroll_area_base_without_child(id, &current_render_palette(), ControlState::default())
+        .children(children)
+        .track_scroll(&handle)
+}
+
 pub fn scroll_area_with_palette(
     id: &'static str,
     child: impl IntoElement,
@@ -121,13 +137,20 @@ fn scroll_area_base(
     palette: &Palette,
     state: ControlState,
 ) -> Stateful<Div> {
+    scroll_area_base_without_child(id, palette, state).child(child)
+}
+
+fn scroll_area_base_without_child(
+    id: &'static str,
+    palette: &Palette,
+    state: ControlState,
+) -> Stateful<Div> {
     let focus_ring = palette.ring;
     let mut area = div()
         .id(id)
         .min_w_0()
         .overflow_y_scroll()
-        .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
-        .child(child);
+        .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
     if state.disabled {
         area = area.opacity(0.5);
     }

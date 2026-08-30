@@ -7,15 +7,15 @@
 
 use std::process::Command;
 
-use gpui::{Context, Div, FontWeight, KeyDownEvent, div, point, prelude::*, px};
+use gpui::{Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, point, prelude::*, px};
 
 use crate::{
-    app::{ACCENT, AhabApp, BACKGROUND, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    app::{ACCENT, AhabApp, BORDER, SURFACE, TEXT, TEXT_MUTED},
     assets,
     components::style::current_render_palette,
     components::{
-        ButtonVariant, button, is_activation_key, palette_rgb, render_rgb as rgb,
-        scroll_area_with_handle,
+        ButtonVariant, button, card, is_activation_key, page_root, palette_rgb, render_rgb as rgb,
+        scroll_area_with_handle_children,
     },
     i18n::{self, Key as I18nKey},
     model::Language,
@@ -45,24 +45,40 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         })
         .collect();
 
+    let toc_indices: Vec<usize> = toc.iter().map(|(index, _)| *index).collect();
+    let active_toc = app.help_active_section.min(toc.len().saturating_sub(1));
     let mut toc_view = div().flex().flex_col().gap_0p5();
-    for (index, title) in toc {
-        let mut link = button(title, ButtonVariant::Ghost)
-            .id(format!("help-toc-{index}"))
-            .w_full()
-            .justify_start()
-            .px_2()
-            .py_1p5()
-            .text_size(px(12.))
-            .text_color(rgb(TEXT_MUTED));
+    for (toc_index, (index, title)) in toc.into_iter().enumerate() {
+        let toc_foreground = if toc_index == active_toc {
+            current_render_palette().secondary_foreground
+        } else {
+            current_render_palette().muted_foreground
+        };
+        let mut link = button(
+            title,
+            if toc_index == active_toc {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Ghost
+            },
+        )
+        .id(format!("help-toc-{toc_index}"))
+        .w_full()
+        .justify_start()
+        .px_2()
+        .py_1p5()
+        .text_size(px(12.))
+        .text_color(palette_rgb(toc_foreground));
         link = link
             .on_click(cx.listener(move |view, _, _, cx| {
+                view.help_active_section = toc_index;
                 view.help_scroll.scroll_to_top_of_item(index);
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
                 if is_activation_key(event) {
                     window.prevent_default();
+                    view.help_active_section = toc_index;
                     view.help_scroll.scroll_to_top_of_item(index);
                     cx.notify();
                 }
@@ -88,6 +104,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.set_language(candidate);
                 view.help_scroll.set_offset(point(px(0.), px(0.)));
+                view.help_active_section = 0;
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
@@ -95,59 +112,84 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     window.prevent_default();
                     view.set_language(candidate);
                     view.help_scroll.set_offset(point(px(0.), px(0.)));
+                    view.help_active_section = 0;
                     cx.notify();
                 }
             }));
         language_switch = language_switch.child(control);
     }
 
-    let directory = div()
-        .w(px(208.))
-        .flex_none()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .border_r_1()
-        .border_color(rgb(BORDER))
-        .p_3()
-        .bg(rgb(SURFACE))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(TEXT_MUTED))
-                        .child(i18n::text(language, I18nKey::Contents)),
-                )
-                .child(language_switch),
-        )
-        .child(toc_view);
+    let directory = card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(TEXT_MUTED))
+                            .child(i18n::text(language, I18nKey::Contents)),
+                    )
+                    .child(language_switch),
+            )
+            .child(toc_view),
+    )
+    .w(px(208.))
+    .h_full()
+    .flex_none()
+    .p_3();
 
-    let mut document = div().w_full().flex().flex_col().gap_2().px_8().py_6();
-    for block in blocks {
-        document = document.child(render_block(block, cx));
-    }
+    let document_children: Vec<Div> = blocks
+        .into_iter()
+        .map(|block| render_block(block, cx))
+        .collect();
 
     let scroll_handle = app.help_scroll.clone();
-    let document = scroll_area_with_handle(app, HELP_SCROLL_ID, document, scroll_handle)
-        .w_full()
-        .max_w(px(672.))
-        .mx_auto()
-        .scrollbar_width(px(6.))
-        .flex_1()
-        .min_w_0();
+    let mut document =
+        scroll_area_with_handle_children(app, HELP_SCROLL_ID, document_children, scroll_handle)
+            .w_full()
+            .max_w(px(672.))
+            .mx_auto()
+            .scrollbar_width(px(6.))
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .px_8()
+            .py_6()
+            .rounded_lg()
+            .bg(palette_rgb(current_render_palette().card));
+    let scroll_handle = app.help_scroll.clone();
+    document =
+        document.on_scroll_wheel(cx.listener(move |_view, _: &ScrollWheelEvent, window, cx| {
+            let scroll_handle = scroll_handle.clone();
+            let toc_indices = toc_indices.clone();
+            cx.on_next_frame(window, move |view, _window, cx| {
+                let active = active_help_toc(scroll_handle.top_item(), &toc_indices);
+                if view.help_active_section != active {
+                    view.help_active_section = active;
+                    cx.notify();
+                }
+            });
+        }));
 
-    div()
-        .size_full()
-        .flex()
-        .bg(rgb(BACKGROUND))
-        .child(directory)
-        .child(document)
+    page_root().flex_row().child(directory).child(document)
+}
+
+fn active_help_toc(top_item: usize, toc_indices: &[usize]) -> usize {
+    toc_indices
+        .iter()
+        .rposition(|index| *index <= top_item)
+        .unwrap_or(0)
 }
 
 fn render_block(block: HelpBlock, cx: &mut Context<AhabApp>) -> Div {
@@ -312,5 +354,13 @@ mod tests {
         );
         assert_eq!(heading("### Details"), Some((3, "Details")));
         assert_eq!(ordered_item("12. item"), Some("12.  item".into()));
+    }
+
+    #[test]
+    fn help_scroll_item_maps_to_the_latest_visible_toc_entry() {
+        let toc = [0, 4, 9];
+        assert_eq!(super::active_help_toc(0, &toc), 0);
+        assert_eq!(super::active_help_toc(7, &toc), 1);
+        assert_eq!(super::active_help_toc(99, &toc), 2);
     }
 }
