@@ -46,6 +46,7 @@ pub(super) fn logs_card(app: &AhabApp) -> Div {
     div()
         .flex_1()
         .min_h_0()
+        .h_full()
         .when_some(logs, |this, logs| this.child(logs))
 }
 
@@ -143,6 +144,8 @@ impl Render for LogPanelView {
                         .py_2(),
                 ),
         )
+        .w_full()
+        .h_full()
     }
 }
 
