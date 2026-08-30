@@ -57,7 +57,9 @@ fn nav_item(page: Page, active: bool, cx: &mut Context<AhabApp>) -> impl IntoEle
         .rounded_md()
         .cursor_pointer()
         .hover(|style| style.bg(rgb(SURFACE_HOVER)))
-        .on_click(cx.listener(move |view, _, _, cx| view.select_page(page, cx)));
+        .on_click(cx.listener(move |view, _, window, cx| {
+            view.select_page(page, window, cx)
+        }));
 
     if active {
         item = item.bg(rgb(0x354052)).text_color(rgb(TEXT));

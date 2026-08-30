@@ -13,6 +13,7 @@ pub(super) fn set_windows_card(
     let expanded = app.home.is_expanded(FixedTaskId::SetWindows);
     let body = super::task_details::set_windows_details(app, cx, busy);
     task_card(
+        app,
         cx,
         TaskCardSpec {
             task: FixedTaskId::SetWindows,
@@ -76,6 +77,7 @@ pub(super) fn daily_card(
     ];
     let body = super::task_details::daily_details(app, cx, busy);
     task_card_with_toggle(
+        app,
         cx,
         busy,
         TaskCardSpec {
@@ -145,6 +147,7 @@ pub(super) fn reward_card(
         mode_select,
     ));
     task_card_with_toggle(
+        app,
         cx,
         busy,
         TaskCardSpec {
@@ -176,6 +179,7 @@ pub(super) fn enkephalin_card(
     let config = app.home.tasks.buy_enkephalin.clone();
     let body = super::task_details::enkephalin_details(app, cx, busy);
     task_card_with_toggle(
+        app,
         cx,
         busy,
         TaskCardSpec {
@@ -394,6 +398,7 @@ pub(super) fn mirror_card(
             TaskOptionsTab::Advanced => advanced,
         });
     task_card_with_toggle(
+        app,
         cx,
         busy,
         TaskCardSpec {
@@ -439,6 +444,7 @@ pub(super) fn ahab_card(
     let enabled = app.home.tasks.enabledTasks.resonate_with_Ahab;
     let language = app.state.settings.language;
     task_card_with_toggle(
+        app,
         cx,
         busy,
         TaskCardSpec {

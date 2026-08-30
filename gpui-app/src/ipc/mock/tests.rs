@@ -116,6 +116,23 @@ fn device_starts_disconnected_until_explicit_connect() {
 }
 
 #[test]
+fn preview_control_is_idempotent_and_reports_connection_state() {
+    let client = MockClient::default();
+    let stopped = client.call(method::PREVIEW_SET_ENABLED, Some(json!({"enabled": false})));
+    assert_eq!(
+        stopped.result.unwrap(),
+        json!({"enabled": false, "running": false})
+    );
+
+    client.call(method::DEVICE_CONNECT, Some(json!({"id": "pc:limbus"})));
+    let running = client.call(method::PREVIEW_SET_ENABLED, Some(json!({"enabled": true})));
+    assert_eq!(
+        running.result.unwrap(),
+        json!({"enabled": true, "running": true})
+    );
+}
+
+#[test]
 fn cloned_clients_observe_one_backend_state() {
     let writer = MockClient::default();
     let reader = writer.shared();

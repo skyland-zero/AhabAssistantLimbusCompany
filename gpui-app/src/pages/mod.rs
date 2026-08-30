@@ -6,6 +6,8 @@ mod teams;
 mod theme_packs;
 mod toolbox;
 
+pub(crate) use home::HomeViewRefs;
+
 use gpui::{Context, Div};
 
 use crate::app::{AhabApp, Page};

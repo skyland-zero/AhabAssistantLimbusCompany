@@ -257,6 +257,70 @@ def test_device_events_control_continuous_preview_lifecycle() -> None:
     assert preview.close_count == 1
 
 
+def test_preview_control_is_idempotent_and_gates_connected_devices() -> None:
+    preview = FakePreviewCapture()
+    app = make_application(preview)
+
+    assert app.preview_set_enabled({"enabled": False}) == {
+        "enabled": False,
+        "running": False,
+    }
+    assert app.preview_set_enabled({"enabled": False}) == {
+        "enabled": False,
+        "running": False,
+    }
+    app._on_device_event(
+        "device.status",
+        {"deviceId": "pc:limbus", "status": "connected"},
+    )
+    assert preview.started == []
+    assert preview.stop_count == 1
+
+    assert app.preview_set_enabled({"enabled": True}) == {
+        "enabled": True,
+        "running": True,
+    }
+    assert app.preview_set_enabled({"enabled": True}) == {
+        "enabled": True,
+        "running": True,
+    }
+    assert preview.started == ["pc:limbus"]
+
+    app._on_device_event(
+        "device.status",
+        {"deviceId": None, "status": "disconnected"},
+    )
+    assert preview.stop_count == 2
+    app.close()
+
+
+def test_dispatcher_validates_preview_control_params() -> None:
+    app = make_application(FakePreviewCapture())
+    dispatcher = RpcDispatcher(application=app, version="test")
+
+    response = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "preview.setEnabled",
+            "params": {"enabled": False},
+        }
+    )
+    invalid = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "preview.setEnabled",
+            "params": {"enabled": "no"},
+        }
+    )
+
+    assert response["result"] == {"enabled": False, "running": False}
+    assert invalid["error"]["code"] == -32602
+    assert RpcDispatcher.is_mutating("preview.setEnabled")
+    app.close()
+
+
 def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     app = make_application()
     dispatcher = RpcDispatcher(application=app, version="test")

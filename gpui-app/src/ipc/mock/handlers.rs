@@ -315,6 +315,21 @@ impl MockState {
                 }
                 Ok(json!({"accepted": true}))
             }
+            method::PREVIEW_SET_ENABLED => {
+                let value: Value =
+                    Self::params(request.params, "preview.setEnabled requires {enabled}")?;
+                let enabled = value
+                    .get("enabled")
+                    .and_then(Value::as_bool)
+                    .ok_or_else(|| {
+                        RpcError::invalid_params("preview.setEnabled.enabled must be a boolean")
+                    })?;
+                self.preview_enabled = enabled;
+                Ok(json!({
+                    "enabled": enabled,
+                    "running": enabled && self.device_status == ConnectionStatus::Connected
+                }))
+            }
             method::DEVICE_LIST => Ok(serde_json::to_value(&self.devices).unwrap()),
             method::DEVICE_CONNECT => {
                 let value: Value = Self::params(request.params, "device.connect requires {id}")?;

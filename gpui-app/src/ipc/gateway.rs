@@ -97,6 +97,10 @@ impl RpcGateway {
     pub fn take_completions(&self) -> Vec<RpcCompletion> {
         self.client.take_completions()
     }
+
+    pub async fn wait_for_activity(&self) -> bool {
+        self.client.activity().wait().await
+    }
 }
 
 #[cfg(test)]

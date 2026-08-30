@@ -1,110 +1,149 @@
+use std::collections::VecDeque;
+
+use gpui::{Context, Render, ScrollHandle, WeakEntity, Window};
+
+use crate::{app::AhabApp, model::Language};
+
 use super::*;
 
-pub(super) fn logs_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
-    let scroll_handle = app.home_log_scroll.clone();
-    let language = app.state.settings.language;
-    let visible_logs: Vec<LogEntryPayload> = app
-        .home
-        .logs
-        .iter()
-        .rev()
-        .take(300)
-        .cloned()
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    let log_rows: Vec<_> = visible_logs
-        .iter()
-        .cloned()
-        .map(|entry| {
-            let level_color = match entry.level {
-                LogLevel::Error => 0xe7000b,
-                LogLevel::Warn => 0xd6791d,
-                LogLevel::Debug | LogLevel::Info => TEXT_MUTED,
-            };
-            div()
-                .w_full()
-                .flex()
-                .items_start()
-                .gap_2()
-                .py(px(2.0))
-                .font_family("monospace")
-                .text_size(px(11.0))
-                .child(
-                    div()
-                        .w(px(62.0))
-                        .flex_none()
-                        .text_color(rgb(TEXT_MUTED))
-                        .child(format_log_time(entry.ts)),
-                )
-                .child(log_marker(entry.level, level_color))
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_color(rgb(level_color))
-                        .child(entry.message),
-                )
-        })
-        .collect();
-    let mut clear_logs = button("", ButtonVariant::Ghost)
-        .id("clear-logs")
-        .h(px(24.0))
-        .px(px(8.0))
-        .gap(px(4.0))
-        .text_size(px(12.0))
-        .text_color(rgb(TEXT_MUTED))
-        .child(action_icon(ICON_TRASH, 14., TEXT_MUTED))
-        .child(text("清空", "Clear").get(language));
-    clear_logs = clear_logs.on_click(cx.listener(|view, _, _, cx| {
-        view.home.clear_logs();
-        cx.stop_propagation();
-        cx.notify();
-    }));
-    let logs_header = div()
-        .h(px(32.0))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_between()
-        .px(px(10.0))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(super::panel::panel_heading(
-                    ICON_SCROLL_TEXT,
-                    text("运行日志", "Execution Logs").get(language),
-                ))
-                .child(badge(
-                    visible_logs_count(app).to_string(),
-                    BadgeTone::Neutral,
-                )),
-        )
-        .child(div().flex().items_center().gap_1().child(clear_logs));
-    super::panel::panel_card(
-        div()
+pub(super) struct LogPanelView {
+    root: WeakEntity<AhabApp>,
+    logs: VecDeque<LogEntryPayload>,
+    language: Language,
+    revision: u64,
+    scroll_handle: ScrollHandle,
+}
+
+impl LogPanelView {
+    pub(super) fn new(root: WeakEntity<AhabApp>) -> Self {
+        Self {
+            root,
+            logs: VecDeque::new(),
+            language: Language::ZhCn,
+            revision: u64::MAX,
+            scroll_handle: ScrollHandle::new(),
+        }
+    }
+
+    pub(super) fn sync_snapshot(
+        &mut self,
+        logs: VecDeque<LogEntryPayload>,
+        revision: u64,
+        language: Language,
+    ) {
+        self.language = language;
+        if self.revision == revision {
+            return;
+        }
+        self.logs = logs;
+        self.revision = revision;
+        self.scroll_handle.scroll_to_bottom();
+    }
+}
+
+pub(super) fn logs_card(app: &AhabApp) -> Div {
+    let logs = app.home_views.as_ref().map(|views| views.logs_view());
+    div()
+        .flex_1()
+        .min_h_0()
+        .when_some(logs, |this, logs| this.child(logs))
+}
+
+impl Render for LogPanelView {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let language = self.language;
+        let log_rows: Vec<_> = self
+            .logs
+            .iter()
+            .cloned()
+            .map(|entry| {
+                let level_color = match entry.level {
+                    LogLevel::Error => 0xe7000b,
+                    LogLevel::Warn => 0xd6791d,
+                    LogLevel::Debug | LogLevel::Info => TEXT_MUTED,
+                };
+                div()
+                    .w_full()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .py(px(2.0))
+                    .font_family("monospace")
+                    .text_size(px(11.0))
+                    .child(
+                        div()
+                            .w(px(62.0))
+                            .flex_none()
+                            .text_color(rgb(TEXT_MUTED))
+                            .child(format_log_time(entry.ts)),
+                    )
+                    .child(log_marker(entry.level, level_color))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_color(rgb(level_color))
+                            .child(entry.message),
+                    )
+            })
+            .collect();
+
+        let root = self.root.clone();
+        let mut clear_logs = button("", ButtonVariant::Ghost)
+            .id("clear-logs")
+            .h(px(24.0))
+            .px(px(8.0))
+            .gap(px(4.0))
+            .text_size(px(12.0))
+            .text_color(rgb(TEXT_MUTED))
+            .child(action_icon(ICON_TRASH, 14., TEXT_MUTED))
+            .child(text("清空", "Clear").get(language));
+        clear_logs = clear_logs.on_click(move |_, _, cx| {
+            if let Some(root) = root.upgrade() {
+                root.update(cx, |view, cx| {
+                    view.home.clear_logs();
+                    cx.stop_propagation();
+                    cx.notify();
+                });
+            }
+        });
+
+        let logs_header = div()
+            .h(px(32.0))
+            .flex_none()
             .flex()
-            .flex_col()
-            .min_h_0()
-            .h_full()
-            .child(logs_header)
+            .items_center()
+            .justify_between()
+            .px(px(10.0))
             .child(
-                scroll_area_with_handle(
-                    app,
-                    "home-log-scroll",
-                    div().children(log_rows),
-                    scroll_handle,
-                )
-                .flex_1()
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(super::panel::panel_heading(
+                        ICON_SCROLL_TEXT,
+                        text("运行日志", "Execution Logs").get(language),
+                    ))
+                    .child(badge(self.logs.len().to_string(), BadgeTone::Neutral)),
+            )
+            .child(div().flex().items_center().gap_1().child(clear_logs));
+
+        super::panel::panel_card(
+            div()
+                .flex()
+                .flex_col()
                 .min_h_0()
-                .px_3()
-                .py_2(),
-            ),
-    )
-    .flex_1()
-    .min_h_0()
+                .h_full()
+                .child(logs_header)
+                .child(
+                    scroll_area(div().children(log_rows))
+                        .track_scroll(&self.scroll_handle)
+                        .flex_1()
+                        .min_h_0()
+                        .px_3()
+                        .py_2(),
+                ),
+        )
+    }
 }
 
 fn log_marker(level: LogLevel, color: u32) -> gpui::AnyElement {
@@ -136,8 +175,4 @@ fn format_log_time(timestamp: i64) -> String {
     let minutes = (seconds / 60) % 60;
     let seconds = seconds % 60;
     format!("{hours:02}:{minutes:02}:{seconds:02}")
-}
-
-fn visible_logs_count(app: &AhabApp) -> usize {
-    app.home.logs.len().min(300)
 }

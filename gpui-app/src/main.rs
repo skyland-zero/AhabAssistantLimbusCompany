@@ -101,7 +101,8 @@ fn main() {
 
                 cx.new(|cx| {
                     let mut app = AhabApp::new();
-                    app.start_event_pump(cx);
+                    app.attach_window(window, cx);
+                    app.start_event_pump(window, cx);
                     cx.on_next_frame(window, |view, _window, cx| {
                         view.start_backend_bootstrap(cx);
                     });

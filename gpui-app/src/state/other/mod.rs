@@ -3,7 +3,7 @@ mod settings;
 mod theme_packs;
 mod toolbox;
 
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 
 use serde_json::json;
 
@@ -24,7 +24,8 @@ pub struct ThemePacksState {
     pub sort_by_weight: bool,
     pub feedback: Option<String>,
     pub(crate) confirmed_packs: Vec<ThemePack>,
-    pub(crate) persist_due: Option<Instant>,
+    pub(crate) persist_generation: u64,
+    pub(crate) pending_persist_generation: Option<u64>,
 }
 
 pub struct ToolboxState {
@@ -123,6 +124,27 @@ mod tests {
         );
         state.set_all_enabled(false);
         assert_eq!(state.total_weight(), 0);
+    }
+
+    #[test]
+    fn sidecar_theme_persistence_uses_latest_generation_once() {
+        let mut state =
+            ThemePacksState::with_client(crate::ipc::BackendClient::unavailable("test backend"));
+        state.data.packs.push(crate::model::ThemePack {
+            id: "pk-1".to_owned(),
+            name: "Test pack".to_owned(),
+            weight: 1,
+            enabled: true,
+            tier: "T1".to_owned(),
+        });
+        state.toggle_enabled("pk-1");
+        let generation = state
+            .pending_persist_generation()
+            .expect("sidecar edits should schedule persistence");
+
+        assert!(!state.flush_debounced(generation.wrapping_sub(1)));
+        assert!(state.flush_debounced(generation));
+        assert!(!state.flush_debounced(generation));
     }
 
     #[test]

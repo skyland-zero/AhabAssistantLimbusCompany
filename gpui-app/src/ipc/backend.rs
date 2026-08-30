@@ -8,29 +8,42 @@ use serde_json::Value;
 
 use super::{
     EventEnvelope, MockClient, RpcClient, RpcCompletion, RpcError, RpcRequest, RpcResponse,
-    websocket::WebSocketClient,
+    TransportActivity, websocket::WebSocketClient,
 };
 
 #[derive(Clone)]
 pub struct SidecarSupervisor {
     client: Arc<RwLock<WebSocketClient>>,
+    activity: TransportActivity,
     restartable: bool,
     restarting: Arc<AtomicBool>,
 }
 
 impl SidecarSupervisor {
     fn try_new() -> Result<Self, String> {
+        Self::try_new_with_activity(TransportActivity::new())
+    }
+
+    fn try_new_with_activity(activity: TransportActivity) -> Result<Self, String> {
         let restartable = std::env::var_os("AHAB_BACKEND_URL").is_none();
         Ok(Self {
-            client: Arc::new(RwLock::new(WebSocketClient::try_new()?)),
+            client: Arc::new(RwLock::new(WebSocketClient::try_new_with_activity(
+                activity.clone(),
+            )?)),
+            activity,
             restartable,
             restarting: Arc::new(AtomicBool::new(false)),
         })
     }
 
     fn unavailable(error: impl Into<String>) -> Self {
+        let activity = TransportActivity::new();
         Self {
-            client: Arc::new(RwLock::new(WebSocketClient::failed(error))),
+            client: Arc::new(RwLock::new(WebSocketClient::failed_with_activity(
+                error,
+                activity.clone(),
+            ))),
+            activity,
             restartable: std::env::var_os("AHAB_BACKEND_URL").is_none(),
             restarting: Arc::new(AtomicBool::new(false)),
         }
@@ -58,15 +71,17 @@ impl SidecarSupervisor {
         if self.restarting.swap(true, Ordering::AcqRel) {
             return Err("Python sidecar 已在重启".to_owned());
         }
-        let result = WebSocketClient::try_new().and_then(|replacement| {
-            let mut client = self
-                .client
-                .write()
-                .map_err(|_| "sidecar supervisor lock poisoned".to_owned())?;
-            *client = replacement;
-            Ok(())
-        });
+        let result =
+            WebSocketClient::try_new_with_activity(self.activity.clone()).and_then(|replacement| {
+                let mut client = self
+                    .client
+                    .write()
+                    .map_err(|_| "sidecar supervisor lock poisoned".to_owned())?;
+                *client = replacement;
+                Ok(())
+            });
         self.restarting.store(false, Ordering::Release);
+        self.activity.notify();
         result
     }
 
@@ -113,6 +128,10 @@ impl SidecarSupervisor {
 
     fn take_completions(&self) -> Vec<RpcCompletion> {
         self.with_client(Vec::new, WebSocketClient::take_completions)
+    }
+
+    fn activity(&self) -> TransportActivity {
+        self.activity.clone()
     }
 }
 
@@ -167,7 +186,9 @@ impl BackendClient {
                 supervisor.restart()?;
                 Ok(BackendAttach::Reused)
             }
-            Self::Sidecar(_) => Ok(BackendAttach::New(Self::try_sidecar()?)),
+            Self::Sidecar(supervisor) => Ok(BackendAttach::New(Self::Sidecar(
+                SidecarSupervisor::try_new_with_activity(supervisor.activity())?,
+            ))),
         }
     }
 
@@ -227,6 +248,13 @@ impl BackendClient {
             Self::Sidecar(supervisor) => supervisor.take_completions(),
         }
     }
+
+    pub(crate) fn activity(&self) -> TransportActivity {
+        match self {
+            Self::Mock(_) => TransportActivity::new(),
+            Self::Sidecar(supervisor) => supervisor.activity(),
+        }
+    }
 }
 
 impl From<MockClient> for BackendClient {
@@ -237,8 +265,10 @@ impl From<MockClient> for BackendClient {
 
 impl From<WebSocketClient> for BackendClient {
     fn from(client: WebSocketClient) -> Self {
+        let activity = client.activity();
         Self::Sidecar(SidecarSupervisor {
             client: Arc::new(RwLock::new(client)),
+            activity,
             restartable: false,
             restarting: Arc::new(AtomicBool::new(false)),
         })

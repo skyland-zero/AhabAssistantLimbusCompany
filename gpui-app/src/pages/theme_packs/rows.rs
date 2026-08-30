@@ -24,6 +24,7 @@ pub(super) fn pack_row(
     let id_for_click = id.clone();
     toggle = toggle.on_click(cx.listener(move |view, _, _, cx| {
         view.theme_packs.toggle_enabled(&id_for_click);
+        view.schedule_theme_pack_persist(cx);
         cx.notify();
     }));
     let id_for_key = id.clone();
@@ -31,6 +32,7 @@ pub(super) fn pack_row(
         if is_activation_key(event) {
             window.prevent_default();
             view.theme_packs.toggle_enabled(&id_for_key);
+            view.schedule_theme_pack_persist(cx);
             cx.notify();
         }
     }));
@@ -47,6 +49,7 @@ pub(super) fn pack_row(
         weight_slider = weight_slider
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.theme_packs.cycle_weight(&id_for_slider);
+                view.schedule_theme_pack_persist(cx);
                 cx.notify();
             }))
             .on_drag(ThemeWeightDragGhost, |_, _, _, cx| {
@@ -58,6 +61,7 @@ pub(super) fn pack_row(
                     let position = (event.event.position.x - event.bounds.left()).as_f32();
                     let weight = slider_weight_from_position(position, width);
                     view.theme_packs.set_weight(&id_for_drag, weight);
+                    view.schedule_theme_pack_persist(cx);
                     cx.notify();
                 },
             ))
@@ -72,6 +76,7 @@ pub(super) fn pack_row(
                 if let Some(delta) = delta {
                     window.prevent_default();
                     view.theme_packs.adjust_weight(&id_for_key, delta);
+                    view.schedule_theme_pack_persist(cx);
                     cx.notify();
                 }
             }));

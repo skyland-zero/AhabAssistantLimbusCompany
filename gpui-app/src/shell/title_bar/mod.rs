@@ -144,8 +144,8 @@ pub fn title_bar(
             .bg(rgb(palette.secondary.rgb_hex()))
             .text_color(rgb(palette.brand.rgb_hex()));
     }
-    settings_button = settings_button.on_click(cx.listener(|view, _, _, cx| {
-        view.select_page(Page::Settings, cx);
+    settings_button = settings_button.on_click(cx.listener(|view, _, window, cx| {
+        view.select_page(Page::Settings, window, cx);
     }));
 
     let utilities = div()
@@ -255,8 +255,8 @@ fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElemen
         .cursor_pointer()
         .focus_visible(|style| style.border_1().border_color(rgb(palette.ring.rgb_hex())))
         .active(|style| style.bg(rgb(palette.secondary.rgb_hex())))
-        .on_click(cx.listener(move |view, _, _, cx| {
-            view.select_page(page, cx);
+        .on_click(cx.listener(move |view, _, window, cx| {
+            view.select_page(page, window, cx);
         }))
         .child(icon(page_icon(page), 13.).text_color(rgb(if active {
             palette.brand_foreground.rgb_hex()

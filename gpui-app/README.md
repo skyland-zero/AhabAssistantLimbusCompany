@@ -47,7 +47,7 @@ $env:AHAB_BACKEND_URL = "ws://127.0.0.1:9000"
 $env:AHAB_BACKEND_TOKEN = "your-token"
 ```
 
-真实 sidecar 已提供配置、任务执行、设备、队伍、主题包、资源同步、工具、截图、热键、系统设置和更新检查等 RPC；设备标识继续兼容 `pc:limbus`、`mumu:0` 以及 `adb:<serial>`。
+真实 sidecar 已提供配置、任务执行、设备、队伍、主题包、资源同步、工具、截图、热键、系统设置和更新检查等 RPC；实时预览通过 `preview.setEnabled` 按需启停，设备标识继续兼容 `pc:limbus`、`mumu:0` 以及 `adb:<serial>`。GPUI 仅在首页右栏展开且窗口未最小化时接收预览帧，后台但可见时保持预览。
 
 ## 固定尺寸视觉回归
 
@@ -75,7 +75,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps
 - 页面旧 token 会通过 render-time Palette 跟随浅色/深色和强调色；全局 Toast、日志复制和自动滚动已接入。
 - 使用 `Ctrl-Q` 退出。
 
-Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、连接设备后的持续实时预览、资源同步进度和任务镜牢进度已纳入事件泵。实时预览默认以 5 FPS、最长边 720 像素的 JPEG 推送，并在断开设备后清理画面。
+Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、连接设备后的持续实时预览、资源同步进度和任务镜牢进度已纳入事件泵。实时预览默认以 1 FPS、最长边 540 像素的 JPEG 推送，并在断开设备后清理画面；主控台把流光、统计、实时画面和日志拆成独立子视图，只刷新收到事件的子树。
 
 ## 测量建议
 

@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use gpui::{ScrollHandle, Subscription};
 
-use gpui::{Image, RenderImage, ScrollHandle};
+use self::preview::PreviewControlState;
 
 use crate::{
     app_inputs::{SettingsInputs, TeamInputs},
     i18n::{self, Key as I18nKey},
+    pages::HomeViewRefs,
     shell,
     state::{
         AppState, HomeState, ResourcesState, SettingsPageState, TeamsState, ThemePacksState,
@@ -15,7 +16,9 @@ use crate::{
 mod device;
 mod interaction;
 mod lifecycle;
+mod preview;
 mod render;
+mod scheduling;
 mod settings;
 mod stats;
 mod team_editor;
@@ -173,6 +176,23 @@ impl BackendOperation {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct HomeInvalidation {
+    pub(crate) root: bool,
+    pub(crate) stats: bool,
+    pub(crate) preview: bool,
+    pub(crate) logs: bool,
+}
+
+impl HomeInvalidation {
+    pub(crate) fn merge(&mut self, other: Self) {
+        self.root |= other.root;
+        self.stats |= other.stats;
+        self.preview |= other.preview;
+        self.logs |= other.logs;
+    }
+}
+
 /// Root UI state. Home owns its task, execution, device, and log state so the
 /// page can evolve without scattering business state through render methods.
 pub struct AhabApp {
@@ -188,20 +208,18 @@ pub struct AhabApp {
     pub settings_inputs: SettingsInputs,
     visual_state: Option<VisualState>,
     pub help_scroll: ScrollHandle,
-    pub home_log_scroll: ScrollHandle,
     pub toast: Option<shell::Toast>,
     toast_generation: u64,
-    home_log_revision_seen: u64,
-    pub(crate) screenshot_image_source: Option<Arc<Image>>,
-    pub(crate) screenshot_render_image: Option<Arc<RenderImage>>,
-    pub(crate) screenshot_image_revision: u64,
-    pub(crate) screenshot_pending_image_source: Option<Arc<Image>>,
-    pub(crate) screenshot_pending_render_image: Option<Arc<RenderImage>>,
-    pub(crate) screenshot_pending_image_revision: Option<u64>,
+    pub(crate) home_views: Option<HomeViewRefs>,
     pub(crate) backend_status: BackendStatus,
     pub(crate) backend_operation: BackendOperation,
     pub(crate) backend_attempt_id: u64,
     pub(crate) backend_epoch: u64,
+    pub(crate) stop_timeout_generation: u64,
+    pub(crate) theme_persist_timer_generation: Option<u64>,
+    pub(crate) preview_control: PreviewControlState,
+    pub(crate) window_minimized: bool,
+    pub(crate) window_subscriptions: Vec<Subscription>,
 }
 
 /// Deterministic transient states used by the visual-regression harness. These

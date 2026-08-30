@@ -1,15 +1,16 @@
-use gpui::Context;
+use gpui::{Context, Window};
 
 use super::{AhabApp, Page};
 use crate::shell;
 
 impl AhabApp {
-    pub fn select_page(&mut self, page: Page, cx: &mut Context<Self>) {
+    pub fn select_page(&mut self, page: Page, window: &mut Window, cx: &mut Context<Self>) {
         self.home.close_select();
         self.teams.close_select();
         self.settings_page.close_select();
         self.home.set_after_completion_open(false);
         self.current_page = page;
+        self.reconcile_preview(Some(window), cx);
         cx.notify();
     }
 

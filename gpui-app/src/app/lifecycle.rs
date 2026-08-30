@@ -50,25 +50,6 @@ fn localized(language: Language, zh: &'static str, en: &'static str) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn automatic_retry_delays_use_exponential_backoff() {
-        assert_eq!(retry_delay(1), Duration::from_secs(1));
-        assert_eq!(retry_delay(2), Duration::from_secs(2));
-        assert_eq!(retry_delay(3), Duration::from_secs(4));
-        assert_eq!(retry_delay(0), Duration::from_secs(4));
-    }
-
-    #[test]
-    fn retry_budget_allows_three_retries_after_the_initial_attempt() {
-        assert_eq!(MAX_AUTO_RETRIES, 3);
-        assert_eq!(usize::from(MAX_AUTO_RETRIES) + 1, 4);
-    }
-}
-
 fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
     if let Ok(theme) = std::env::var("AHAB_VISUAL_THEME") {
         settings.themeMode = match theme.to_ascii_lowercase().as_str() {
@@ -249,7 +230,12 @@ impl AhabApp {
         self.home.append_local_log(level, message);
     }
 
-    fn log_backend_localized(&mut self, level: LogLevel, zh: &'static str, en: &'static str) {
+    pub(crate) fn log_backend_localized(
+        &mut self,
+        level: LogLevel,
+        zh: &'static str,
+        en: &'static str,
+    ) {
         let message = localized(self.state.settings.language, zh, en);
         self.log_backend(level, message);
     }
@@ -327,6 +313,8 @@ impl AhabApp {
         };
         self.backend_status.retry_no = None;
         self.backend_status.last_error = None;
+        self.preview_control.backend_changed();
+        self.reconcile_preview_without_window(cx);
 
         match reason {
             BackendStartReason::Initial => self.log_backend_localized(
@@ -373,6 +361,7 @@ impl AhabApp {
                             view.backend_status.retry_no = None;
                             view.backend_status.last_error = None;
                             view.backend_epoch = view.backend_epoch.wrapping_add(1);
+                            view.preview_control.backend_changed();
                             if recovery {
                                 view.home.reset_after_sidecar_restart();
                             }
@@ -382,6 +371,7 @@ impl AhabApp {
                                 "Python backend is ready; loading console data",
                             );
                             view.start_backend_hydration(cx);
+                            view.reconcile_preview_without_window(cx);
                             cx.notify();
                         });
                         break;
@@ -498,17 +488,6 @@ impl AhabApp {
             return true;
         }
 
-        if self.home.stop_timed_out() {
-            self.home.mark_stop_timeout_handled();
-            self.log_backend_localized(
-                LogLevel::Warn,
-                "任务停止超时，开始恢复 Python 后端",
-                "Task stop timed out; recovering the Python backend",
-            );
-            self.start_backend_connection(cx, BackendStartReason::Reconnect);
-            return true;
-        }
-
         false
     }
 
@@ -547,20 +526,18 @@ impl AhabApp {
             settings_inputs: SettingsInputs::default(),
             visual_state,
             help_scroll: gpui::ScrollHandle::new(),
-            home_log_scroll: gpui::ScrollHandle::new(),
             toast: None,
             toast_generation: 0,
-            home_log_revision_seen: 0,
-            screenshot_image_source: None,
-            screenshot_render_image: None,
-            screenshot_image_revision: u64::MAX,
-            screenshot_pending_image_source: None,
-            screenshot_pending_render_image: None,
-            screenshot_pending_image_revision: None,
+            home_views: None,
             backend_status,
             backend_operation: BackendOperation::Idle,
             backend_attempt_id: 0,
             backend_epoch: 0,
+            stop_timeout_generation: 0,
+            theme_persist_timer_generation: None,
+            preview_control: Default::default(),
+            window_minimized: false,
+            window_subscriptions: Vec::new(),
         };
 
         if app.backend_status.phase == BackendPhase::WaitingForFirstFrame {
@@ -646,5 +623,24 @@ impl AhabApp {
                 self.help_scroll.scroll_to_top_of_item(6);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_retry_delays_use_exponential_backoff() {
+        assert_eq!(retry_delay(1), Duration::from_secs(1));
+        assert_eq!(retry_delay(2), Duration::from_secs(2));
+        assert_eq!(retry_delay(3), Duration::from_secs(4));
+        assert_eq!(retry_delay(0), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn retry_budget_allows_three_retries_after_the_initial_attempt() {
+        assert_eq!(MAX_AUTO_RETRIES, 3);
+        assert_eq!(usize::from(MAX_AUTO_RETRIES) + 1, 4);
     }
 }

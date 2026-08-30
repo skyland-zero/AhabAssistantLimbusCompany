@@ -1,5 +1,21 @@
 use super::*;
 
+pub(super) struct RunningSweepView {
+    task: FixedTaskId,
+}
+
+impl RunningSweepView {
+    pub(super) fn new(task: FixedTaskId) -> Self {
+        Self { task }
+    }
+}
+
+impl Render for RunningSweepView {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        running_sweep_element(self.task)
+    }
+}
+
 pub(super) struct TaskCardSpec {
     pub(super) task: FixedTaskId,
     pub(super) title: String,
@@ -26,6 +42,7 @@ pub(super) fn preview_tag(
 }
 
 pub(super) fn task_card_with_toggle(
+    app: &AhabApp,
     cx: &mut Context<AhabApp>,
     busy: bool,
     spec: TaskCardSpec,
@@ -49,10 +66,11 @@ pub(super) fn task_card_with_toggle(
     } else {
         toggle = toggle.opacity(0.45).cursor_not_allowed();
     }
-    task_card(cx, spec, Some(toggle))
+    task_card(app, cx, spec, Some(toggle))
 }
 
 pub(super) fn task_card(
+    app: &AhabApp,
     cx: &mut Context<AhabApp>,
     spec: TaskCardSpec,
     toggle: Option<gpui::Stateful<Div>>,
@@ -176,8 +194,8 @@ pub(super) fn task_card(
             );
         root = root.child(body);
     }
-    if executing {
-        root = root.child(running_sweep(task));
+    if executing && let Some(views) = app.home_views.as_ref() {
+        root = root.child(views.running_sweep(task));
     }
     root
 }
@@ -216,7 +234,7 @@ pub(super) fn task_icon(label: &'static str, executing: bool) -> Div {
         .child(action_icon(task_icon_data(label), 16., color))
 }
 
-pub(super) fn running_sweep(task: FixedTaskId) -> Div {
+fn running_sweep_element(task: FixedTaskId) -> Div {
     let palette = current_render_palette();
     let is_dark = matches!(palette.scheme, crate::components::style::ColorScheme::Dark);
     let track_color = rgba((palette.brand.rgb_hex() << 8) | if is_dark { 0x38 } else { 0x28 });
@@ -241,7 +259,9 @@ pub(super) fn running_sweep(task: FixedTaskId) -> Div {
                 .bg(core_color)
                 .with_animation(
                     format!("home-task-sweep-{}", task_id(task)),
-                    Animation::new(Duration::from_millis(1300)).repeat(),
+                    Animation::new(Duration::from_millis(1300))
+                        .repeat()
+                        .with_max_fps(12.0),
                     |element, progress| element.top(relative(progress * 1.45 - 0.45)),
                 ),
         )

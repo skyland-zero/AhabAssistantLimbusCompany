@@ -144,7 +144,7 @@ pub(super) fn execution_toolbar(
     }
     if busy && state != ExecutionState::Stopping {
         run = run.on_click(cx.listener(|view, _, _, cx| {
-            view.home.stop();
+            view.stop_execution(cx);
             cx.stop_propagation();
             cx.notify();
         }));

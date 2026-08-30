@@ -42,6 +42,7 @@ struct MockState {
     system_settings: SystemSettingsConfig,
     devices: Vec<DeviceInfo>,
     device_status: ConnectionStatus,
+    preview_enabled: bool,
     tools: HashMap<ToolId, bool>,
     events: Vec<EventEnvelope>,
 }

@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 use tungstenite::{Error as TungsteniteError, Message};
 
 use super::{
-    RpcClient,
+    RpcClient, TransportActivity,
     contract::{
         EventEnvelope, RPC_SCHEMA_VERSION, RequestId, RpcCompletion, RpcError, RpcRequest,
         RpcResponse,
@@ -58,6 +58,7 @@ struct ClientShared {
     error: Arc<Mutex<Option<String>>>,
     events: Arc<Mutex<VecDeque<EventEnvelope>>>,
     completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
+    activity: TransportActivity,
     commands: Mutex<Option<Sender<WorkerCommand>>>,
     _sidecar: Option<Arc<SidecarGuard>>,
 }
@@ -81,19 +82,30 @@ impl WebSocketClient {
 
     /// Start the configured Python sidecar and connect to its loopback socket.
     pub fn try_new() -> Result<Self, String> {
+        Self::try_new_with_activity(TransportActivity::new())
+    }
+
+    pub(crate) fn try_new_with_activity(activity: TransportActivity) -> Result<Self, String> {
         if let Ok(url) = env::var("AHAB_BACKEND_URL") {
             let token = env::var("AHAB_BACKEND_TOKEN")
                 .map_err(|_| "AHAB_BACKEND_TOKEN is required with AHAB_BACKEND_URL".to_owned())?;
-            return Self::connect_url(&url, &token, None);
+            return Self::connect_url(&url, &token, None, activity);
         }
 
         let (sidecar, port, token) = sidecar::spawn_sidecar()?;
         let url = format!("ws://127.0.0.1:{port}");
-        Self::connect_url(&url, &token, Some(sidecar))
+        Self::connect_url(&url, &token, Some(sidecar), activity)
     }
 
     /// Return a client that reports an unavailable transport without panicking.
     pub fn failed(error: impl Into<String>) -> Self {
+        Self::failed_with_activity(error, TransportActivity::new())
+    }
+
+    pub(crate) fn failed_with_activity(
+        error: impl Into<String>,
+        activity: TransportActivity,
+    ) -> Self {
         Self {
             shared: Arc::new(ClientShared {
                 next_id: AtomicU64::new(1),
@@ -101,6 +113,7 @@ impl WebSocketClient {
                 error: Arc::new(Mutex::new(Some(error.into()))),
                 events: Arc::new(Mutex::new(VecDeque::new())),
                 completions: Arc::new(Mutex::new(VecDeque::new())),
+                activity,
                 commands: Mutex::new(None),
                 _sidecar: None,
             }),
@@ -109,6 +122,10 @@ impl WebSocketClient {
 
     pub fn is_connected(&self) -> bool {
         self.shared.connected.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn activity(&self) -> TransportActivity {
+        self.shared.activity.clone()
     }
 
     pub fn take_events(&self) -> Vec<EventEnvelope> {
@@ -162,6 +179,7 @@ impl WebSocketClient {
         url: &str,
         token: &str,
         sidecar: Option<Arc<SidecarGuard>>,
+        activity: TransportActivity,
     ) -> Result<Self, String> {
         let address = sidecar::parse_loopback_address(url)?;
         let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
@@ -214,6 +232,7 @@ impl WebSocketClient {
         let worker_completions = Arc::clone(&completions);
         let worker_connected = Arc::clone(&connected_flag);
         let worker_error = Arc::clone(&error);
+        let worker_activity = activity.clone();
 
         thread::Builder::new()
             .name("AhabSidecarWebSocket".into())
@@ -225,6 +244,7 @@ impl WebSocketClient {
                     worker_completions,
                     worker_connected,
                     worker_error,
+                    worker_activity,
                 )
             })
             .map_err(|error| format!("启动 sidecar 网络线程失败：{error}"))?;
@@ -236,6 +256,7 @@ impl WebSocketClient {
                 error,
                 events,
                 completions,
+                activity,
                 commands: Mutex::new(Some(commands_tx)),
                 _sidecar: sidecar,
             }),
@@ -304,29 +325,31 @@ impl WebSocketClient {
             {
                 let _ = sender.send(response.clone());
             }
-            if report_completion && let Ok(mut queue) = self.shared.completions.lock() {
-                if queue.len() >= MAX_EVENT_QUEUE {
-                    queue.pop_front();
-                }
-                queue.push_back(RpcCompletion {
-                    method,
-                    params,
-                    response,
-                });
+            if report_completion {
+                self.push_completion_parts(method, params, response);
             }
         }
     }
 
     fn push_completion(&self, request: &RpcRequest, response: RpcResponse) {
+        self.push_completion_parts(request.method.clone(), request.params.clone(), response);
+    }
+
+    fn push_completion_parts(&self, method: String, params: Option<Value>, response: RpcResponse) {
+        let mut queued = false;
         if let Ok(mut queue) = self.shared.completions.lock() {
             if queue.len() >= MAX_EVENT_QUEUE {
                 queue.pop_front();
             }
             queue.push_back(RpcCompletion {
-                method: request.method.clone(),
-                params: request.params.clone(),
+                method,
+                params,
                 response,
             });
+            queued = true;
+        }
+        if queued {
+            self.shared.activity.notify();
         }
     }
 

@@ -19,7 +19,8 @@ impl ThemePacksState {
             data,
             sort_by_weight: false,
             feedback: None,
-            persist_due: None,
+            persist_generation: 0,
+            pending_persist_generation: None,
         };
         if !state.rpc.is_sidecar() {
             state.reload();
@@ -118,7 +119,7 @@ impl ThemePacksState {
 
     pub fn reset_weights(&mut self) {
         if self.rpc.is_sidecar() {
-            self.persist_due = None;
+            self.cancel_pending_persist();
             self.rpc.submit(method::THEME_PACK_RESET_WEIGHTS, None);
             self.feedback = Some("正在恢复默认权重".to_owned());
             return;
@@ -149,8 +150,8 @@ impl ThemePacksState {
     fn persist_packs(&mut self, packs: Vec<ThemePack>) {
         if self.rpc.is_sidecar() {
             self.data.packs = packs;
-            self.persist_due =
-                Some(std::time::Instant::now() + std::time::Duration::from_millis(200));
+            self.persist_generation = self.persist_generation.wrapping_add(1);
+            self.pending_persist_generation = Some(self.persist_generation);
             self.feedback = Some("主题包设置待保存".to_owned());
             return;
         }
@@ -167,20 +168,26 @@ impl ThemePacksState {
         self.feedback = Some("主题包设置已保存".to_owned());
     }
 
-    pub(crate) fn flush_debounced(&mut self) -> bool {
-        let Some(due) = self.persist_due else {
-            return false;
-        };
-        if std::time::Instant::now() < due {
+    pub(crate) fn pending_persist_generation(&self) -> Option<u64> {
+        self.pending_persist_generation
+    }
+
+    pub(crate) fn flush_debounced(&mut self, generation: u64) -> bool {
+        if self.pending_persist_generation != Some(generation) {
             return false;
         }
-        self.persist_due = None;
+        self.pending_persist_generation = None;
         self.rpc.submit(
             method::THEME_PACK_UPDATE_ALL,
             Some(json!({ "packs": self.data.packs.clone() })),
         );
         self.feedback = Some("正在保存主题包设置".to_owned());
         true
+    }
+
+    fn cancel_pending_persist(&mut self) {
+        self.persist_generation = self.persist_generation.wrapping_add(1);
+        self.pending_persist_generation = None;
     }
 
     pub(crate) fn apply_rpc_result(

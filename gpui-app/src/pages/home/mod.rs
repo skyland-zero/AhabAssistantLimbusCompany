@@ -14,6 +14,9 @@ mod shared;
 mod stats;
 mod task_details;
 mod tasks;
+mod views;
+
+pub(crate) use views::HomeViewRefs;
 
 use cards::*;
 use controls::*;
@@ -32,9 +35,8 @@ use crate::{
     },
     components::{
         BadgeTone, ButtonVariant, badge, button, card, current_render_palette, is_activation_key,
-        palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area_with_handle,
-        scroll_area_with_id, select_option, select_popup, select_trigger, settings_grid, switch,
-        switch_accent,
+        palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area, scroll_area_with_id,
+        select_option, select_popup, select_trigger, settings_grid, switch, switch_accent,
     },
     i18n::{self, Key as I18nKey, paired as text},
     model::{
@@ -45,6 +47,7 @@ use crate::{
 };
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+    app.ensure_home_views(cx);
     let busy = app.home.is_busy();
     let execution_state = app.home.execution.state;
     // Keep a compatibility fallback for older sidecars that may omit
@@ -94,7 +97,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .flex_col()
         .border_r_1()
         .border_color(rgba(0))
-        .child(stats::overview(app, cx))
+        .child(
+            app.home_views
+                .as_ref()
+                .expect("Home child views are initialized before rendering")
+                .stats_view(),
+        )
         .child(task_list)
         .child(execution::execution_toolbar(app, cx, busy, execution_state));
 

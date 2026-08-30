@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
+mod activity;
 pub mod backend;
 pub mod contract;
 pub mod gateway;
@@ -7,6 +8,8 @@ pub mod mock;
 pub mod websocket;
 
 use contract::RpcRequest;
+
+pub(crate) use activity::TransportActivity;
 
 /// Transport-independent JSON-RPC boundary. The GPUI UI should depend only on
 /// this trait; `BackendClient` selects the real sidecar or an explicit mock.

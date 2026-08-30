@@ -216,6 +216,8 @@ class BackendApplication:
         self._hotkey_listener: Any | None = None
         self._mediator_bindings: list[tuple[Any, Callable[..., Any]]] = []
         self._preview_capture = preview_capture or PreviewCapture(self.emit)
+        self._preview_enabled = True
+        self._preview_device_id: str | None = None
         self._closed = False
         if stats_path is None:
             from module import CONFIG_PATH
@@ -281,6 +283,24 @@ class BackendApplication:
         if self._shutdown is not None:
             self._shutdown()
         return True
+
+    def preview_set_enabled(self, params: Any) -> dict[str, bool]:
+        values = self._require_mapping(params, "preview.setEnabled")
+        enabled = values.get("enabled")
+        if not isinstance(enabled, bool):
+            raise ValueError("preview.setEnabled.enabled must be a boolean")
+
+        with self._lock:
+            if enabled != self._preview_enabled:
+                self._preview_enabled = enabled
+                if not enabled:
+                    self._preview_capture.stop()
+                elif self._preview_device_id:
+                    self._preview_capture.start(self._preview_device_id)
+
+            fallback_running = self._preview_enabled and self._preview_device_id is not None
+            running = bool(getattr(self._preview_capture, "running", fallback_running))
+            return {"enabled": self._preview_enabled, "running": running}
 
     def stats_get_summary(self) -> dict[str, Any]:
         return self.stats.summary()
@@ -1343,10 +1363,14 @@ class BackendApplication:
         status = payload.get("status")
         device_id = payload.get("deviceId")
         try:
-            if status == "connected" and isinstance(device_id, str) and device_id:
-                self._preview_capture.start(device_id)
-            elif status in {"connecting", "disconnected"}:
-                self._preview_capture.stop()
+            with self._lock:
+                if status == "connected" and isinstance(device_id, str) and device_id:
+                    self._preview_device_id = device_id
+                    if self._preview_enabled:
+                        self._preview_capture.start(device_id)
+                elif status in {"connecting", "disconnected"}:
+                    self._preview_device_id = None
+                    self._preview_capture.stop()
         except Exception as error:
             log.exception("实时预览生命周期处理失败")
             if isinstance(device_id, str) and device_id:

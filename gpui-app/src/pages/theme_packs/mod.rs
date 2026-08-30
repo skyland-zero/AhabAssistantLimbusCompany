@@ -74,6 +74,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     enable_all = enable_all
         .on_click(cx.listener(move |view, _, _, cx| {
             view.theme_packs.set_all_enabled(true);
+            view.schedule_theme_pack_persist(cx);
             view.show_toast(
                 crate::shell::ToastKind::Success,
                 text("主题包已全部启用", "All theme packs enabled").get(language),
@@ -85,6 +86,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             if is_activation_key(event) {
                 window.prevent_default();
                 view.theme_packs.set_all_enabled(true);
+                view.schedule_theme_pack_persist(cx);
                 view.show_toast(
                     crate::shell::ToastKind::Success,
                     text("主题包已全部启用", "All theme packs enabled").get(language),
@@ -104,6 +106,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     disable_all = disable_all
         .on_click(cx.listener(move |view, _, _, cx| {
             view.theme_packs.set_all_enabled(false);
+            view.schedule_theme_pack_persist(cx);
             view.show_toast(
                 crate::shell::ToastKind::Info,
                 text("主题包已全部停用", "All theme packs disabled").get(language),
@@ -115,6 +118,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             if is_activation_key(event) {
                 window.prevent_default();
                 view.theme_packs.set_all_enabled(false);
+                view.schedule_theme_pack_persist(cx);
                 view.show_toast(
                     crate::shell::ToastKind::Info,
                     text("主题包已全部停用", "All theme packs disabled").get(language),

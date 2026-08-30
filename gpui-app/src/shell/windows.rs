@@ -9,6 +9,8 @@
 
 use std::{ffi::c_void, mem, ptr, thread};
 
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
 type HINSTANCE = *mut c_void;
 type HANDLE = *mut c_void;
 type HWND = *mut c_void;
@@ -147,6 +149,7 @@ unsafe extern "system" {
     fn TranslateMessage(message: *const Msg) -> BOOL;
     fn DispatchMessageW(message: *const Msg) -> LRESULT;
     fn PostQuitMessage(exit_code: i32);
+    fn IsIconic(window: HWND) -> BOOL;
 }
 
 #[link(name = "shell32")]
@@ -189,6 +192,16 @@ pub fn start_tray() {
         .name("AhabWindowsTray".to_owned())
         .spawn(|| unsafe { tray_thread() })
         .expect("启动 Windows 托盘线程失败");
+}
+
+pub fn is_window_minimized(window: &gpui::Window) -> bool {
+    let Ok(handle) = <gpui::Window as HasWindowHandle>::window_handle(window) else {
+        return false;
+    };
+    let RawWindowHandle::Win32(handle) = handle.as_raw() else {
+        return false;
+    };
+    unsafe { IsIconic(handle.hwnd.get() as HWND) != 0 }
 }
 
 fn focus_existing_window() {

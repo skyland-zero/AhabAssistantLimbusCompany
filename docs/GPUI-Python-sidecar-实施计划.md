@@ -157,7 +157,7 @@ app.notice
 | 3 | 队伍和罪人 | `team.*`、`sinner.list` | 旧字段不丢失，新增/编辑/删除可回读 |
 | 4 | 主题包 | `themePack.*` | 列表、批量更新、权重和重置 |
 | 5 | 资源同步 | `resource.*` | 检查、同步、进度、失败和取消 |
-| 6 | 工具和截图 | `tool.*`、`screenshot.frame`、`preview.status` | 启停、单次截图、连接后持续预览、状态和错误 |
+| 6 | 工具和截图 | `tool.*`、`screenshot.frame`、`preview.setEnabled`、`preview.status` | 启停、单次截图、按需预览、状态和错误 |
 | 7 | 更新和热键 | `app.checkUpdate`、`hotkey.*` | 状态推送、快捷键修改和冲突提示 |
 | 8 | 系统设置 | `systemSettings.*` | 读写、兼容默认值和持久化 |
 
@@ -189,8 +189,9 @@ app.notice
 
 - [x] `device.status=connected` 启动独立预览线程，`disconnected`、重连和 sidecar 退出时停止。
 - [x] 复用既有 PC 窗口、MuMu 和 ADB 截图路径；预览不移动 PC 游戏窗口、不写磁盘，也不受任务截图节流影响。
-- [x] 预览默认 5 FPS，最长边压缩到 720 像素后以 JPEG 推送，仅保留当前帧，限制 GPUI 图片缓存增长。
-- [x] 增加 `preview.status` 状态事件；GPUI 按当前设备过滤帧，异步解码并显示实时画面，断开时释放旧帧。
+- [x] 预览默认 1 FPS，最长边压缩到 540 像素后以 JPEG 推送，仅保留当前帧，限制 GPUI 图片缓存增长。
+- [x] 增加 `preview.setEnabled` 与 `preview.status`；GPUI 按页面、右栏和最小化状态按需接收帧，异步解码并显示实时画面，断开或停用时释放旧帧。
+- [x] 主控台按事件类型拆分局部刷新：流光、统计、实时画面和日志各自维护稳定子视图，避免无关区域重复布局。
 - [x] 覆盖帧编码、预览线程生命周期、事件 reducer、断开清理、Rust 单元测试和发布构建。
 - [ ] 使用真实 Limbus Company 窗口、MuMu 或 ADB 设备完成 Windows 实机验收。
 

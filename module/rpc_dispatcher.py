@@ -75,6 +75,7 @@ class RpcDispatcher:
             "hotkey.set",
             "systemSettings.set",
             "notification.test",
+            "preview.setEnabled",
             "device.connect",
             "device.disconnect",
         }
@@ -132,6 +133,7 @@ class RpcDispatcher:
             "systemSettings.get": "system_settings_get",
             "systemSettings.set": "system_settings_set",
             "notification.test": "notification_test",
+            "preview.setEnabled": "preview_set_enabled",
             "device.list": "device.list",
             "device.connect": "device.connect",
             "device.disconnect": "device.disconnect",

@@ -208,6 +208,7 @@ impl Default for MockState {
                 },
             ],
             device_status: ConnectionStatus::Disconnected,
+            preview_enabled: true,
             tools: HashMap::new(),
             events: Vec::new(),
         }

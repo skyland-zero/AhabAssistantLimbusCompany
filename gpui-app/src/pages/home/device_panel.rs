@@ -112,7 +112,9 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
         action_icon(ICON_LOADER, 14., ACCENT)
             .with_animation(
                 "device-refresh-spin",
-                Animation::new(Duration::from_millis(700)).repeat(),
+                Animation::new(Duration::from_millis(700))
+                    .repeat()
+                    .with_max_fps(12.0),
                 |svg, progress| {
                     svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
                         progress,

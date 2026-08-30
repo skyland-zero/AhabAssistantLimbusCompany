@@ -12,16 +12,18 @@ impl HomeState {
         self.send(crate::ipc::contract::method::EXECUTION_START, None);
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&mut self) -> bool {
         if !self.is_busy() {
-            return;
+            return false;
         }
-        if self.rpc.is_sidecar() {
+        let needs_timeout = self.rpc.is_sidecar();
+        if needs_timeout {
             self.state_before_stopping = Some(self.execution.state);
             self.execution.state = ExecutionState::Stopping;
             self.stopping_since = Some(std::time::Instant::now());
         }
         self.send(crate::ipc::contract::method::EXECUTION_STOP, None);
+        needs_timeout
     }
 
     pub fn pause_or_resume(&mut self) {
@@ -150,15 +152,29 @@ impl HomeState {
         }
     }
 
-    pub(crate) fn stop_timed_out(&self) -> bool {
-        self.execution.state == ExecutionState::Stopping
-            && self
-                .stopping_since
-                .is_some_and(|started| started.elapsed() >= std::time::Duration::from_secs(5))
-    }
-
     pub(crate) fn mark_stop_timeout_handled(&mut self) {
         self.stopping_since = None;
+    }
+
+    pub(crate) fn suspend_preview(&mut self) -> bool {
+        let changed = self.latest_screenshot.is_some()
+            || self.preview_status != PreviewStatus::Stopped
+            || self.preview_error.is_some();
+        self.latest_screenshot = None;
+        self.preview_status = PreviewStatus::Stopped;
+        self.preview_error = None;
+        if changed {
+            self.screenshot_revision = self.screenshot_revision.wrapping_add(1);
+        }
+        changed
+    }
+
+    pub(crate) fn start_preview(&mut self) -> bool {
+        let changed =
+            self.preview_status != PreviewStatus::Starting || self.preview_error.is_some();
+        self.preview_status = PreviewStatus::Starting;
+        self.preview_error = None;
+        changed
     }
 
     pub(crate) fn reset_after_sidecar_restart(&mut self) {

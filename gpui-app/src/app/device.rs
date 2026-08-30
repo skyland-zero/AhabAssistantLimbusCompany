@@ -1,28 +1,31 @@
-use gpui::Context;
+use gpui::{Context, Window};
 
-use super::AhabApp;
+use super::{AhabApp, HomeInvalidation};
 use crate::ipc::{
     RpcCompletion, RpcGateway,
     contract::{event, method},
 };
 
 impl AhabApp {
-    /// Start a lightweight GPUI-side event pump for unsolicited sidecar
-    /// events. Visual/mock runs do not need a timer.
-    pub fn start_event_pump(&mut self, cx: &mut Context<Self>) {
+    /// Wait for transport activity and drain every queued sidecar update in a
+    /// single GPUI turn. Visual/mock runs apply their events synchronously.
+    pub fn start_event_pump(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.home.rpc.is_sidecar() {
             return;
         }
-        cx.spawn(async move |this, cx| {
+        let activity_rpc = self.home.rpc.clone();
+        cx.spawn_in(window, async move |this, cx| {
             loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(50))
-                    .await;
+                if !activity_rpc.wait_for_activity().await {
+                    break;
+                }
                 if this
-                    .update(cx, |view, cx| {
-                        let changed = view.poll_backend_events();
+                    .update_in(cx, |view, window, cx| {
+                        let invalidation = view.poll_backend_events();
                         let recovering = view.maybe_recover_backend(cx);
-                        if changed || recovering {
+                        view.reconcile_preview(Some(window), cx);
+                        view.notify_home_views(invalidation, cx);
+                        if invalidation.root || recovering {
                             cx.notify();
                         }
                     })
@@ -35,72 +38,123 @@ impl AhabApp {
         .detach();
     }
 
-    pub(crate) fn poll_backend_events(&mut self) -> bool {
+    pub(crate) fn poll_backend_events(&mut self) -> HomeInvalidation {
         let events = self.home.rpc.take_events();
-        let mut changed = false;
+        let mut invalidation = HomeInvalidation::default();
         if !events.is_empty() {
             let mut home_events = Vec::new();
             let mut toolbox_events = Vec::new();
             let mut resource_events = Vec::new();
             for event_value in events {
                 match event_value.event.as_str() {
-                    event::TOOL_STATUS => toolbox_events.push(event_value),
-                    event::RESOURCE_SYNC_PROGRESS => resource_events.push(event_value),
-                    event::EXECUTION_STATUS
-                    | event::EXECUTION_MIRROR_PROGRESS
-                    | event::EXECUTION_STATS
-                    | event::SCREENSHOT_FRAME
-                    | event::PREVIEW_STATUS
-                    | event::DEVICE_STATUS
-                    | event::LOG_ENTRY
-                    | event::APP_NOTICE => home_events.push(event_value),
+                    event::TOOL_STATUS => {
+                        invalidation.root = true;
+                        toolbox_events.push(event_value);
+                    }
+                    event::RESOURCE_SYNC_PROGRESS => {
+                        invalidation.root = true;
+                        resource_events.push(event_value);
+                    }
+                    event::EXECUTION_STATUS => {
+                        invalidation.root = true;
+                        invalidation.stats = true;
+                        home_events.push(event_value);
+                    }
+                    event::EXECUTION_MIRROR_PROGRESS => {
+                        // Mirror progress is rendered inside the task card. It
+                        // is not a frame-rate event, so a root refresh here is
+                        // acceptable and keeps all existing task controls intact.
+                        invalidation.root = true;
+                        home_events.push(event_value);
+                    }
+                    event::EXECUTION_STATS => {
+                        invalidation.stats = true;
+                        home_events.push(event_value);
+                    }
+                    event::SCREENSHOT_FRAME => {
+                        if self.preview_accepts_frames() {
+                            invalidation.preview = true;
+                            home_events.push(event_value);
+                        }
+                    }
+                    event::PREVIEW_STATUS => {
+                        invalidation.preview = true;
+                        home_events.push(event_value);
+                    }
+                    event::DEVICE_STATUS => {
+                        invalidation.root = true;
+                        invalidation.preview = true;
+                        home_events.push(event_value);
+                    }
+                    event::LOG_ENTRY => {
+                        invalidation.logs = true;
+                        home_events.push(event_value);
+                    }
+                    event::APP_NOTICE => {
+                        invalidation.root = true;
+                        invalidation.logs = true;
+                        home_events.push(event_value);
+                    }
                     _ => {}
                 }
             }
             self.home.apply_events(home_events);
             self.toolbox.apply_events(toolbox_events);
             self.resources.apply_events(resource_events);
-            changed = true;
         }
 
         for completion in self.home.rpc.take_completions() {
-            self.apply_backend_completion(completion);
-            changed = true;
+            invalidation.merge(self.apply_backend_completion(completion));
         }
-        if self.theme_packs.flush_debounced() {
-            changed = true;
-        }
-        changed
+        invalidation
     }
 
-    fn apply_backend_completion(&mut self, completion: RpcCompletion) {
+    fn apply_backend_completion(&mut self, completion: RpcCompletion) -> HomeInvalidation {
         let method_name = completion.method.as_str();
         let result = RpcGateway::decode_response(method_name, completion.response);
+        let mut invalidation = HomeInvalidation::default();
         match method_name {
             method::EXECUTION_START
             | method::EXECUTION_STOP
             | method::EXECUTION_PAUSE
             | method::EXECUTION_RESUME
-            | method::TASKS_SET_CONFIG => self.home.apply_command_result(method_name, result),
+            | method::TASKS_SET_CONFIG => {
+                self.home.apply_command_result(method_name, result);
+                invalidation.root = true;
+                invalidation.stats = true;
+            }
             method::APP_CHECK_UPDATE
             | method::HOTKEY_GET
             | method::HOTKEY_SET
             | method::SYSTEM_SETTINGS_GET
             | method::SYSTEM_SETTINGS_SET
-            | method::NOTIFICATION_TEST => self.settings_page.apply_rpc_result(method_name, result),
+            | method::NOTIFICATION_TEST => {
+                self.settings_page.apply_rpc_result(method_name, result);
+                invalidation.root = true;
+            }
             method::RESOURCE_STATUS
             | method::RESOURCE_CHECK_UPDATE
-            | method::RESOURCE_SYNC_START => self.resources.apply_rpc_result(method_name, result),
-            method::TOOL_START | method::TOOL_STOP | method::TOOL_SCREENSHOT => self
-                .toolbox
-                .apply_rpc_result(method_name, completion.params, result),
+            | method::RESOURCE_SYNC_START => {
+                self.resources.apply_rpc_result(method_name, result);
+                invalidation.root = true;
+            }
+            method::TOOL_START | method::TOOL_STOP | method::TOOL_SCREENSHOT => {
+                self.toolbox
+                    .apply_rpc_result(method_name, completion.params, result);
+                invalidation.root = true;
+            }
             method::THEME_PACK_LIST
             | method::THEME_PACK_UPDATE_ALL
             | method::THEME_PACK_RESET_WEIGHTS => {
-                self.theme_packs.apply_rpc_result(method_name, result)
+                self.theme_packs.apply_rpc_result(method_name, result);
+                invalidation.root = true;
+            }
+            method::PREVIEW_SET_ENABLED => {
+                invalidation.merge(self.apply_preview_control_completion(result));
             }
             _ => {}
         }
+        invalidation
     }
 
     pub fn select_device(&mut self, id: String, cx: &mut Context<Self>) {

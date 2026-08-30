@@ -1,10 +1,74 @@
 use super::*;
 
+use gpui::{Context, Render, WeakEntity, Window};
+
+use crate::{
+    app::{AhabApp, BackendStatus},
+    model::{ExecutionStatsPayload, ExecutionStatusPayload, TasksConfig},
+};
+
 use crate::model::{CurrentRunStats, DailyStatEntry, StatCounts};
 
 const STATS_CARD_HEIGHT: f32 = 156.0;
 
-pub(super) fn overview(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct StatsSnapshot {
+    pub(super) language: Language,
+    pub(super) backend_status: BackendStatus,
+    pub(super) stats: ExecutionStatsPayload,
+    pub(super) tasks: TasksConfig,
+    pub(super) execution: ExecutionStatusPayload,
+}
+
+impl Default for StatsSnapshot {
+    fn default() -> Self {
+        Self {
+            language: Language::ZhCn,
+            backend_status: BackendStatus::mock(),
+            stats: ExecutionStatsPayload::default(),
+            tasks: TasksConfig::default(),
+            execution: ExecutionStatusPayload::default(),
+        }
+    }
+}
+
+impl StatsSnapshot {
+    pub(super) fn from_app(app: &AhabApp) -> Self {
+        Self {
+            language: app.state.settings.language,
+            backend_status: app.backend_status.clone(),
+            stats: app.home.stats.clone(),
+            tasks: app.home.tasks.clone(),
+            execution: app.home.execution.clone(),
+        }
+    }
+}
+
+pub(super) struct StatsView {
+    root: WeakEntity<AhabApp>,
+    snapshot: StatsSnapshot,
+}
+
+impl StatsView {
+    pub(super) fn new(root: WeakEntity<AhabApp>) -> Self {
+        Self {
+            root,
+            snapshot: StatsSnapshot::default(),
+        }
+    }
+
+    pub(super) fn sync_snapshot(&mut self, snapshot: StatsSnapshot) {
+        self.snapshot = snapshot;
+    }
+}
+
+impl Render for StatsView {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        render_overview(&self.snapshot, &self.root)
+    }
+}
+
+fn render_overview(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
     div()
         .flex_none()
         .flex()
@@ -13,8 +77,8 @@ pub(super) fn overview(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .ml(px(10.0))
         .mr(px(4.0))
         .mt(px(10.0))
-        .child(runtime_card(app, cx))
-        .child(period_card(app, cx).flex_grow(1.0).flex_shrink(1.0))
+        .child(runtime_card(snapshot, root))
+        .child(period_card(snapshot, root).flex_grow(1.0).flex_shrink(1.0))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,11 +104,11 @@ fn runtime_card_view(phase: BackendPhase) -> RuntimeCardView {
     }
 }
 
-fn runtime_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl IntoElement {
-    let view = runtime_card_view(app.backend_status.phase);
+fn runtime_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> impl IntoElement {
+    let view = runtime_card_view(snapshot.backend_status.phase);
     let card = match view {
-        RuntimeCardView::Backend => backend_status_card(app, cx),
-        RuntimeCardView::CurrentRun => current_run_card(app),
+        RuntimeCardView::Backend => backend_status_card(snapshot, root),
+        RuntimeCardView::CurrentRun => current_run_card(snapshot),
     };
 
     card.flex_grow(2.0)
@@ -57,9 +121,9 @@ fn runtime_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> impl IntoElemen
         )
 }
 
-fn backend_status_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
-    let language = app.state.settings.language;
-    let status = &app.backend_status;
+fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
+    let language = snapshot.language;
+    let status = &snapshot.backend_status;
     let (label, detail, tone) = match status.phase {
         BackendPhase::WaitingForFirstFrame => (
             text("等待首帧", "Waiting for first frame")
@@ -179,11 +243,16 @@ fn backend_status_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .gap_1()
         .text_size(px(11.0))
         .child(action_icon(ICON_REFRESH, 12., ACCENT));
-        retry = retry.on_click(cx.listener(|view, _, _, cx| {
-            view.retry_backend(cx);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        let root = root.clone();
+        retry = retry.on_click(move |_, _, cx| {
+            if let Some(root) = root.upgrade() {
+                root.update(cx, |view, cx| {
+                    view.retry_backend(cx);
+                    cx.stop_propagation();
+                    cx.notify();
+                });
+            }
+        });
         content = content.child(retry);
     }
 
@@ -191,31 +260,6 @@ fn backend_status_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .h(px(STATS_CARD_HEIGHT))
         .min_w_0()
         .overflow_hidden()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn runtime_card_shows_current_run_only_after_backend_is_ready() {
-        assert_eq!(
-            runtime_card_view(BackendPhase::Ready),
-            RuntimeCardView::CurrentRun
-        );
-
-        for phase in [
-            BackendPhase::WaitingForFirstFrame,
-            BackendPhase::Starting,
-            BackendPhase::RetryWaiting,
-            BackendPhase::Failed,
-            BackendPhase::Disconnected,
-            BackendPhase::Restarting,
-            BackendPhase::Mock,
-        ] {
-            assert_eq!(runtime_card_view(phase), RuntimeCardView::Backend);
-        }
-    }
 }
 
 pub(super) fn daily_details_overlay(
@@ -362,33 +406,33 @@ pub(super) fn daily_details_overlay(
         .into_any_element()
 }
 
-fn current_run_card(app: &AhabApp) -> Div {
-    let language = app.state.settings.language;
-    let current = &app.home.stats.currentRun;
+fn current_run_card(snapshot: &StatsSnapshot) -> Div {
+    let language = snapshot.language;
+    let current = &snapshot.stats.currentRun;
     let (targets, infinite) = if current.runId.is_some() {
         (current.targets.clone(), current.isMirrorInfinite)
     } else {
         (
             StatCounts {
-                exp: if app.home.tasks.enabledTasks.daily_task {
-                    u32::from(app.home.tasks.daily_task.set_EXP_count)
+                exp: if snapshot.tasks.enabledTasks.daily_task {
+                    u32::from(snapshot.tasks.daily_task.set_EXP_count)
                 } else {
                     0
                 },
-                thread: if app.home.tasks.enabledTasks.daily_task {
-                    u32::from(app.home.tasks.daily_task.set_thread_count)
+                thread: if snapshot.tasks.enabledTasks.daily_task {
+                    u32::from(snapshot.tasks.daily_task.set_thread_count)
                 } else {
                     0
                 },
-                mirror: if app.home.tasks.enabledTasks.mirror
-                    && !app.home.tasks.mirror.infinite_dungeons
+                mirror: if snapshot.tasks.enabledTasks.mirror
+                    && !snapshot.tasks.mirror.infinite_dungeons
                 {
-                    u32::from(app.home.tasks.mirror.set_mirror_count)
+                    u32::from(snapshot.tasks.mirror.set_mirror_count)
                 } else {
                     0
                 },
             },
-            app.home.tasks.enabledTasks.mirror && app.home.tasks.mirror.infinite_dungeons,
+            snapshot.tasks.enabledTasks.mirror && snapshot.tasks.mirror.infinite_dungeons,
         )
     };
     let completed = if current.runId.is_some() {
@@ -399,9 +443,9 @@ fn current_run_card(app: &AhabApp) -> Div {
     let state = if current.runId.is_some() {
         current.state
     } else {
-        app.home.execution.state
+        snapshot.execution.state
     };
-    let current_task = current.currentTaskId.or(app.home.execution.currentTaskId);
+    let current_task = current.currentTaskId.or(snapshot.execution.currentTaskId);
     let state_text = match state {
         ExecutionState::Running => text("运行中", "Running").get(language),
         ExecutionState::Paused => text("已暂停", "Paused").get(language),
@@ -501,10 +545,10 @@ fn current_run_card(app: &AhabApp) -> Div {
     .overflow_hidden()
 }
 
-fn period_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
-    let language = app.state.settings.language;
-    let today = app.home.stats.today.clone();
-    let week = app.home.stats.week.clone();
+fn period_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
+    let language = snapshot.language;
+    let today = snapshot.stats.today.clone();
+    let week = snapshot.stats.week.clone();
     let mut details = button(
         text("查看明细", "View Details").get(language),
         ButtonVariant::Ghost,
@@ -516,10 +560,15 @@ fn period_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     .gap_1()
     .text_size(px(11.0))
     .child(action_icon(ICON_CALENDAR_CHECK, 13., ACCENT));
-    details = details.on_click(cx.listener(|view, _, _, cx| {
-        view.open_stats_details(cx);
-        cx.stop_propagation();
-    }));
+    let root_for_details = root.clone();
+    details = details.on_click(move |_, _, cx| {
+        if let Some(root) = root_for_details.upgrade() {
+            root.update(cx, |view, cx| {
+                view.open_stats_details(cx);
+                cx.stop_propagation();
+            });
+        }
+    });
 
     let header = div()
         .h(px(28.0))
@@ -800,4 +849,29 @@ fn daily_value(value: impl Into<String>) -> Div {
 #[allow(dead_code)]
 fn _current_run_for_tests(current: &CurrentRunStats) -> &CurrentRunStats {
     current
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_card_shows_current_run_only_after_backend_is_ready() {
+        assert_eq!(
+            runtime_card_view(BackendPhase::Ready),
+            RuntimeCardView::CurrentRun
+        );
+
+        for phase in [
+            BackendPhase::WaitingForFirstFrame,
+            BackendPhase::Starting,
+            BackendPhase::RetryWaiting,
+            BackendPhase::Failed,
+            BackendPhase::Disconnected,
+            BackendPhase::Restarting,
+            BackendPhase::Mock,
+        ] {
+            assert_eq!(runtime_card_view(phase), RuntimeCardView::Backend);
+        }
+    }
 }

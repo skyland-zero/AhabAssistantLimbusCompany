@@ -25,7 +25,7 @@ mod parser;
 
 use parser::{HelpBlock, InlinePart, parse_help, parse_inline};
 
-const HELP_SCROLL_ID: &'static str = "help-document-scroll";
+const HELP_SCROLL_ID: &str = "help-document-scroll";
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;

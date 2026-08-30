@@ -171,6 +171,7 @@ pub mod method {
     pub const SYSTEM_SETTINGS_GET: &str = "systemSettings.get";
     pub const SYSTEM_SETTINGS_SET: &str = "systemSettings.set";
     pub const NOTIFICATION_TEST: &str = "notification.test";
+    pub const PREVIEW_SET_ENABLED: &str = "preview.setEnabled";
     pub const DEVICE_LIST: &str = "device.list";
     pub const DEVICE_CONNECT: &str = "device.connect";
     pub const DEVICE_DISCONNECT: &str = "device.disconnect";

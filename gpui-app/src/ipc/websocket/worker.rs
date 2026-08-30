@@ -26,6 +26,7 @@ pub(super) fn run_worker(
     completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
     connected: Arc<AtomicBool>,
     error: Arc<Mutex<Option<String>>>,
+    activity: TransportActivity,
 ) {
     let mut pending: HashMap<RequestId, PendingRequest> = HashMap::new();
     let mut fatal_error: Option<String> = None;
@@ -83,6 +84,7 @@ pub(super) fn run_worker(
                                 },
                                 response,
                                 &completions,
+                                &activity,
                             );
                             fatal_error = Some(send_error);
                             break;
@@ -102,7 +104,7 @@ pub(super) fn run_worker(
 
         match socket.read() {
             Ok(Message::Binary(bytes)) => match decode_binary_event(bytes.as_ref()) {
-                Ok(event) => push_event(&events, event),
+                Ok(event) => push_event(&events, event, &activity),
                 Err(parse_error) => {
                     fatal_error = Some(format!("sidecar 二进制事件无效：{parse_error}"));
                     break;
@@ -113,7 +115,7 @@ pub(super) fn run_worker(
                     match serde_json::from_str::<Value>(&text) {
                         Ok(value) if value.get("event").and_then(Value::as_str).is_some() => {
                             if let Ok(event) = serde_json::from_value::<EventEnvelope>(value) {
-                                push_event(&events, event);
+                                push_event(&events, event, &activity);
                             }
                         }
                         Ok(value) => {
@@ -121,7 +123,7 @@ pub(super) fn run_worker(
                                 match serde_json::from_value::<RpcResponse>(value) {
                                     Ok(response) => {
                                         if let Some(waiter) = pending.remove(&id) {
-                                            complete(waiter, response, &completions);
+                                            complete(waiter, response, &completions, &activity);
                                         }
                                     }
                                     Err(parse_error) => {
@@ -157,6 +159,7 @@ pub(super) fn run_worker(
                     request,
                     RpcResponse::failure(id, RpcError::new(-32000, "sidecar 请求超时")),
                     &completions,
+                    &activity,
                 );
             }
         }
@@ -172,33 +175,46 @@ pub(super) fn run_worker(
             request,
             RpcResponse::failure(id, RpcError::new(-32000, message.clone())),
             &completions,
+            &activity,
         );
     }
+    activity.notify();
 }
 
 fn complete(
     pending: PendingRequest,
     response: RpcResponse,
     completions: &Arc<Mutex<VecDeque<RpcCompletion>>>,
+    activity: &TransportActivity,
 ) {
     if let Some(waiter) = pending.response_tx {
         let _ = waiter.send(response.clone());
     }
-    if pending.report_completion
-        && let Ok(mut queue) = completions.lock()
-    {
-        if queue.len() >= MAX_EVENT_QUEUE {
-            queue.pop_front();
+    if pending.report_completion {
+        let mut queued = false;
+        if let Ok(mut queue) = completions.lock() {
+            if queue.len() >= MAX_EVENT_QUEUE {
+                queue.pop_front();
+            }
+            queue.push_back(RpcCompletion {
+                method: pending.method,
+                params: pending.params,
+                response,
+            });
+            queued = true;
         }
-        queue.push_back(RpcCompletion {
-            method: pending.method,
-            params: pending.params,
-            response,
-        });
+        if queued {
+            activity.notify();
+        }
     }
 }
 
-fn push_event(events: &Arc<Mutex<VecDeque<EventEnvelope>>>, event: EventEnvelope) {
+fn push_event(
+    events: &Arc<Mutex<VecDeque<EventEnvelope>>>,
+    event: EventEnvelope,
+    activity: &TransportActivity,
+) {
+    let mut queued = false;
     if let Ok(mut queue) = events.lock() {
         if event.event == super::super::contract::event::SCREENSHOT_FRAME {
             queue.retain(|queued| queued.event != super::super::contract::event::SCREENSHOT_FRAME);
@@ -207,6 +223,10 @@ fn push_event(events: &Arc<Mutex<VecDeque<EventEnvelope>>>, event: EventEnvelope
             queue.pop_front();
         }
         queue.push_back(event);
+        queued = true;
+    }
+    if queued {
+        activity.notify();
     }
 }
 

@@ -1,4 +1,4 @@
-use gpui::{AppContext, Context};
+use gpui::{AppContext, Context, Window};
 
 use super::AhabApp;
 use crate::{components::TextInput, model::Language, state::SystemU16};
@@ -104,11 +104,17 @@ impl AhabApp {
         }
     }
 
-    pub fn set_right_panel_collapsed(&mut self, collapsed: bool) {
+    pub fn set_right_panel_collapsed(
+        &mut self,
+        collapsed: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.home.right_panel_collapsed = collapsed;
         self.state.settings.rightPanelCollapsed = collapsed;
         if let Err(error) = self.state.save() {
             eprintln!("failed to persist right panel layout: {error}");
         }
+        self.reconcile_preview(Some(window), cx);
     }
 }
