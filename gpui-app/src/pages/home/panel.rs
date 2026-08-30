@@ -67,6 +67,7 @@ impl PreviewView {
             if let Some(image) = self.screenshot_pending_render_image.take() {
                 let _ = window.drop_image(image);
             }
+            release_image_asset(&mut self.screenshot_pending_image_source, cx);
             self.screenshot_pending_image_revision = Some(revision);
             self.screenshot_pending_image_source = self
                 .latest_screenshot
@@ -75,10 +76,17 @@ impl PreviewView {
         }
 
         if self.screenshot_pending_render_image.is_none()
-            && let Some(source) = self.screenshot_pending_image_source.clone()
-            && let Some(render_image) = source.use_render_image(window, cx)
+            && let Some(source) = self.screenshot_pending_image_source.take()
         {
-            self.screenshot_pending_render_image = Some(adapt_preview_render_image(render_image));
+            if let Some(render_image) = source.clone().use_render_image(window, cx) {
+                self.screenshot_pending_render_image =
+                    Some(adapt_preview_render_image(render_image));
+                // The decoded RenderImage is now owned by the preview state. The
+                // source itself must not remain in GPUI's global asset cache.
+                source.remove_asset(cx);
+            } else {
+                self.screenshot_pending_image_source = Some(source);
+            }
         }
 
         if self.screenshot_pending_image_source.is_none()
@@ -87,13 +95,14 @@ impl PreviewView {
             if let Some(image) = self.screenshot_render_image.take() {
                 let _ = window.drop_image(image);
             }
-            self.screenshot_image_source = None;
+            release_image_asset(&mut self.screenshot_image_source, cx);
             self.screenshot_image_revision = revision;
             self.screenshot_pending_image_revision = None;
         } else if let Some(render_image) = self.screenshot_pending_render_image.take() {
             if let Some(image) = self.screenshot_render_image.take() {
                 let _ = window.drop_image(image);
             }
+            release_image_asset(&mut self.screenshot_image_source, cx);
             self.screenshot_image_source = self.screenshot_pending_image_source.take();
             self.screenshot_render_image = Some(render_image);
             self.screenshot_image_revision = revision;
@@ -101,17 +110,23 @@ impl PreviewView {
         }
     }
 
-    pub(super) fn clear_render_resources(&mut self, window: &mut Window) {
+    pub(super) fn clear_render_resources(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(image) = self.screenshot_render_image.take() {
             let _ = window.drop_image(image);
         }
         if let Some(image) = self.screenshot_pending_render_image.take() {
             let _ = window.drop_image(image);
         }
-        self.screenshot_image_source = None;
-        self.screenshot_pending_image_source = None;
+        release_image_asset(&mut self.screenshot_image_source, cx);
+        release_image_asset(&mut self.screenshot_pending_image_source, cx);
         self.screenshot_pending_image_revision = None;
         self.screenshot_image_revision = self.home_screenshot_revision;
+    }
+}
+
+fn release_image_asset(source: &mut Option<Arc<Image>>, cx: &mut Context<PreviewView>) {
+    if let Some(source) = source.take() {
+        source.remove_asset(cx);
     }
 }
 

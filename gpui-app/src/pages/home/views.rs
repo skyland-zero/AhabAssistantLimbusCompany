@@ -111,7 +111,7 @@ impl HomeViewRefs {
         cx: &mut Context<AhabApp>,
     ) {
         self.preview.update(cx, |view, cx| {
-            view.clear_render_resources(window);
+            view.clear_render_resources(window, cx);
             cx.notify();
         });
     }
