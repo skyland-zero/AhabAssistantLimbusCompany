@@ -187,7 +187,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
     let dialog_body =
         div()
             .id("team-editor-dialog")
-            .w(px(512.))
+            .w(px(680.))
             .h(px(600.))
             .max_w_full()
             .max_h(relative(0.96))

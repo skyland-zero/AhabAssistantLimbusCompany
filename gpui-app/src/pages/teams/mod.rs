@@ -180,11 +180,21 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
         .iter()
         .map(|(value, _)| value.clone())
         .collect::<Vec<_>>();
+    let has_current = options.iter().any(|(value, _)| value == &current);
     let open = app.teams.is_select_open(select);
     let palette = current_render_palette();
     let mut trigger = select_trigger(selected_label, open, &palette)
         .id(id.clone())
         .w(px(width));
+    if has_current {
+        trigger = trigger
+            .bg(palette_rgb(palette.brand_light))
+            .text_color(palette_rgb(palette.brand))
+            .font_weight(gpui::FontWeight::MEDIUM);
+        if !open {
+            trigger = trigger.border_color(palette_rgb(palette.brand));
+        }
+    }
     trigger = trigger.on_click(cx.listener(move |view, _, _, cx| {
         if open {
             view.teams.close_select();
@@ -257,6 +267,12 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
                 cx.stop_propagation();
                 cx.notify();
             }));
+        if selected {
+            option = option
+                .border_1()
+                .border_color(palette_rgb(palette.brand))
+                .font_weight(gpui::FontWeight::MEDIUM);
+        }
         let key_change = on_change.clone();
         let key_value = value;
         option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
@@ -347,7 +363,7 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
     } else {
         (palette.border, palette.card, palette.muted_foreground)
     };
-    div()
+    let mut control = div()
         .flex()
         .items_center()
         .gap_2()
@@ -375,7 +391,11 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
                 .min_w_0()
                 .truncate()
                 .child(system_label(index, language)),
-        )
+        );
+    if selected {
+        control = control.border_2().font_weight(gpui::FontWeight::MEDIUM);
+    }
+    control
 }
 
 fn scheme_badge(scheme: &str, language: Language) -> Div {

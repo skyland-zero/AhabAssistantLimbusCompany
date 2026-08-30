@@ -87,9 +87,10 @@ pub(crate) fn basic_editor(
         field_block(text("饰品体系", "Gift System").get(language), systems).into_any_element()
     };
 
-    let mut sinners = div().flex().flex_wrap().gap_2();
+    let mut sinners = div().w_full().grid().grid_cols(6).gap_2();
     for sinner in app.teams.sinners.clone() {
         let selected = team.sinners.iter().position(|id| id == &sinner.id);
+        let selected_state = selected.is_some();
         let id = sinner.id.clone();
         let path = sinner_path(&id);
         let key_id = id.clone();
@@ -104,15 +105,24 @@ pub(crate) fn basic_editor(
             .flex_none()
             .px_1()
             .rounded_sm()
-            .bg(palette_rgb(palette.card))
+            .bg(palette_rgb(if selected_state {
+                palette.brand
+            } else {
+                palette.card
+            }))
             .text_center()
             .text_size(px(11.))
             .font_weight(gpui::FontWeight::MEDIUM)
-            .text_color(rgb(TEXT))
+            .text_color(palette_rgb(if selected_state {
+                palette.brand_foreground
+            } else {
+                palette.foreground
+            }))
             .child(sinner.name);
         let mut control = div()
             .id(format!("team-sinner-{id}"))
-            .w(px(76.))
+            .w_full()
+            .min_w_0()
             .h(px(124.))
             .flex()
             .flex_col()
@@ -123,12 +133,12 @@ pub(crate) fn basic_editor(
             .rounded_lg()
             .tab_index(0)
             .border_1()
-            .border_color(palette_rgb(if selected.is_some() {
+            .border_color(palette_rgb(if selected_state {
                 palette.brand
             } else {
                 palette.border
             }))
-            .bg(palette_rgb(if selected.is_some() {
+            .bg(palette_rgb(if selected_state {
                 palette.brand_light
             } else {
                 palette.secondary
@@ -147,6 +157,9 @@ pub(crate) fn basic_editor(
                     cx.notify();
                 }
             }));
+        if selected_state {
+            control = control.border_2();
+        }
         control = control.child(
             div()
                 .relative()
