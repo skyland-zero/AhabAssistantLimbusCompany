@@ -1,9 +1,4 @@
-use std::time::Duration;
-
-use gpui::{
-    Animation, AnimationExt, Context, Div, Window, WindowControlArea, div, img, prelude::*, px,
-    rgb, rgba,
-};
+use gpui::{Context, Div, Entity, Window, WindowControlArea, div, img, prelude::*, px, rgb, rgba};
 
 use crate::{
     app::{AhabApp, Page},
@@ -15,8 +10,10 @@ use crate::{
 };
 
 mod icons;
+mod status_dot;
 
 use icons::{Icon, icon};
+pub(crate) use status_dot::StatusDot;
 
 const TITLEBAR_HEIGHT: f32 = 40.0;
 const WINDOW_BUTTON_WIDTH: f32 = 48.0;
@@ -72,6 +69,7 @@ pub fn title_bar(
 
     let is_busy = app.home.is_busy();
     let is_paused = app.home.execution.state == crate::model::ExecutionState::Paused;
+    let status_dot = app.ensure_titlebar_status_dot(is_busy, is_paused, palette, cx);
 
     let mut pages = div().flex().items_center().gap_1();
     for (index, page) in NAV_PAGES.into_iter().enumerate() {
@@ -82,8 +80,7 @@ pub fn title_bar(
                 tab_index: index as isize,
                 language,
                 palette,
-                is_busy,
-                is_paused,
+                status_dot: (page == Page::Home).then(|| status_dot.clone()),
             },
             cx,
         ));
@@ -232,8 +229,7 @@ struct NavItemConfig {
     tab_index: isize,
     language: Language,
     palette: Palette,
-    is_busy: bool,
-    is_paused: bool,
+    status_dot: Option<Entity<StatusDot>>,
 }
 
 fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElement {
@@ -243,8 +239,7 @@ fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElemen
         tab_index,
         language,
         palette,
-        is_busy,
-        is_paused,
+        status_dot,
     } = config;
     let mut item = div()
         .id(format!("tab-{:?}", page))
@@ -270,39 +265,9 @@ fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElemen
         })))
         .child(page.label_for(language));
 
-    if page == Page::Home {
-        let dot_color = if is_busy {
-            if is_paused {
-                rgb(palette.warning.rgb_hex())
-            } else {
-                rgb(palette.success.rgb_hex())
-            }
-        } else {
-            rgba(0)
-        };
-        let status_dot = div()
-            .w(px(6.))
-            .h(px(6.))
-            .rounded_full()
-            .bg(dot_color)
-            .flex_none();
-        let status_dot: gpui::AnyElement = if is_busy {
-            status_dot
-                .with_animation(
-                    "titlebar-console-status-breathe",
-                    Animation::new(Duration::from_millis(1400))
-                        .repeat()
-                        .with_max_fps(12.0),
-                    |dot, progress| {
-                        let opacity =
-                            0.40 + 0.60 * (0.5 + 0.5 * (progress * std::f32::consts::TAU).sin());
-                        dot.opacity(opacity)
-                    },
-                )
-                .into_any_element()
-        } else {
-            status_dot.into_any_element()
-        };
+    if page == Page::Home
+        && let Some(status_dot) = status_dot
+    {
         item = item.child(status_dot);
     }
 

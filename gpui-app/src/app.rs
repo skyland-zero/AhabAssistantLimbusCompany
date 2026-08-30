@@ -1,4 +1,4 @@
-use gpui::{ScrollHandle, Subscription};
+use gpui::{Entity, ScrollHandle, Subscription};
 
 use self::preview::PreviewControlState;
 
@@ -214,6 +214,7 @@ pub struct AhabApp {
     pub toast: Option<shell::Toast>,
     toast_generation: u64,
     pub(crate) home_views: Option<HomeViewRefs>,
+    pub(crate) titlebar_status_dot: Option<Entity<shell::StatusDot>>,
     pub(crate) backend_status: BackendStatus,
     pub(crate) backend_operation: BackendOperation,
     pub(crate) backend_attempt_id: u64,

@@ -79,8 +79,10 @@ impl PreviewView {
             && let Some(source) = self.screenshot_pending_image_source.take()
         {
             if let Some(render_image) = source.clone().use_render_image(window, cx) {
-                self.screenshot_pending_render_image =
-                    Some(adapt_preview_render_image(render_image));
+                // GPUI's JPEG decoder already converts the decoded pixels into
+                // the renderer's BGRA component order. Keep and reuse that
+                // RenderImage so each preview frame avoids a full-size copy.
+                self.screenshot_pending_render_image = Some(render_image);
                 // The decoded RenderImage is now owned by the preview state. The
                 // source itself must not remain in GPUI's global asset cache.
                 source.remove_asset(cx);
@@ -312,37 +314,6 @@ fn live_indicator() -> Div {
         .child(div().w(px(5.0)).h(px(5.0)).rounded_full().bg(success))
 }
 
-fn swap_red_blue_channels(bytes: &mut [u8]) {
-    let (pixels, _) = bytes.as_chunks_mut::<4>();
-    for pixel in pixels {
-        pixel.swap(0, 2);
-    }
-}
-
-fn adapt_preview_render_image(render_image: Arc<RenderImage>) -> Arc<RenderImage> {
-    let Some(source_bytes) = render_image.as_bytes(0) else {
-        return render_image;
-    };
-
-    let size = render_image.size(0);
-    let width = size.width.0.max(0) as u32;
-    let height = size.height.0.max(0) as u32;
-    let expected_len = width as usize * height as usize * 4;
-    if width == 0 || height == 0 || source_bytes.len() != expected_len {
-        return render_image;
-    }
-
-    let mut bytes = source_bytes.to_vec();
-    // JPEG is decoded as RGB while GPUI's image surface expects the
-    // component order used by the D3D-backed renderer.
-    swap_red_blue_channels(&mut bytes);
-    let Some(buffer) = image::RgbaImage::from_raw(width, height, bytes) else {
-        return render_image;
-    };
-
-    Arc::new(RenderImage::new(vec![image::Frame::new(buffer)]))
-}
-
 pub(super) fn panel_card(child: impl IntoElement) -> Div {
     div()
         .min_w_0()
@@ -394,30 +365,5 @@ pub(super) fn reward_mode_label(mode: u8, language: Language) -> &'static str {
         1 => text("狂气/通行证", "Lunacy/Pass").get(language),
         2 => text("邮件", "Mail").get(language),
         _ => text("全部", "All").get(language),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn preview_render_adapter_swaps_red_and_blue_once() {
-        let render_image = Arc::new(RenderImage::new(vec![image::Frame::new(
-            image::RgbaImage::from_raw(1, 1, vec![0x10, 0x20, 0x30, 0xff]).unwrap(),
-        )]));
-
-        let adapted = adapt_preview_render_image(render_image);
-
-        assert_eq!(adapted.as_bytes(0).unwrap(), &[0x30, 0x20, 0x10, 0xff]);
-    }
-
-    #[test]
-    fn channel_swap_keeps_alpha_and_green_channels() {
-        let mut bytes = vec![0x10, 0x20, 0x30, 0x40, 0xaa, 0xbb, 0xcc, 0xdd];
-
-        swap_red_blue_channels(&mut bytes);
-
-        assert_eq!(bytes, vec![0x30, 0x20, 0x10, 0x40, 0xcc, 0xbb, 0xaa, 0xdd]);
     }
 }

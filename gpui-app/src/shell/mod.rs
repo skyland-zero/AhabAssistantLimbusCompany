@@ -5,6 +5,7 @@ mod windows;
 
 pub(crate) const NATIVE_APP_TITLE: &str = "AALC·gpui";
 
+pub(crate) use title_bar::StatusDot;
 pub use title_bar::title_bar;
 pub use toast::{Toast, ToastKind, toast_layer};
 

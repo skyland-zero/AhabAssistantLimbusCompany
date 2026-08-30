@@ -1,12 +1,31 @@
 use std::time::Duration;
 
-use gpui::{Animation, AnimationExt, Context, Render, Window, div, prelude::*, px, rgb};
+use gpui::{Animation, AnimationExt, Context, Entity, Render, Window, div, prelude::*, px, rgb};
 
 use super::AhabApp;
 use super::HomeInvalidation;
 use crate::{components::style::Palette, pages, shell};
 
 impl AhabApp {
+    pub(crate) fn ensure_titlebar_status_dot(
+        &mut self,
+        busy: bool,
+        paused: bool,
+        palette: Palette,
+        cx: &mut Context<Self>,
+    ) -> Entity<shell::StatusDot> {
+        let status_dot = if let Some(status_dot) = self.titlebar_status_dot.clone() {
+            status_dot
+        } else {
+            let status_dot = cx.new(|_| shell::StatusDot::new(busy, paused, palette));
+            self.titlebar_status_dot = Some(status_dot.clone());
+            status_dot
+        };
+
+        status_dot.update(cx, |view, _| view.sync_snapshot(busy, paused, palette));
+        status_dot
+    }
+
     pub(crate) fn ensure_home_views(&mut self, cx: &mut Context<Self>) {
         if self.home_views.is_none() {
             self.home_views = Some(crate::pages::HomeViewRefs::new(cx));

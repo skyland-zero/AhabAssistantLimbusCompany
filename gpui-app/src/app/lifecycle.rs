@@ -532,6 +532,7 @@ impl AhabApp {
             toast: None,
             toast_generation: 0,
             home_views: None,
+            titlebar_status_dot: None,
             backend_status,
             backend_operation: BackendOperation::Idle,
             backend_attempt_id: 0,
