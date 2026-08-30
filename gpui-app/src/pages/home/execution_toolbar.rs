@@ -108,7 +108,11 @@ pub(super) fn execution_toolbar(
     }
 
     let (run_icon, run_label, run_variant) = if state == ExecutionState::Stopping {
-        (ICON_LOADER, "Stopping...", ButtonVariant::Destructive)
+        (
+            ICON_LOADER,
+            text("正在停止", "Stopping").get(language),
+            ButtonVariant::Destructive,
+        )
     } else if busy {
         (ICON_SQUARE, "Stop!", ButtonVariant::Destructive)
     } else {
@@ -222,8 +226,8 @@ pub(super) fn execution_toolbar(
         }));
     }
 
-    let mut command_group = div().min_w_0().flex().flex_wrap().items_center().gap_2();
-    if busy {
+    let mut command_group = div().min_w_0().flex().items_center().gap_2();
+    if busy && state != ExecutionState::Stopping {
         command_group = command_group.child(pause);
     }
     command_group = command_group.child(run);
@@ -236,7 +240,8 @@ pub(super) fn execution_toolbar(
         .items_center()
         .justify_between()
         .gap_3()
-        .mx(px(14.0))
+        .ml(px(14.0))
+        .mr(px(4.0))
         .mb(px(10.0))
         .mt(px(4.0))
         .rounded_lg()
