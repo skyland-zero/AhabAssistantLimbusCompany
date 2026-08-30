@@ -78,7 +78,12 @@ fn render_overview(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div 
         .mr(px(4.0))
         .mt(px(10.0))
         .child(runtime_card(snapshot, root))
-        .child(period_card(snapshot, root).flex_grow(1.0).flex_shrink(1.0))
+        .child(
+            period_card(snapshot, root)
+                .flex_grow(1.0)
+                .flex_shrink(1.0)
+                .flex_basis(relative(0.0)),
+        )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,8 +116,9 @@ fn runtime_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> impl In
         RuntimeCardView::CurrentRun => current_run_card(snapshot),
     };
 
-    card.flex_grow(2.0)
+    card.flex_grow(1.0)
         .flex_shrink(1.0)
+        .flex_basis(relative(0.0))
         .id("runtime-status-card")
         .with_animation(
             format!("runtime-card-{}", view.animation_key()),
