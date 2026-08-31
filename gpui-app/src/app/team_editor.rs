@@ -290,8 +290,8 @@ impl AhabApp {
             crate::model::Language::EnUs => "Team code (optional)",
         };
         let observe_placeholder = match language {
-            crate::model::Language::ZhCn => "输入 E.G.O 饰品名称",
-            crate::model::Language::EnUs => "Enter E.G.O gift name",
+            crate::model::Language::ZhCn => "高级坐标，如 general_3_4_8",
+            crate::model::Language::EnUs => "Advanced coordinate, e.g. general_3_4_8",
         };
         let json_placeholder = match language {
             crate::model::Language::ZhCn => "粘贴 Team JSON",

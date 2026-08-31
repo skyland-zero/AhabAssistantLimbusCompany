@@ -22,6 +22,6 @@ pub use tasks::{
     MirrorConfig, MirrorProgressPayload, ResonateWithAhabConfig, SetWindowsConfig, TasksConfig,
 };
 pub use teams::{
-    DiscardSystems, SinnerInfo, TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPurpose,
-    TeamSummary, team_number_from_id,
+    DiscardSystems, MAX_OBSERVE_EGO_GIFTS, SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID, SinnerInfo,
+    TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPurpose, TeamSummary, team_number_from_id,
 };

@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+pub const SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID: &str = "spiderweb_entangled_in_red";
+pub const MAX_OBSERVE_EGO_GIFTS: usize = 3;
+
 /// The formation page reserves the first twenty numbers as stable UI slots.
 /// This is intentionally a presentation limit; the backend may still expose
 /// teams outside this range.

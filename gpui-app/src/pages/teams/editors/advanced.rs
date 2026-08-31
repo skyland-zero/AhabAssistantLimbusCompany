@@ -1,5 +1,16 @@
 use super::*;
 
+fn observe_gift_label(gift: &str, language: Language) -> String {
+    match gift {
+        crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID => {
+            text("赤红纠缠的蜘蛛巢", "Spiderweb Entangled in Red")
+                .get(language)
+                .to_owned()
+        }
+        _ => gift.to_owned(),
+    }
+}
+
 pub(crate) fn advanced_editor(
     app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
@@ -54,10 +65,35 @@ pub(crate) fn advanced_editor(
                 .bg(palette_rgb(current_render_palette().secondary))
                 .text_size(px(11.))
                 .text_color(palette_rgb(current_render_palette().foreground))
-                .child(gift.clone())
+                .child(observe_gift_label(gift, language))
                 .child(remove),
         );
     }
+
+    let has_spiderweb = config
+        .observe_ego_gift_selected
+        .iter()
+        .any(|gift| gift == crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID);
+    let mut spiderweb_preset = editor_choice_button(
+        text("赤红纠缠的蜘蛛巢", "Spiderweb Entangled in Red").get(language),
+        has_spiderweb,
+    )
+    .id("advanced-spiderweb-gift")
+    .h(px(30.))
+    .px_2()
+    .py_0()
+    .on_click(cx.listener(|view, _, _, cx| {
+        view.teams.add_spiderweb_entangled_in_red();
+        cx.notify();
+    }));
+    spiderweb_preset =
+        spiderweb_preset.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                view.teams.add_spiderweb_entangled_in_red();
+                cx.notify();
+            }
+        }));
 
     let mut add_observe = button(text("添加", "Add").get(language), ButtonVariant::Default)
         .id("advanced-add-observe")
@@ -224,18 +260,35 @@ pub(crate) fn advanced_editor(
                     .flex_col()
                     .gap_2()
                     .child(control_row(
-                        text("观测 E.G.O 饰品", "Observe E.G.O Gifts").get(language),
+                        text("开局礼物搜索", "Starting Gift Search").get(language),
                         observe_switch,
                     ))
                     .child(
                         div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
                             text(
-                                "输入名称后点击添加；重复名称不会重复加入。",
-                                "Enter a gift name and click Add; duplicates are ignored.",
+                                "推荐直接选择小指良专属礼物；高级配置可填写 system_level_row_col。",
+                                "Use the Ryoshu preset, or enter system_level_row_col for advanced configuration.",
                             )
                             .get(language),
                         ),
                     )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .flex_wrap()
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(TEXT_MUTED))
+                                    .child(text("快速选择", "Quick preset").get(language)),
+                            )
+                            .child(spiderweb_preset),
+                    )
+                    .child(editor_section_title(
+                        text("高级坐标配置", "Advanced coordinate configuration").get(language),
+                    ))
                     .child(observe_content),
             )
             .flex_none(),

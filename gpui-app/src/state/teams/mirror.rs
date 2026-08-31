@@ -139,23 +139,72 @@ impl TeamsState {
         if gift.is_empty() {
             return false;
         }
+        let canonical = canonical_observe_gift_id(gift);
         let mut added = false;
         self.update_mirror(|config| {
+            if config.observe_ego_gift_selected.len() >= crate::model::MAX_OBSERVE_EGO_GIFTS
+                && !config
+                    .observe_ego_gift_selected
+                    .iter()
+                    .any(|item| canonical_observe_gift_id(item) == canonical)
+            {
+                return;
+            }
             if !config
                 .observe_ego_gift_selected
                 .iter()
-                .any(|item| item == gift)
+                .any(|item| canonical_observe_gift_id(item) == canonical)
             {
-                config.observe_ego_gift_selected.push(gift.to_owned());
+                config.observe_ego_gift_selected.push(canonical.to_owned());
                 added = true;
             }
         });
         added
     }
 
+    pub fn add_spiderweb_entangled_in_red(&mut self) -> bool {
+        let mut added = false;
+        self.update_mirror(|config| {
+            if config.observe_ego_gift_selected.iter().any(|item| {
+                canonical_observe_gift_id(item) == crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID
+            }) {
+                config.observe_ego_gift = true;
+                return;
+            }
+            if config.observe_ego_gift_selected.len() >= crate::model::MAX_OBSERVE_EGO_GIFTS {
+                return;
+            }
+            config
+                .observe_ego_gift_selected
+                .push(crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID.to_owned());
+            config.observe_ego_gift = true;
+            added = true;
+        });
+        added
+    }
+
     pub fn remove_observe_gift(&mut self, gift: &str) {
         self.update_mirror(|config| {
-            config.observe_ego_gift_selected.retain(|item| item != gift);
+            if canonical_observe_gift_id(gift) == crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID {
+                config.observe_ego_gift_selected.retain(|item| {
+                    canonical_observe_gift_id(item)
+                        != crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID
+                });
+            } else {
+                config.observe_ego_gift_selected.retain(|item| item != gift);
+            }
         });
+    }
+}
+
+fn canonical_observe_gift_id(gift: &str) -> &str {
+    if gift.eq_ignore_ascii_case("spiderweb entangled in red")
+        || gift == "赤红纠缠的蜘蛛巢"
+        || gift == "赤紅糾纏的蜘蛛巢"
+        || gift.eq_ignore_ascii_case("general_gift_3_32.png")
+    {
+        crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID
+    } else {
+        gift
     }
 }

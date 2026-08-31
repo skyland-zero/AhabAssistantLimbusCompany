@@ -24,6 +24,7 @@ from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.execution_stats import ExecutionStatsStore
 from module.logger import log
+from module.observe_ego_gift import normalize_observe_ego_gifts
 from module.preview_capture import PreviewCapture, encode_screenshot_frame
 
 SCHEMA_VERSION = 2
@@ -1597,7 +1598,7 @@ class BackendApplication:
             or []
         )
         mirror["observe_ego_gift_selected"] = (
-            [value for value in selected_gifts if isinstance(value, str)] if isinstance(selected_gifts, list) else []
+            normalize_observe_ego_gifts(selected_gifts) if isinstance(selected_gifts, list) else []
         )
 
         actions = values.get("second_system_action", getattr(defaults, "second_system_action", [])) or []
@@ -1732,7 +1733,7 @@ class BackendApplication:
                 continue
             if key == "observe_ego_gift_selected":
                 values = BackendApplication._require_string_list(value, f"team.save.mirrorConfig.{key}")
-                setattr(setting, key, values)
+                setattr(setting, key, normalize_observe_ego_gifts(values))
                 continue
             if key == "ignore_shop":
                 values = BackendApplication._require_bool_list(value, f"team.save.mirrorConfig.{key}")

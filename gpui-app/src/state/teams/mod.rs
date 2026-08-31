@@ -72,6 +72,55 @@ mod tests {
     }
 
     #[test]
+    fn spiderweb_gift_preset_adds_canonical_id_and_enables_search() {
+        let mut state = TeamsState::default();
+        state.open_new();
+
+        assert!(state.add_spiderweb_entangled_in_red());
+        let config = state.editor.as_ref().unwrap().mirror_config();
+        assert!(config.observe_ego_gift);
+        assert_eq!(
+            config.observe_ego_gift_selected,
+            vec![crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID]
+        );
+        assert!(!state.add_spiderweb_entangled_in_red());
+    }
+
+    #[test]
+    fn observe_gift_input_normalizes_spiderweb_alias_and_caps_selection() {
+        let mut state = TeamsState::default();
+        state.open_new();
+
+        assert!(state.add_observe_gift("赤红纠缠的蜘蛛巢"));
+        assert!(state.add_observe_gift("bleed_3_1_1"));
+        assert!(state.add_observe_gift("burn_3_1_1"));
+        assert!(!state.add_observe_gift("general_3_1_1"));
+        let config = state.editor.as_ref().unwrap().mirror_config();
+        assert_eq!(config.observe_ego_gift_selected.len(), 3);
+        assert_eq!(
+            config.observe_ego_gift_selected[0],
+            crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID
+        );
+    }
+
+    #[test]
+    fn spiderweb_preset_recognizes_imported_legacy_alias() {
+        let mut state = TeamsState::default();
+        state.open_new();
+        state.update_mirror(|config| {
+            config.observe_ego_gift_selected = vec!["general_gift_3_32.png".to_owned()];
+        });
+
+        assert!(!state.add_spiderweb_entangled_in_red());
+        let config = state.editor.as_ref().unwrap().mirror_config();
+        assert!(config.observe_ego_gift);
+        assert_eq!(
+            config.observe_ego_gift_selected,
+            vec!["general_gift_3_32.png".to_owned()]
+        );
+    }
+
+    #[test]
     fn starlight_cost_and_json_import_use_contract_defaults() {
         let mut state = TeamsState::default();
         state.open_new();
