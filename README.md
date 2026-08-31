@@ -26,6 +26,10 @@
 
 遇到问题，请在提问前查看：[FAQ](assets/doc/zh/FAQ.md)
 
+> **关于本 Fork**
+>
+> 本项目是 [AhabAssistantLimbusCompany](https://github.com/KIYI671/AhabAssistantLimbusCompany) 的一个 Fork，主要使用 Rust/GPUI 重做桌面 UI。自动化任务、游戏识别、战斗流程等功能整体沿用上游实现；本 Fork 仅针对 GPUI 界面及其与后端的连接进行必要适配，不重新实现自动化逻辑。
+
   ---
 
 本项目为非科班出身、非计算机从业人员心血来潮的作品
