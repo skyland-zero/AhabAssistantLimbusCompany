@@ -22,6 +22,8 @@ allowed_protected_files = [
     "module/automation/screenshot.py",
     "module/config/config.py",
     "module/config/config_typing.py",
+    # Fork-owned credential redaction used by the GPUI/sidecar settings path.
+    "module/config/redaction.py",
     "module/config/theme_pack_catalog.py",
     "module/game_and_screen/screen.py",
     "tasks/base/make_enkephalin_module.py",
@@ -29,12 +31,16 @@ allowed_protected_files = [
     "tasks/base/script_task_scheme.py",
     "tasks/battle/battle.py",
     "tasks/daily/luxcavation.py",
+    # Fork-owned mirror pathfinding and detector/session reuse optimizations.
+    "tasks/mirror/search_road.py",
     "tasks/teams/team_formation.py",
     "tasks/tools/__init__.py",
     "tasks/tools/infinite_battle.py",
     "tasks/tools/production_module.py",
     "tasks/tools/screenshot_module.py",
     "tasks/tools/ui_style.py",
+    # Fork-owned template matching and ORB descriptor reuse optimizations.
+    "utils/image_utils.py",
     "utils/utils.py",
 ]
 
