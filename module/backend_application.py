@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from core.team_squad import validate_pseudo_solo_selection
 from module.config.redaction import redact_text
 from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
@@ -669,8 +670,15 @@ class BackendApplication:
             if match is None:
                 raise ValueError("team.save.id 无效")
             team_number = int(match.group(1))
+            if "teamNumber" in values:
+                raise ValueError("team.save.teamNumber 只允许用于新建队伍")
         else:
-            team_number = max(numbers, default=0) + 1
+            if "teamNumber" in values:
+                team_number = self._require_int(values["teamNumber"], "team.save.teamNumber", minimum=1)
+                if team_number in numbers:
+                    raise ValueError(f"编队编号 {team_number} 已被占用")
+            else:
+                team_number = max(numbers, default=0) + 1
         if team_number < 1:
             team_number = 1
         try:
@@ -705,6 +713,8 @@ class BackendApplication:
                 self._write_mirror_setting(setting, mirror)
             elif "accessoryScheme" in values:
                 self._write_accessory_scheme(setting, values["accessoryScheme"])
+            if getattr(setting, "defense_for_solo", False):
+                validate_pseudo_solo_selection(setting.chosen_sinners)
 
         if hasattr(setting, "team_number"):
             setting.team_number = team_number

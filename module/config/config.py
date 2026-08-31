@@ -2,6 +2,7 @@ import atexit
 import copy
 import sys
 import threading
+from collections.abc import Mapping
 from pathlib import Path
 from time import localtime, strftime, time
 from typing import Any, Optional
@@ -33,6 +34,8 @@ _LEGACY_WINDOW_POSITION = {
     2: "right_top",
     3: "free",
 }
+
+_BUILTIN_TEAM_PRESET_NAMES = frozenset({"小指良伪单通", "蜘蛛巢全家桶"})
 
 
 class Config(metaclass=SingletonMeta):
@@ -212,6 +215,83 @@ class Config(metaclass=SingletonMeta):
         except FileNotFoundError:
             sys.exit("默认配置文件未找到")
 
+    def _merge_builtin_team_presets(self, loaded_config: dict) -> bool:
+        """Merge newly shipped team presets into an old user config once.
+
+        Team settings are user-owned after they are written to ``config.yaml``.
+        A revision marker lets us add missing presets during an upgrade without
+        re-adding a preset that the user deliberately removed later.
+        """
+
+        target_revision = self._defaults.get("team_presets_revision", 0)
+        if isinstance(target_revision, bool) or not isinstance(target_revision, int):
+            target_revision = 0
+        saved_revision = loaded_config.get("team_presets_revision", 0)
+        if isinstance(saved_revision, bool) or not isinstance(saved_revision, int):
+            saved_revision = 0
+        if saved_revision >= target_revision:
+            return False
+
+        default_teams = self._defaults.get("teams", {}) or {}
+        if not isinstance(default_teams, Mapping):
+            return False
+
+        loaded_teams = loaded_config.get("teams")
+        if isinstance(loaded_teams, Mapping):
+            teams = copy.deepcopy(dict(loaded_teams))
+        else:
+            teams = copy.deepcopy(dict(default_teams))
+
+        existing_names: set[str] = set()
+        used_numbers: set[int] = set()
+        for raw_number, setting in teams.items():
+            try:
+                number = int(raw_number)
+            except (TypeError, ValueError):
+                number = 0
+            if number > 0:
+                used_numbers.add(number)
+            if isinstance(setting, Mapping):
+                name = setting.get("remark_name")
+            else:
+                name = getattr(setting, "remark_name", None)
+            if isinstance(name, str) and name:
+                existing_names.add(name)
+
+        added_names: list[str] = []
+        for raw_number, preset_setting in sorted(default_teams.items(), key=lambda item: str(item[0])):
+            if not isinstance(preset_setting, Mapping):
+                continue
+            preset_name = preset_setting.get("remark_name")
+            if not isinstance(preset_name, str) or preset_name not in _BUILTIN_TEAM_PRESET_NAMES:
+                continue
+            if preset_name in existing_names:
+                continue
+
+            try:
+                preferred_number = int(raw_number)
+            except (TypeError, ValueError):
+                preferred_number = 0
+            if preferred_number <= 0 or preferred_number in used_numbers:
+                team_number = max(used_numbers, default=0) + 1
+                while team_number in used_numbers:
+                    team_number += 1
+            else:
+                team_number = preferred_number
+
+            preset = copy.deepcopy(dict(preset_setting))
+            preset["team_number"] = team_number
+            teams[str(team_number)] = preset
+            used_numbers.add(team_number)
+            existing_names.add(preset_name)
+            added_names.append(preset_name)
+
+        loaded_config["teams"] = teams
+        loaded_config["team_presets_revision"] = target_revision
+        if added_names:
+            log.info(f"已合并内置队伍预设：{'、'.join(added_names)}")
+        return True
+
     def _load_config(self, path: str | Path | None = None) -> None:
         """加载用户配置文件，如未找到则保存默认配置"""
         if isinstance(path, str):
@@ -265,6 +345,7 @@ class Config(metaclass=SingletonMeta):
                     saved_version = loaded_config.get("config_version", 0)
                     loaded_config["config_version"] = self.config.config_version
                     self._old_version_cfg_upgrade(saved_version, loaded_config)
+                self._merge_builtin_team_presets(loaded_config)
                 # 使用更新后的配置初始化 Config 对象
                 self.config = ConfigModel(**{**self._defaults, **loaded_config})
                 register_secrets(self.config.model_dump())
@@ -575,6 +656,7 @@ class Config(metaclass=SingletonMeta):
             with open(path, "r", encoding="utf-8") as file:
                 loaded_config = self.yaml.load(file)
             if loaded_config:
+                self._merge_builtin_team_presets(loaded_config)
                 self.config = ConfigModel(**{**self._defaults, **loaded_config})
                 register_secrets(self.config.model_dump())
                 queue_in_loaded_config = loaded_config.get("teams_active_queue")

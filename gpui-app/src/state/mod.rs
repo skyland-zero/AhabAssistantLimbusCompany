@@ -11,5 +11,5 @@ pub use other::{
 };
 pub use teams::{
     MirrorBool, MirrorU8, SYSTEM_LABELS, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamSelect,
-    TeamsState,
+    TeamSlot, TeamsState,
 };

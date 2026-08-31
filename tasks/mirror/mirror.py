@@ -4,6 +4,8 @@ from time import sleep
 
 import numpy as np
 
+from core.pseudo_solo import BattleRosterObserver, PseudoSoloDefenseState
+from core.team_squad import validate_pseudo_solo_selection
 from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -47,10 +49,14 @@ def to_log_with_time(msg, elapsed_time):
 class Mirror:
     def __init__(self, team_setting: TeamSetting, team_num: int):
         team_setting = team_setting.model_copy(deep=True)  # 避免修改原始配置
+        if team_setting.defense_for_solo:
+            validate_pseudo_solo_selection(team_setting.chosen_sinners)
         self.logger = log
         self.team_order = team_num
         self.sinner_team = team_setting.sinner_order  # 选择的罪人序列
+        self.chosen_sinners = team_setting.chosen_sinners
         self.team_number = team_setting.team_number  # 选择的编队名
+        self.team_code_loaded = False
         self.shop = Shop(team_setting)
         self.system = all_systems[team_setting.team_system]  # 选择的体系
         self.avoid_skill_3 = team_setting.avoid_skill_3  # 是否避免使用3技能
@@ -76,9 +82,14 @@ class Mirror:
 
         self.defense_first_round = team_setting.defense_first_round  # 是否第一回合全员防御
         self.defense_for_solo = team_setting.defense_for_solo  # 是否小指良单通连续防御
-        self.defense_for_solo_state = (
-            DefenseForSoloState(team_setting.defense_for_solo_turns) if team_setting.defense_for_solo else None
-        )
+        if team_setting.defense_for_solo:
+            base_defense_state = DefenseForSoloState(team_setting.defense_for_solo_turns)
+            self.defense_for_solo_state = PseudoSoloDefenseState(
+                base_defense_state,
+                BattleRosterObserver(team_setting.chosen_sinners),
+            )
+        else:
+            self.defense_for_solo_state = None
 
         self.start_time = time.time()
         self.first_battle = True  # 判断是否首次进入战斗，如果是则重新配队
@@ -117,6 +128,15 @@ class Mirror:
             defense_for_solo_state=self.defense_for_solo_state,
         )
         self.battle_total_time += elapsed
+
+    def _form_team_for_battle(self) -> bool:
+        """Apply the selected formation without overwriting a loaded team code."""
+
+        if self.team_code_loaded:
+            self.team_code_loaded = False
+            log.info("编队码已加载，跳过手动编队")
+            return True
+        return team_formation(self.sinner_team, self.chosen_sinners)
 
     def road_to_mir(self):
         loop_count = 30
@@ -324,10 +344,14 @@ class Mirror:
 
             # 战斗配队的情况
             if auto.find_element("teams/identify_assets.png"):
+                if self.defense_for_solo_state is not None:
+                    self.defense_for_solo_state.observe_team_page(self.floor)
                 # 如果第一次启动脚本，还没进行编队，就先编队
                 if self.first_battle:
-                    team_formation(self.sinner_team)
-                    self.first_battle = False
+                    if self._form_team_for_battle():
+                        self.first_battle = False
+                    else:
+                        log.warning("罪人编队失败，将在下一轮识别后重试")
                     continue
                 # 战斗配队失败的情况
                 if auto.click_element("teams/none_sinner_assets.png", model="clam"):
@@ -1013,6 +1037,7 @@ class Mirror:
                     return
 
     def select_mirror_team(self):
+        self.team_code_loaded = False
         chance_to_select_team = 5
         while not select_battle_team(self.team_number):
             chance_to_select_team -= 1
@@ -1022,7 +1047,8 @@ class Mirror:
         # 加载编队码（如果启用）
         team_setting = cfg.config.teams.get(str(self.team_order))
         if team_setting and team_setting.use_team_code and team_setting.team_code:
-            if not load_team_code_in_game(team_setting.team_code):
+            self.team_code_loaded = load_team_code_in_game(team_setting.team_code)
+            if not self.team_code_loaded:
                 log.warning("编队码加载失败，继续使用当前队伍配置")
         loop_count = 30
         auto.model = "clam"
@@ -1154,6 +1180,8 @@ class Mirror:
         msg = f"满 身 疮 痍 ！ 重 开 ！此次战败耗时{time.time() - self.start_time}"
         log.info(msg)
         self.first_battle = True
+        if self.defense_for_solo_state is not None:
+            self.defense_for_solo_state.reset_for_run()
         self.start_time = time.time()
 
     def event_handling(self):

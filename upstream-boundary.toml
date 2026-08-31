@@ -31,6 +31,10 @@ allowed_protected_files = [
     "tasks/base/script_task_scheme.py",
     "tasks/battle/battle.py",
     "tasks/daily/luxcavation.py",
+    # Fork-owned mirror compatibility hooks (team-code precedence and the
+    # pseudo-solo defense adapter); replay these small changes after taking
+    # the upstream mirror runner during synchronization.
+    "tasks/mirror/mirror.py",
     # Fork-owned mirror pathfinding and detector/session reuse optimizations.
     "tasks/mirror/search_road.py",
     "tasks/teams/team_formation.py",

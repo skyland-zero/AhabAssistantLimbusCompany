@@ -21,6 +21,85 @@ impl AhabApp {
         cx.notify();
     }
 
+    pub fn open_new_team_for_slot(&mut self, number: u32, cx: &mut Context<Self>) {
+        self.teams.open_new_for_slot(number);
+        self.create_team_inputs(cx);
+        cx.notify();
+    }
+
+    pub fn set_team_enabled(&mut self, team: &TeamDetail, enabled: bool, cx: &mut Context<Self>) {
+        if self.teams.rpc.is_sidecar() {
+            let params = match self.teams.begin_team_enabled(team, enabled) {
+                Ok(params) => params,
+                Err(error) => {
+                    self.teams.feedback = Some(error);
+                    cx.notify();
+                    return;
+                }
+            };
+            let team_id = team.id.clone();
+            let rpc = self.teams.rpc.clone();
+            cx.spawn(async move |this, cx| {
+                let request = rpc.request_async(method::TEAM_SAVE, Some(params));
+                let response = cx
+                    .background_executor()
+                    .spawn(async move { request.recv().ok() })
+                    .await;
+                let result = match response {
+                    None => Err("后端连接已断开".to_owned()),
+                    Some(response) => match RpcGateway::decode_response(method::TEAM_SAVE, response) {
+                        Err(error) => Err(error.message),
+                        Ok(None) => Err("team.save 返回了空结果".to_owned()),
+                        Ok(Some(value)) if value.as_bool() == Some(true) => {
+                            let list_request = rpc.request_async(method::TEAM_LIST, None);
+                            let list_response = cx
+                                .background_executor()
+                                .spawn(async move { list_request.recv().ok() })
+                                .await;
+                            match list_response {
+                                None => Err("team.save 已成功，但无法读取队伍列表".to_owned()),
+                                Some(response) => match RpcGateway::decode_response(
+                                    method::TEAM_LIST,
+                                    response,
+                                ) {
+                                    Err(error) => Err(error.message),
+                                    Ok(None) => Err("team.list 返回了空结果".to_owned()),
+                                    Ok(Some(value)) => {
+                                        let teams: Result<Vec<TeamDetail>, _> =
+                                            serde_json::from_value(value);
+                                        teams
+                                            .map_err(|error| format!("team.list 返回了无效队伍：{error}"))
+                                            .and_then(|teams| {
+                                                teams
+                                                    .into_iter()
+                                                    .find(|team| team.id == team_id)
+                                                    .ok_or_else(|| {
+                                                        "team.save 已成功，但无法从列表定位队伍".to_owned()
+                                                    })
+                                            })
+                                    }
+                                },
+                            }
+                        }
+                        Ok(Some(value)) => serde_json::from_value(value)
+                            .map_err(|error| format!("team.save 返回了无效队伍：{error}")),
+                    },
+                };
+                let _ = this.update(cx, |view, cx| {
+                    match result {
+                        Ok(saved) => view.teams.apply_team_enabled(saved),
+                        Err(error) => view.teams.fail_team_enabled(error),
+                    }
+                    cx.notify();
+                });
+            })
+            .detach();
+        } else if let Err(error) = self.teams.set_team_enabled(team, enabled) {
+            self.teams.feedback = Some(error);
+        }
+        cx.notify();
+    }
+
     pub fn close_team_editor(&mut self, cx: &mut Context<Self>) {
         if self.teams.saving {
             self.teams.feedback = Some("队伍正在保存，请等待后端响应".to_owned());

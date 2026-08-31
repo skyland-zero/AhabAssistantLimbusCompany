@@ -1,13 +1,6 @@
 use super::*;
 
 impl TeamsState {
-    pub fn filtered_teams(&self) -> impl Iterator<Item = &TeamDetail> {
-        let purpose = self.filter.purpose();
-        self.teams
-            .iter()
-            .filter(move |team| purpose.is_none() || Some(team.purpose) == purpose)
-    }
-
     pub fn count_for(&self, filter: TeamFilter) -> usize {
         match filter.purpose() {
             None => self.teams.len(),
@@ -28,19 +21,32 @@ impl TeamsState {
     }
 
     pub fn open_new(&mut self) {
+        self.open_new_with_slot(None, self.filter.purpose().unwrap_or(TeamPurpose::General));
+    }
+
+    pub fn open_new_for_slot(&mut self, number: u32) {
+        if !(1..=TEAM_SLOT_COUNT).contains(&number) {
+            return;
+        }
+        self.open_new_with_slot(Some(number), TeamSlot::default_purpose(number));
+    }
+
+    fn open_new_with_slot(&mut self, requested_team_number: Option<u32>, purpose: TeamPurpose) {
         self.close_select();
-        let purpose = self.filter.purpose().unwrap_or(TeamPurpose::General);
         let is_luxcavation = purpose == TeamPurpose::Luxcavation;
-        self.editor = Some(TeamEditorState::new(TeamDetail {
-            schemaVersion: 1,
-            id: String::new(),
-            name: String::new(),
-            sinners: Vec::new(),
-            purpose,
-            accessoryScheme: "burn".into(),
-            enabled: !is_luxcavation,
-            mirrorConfig: (!is_luxcavation).then(TeamMirrorConfig::default),
-        }));
+        self.editor = Some(TeamEditorState::new_with_slot(
+            TeamDetail {
+                schemaVersion: 1,
+                id: String::new(),
+                name: String::new(),
+                sinners: Vec::new(),
+                purpose,
+                accessoryScheme: "burn".into(),
+                enabled: !is_luxcavation,
+                mirrorConfig: (!is_luxcavation).then(TeamMirrorConfig::default),
+            },
+            requested_team_number,
+        ));
         self.feedback = None;
     }
 
@@ -84,6 +90,57 @@ impl TeamsState {
 
     pub fn set_filter(&mut self, filter: TeamFilter) {
         self.filter = filter;
+    }
+
+    pub fn fixed_slots_for_filter(&self, filter: TeamFilter) -> Vec<TeamSlot> {
+        let numbers: Vec<u32> = match filter {
+            TeamFilter::All => (1..=TEAM_SLOT_COUNT).collect(),
+            TeamFilter::Mirror => (2..=TEAM_SLOT_COUNT).collect(),
+            TeamFilter::Luxcavation => vec![1],
+            TeamFilter::General => Vec::new(),
+        };
+        let purpose = filter.purpose();
+        numbers
+            .into_iter()
+            .filter_map(|number| {
+                let team = self
+                    .teams
+                    .iter()
+                    .find(|team| team_number_from_id(&team.id) == Some(number))
+                    .cloned();
+                if let Some(team) = team.as_ref()
+                    && purpose.is_some()
+                    && Some(team.purpose) != purpose
+                {
+                    return None;
+                }
+                Some(TeamSlot { number, team })
+            })
+            .collect()
+    }
+
+    pub fn extra_teams_for_filter(&self, filter: TeamFilter) -> Vec<TeamDetail> {
+        let fixed_numbers: Vec<u32> = match filter {
+            TeamFilter::All => (1..=TEAM_SLOT_COUNT).collect(),
+            TeamFilter::Mirror => (2..=TEAM_SLOT_COUNT).collect(),
+            TeamFilter::Luxcavation => vec![1],
+            TeamFilter::General => Vec::new(),
+        };
+        self.filtered_teams_for(filter)
+            .filter(|team| {
+                team_number_from_id(&team.id)
+                    .map(|number| !fixed_numbers.contains(&number))
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn filtered_teams_for(&self, filter: TeamFilter) -> impl Iterator<Item = &TeamDetail> {
+        let purpose = filter.purpose();
+        self.teams
+            .iter()
+            .filter(move |team| purpose.is_none() || Some(team.purpose) == purpose)
     }
 
     pub fn set_editor_purpose(&mut self, purpose: TeamPurpose) {

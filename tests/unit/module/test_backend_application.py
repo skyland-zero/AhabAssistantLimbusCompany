@@ -4,8 +4,11 @@ import sys
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 from module.backend_application import BackendApplication
 from module.config import TeamSetting
+from module.config.config import Config
 from module.device_manager import DeviceManager, DeviceSession
 from module.rpc_dispatcher import RpcDispatcher
 
@@ -488,9 +491,7 @@ def test_stats_rpc_exposes_period_and_daily_summaries(tmp_path) -> None:
     app._on_task_completed("mirror", 1)
     dispatcher = RpcDispatcher(application=app, version="test")
 
-    summary = dispatcher.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "stats.getSummary"}
-    )
+    summary = dispatcher.dispatch({"jsonrpc": "2.0", "id": 1, "method": "stats.getSummary"})
     assert summary["result"]["currentRun"]["completed"]["exp"] == 2
     assert summary["result"]["today"]["mirror"] == 1
 
@@ -522,26 +523,19 @@ def test_task_started_bridges_current_task_to_status_and_stats(tmp_path) -> None
         mediator.task_started.emit("mirror")
         mediator.task_started.emit("unknown")
 
-        status_tasks = [
-            payload["currentTaskId"]
-            for event, payload, _ in events
-            if event == "execution.status"
-        ]
+        status_tasks = [payload["currentTaskId"] for event, payload, _ in events if event == "execution.status"]
         stats_tasks = [
-            payload["currentRun"]["currentTaskId"]
-            for event, payload, _ in events
-            if event == "execution.stats"
+            payload["currentRun"]["currentTaskId"] for event, payload, _ in events if event == "execution.stats"
         ]
         assert status_tasks == ["daily_task", "mirror"]
         assert stats_tasks == ["daily_task", "mirror"]
 
         app._execution_state = "stopping"
         mediator.task_started.emit("get_reward")
-        assert [
-            payload["currentTaskId"]
-            for event, payload, _ in events
-            if event == "execution.status"
-        ] == ["daily_task", "mirror"]
+        assert [payload["currentTaskId"] for event, payload, _ in events if event == "execution.status"] == [
+            "daily_task",
+            "mirror",
+        ]
     finally:
         app._execution_state = "idle"
         app._execution_run_id = None
@@ -624,6 +618,52 @@ def test_team_save_allocates_id_and_isolates_luxcavation_from_mirror_queue() -> 
     app.close()
 
 
+def test_team_save_can_bind_a_new_team_to_a_slot_and_update_enabled_partially() -> None:
+    app = make_application()
+    app.config.config.teams = {
+        "1": TeamSetting(
+            team_number=1,
+            purpose="mirror",
+            chosen_sinners=[1] + [0] * 11,
+            sinner_order=[1] + [0] * 11,
+        )
+    }
+    app.config.values["teams_active_queue"] = [1]
+
+    created = app.team_save(
+        {
+            "id": "",
+            "teamNumber": 5,
+            "name": "五号镜牢",
+            "purpose": "mirror",
+            "sinners": ["faust"],
+            "mirrorConfig": None,
+            "enabled": False,
+        }
+    )
+
+    assert created["id"] == "team-5"
+    assert "5" in app.config.config.teams
+    assert app.config.values["teams_active_queue"] == [1]
+
+    with pytest.raises(ValueError, match="已被占用"):
+        app.team_save(
+            {
+                "id": "",
+                "teamNumber": 5,
+                "name": "重复编号",
+                "purpose": "mirror",
+                "enabled": False,
+            }
+        )
+
+    app.team_save({"id": "team-1", "enabled": False})
+    assert app.config.values["teams_active_queue"] == []
+    app.team_save({"id": "team-1", "enabled": True})
+    assert app.config.values["teams_active_queue"] == [1]
+    app.close()
+
+
 def test_team_save_rejects_duplicate_and_unknown_sinners() -> None:
     app = make_application()
     common = {
@@ -649,6 +689,58 @@ def test_team_save_rejects_duplicate_and_unknown_sinners() -> None:
     else:
         raise AssertionError("unknown sinner should be rejected")
     app.close()
+
+
+def test_team_save_requires_ryoshu_and_two_family_members_for_pseudo_solo() -> None:
+    app = make_application()
+    common = {
+        "id": "",
+        "name": "伪单通校验",
+        "purpose": "mirror",
+        "enabled": False,
+        "mirrorConfig": {"defense_for_solo": True},
+    }
+
+    with pytest.raises(ValueError, match="必须包含良秀"):
+        app.team_save({**common, "sinners": ["yi_sang", "faust", "don_quixote"]})
+
+    with pytest.raises(ValueError, match="至少需要"):
+        app.team_save({**common, "sinners": ["ryoshu", "faust"]})
+
+    saved = app.team_save({**common, "sinners": ["ryoshu", "faust", "yi_sang"]})
+    assert saved["sinners"] == ["ryoshu", "faust", "yi_sang"]
+    assert saved["mirrorConfig"]["defense_for_solo"] is True
+    app.close()
+
+
+def test_builtin_team_preset_merge_preserves_custom_teams_and_queue() -> None:
+    config = object.__new__(Config)
+    config._defaults = {
+        "team_presets_revision": 1,
+        "teams": {
+            "2": {"remark_name": "小指良伪单通", "team_number": 2},
+            "3": {"remark_name": "蜘蛛巢全家桶", "team_number": 3},
+        },
+    }
+    loaded = {
+        "team_presets_revision": 0,
+        "teams": {"1": {"remark_name": "我的队伍"}, "2": {"remark_name": "旧自定义队伍"}},
+        "teams_active_queue": [1, 2],
+    }
+
+    assert config._merge_builtin_team_presets(loaded) is True
+    assert loaded["teams"]["1"]["remark_name"] == "我的队伍"
+    assert loaded["teams"]["2"]["remark_name"] == "旧自定义队伍"
+    assert loaded["teams"]["3"]["remark_name"] == "小指良伪单通"
+    assert loaded["teams"]["4"]["remark_name"] == "蜘蛛巢全家桶"
+    assert loaded["teams"]["3"]["team_number"] == 3
+    assert loaded["teams"]["4"]["team_number"] == 4
+    assert loaded["teams_active_queue"] == [1, 2]
+    assert loaded["team_presets_revision"] == 1
+
+    removed_after_migration = {"team_presets_revision": 1, "teams": {"1": {"remark_name": "我的队伍"}}}
+    assert config._merge_builtin_team_presets(removed_after_migration) is False
+    assert list(removed_after_migration["teams"]) == ["1"]
 
 
 def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> None:

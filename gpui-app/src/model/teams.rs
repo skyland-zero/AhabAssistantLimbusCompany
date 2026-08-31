@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+/// The formation page reserves the first twenty numbers as stable UI slots.
+/// This is intentionally a presentation limit; the backend may still expose
+/// teams outside this range.
+pub const TEAM_SLOT_COUNT: u32 = 20;
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[allow(non_snake_case)]
 pub struct TeamMirrorConfig {
@@ -165,6 +170,14 @@ pub struct TeamDetail {
     pub mirrorConfig: Option<TeamMirrorConfig>,
 }
 
+/// Backend team IDs are derived from the persisted formation number
+/// (`team-<number>`). Keeping the parser next to the payload model avoids
+/// making each page reimplement that contract detail.
+pub fn team_number_from_id(id: &str) -> Option<u32> {
+    let number = id.strip_prefix("team-")?.parse::<u32>().ok()?;
+    (number > 0).then_some(number)
+}
+
 fn schema_version() -> u32 {
     1
 }
@@ -220,5 +233,13 @@ mod tests {
         assert!(!config.reward_cards);
         assert_eq!(config.shopping_strategy_select, 0);
         assert_eq!(config.opening_items_system, 0);
+    }
+
+    #[test]
+    fn team_ids_expose_persisted_numbers() {
+        assert_eq!(team_number_from_id("team-1"), Some(1));
+        assert_eq!(team_number_from_id("team-20"), Some(20));
+        assert_eq!(team_number_from_id("team-0"), None);
+        assert_eq!(team_number_from_id("team-invalid"), None);
     }
 }

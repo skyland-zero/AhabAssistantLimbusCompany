@@ -1,4 +1,5 @@
 config_version: 1781049600 # 配置文件版本号 (时间戳)
+team_presets_revision: 1 # 内置队伍预设迁移版本
 
 # 游戏设置
 game_title_name: LimbusCompany # 游戏窗口标题。
@@ -207,3 +208,30 @@ teams:
     mirror_hard_count: 0 # 困难镜牢次数
     total_mirror_time_normal: [] # 普通镜牢总用时
     mirror_normal_count: 0 # 普通镜牢次数
+  '2':
+    purpose: mirror # 队伍用途
+    team_system: 4 # 队伍使用的体系
+    team_number: 2 # 使用的队伍序号
+    sinners_be_select: 12 # 有几名罪人被选中
+    chosen_sinners: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] # 有哪几名罪人被选中
+    sinner_order: [5, 2, 4, 1, 8, 6, 10, 3, 9, 7, 11, 12] # 罪人被选中的顺序
+    do_not_heal: true # 不治疗
+    do_not_fuse: true # 不合成
+    do_not_sell: true # 不出售
+    do_not_enhance: true # 不升级
+    use_starlight: true # 开局星光换钱
+    defense_for_solo: true # 小指良伪单通
+    defense_for_solo_turns: 5 # 伪单通防御回合数
+    remark_name: 小指良伪单通 # 队伍备注名
+    use_team_code: true # 使用编队码
+    team_code: "H4sIAAAAAAAACnMxdEx3BIIAT2cQ5Wjq6AmiXCocM9IDsx290qHC6WBhx0KIan9foLBToKN/IES1sWNGhWe6o0sxRHUIxBBHR1tbAOtxsudgAAAA"
+  '3':
+    purpose: mirror # 队伍用途
+    team_system: 4 # 队伍使用的体系
+    team_number: 3 # 使用的队伍序号
+    sinners_be_select: 10 # 有几名罪人被选中
+    chosen_sinners: [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0] # 有哪几名罪人被选中
+    sinner_order: [2, 8, 4, 1, 0, 5, 7, 9, 3, 10, 6, 0] # 罪人被选中的顺序
+    remark_name: 蜘蛛巢全家桶 # 队伍备注名
+    use_team_code: true # 使用编队码
+    team_code: "H4sIAAAAAAAACg3MQRJAMAxA0UthZ/HTFGE6ZKx6gtS4ALfnHeDpq0QERyQVCXqs5hV9aOE3hTTLBb2bn0ZeuNwr+52yiguPlW1GB6LZn9QzpxZ0eLUJGMcPt8GoUGAAAAA="

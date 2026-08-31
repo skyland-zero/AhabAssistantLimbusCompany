@@ -1,5 +1,6 @@
 from time import sleep
 
+from core.team_squad import ordered_sinner_indices
 from module.automation import auto
 from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -35,7 +36,7 @@ def clean_team():
 
 @begin_and_finish_time_log(task_name="罪人编队")
 # 编队
-def team_formation(sinner_team):
+def team_formation(sinner_team, chosen_sinners=None) -> bool:
     scale = cfg.set_win_size / 1440
 
     clean_team()
@@ -45,14 +46,15 @@ def team_formation(sinner_team):
         first_sinner = [reset_team[0] - 1800 * scale, reset_team[1] + 130 * scale]
     else:
         log.error("无法找到罪人编队的起始位置")
-        return
+        return False
     sleep(0.5)
 
-    for i in range(1, 13):
-        if i in sinner_team:
-            sinner = sinner_team.index(i)
-        else:
-            return
+    sinners = ordered_sinner_indices(sinner_team, chosen_sinners)
+    if not sinners:
+        log.error("队伍没有可用的人格顺序，无法编队")
+        return False
+
+    for sinner in sinners:
         if sinner <= 5:
             auto.mouse_click(first_sinner[0] + 270 * sinner * scale, first_sinner[1])
         else:
@@ -61,6 +63,7 @@ def team_formation(sinner_team):
                 first_sinner[1] + 500 * scale,
             )
         sleep(cfg.mouse_action_interval)
+    return True
 
 
 def _ordered_team_page_swipe_distance():

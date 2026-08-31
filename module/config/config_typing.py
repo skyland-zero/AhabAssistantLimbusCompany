@@ -210,6 +210,9 @@ class ConfigModel(BaseModel):
     config_version: int
     """配置文件版本号（时间戳）"""
 
+    team_presets_revision: int
+    """内置队伍预设迁移版本"""
+
     game_title_name: str
     """游戏窗口标题"""
 

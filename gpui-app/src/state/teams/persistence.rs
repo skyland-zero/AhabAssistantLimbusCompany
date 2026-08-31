@@ -30,6 +30,7 @@ impl TeamsState {
             feedback: None,
             saving: false,
             deleting: false,
+            team_toggle_in_flight: None,
         };
         if !state.rpc.is_sidecar() {
             state.reload();
@@ -185,6 +186,9 @@ impl TeamsState {
         if self.saving {
             return Err("队伍正在保存，请稍候".to_owned());
         }
+        if self.team_toggle_in_flight.is_some() {
+            return Err("队伍启用状态正在更新，请稍候".to_owned());
+        }
         let Some(editor) = self.editor.as_ref() else {
             return Err("当前没有打开队伍编辑器".to_owned());
         };
@@ -193,6 +197,12 @@ impl TeamsState {
         }
         let submitted = editor.team.clone();
         let mut value = serde_json::to_value(&submitted).map_err(|error| error.to_string())?;
+        if submitted.id.is_empty()
+            && let Some(team_number) = editor.requested_team_number
+            && let Some(object) = value.as_object_mut()
+        {
+            object.insert("teamNumber".to_owned(), json!(team_number));
+        }
         if submitted.purpose == TeamPurpose::Luxcavation
             && let Some(object) = value.as_object_mut()
         {
@@ -202,6 +212,80 @@ impl TeamsState {
         self.saving = true;
         self.feedback = Some("队伍保存中…".to_owned());
         Ok((submitted, value))
+    }
+
+    pub fn begin_team_enabled(
+        &mut self,
+        team: &TeamDetail,
+        enabled: bool,
+    ) -> Result<Value, String> {
+        if self.saving {
+            return Err("队伍正在保存，请稍候".to_owned());
+        }
+        if self.team_toggle_in_flight.is_some() {
+            return Err("队伍启用状态正在更新，请稍候".to_owned());
+        }
+        if team.id.is_empty() {
+            return Err("未保存的队伍不能切换启用状态".to_owned());
+        }
+        if team.purpose == TeamPurpose::Luxcavation {
+            return Err("经验本队伍不参与镜牢启用队列".to_owned());
+        }
+        self.team_toggle_in_flight = Some(team.id.clone());
+        self.feedback = Some(if enabled {
+            "正在启用队伍…".to_owned()
+        } else {
+            "正在停用队伍…".to_owned()
+        });
+        Ok(json!({"id": team.id, "enabled": enabled}))
+    }
+
+    pub fn set_team_enabled(&mut self, team: &TeamDetail, enabled: bool) -> Result<(), String> {
+        let params = self.begin_team_enabled(team, enabled)?;
+        let result = self
+            .rpc
+            .request_value(method::TEAM_SAVE, Some(params))
+            .map_err(|error| error.message)
+            .and_then(|value| self.decode_enabled_team(&team.id, value));
+        match result {
+            Ok(saved) => {
+                self.apply_team_enabled(saved);
+                Ok(())
+            }
+            Err(error) => {
+                self.fail_team_enabled(error.clone());
+                Err(error)
+            }
+        }
+    }
+
+    pub fn apply_team_enabled(&mut self, saved: TeamDetail) {
+        self.team_toggle_in_flight = None;
+        let team_id = saved.id.clone();
+        if let Some(existing) = self.teams.iter_mut().find(|team| team.id == team_id) {
+            *existing = saved.clone();
+        }
+        if let Some(editor) = self
+            .editor
+            .as_mut()
+            .filter(|editor| editor.team.id == team_id)
+        {
+            editor.team.enabled = saved.enabled;
+        }
+        self.feedback = Some(if saved.enabled {
+            "队伍已启用".to_owned()
+        } else {
+            "队伍已停用".to_owned()
+        });
+    }
+
+    pub fn fail_team_enabled(&mut self, error: String) {
+        self.team_toggle_in_flight = None;
+        self.feedback = Some(error);
+    }
+
+    pub fn team_toggle_busy(&self) -> bool {
+        self.team_toggle_in_flight.is_some()
     }
 
     pub fn apply_saved_team(&mut self, submitted: &TeamDetail, saved: TeamDetail) {
@@ -331,6 +415,26 @@ impl TeamsState {
                         })
                         .cloned()
                 })
+                .ok_or_else(|| "team.save 已成功，但无法从列表定位队伍".to_owned());
+        }
+        serde_json::from_value(value).map_err(|error| format!("team.save 返回了无效队伍：{error}"))
+    }
+
+    fn decode_enabled_team(
+        &mut self,
+        team_id: &str,
+        value: Option<Value>,
+    ) -> Result<TeamDetail, String> {
+        let Some(value) = value else {
+            return Err("team.save 返回了空结果".to_owned());
+        };
+        if value.as_bool() == Some(true) {
+            self.reload_teams_only();
+            return self
+                .teams
+                .iter()
+                .find(|team| team.id == team_id)
+                .cloned()
                 .ok_or_else(|| "team.save 已成功，但无法从列表定位队伍".to_owned());
         }
         serde_json::from_value(value).map_err(|error| format!("team.save 返回了无效队伍：{error}"))

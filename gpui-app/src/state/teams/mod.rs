@@ -10,7 +10,9 @@ pub use types::*;
 
 use crate::{
     ipc::RpcGateway,
-    model::{SinnerInfo, TeamDetail, TeamMirrorConfig, TeamPurpose},
+    model::{
+        SinnerInfo, TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPurpose, team_number_from_id,
+    },
 };
 
 #[cfg(test)]
@@ -173,5 +175,86 @@ mod tests {
         assert_eq!(state.teams.last().unwrap().id, "team-42");
         assert!(state.editor.is_none());
         assert!(!state.saving);
+    }
+
+    #[test]
+    fn fixed_slots_keep_numbers_stable_without_materializing_empty_teams() {
+        let mut state = TeamsState::default();
+        let slots = state.fixed_slots_for_filter(TeamFilter::All);
+
+        assert_eq!(slots.len(), 20);
+        assert_eq!(slots[0].number, 1);
+        assert_eq!(slots[0].team.as_ref().unwrap().id, "team-1");
+        assert_eq!(slots[3].number, 4);
+        assert!(slots[3].team.is_none());
+        assert_eq!(state.count_for(TeamFilter::All), 3);
+
+        let mirror_slots = state.fixed_slots_for_filter(TeamFilter::Mirror);
+        assert!(!mirror_slots.iter().any(|slot| slot.number == 1));
+        assert!(mirror_slots.iter().any(|slot| slot.number == 4));
+        assert_eq!(
+            state
+                .extra_teams_for_filter(TeamFilter::Mirror)
+                .first()
+                .unwrap()
+                .id,
+            "team-1"
+        );
+
+        let luxcavation_slots = state.fixed_slots_for_filter(TeamFilter::Luxcavation);
+        assert!(luxcavation_slots.is_empty());
+        assert_eq!(
+            state
+                .extra_teams_for_filter(TeamFilter::Luxcavation)
+                .first()
+                .unwrap()
+                .id,
+            "team-2"
+        );
+
+        let mut overflow = state.teams[0].clone();
+        overflow.id = "team-21".into();
+        overflow.name = "额外队伍".into();
+        state.teams.push(overflow);
+        assert_eq!(
+            state
+                .extra_teams_for_filter(TeamFilter::All)
+                .iter()
+                .map(|team| team.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["team-21"]
+        );
+    }
+
+    #[test]
+    fn empty_slots_use_soft_purpose_defaults_and_bind_save_number() {
+        let mut state = TeamsState::default();
+        state.open_new_for_slot(1);
+        state.editor.as_mut().unwrap().team.name = "经验本".into();
+        let (_, payload) = state.prepare_save().unwrap();
+        assert_eq!(payload["teamNumber"], 1);
+        assert_eq!(payload["purpose"], "luxcavation");
+        assert_eq!(payload["enabled"], false);
+        state.fail_save("test".into());
+
+        state.open_new_for_slot(5);
+        state.editor.as_mut().unwrap().team.name = "镜牢".into();
+        let (_, payload) = state.prepare_save().unwrap();
+        assert_eq!(payload["teamNumber"], 5);
+        assert_eq!(payload["purpose"], "mirror");
+    }
+
+    #[test]
+    fn list_enabled_update_uses_partial_save_and_syncs_open_editor() {
+        let mut state = TeamsState::default();
+        let team = state.teams[0].clone();
+        state.open_edit(&team);
+
+        state.set_team_enabled(&team, false).unwrap();
+
+        assert!(!state.teams[0].enabled);
+        assert!(!state.editor.as_ref().unwrap().team.enabled);
+        assert!(state.team_toggle_in_flight.is_none());
+        assert_eq!(state.feedback.as_deref(), Some("队伍已停用"));
     }
 }

@@ -28,9 +28,10 @@ use crate::{
         select_trigger, settings_grid, svg_icon_bytes, switch, tab_surface_with_palette,
     },
     i18n::paired as text,
-    model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose},
+    model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose, team_number_from_id},
     state::{
-        MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamSelect, TeamsState,
+        MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamSelect, TeamSlot,
+        TeamsState,
     },
 };
 

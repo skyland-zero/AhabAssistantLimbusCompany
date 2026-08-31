@@ -85,19 +85,43 @@ pub struct TeamEditorState {
     pub team: TeamDetail,
     pub tab: TeamEditorTab,
     pub json_import_open: bool,
+    /// A number selected from an empty UI slot. Existing teams keep their
+    /// number in the backend-derived `team-N` id and do not use this field.
+    pub requested_team_number: Option<u32>,
 }
 
 impl TeamEditorState {
     pub fn new(team: TeamDetail) -> Self {
+        Self::new_with_slot(team, None)
+    }
+
+    pub fn new_with_slot(team: TeamDetail, requested_team_number: Option<u32>) -> Self {
         Self {
             team,
             tab: TeamEditorTab::Basic,
             json_import_open: false,
+            requested_team_number,
         }
     }
 
     pub fn mirror_config(&self) -> TeamMirrorConfig {
         self.team.mirrorConfig.clone().unwrap_or_default()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TeamSlot {
+    pub number: u32,
+    pub team: Option<TeamDetail>,
+}
+
+impl TeamSlot {
+    pub fn default_purpose(number: u32) -> TeamPurpose {
+        if number == 1 {
+            TeamPurpose::Luxcavation
+        } else {
+            TeamPurpose::Mirror
+        }
     }
 }
 
@@ -114,6 +138,7 @@ pub struct TeamsState {
     pub feedback: Option<String>,
     pub saving: bool,
     pub deleting: bool,
+    pub team_toggle_in_flight: Option<String>,
 }
 
 /// Named bool fields keep the page readable and prevent ad-hoc JSON patches.

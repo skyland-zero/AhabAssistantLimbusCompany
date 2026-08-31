@@ -190,30 +190,78 @@ impl MockState {
             }
             method::TEAM_LIST => Ok(serde_json::to_value(&self.teams).unwrap()),
             method::TEAM_SAVE => {
-                let mut team: TeamDetail =
-                    Self::params(request.params, "team.save requires TeamDetail")?;
-                if team.name.trim().is_empty() {
-                    Err(RpcError::invalid_params("team name required"))
+                let raw: Value = Self::params(request.params, "team.save requires an object")?;
+                let raw_object = raw
+                    .as_object()
+                    .ok_or_else(|| RpcError::invalid_params("team.save requires an object"))?;
+                let team_id = raw_object
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if !team_id.is_empty() && raw_object.contains_key("teamNumber") {
+                    Err(RpcError::invalid_params(
+                        "team.save.teamNumber is only valid when creating a team",
+                    ))
                 } else {
-                    if team.id.is_empty() {
-                        team.id = format!("team-{}", self.next_team_id);
-                        self.next_team_id += 1;
-                    }
-                    if team.purpose == TeamPurpose::Luxcavation {
-                        team.enabled = false;
-                        team.mirrorConfig = None;
-                    } else if team.mirrorConfig.is_none()
-                        && let Some(existing) = self.teams.iter().find(|entry| entry.id == team.id)
-                    {
-                        team.mirrorConfig = existing.mirrorConfig.clone();
-                    }
-                    if let Some(existing) = self.teams.iter_mut().find(|entry| entry.id == team.id)
-                    {
-                        *existing = team.clone();
+                    let mut team: TeamDetail = if team_id.is_empty() {
+                        Self::params(Some(raw.clone()), "team.save requires TeamDetail")?
                     } else {
-                        self.teams.push(team.clone());
+                        let existing = self
+                            .teams
+                            .iter()
+                            .find(|entry| entry.id == team_id)
+                            .cloned()
+                            .ok_or_else(|| RpcError::invalid_params("team.save team not found"))?;
+                        let mut merged = serde_json::to_value(existing).unwrap();
+                        let merged_object = merged.as_object_mut().unwrap();
+                        merged_object.extend(raw_object.clone());
+                        Self::params(Some(merged), "team.save requires TeamDetail")?
+                    };
+                    if team.name.trim().is_empty() {
+                        Err(RpcError::invalid_params("team name required"))
+                    } else {
+                        if team.id.is_empty() {
+                            let requested_number = raw_object
+                                .get("teamNumber")
+                                .map(|value| {
+                                    value.as_u64().ok_or_else(|| {
+                                        RpcError::invalid_params(
+                                            "team.save.teamNumber requires a positive integer",
+                                        )
+                                    })
+                                })
+                                .transpose()?;
+                            let team_number = requested_number.unwrap_or(self.next_team_id);
+                            if team_number == 0 {
+                                return Err(RpcError::invalid_params(
+                                    "team.save.teamNumber requires a positive integer",
+                                ));
+                            }
+                            let requested_id = format!("team-{team_number}");
+                            if self.teams.iter().any(|entry| entry.id == requested_id) {
+                                return Err(RpcError::invalid_params("team number already in use"));
+                            }
+                            team.id = requested_id;
+                            self.next_team_id = self.next_team_id.max(team_number + 1);
+                        }
+                        if team.purpose == TeamPurpose::Luxcavation {
+                            team.enabled = false;
+                            team.mirrorConfig = None;
+                        } else if team.mirrorConfig.is_none()
+                            && let Some(existing) =
+                                self.teams.iter().find(|entry| entry.id == team.id)
+                        {
+                            team.mirrorConfig = existing.mirrorConfig.clone();
+                        }
+                        if let Some(existing) =
+                            self.teams.iter_mut().find(|entry| entry.id == team.id)
+                        {
+                            *existing = team.clone();
+                        } else {
+                            self.teams.push(team.clone());
+                        }
+                        Ok(json!(team))
                     }
-                    Ok(json!(team))
                 }
             }
             method::TEAM_DELETE => {
