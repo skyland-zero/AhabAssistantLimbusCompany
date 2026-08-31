@@ -33,11 +33,10 @@ cargo +nightly run --manifest-path gpui-app/Cargo.toml
 uv run python main_backend.py --token dev-token
 ```
 
-视觉开发或没有可用设备时，可显式使用 Mock 后端；生产模式不会静默回退：
+视觉开发或没有可用设备时，可使用仓库根目录的 Mock 启动脚本；生产模式不会静默回退：
 
 ```powershell
-$env:AHAB_BACKEND = "mock"
-cargo +nightly run --manifest-path gpui-app/Cargo.toml
+.\run-gpui-mock.bat
 ```
 
 ## 测试和格式化

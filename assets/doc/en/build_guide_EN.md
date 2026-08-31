@@ -21,8 +21,15 @@ rustup toolchain install nightly
 ```
 
 The GPUI window starts and launches `main_backend.py` from the same checkout.
-For visual-only development, set `AHAB_BACKEND=mock` explicitly. Production
-mode never falls back to Mock.
+For visual-only development or when no device is available, run the Mock
+launcher from the repository root:
+
+```powershell
+.\run-gpui-mock.bat
+```
+
+The launcher does not start the Python backend. Production mode must not use
+Mock.
 
 ## Build a release package
 

@@ -21,7 +21,13 @@ rustup toolchain install nightly
 ```
 
 程序会启动 GPUI 窗口，并由 GPUI 自动启动同一目录下的 `main_backend.py`。
-只做页面视觉调试时，可以显式设置 `AHAB_BACKEND=mock`；生产运行不允许使用 Mock。
+只做页面视觉调试或没有可用设备时，可以运行 Mock 启动脚本：
+
+```powershell
+.\run-gpui-mock.bat
+```
+
+该脚本不会启动 Python 后端；生产运行不允许使用 Mock。
 
 ## 构建发布包
 

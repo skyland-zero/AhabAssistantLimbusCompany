@@ -35,6 +35,8 @@ cargo +nightly test --manifest-path gpui-app/Cargo.toml
 
 普通运行时 GPUI 会在首个窗口帧完成后异步启动仓库根目录的 `main_backend.py`（发布包中为 `AALC Backend.exe`），通过 loopback WebSocket 使用 JSON-RPC 连接；视觉回归或显式设置 `AHAB_BACKEND=mock` 时才使用 Mock。Python 后端启动失败会按 1 秒、2 秒、4 秒间隔自动重试 3 次，仍失败时主控台顶部会显示失败状态并提供手动重试，不会静默伪造业务数据。也可以显式选择真实 sidecar：
 
+从仓库根目录运行 `run-gpui-mock.bat` 可以直接进入 Mock 模式；该模式不会启动 Python 后端，仅用于开发和视觉调试。
+
 ```powershell
 $env:AHAB_BACKEND = "sidecar"
 cargo +nightly run --manifest-path gpui-app/Cargo.toml

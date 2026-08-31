@@ -4,6 +4,10 @@ use gpui::{Animation, AnimationExt, Context, Render, Window, div, prelude::*, px
 
 use crate::components::style::{Palette, palette_rgb};
 
+// Keep this disabled while profiling title-bar redraw cost. Set it to `true`
+// to restore the repeating status-dot breathing animation.
+const ENABLE_STATUS_DOT_BREATHING: bool = false;
+
 /// The execution status dot is its own reactive boundary. Its repeating
 /// animation can therefore invalidate only this small subtree instead of the
 /// root application view.
@@ -47,7 +51,7 @@ impl Render for StatusDot {
             .bg(dot_color)
             .flex_none();
 
-        if self.busy {
+        if self.busy && ENABLE_STATUS_DOT_BREATHING {
             status_dot
                 .with_animation(
                     "titlebar-console-status-breathe",
