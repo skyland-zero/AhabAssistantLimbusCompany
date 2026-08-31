@@ -10,6 +10,7 @@ publish = false
 async-channel = "2"
 gpui = { git = "https://github.com/zed-industries/zed", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8", package = "gpui", default-features = false }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8", package = "gpui_platform", default-features = false }
+image = { version = "0.25.10", default-features = false }
 raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
