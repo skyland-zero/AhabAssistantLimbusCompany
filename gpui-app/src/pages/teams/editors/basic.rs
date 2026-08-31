@@ -58,7 +58,7 @@ pub(crate) fn basic_editor(
     );
     let purpose_field = labeled_field(text("用途", "Purpose").get(language), purpose);
 
-    let mut systems = div().flex().flex_wrap().gap_2();
+    let mut systems = div().w_full().grid().grid_cols(5).gap_2();
     for (index, name) in SYSTEM_NAMES.iter().enumerate() {
         let selected = team.accessoryScheme == *name;
         let mut control =
@@ -106,7 +106,7 @@ pub(crate) fn basic_editor(
             .px_1()
             .rounded_sm()
             .bg(palette_rgb(if selected_state {
-                palette.brand
+                palette.brand_light
             } else {
                 palette.card
             }))
@@ -114,7 +114,7 @@ pub(crate) fn basic_editor(
             .text_size(px(11.))
             .font_weight(gpui::FontWeight::MEDIUM)
             .text_color(palette_rgb(if selected_state {
-                palette.brand_foreground
+                palette.brand
             } else {
                 palette.foreground
             }))
@@ -157,9 +157,6 @@ pub(crate) fn basic_editor(
                     cx.notify();
                 }
             }));
-        if selected_state {
-            control = control.border_2();
-        }
         control = control.child(
             div()
                 .relative()
@@ -258,7 +255,7 @@ pub(crate) fn basic_editor(
         cx.notify();
     }));
 
-    let team_code_card = card(
+    let team_code_card = editor_card(
         div()
             .flex()
             .flex_col()
@@ -277,12 +274,9 @@ pub(crate) fn basic_editor(
                 ),
             )
             .child(code_field),
-    )
-    .p_3()
-    .flex_basis(px(300.))
-    .flex_grow(1.);
+    );
 
-    let fixed_card = card(
+    let fixed_card = editor_card(
         div()
             .flex()
             .flex_col()
@@ -316,17 +310,14 @@ pub(crate) fn basic_editor(
             } else {
                 div().into_any_element()
             }),
-    )
-    .p_3()
-    .flex_basis(px(300.))
-    .flex_grow(1.);
+    );
 
     let mirror_basic_cards = if is_luxcavation {
         div().into_any_element()
     } else {
         div()
             .flex()
-            .flex_wrap()
+            .flex_col()
             .gap_3()
             .child(team_code_card)
             .child(fixed_card)
@@ -336,10 +327,10 @@ pub(crate) fn basic_editor(
     let enabled_field = if is_luxcavation {
         div().into_any_element()
     } else {
-        control_row(
+        editor_card(control_row(
             text("队伍启用", "Team Enabled").get(language),
             enabled_switch,
-        )
+        ))
         .into_any_element()
     };
 

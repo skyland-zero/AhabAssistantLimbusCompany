@@ -6,7 +6,7 @@ pub(crate) fn shop_editor(
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
-    let mut discard = div().flex().flex_wrap().gap_2();
+    let mut discard = div().w_full().grid().grid_cols(5).gap_2();
     for (index, name) in SYSTEM_NAMES.iter().enumerate() {
         let selected = discard_value(&config.discard_systems, index);
         let mut control =
@@ -52,7 +52,7 @@ pub(crate) fn shop_editor(
             mirror_switch(app, cx, field, value, format!("shop-restriction-{index}")),
         ));
     }
-    let restriction_rows = settings_grid(restriction_items, 180.);
+    let restriction_rows = editor_option_grid(restriction_items);
 
     let fusions = [
         (
@@ -88,9 +88,9 @@ pub(crate) fn shop_editor(
             mirror_switch(app, cx, field, value, format!("fusion-{index}")),
         ));
     }
-    let fusion_rows = settings_grid(fusion_items, 180.);
+    let fusion_rows = editor_option_grid(fusion_items);
 
-    let after_level = card(
+    let after_level = editor_card(
         div()
             .flex()
             .flex_col()
@@ -145,25 +145,24 @@ pub(crate) fn shop_editor(
         .clone()
         .map(|input| div().w(px(80.)).child(input))
         .unwrap_or_else(|| div().child(text("初始化中", "Initializing").get(language)));
-    let refresh = card(
+    let refresh = editor_card(
         div()
             .flex()
             .flex_col()
             .gap_2()
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(rgb(TEXT))
-                    .child(text("商店刷新上限", "Shop Refresh Limits").get(language)),
-            )
-            .child(control_row(
-                text("关键词刷新", "Keyword Refreshes").get(language),
-                keyword_refresh,
+            .child(editor_section_title(
+                text("商店刷新上限", "Shop Refresh Limits").get(language),
             ))
-            .child(control_row(
-                text("普通刷新", "Normal Refreshes").get(language),
-                normal_refresh,
-            )),
+            .child(editor_option_grid(vec![
+                control_row(
+                    text("关键词刷新", "Keyword Refreshes").get(language),
+                    keyword_refresh,
+                ),
+                control_row(
+                    text("普通刷新", "Normal Refreshes").get(language),
+                    normal_refresh,
+                ),
+            ])),
     );
 
     let mut floors = div().flex().flex_wrap().gap_2();
@@ -199,84 +198,88 @@ pub(crate) fn shop_editor(
             }));
         floors = floors.child(control);
     }
-    let ignore = card(
+    let ignore = editor_card(
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(editor_section_title(
+                text("忽略商店楼层", "Ignore Shop Floors").get(language),
+            ))
+            .child(floors),
+    );
+
+    let shop_strategy = field_block(
+        text("商店策略", "Shop Strategy").get(language),
+        team_select(
+            app,
+            cx,
+            TeamSelectConfig {
+                select: TeamSelect::ShopStrategy,
+                current: config.shop_strategy.to_string(),
+                options: vec![
+                    ("0".to_owned(), shop_strategy_label(0, language).to_owned()),
+                    ("1".to_owned(), shop_strategy_label(1, language).to_owned()),
+                    ("2".to_owned(), shop_strategy_label(2, language).to_owned()),
+                ],
+                id: "shop-strategy".to_owned(),
+                width: 180.,
+                on_change: Rc::new(|teams, value| {
+                    if let Ok(value) = value.parse::<u8>() {
+                        teams.set_mirror_u8(MirrorU8::ShopStrategy, value);
+                    }
+                }),
+            },
+        ),
+    );
+    let discard_card = field_block(
+        text("舍弃饰品体系", "Discard Gift Systems").get(language),
         div()
             .flex()
             .flex_col()
             .gap_2()
             .child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(rgb(TEXT))
-                    .child(text("忽略商店楼层", "Ignore Shop Floors").get(language)),
+                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                    text(
+                        "选择不参与商店购买、合成与保留的体系。",
+                        "Choose systems to avoid in shop purchases, fusion and retention.",
+                    )
+                    .get(language),
+                ),
             )
-            .child(floors),
+            .child(discard),
+    );
+    let restrictions_card = field_block(
+        text("基础操作限制", "Shop Action Restrictions").get(language),
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                    text(
+                        "限制会在镜牢商店阶段按队伍配置执行。",
+                        "Restrictions are applied during Mirror Dungeon shop phases.",
+                    )
+                    .get(language),
+                ),
+            )
+            .child(restriction_rows),
+    );
+    let fusion_card = field_block(
+        text("合成策略", "Fusion Strategy").get(language),
+        fusion_rows,
     );
 
     div()
         .flex()
         .flex_col()
         .gap_4()
-        .child(field_block(
-            text("商店策略", "Shop Strategy").get(language),
-            team_select(
-                app,
-                cx,
-                TeamSelectConfig {
-                    select: TeamSelect::ShopStrategy,
-                    current: config.shop_strategy.to_string(),
-                    options: vec![
-                        ("0".to_owned(), shop_strategy_label(0, language).to_owned()),
-                        ("1".to_owned(), shop_strategy_label(1, language).to_owned()),
-                        ("2".to_owned(), shop_strategy_label(2, language).to_owned()),
-                    ],
-                    id: "shop-strategy".to_owned(),
-                    width: 180.,
-                    on_change: Rc::new(|teams, value| {
-                        if let Ok(value) = value.parse::<u8>() {
-                            teams.set_mirror_u8(MirrorU8::ShopStrategy, value);
-                        }
-                    }),
-                },
-            ),
-        ))
-        .child(field_block(
-            text("舍弃饰品体系", "Discard Gift Systems").get(language),
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(
-                    div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                        text(
-                            "选择不参与商店购买、合成与保留的体系。",
-                            "Choose systems to avoid in shop purchases, fusion and retention.",
-                        )
-                        .get(language),
-                    ),
-                )
-                .child(discard),
-        ))
-        .child(field_block(
-            text("基础操作限制", "Shop Action Restrictions").get(language),
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(
-                    div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                        text(
-                            "限制会在镜牢商店阶段按队伍配置执行。",
-                            "Restrictions are applied during Mirror Dungeon shop phases.",
-                        )
-                        .get(language),
-                    ),
-                )
-                .child(restriction_rows),
-        ))
-        .child(field_block(
-            text("合成策略", "Fusion Strategy").get(language),
-            fusion_rows,
-        ))
-        .child(settings_grid(vec![after_level, refresh, ignore], 220.))
+        .child(shop_strategy)
+        .child(discard_card)
+        .child(restrictions_card)
+        .child(fusion_card)
+        .child(after_level)
+        .child(refresh)
+        .child(ignore)
 }

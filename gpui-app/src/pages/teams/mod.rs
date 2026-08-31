@@ -18,14 +18,14 @@ use std::rc::Rc;
 use gpui::{Context, Div, ImageSource, KeyDownEvent, deferred, div, img, prelude::*, px, relative};
 
 use crate::{
-    app::{AhabApp, BORDER, SURFACE, TEXT, TEXT_MUTED},
+    app::{AhabApp, TEXT, TEXT_MUTED},
     assets::{self, Asset, SinnerAsset, StatusEffectAsset},
     components::style::{ColorToken, current_render_palette},
     components::{
         BadgeTone, ButtonVariant, badge, button, card, empty_state,
         is_activation_key as team_activation_key, page_root, page_toolbar, palette_rgb,
         render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_option, select_popup,
-        select_trigger, settings_grid, svg_icon_bytes, switch,
+        select_trigger, settings_grid, svg_icon_bytes, switch, tab_surface_with_palette,
     },
     i18n::paired as text,
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPurpose},
@@ -307,20 +307,70 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
     root
 }
 
+fn editor_section_title(title: impl Into<String>) -> Div {
+    let palette = current_render_palette();
+    div()
+        .text_size(px(12.))
+        .font_weight(gpui::FontWeight::MEDIUM)
+        .text_color(palette_rgb(palette.muted_foreground))
+        .child(title.into())
+}
+
 fn field_block(title: impl Into<String>, body: impl IntoElement) -> Div {
-    card(
+    editor_card(
         div()
             .flex()
             .flex_col()
             .gap_2()
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(rgb(TEXT))
-                    .child(title.into()),
-            )
+            .child(editor_section_title(title))
             .child(body),
     )
+}
+
+fn editor_card(child: impl IntoElement) -> Div {
+    card(child).w_full().p_3().overflow_hidden()
+}
+
+/// Dense settings stay responsive, but each option gets its own surface so
+/// the two columns remain visually distinct instead of reading as one long
+/// list of switches.
+fn editor_option_grid(children: impl IntoIterator<Item = Div>) -> Div {
+    let palette = current_render_palette();
+    let hover = palette_rgb(palette.accent_surface);
+    let cells = children.into_iter().map(|child| {
+        div()
+            .min_w_0()
+            .p_2()
+            .rounded_md()
+            .bg(palette_rgb(palette.secondary))
+            .hover(move |style| style.bg(hover))
+            .child(child)
+    });
+    settings_grid(cells, 260.)
+}
+
+fn editor_choice_button(label: impl Into<String>, selected: bool) -> Div {
+    let palette = current_render_palette();
+    let mut control = button(label, ButtonVariant::Outline)
+        .border_color(palette_rgb(if selected {
+            palette.brand
+        } else {
+            palette.input
+        }))
+        .bg(palette_rgb(if selected {
+            palette.brand_light
+        } else {
+            palette.card
+        }))
+        .text_color(palette_rgb(if selected {
+            palette.brand
+        } else {
+            palette.foreground
+        }));
+    if selected {
+        control = control.font_weight(gpui::FontWeight::MEDIUM);
+    }
+    control
 }
 
 fn labeled_field(title: impl Into<String>, input: impl IntoElement) -> Div {
@@ -346,6 +396,9 @@ fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
         .py_1()
         .child(
             div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
                 .text_size(px(13.))
                 .text_color(rgb(TEXT))
                 .child(label.into()),
@@ -368,9 +421,8 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
         .items_center()
         .gap_2()
         .h(px(34.))
-        .flex_basis(px(78.))
-        .flex_grow(1.)
-        .min_w(px(68.))
+        .w_full()
+        .min_w_0()
         .px_2()
         .rounded_md()
         .border_1()
@@ -393,7 +445,7 @@ fn system_choice(index: usize, selected: bool, destructive: bool, language: Lang
                 .child(system_label(index, language)),
         );
     if selected {
-        control = control.border_2().font_weight(gpui::FontWeight::MEDIUM);
+        control = control.font_weight(gpui::FontWeight::MEDIUM);
     }
     control
 }
@@ -408,9 +460,9 @@ fn scheme_badge(scheme: &str, language: Language) -> Div {
         .px_2()
         .rounded_md()
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(palette_rgb(current_render_palette().input))
         .text_size(px(11.))
-        .text_color(rgb(TEXT_MUTED))
+        .text_color(palette_rgb(current_render_palette().muted_foreground))
         .child(img(status_effect_path(scheme)).w(px(14.)).h(px(14.)))
         .child(scheme_label(scheme, language))
 }

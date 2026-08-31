@@ -6,7 +6,7 @@ pub(crate) fn starlight_editor(
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
-    let use_starlight = card(
+    let use_starlight = editor_card(
         div()
             .flex()
             .flex_col()
@@ -31,7 +31,6 @@ pub(crate) fn starlight_editor(
                 ),
             ),
     )
-    .p_3()
     .flex_none();
 
     let mut quick = div().flex().items_center().gap_1().flex_wrap();
@@ -71,7 +70,7 @@ pub(crate) fn starlight_editor(
         .text_color(palette_rgb(current_render_palette().brand))
         .child(icon(ICON_SPARKLES, 13., current_render_palette().brand))
         .child(starlight_cost_label(app.teams.starlight_cost(), language));
-    let quick_card = card(
+    let quick_card = editor_card(
         div()
             .flex()
             .items_center()
@@ -93,26 +92,19 @@ pub(crate) fn starlight_editor(
             )
             .child(cost_badge),
     )
-    .p_3()
     .flex_none();
 
-    let mut items = div().flex().flex_wrap().gap_2();
+    let mut items = div().w_full().flex().flex_col().gap_3();
     for (index, cost) in STARLIGHT_COSTS.iter().copied().enumerate() {
         let level = config.opening_bonus.get(index).copied().unwrap_or(0).min(3);
         let mut levels = div().flex().gap_1();
         for candidate in 0..=3_u8 {
-            let mut control = button(
-                starlight_short_level(candidate),
-                if candidate == level {
-                    ButtonVariant::Secondary
-                } else {
-                    ButtonVariant::Ghost
-                },
-            )
-            .id(format!("starlight-{index}-{candidate}"))
-            .h(px(24.))
-            .px_2()
-            .py_0();
+            let mut control =
+                editor_choice_button(starlight_short_level(candidate), candidate == level)
+                    .id(format!("starlight-{index}-{candidate}"))
+                    .h(px(24.))
+                    .px_2()
+                    .py_0();
             control = control
                 .on_click(cx.listener(move |view, _, _, cx| {
                     view.teams.set_starlight_level(index, candidate);
@@ -135,42 +127,37 @@ pub(crate) fn starlight_editor(
             .text_color(rgb(TEXT_MUTED))
             .child(icon(ICON_SPARKLES, 11., current_render_palette().brand))
             .child(starlight_points_label(cost, language));
-        items = items.child(
-            card(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .min_w_0()
-                                    .text_size(px(12.))
-                                    .text_color(rgb(TEXT))
-                                    .child(starlight_name(index, language)),
-                            )
-                            .child(cost),
-                    )
-                    .child(levels)
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(TEXT_MUTED))
-                            .child(starlight_description(index, language)),
-                    ),
-            )
-            .p_3()
-            .flex_basis(px(320.))
-            .flex_grow(1.),
-        );
+        items = items.child(editor_card(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .min_w_0()
+                                .text_size(px(12.))
+                                .text_color(rgb(TEXT))
+                                .child(starlight_name(index, language)),
+                        )
+                        .child(cost),
+                )
+                .child(levels)
+                .child(
+                    div()
+                        .text_size(px(10.))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(starlight_description(index, language)),
+                ),
+        ));
     }
 
     div()

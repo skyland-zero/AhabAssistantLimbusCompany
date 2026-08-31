@@ -47,6 +47,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
     let config = editor.mirror_config();
     let feedback = app.teams.feedback.clone();
     let starlight_cost = app.teams.starlight_cost();
+    let palette = current_render_palette();
 
     let mut tabs = div()
         .flex()
@@ -55,34 +56,19 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .flex_wrap()
         .p(px(2.))
         .rounded_md()
-        .bg(palette_rgb(current_render_palette().muted));
+        .bg(palette_rgb(palette.muted));
     for candidate in TeamEditorTab::ALL {
         if !candidate.is_available(team.purpose) {
             continue;
         }
         let active = candidate == tab;
-        let mut control = div()
+        let hover = palette_rgb(palette.accent_surface);
+        let foreground = palette_rgb(palette.foreground);
+        let mut control = tab_surface_with_palette(active, &palette)
             .id(format!("team-editor-tab-{candidate:?}"))
-            .flex()
-            .items_center()
-            .justify_center()
             .gap_1()
-            .h(px(28.))
-            .px_3()
-            .rounded_md()
-            .tab_index(0)
             .cursor_pointer()
-            .text_size(px(12.))
-            .text_color(palette_rgb(if active {
-                current_render_palette().foreground
-            } else {
-                current_render_palette().muted_foreground
-            }))
-            .bg(palette_rgb(if active {
-                current_render_palette().card
-            } else {
-                current_render_palette().muted
-            }));
+            .hover(move |style| style.bg(hover).text_color(foreground));
         control = control.child(editor_tab_label(candidate, language));
         if candidate == TeamEditorTab::Starlight && starlight_cost > 0 {
             control = control.child(
@@ -121,12 +107,13 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .rounded_md()
         .tab_index(0)
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(palette_rgb(palette.input))
         .cursor_pointer()
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
+        .hover(|style| style.bg(palette_rgb(current_render_palette().accent_surface)))
         .text_size(px(11.))
-        .text_color(rgb(crate::app::ACCENT))
-        .child(icon(ICON_COPY, 14., current_render_palette().brand))
+        .text_color(palette_rgb(palette.brand))
+        .child(icon(ICON_COPY, 14., palette.brand))
         .child(text("复制 JSON", "Copy JSON").get(language))
         .on_click(cx.listener(|view, _, _, cx| view.copy_team_json(cx)));
     copy = copy.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
@@ -197,8 +184,8 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
             .flex_col()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(palette_rgb(palette.input))
+            .bg(palette_rgb(palette.card))
             .child(
                 div()
                     .flex()
@@ -208,27 +195,33 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
                     .px_6()
                     .py_3()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(palette_rgb(palette.input))
                     .child(
                         div()
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(div().text_size(px(16.)).text_color(rgb(TEXT)).child(
-                                if team.id.is_empty() {
-                                    text("新建队伍", "New Team").get(language)
-                                } else {
-                                    text("编辑队伍", "Edit Team").get(language)
-                                },
-                            ))
                             .child(
-                                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                                    text(
-                                        "保存前所有修改只存在于当前编辑器",
-                                        "Changes stay in this editor until Save",
-                                    )
-                                    .get(language),
-                                ),
+                                div()
+                                    .text_size(px(16.))
+                                    .text_color(palette_rgb(palette.foreground))
+                                    .child(if team.id.is_empty() {
+                                        text("新建队伍", "New Team").get(language)
+                                    } else {
+                                        text("编辑队伍", "Edit Team").get(language)
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(palette_rgb(palette.muted_foreground))
+                                    .child(
+                                        text(
+                                            "保存前所有修改只存在于当前编辑器",
+                                            "Changes stay in this editor until Save",
+                                        )
+                                        .get(language),
+                                    ),
                             ),
                     )
                     .child(copy),
@@ -239,7 +232,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
                     .px_6()
                     .py_2()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(palette_rgb(palette.input))
                     .child(tabs),
             )
             .child(
@@ -247,7 +240,8 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
                     .flex_1()
                     .min_h_0()
                     .px_6()
-                    .py_4(),
+                    .py_4()
+                    .bg(palette_rgb(palette.background)),
             )
             .child(
                 div()
@@ -259,8 +253,8 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
                     .px_6()
                     .py_3()
                     .border_t_1()
-                    .border_color(rgb(BORDER))
-                    .bg(palette_rgb(current_render_palette().card))
+                    .border_color(palette_rgb(palette.input))
+                    .bg(palette_rgb(palette.card))
                     .child(
                         feedback
                             .map(|message| {
@@ -276,7 +270,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
                                 .flex_1()
                                 .min_w_0()
                                 .text_size(px(11.))
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_color(palette_rgb(palette.muted_foreground))
                                 .child(text(
                                     "支持中文输入、剪贴板和 JSON 导入",
                                     "Chinese input, clipboard and JSON import are supported",

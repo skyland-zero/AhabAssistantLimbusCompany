@@ -236,6 +236,10 @@ enum VisualState {
     HomePaused,
     HomeAfterCompletion,
     TeamsEditor,
+    TeamsShopEditor,
+    TeamsCombatEditor,
+    TeamsStarlightEditor,
+    TeamsAdvancedEditor,
     TeamsDelete,
     TeamsSelect,
     SettingsHotkey,
@@ -255,6 +259,10 @@ impl VisualState {
             "home-paused" => Self::HomePaused,
             "home-after-completion" => Self::HomeAfterCompletion,
             "teams-editor" => Self::TeamsEditor,
+            "teams-shop-editor" => Self::TeamsShopEditor,
+            "teams-combat-editor" => Self::TeamsCombatEditor,
+            "teams-starlight-editor" => Self::TeamsStarlightEditor,
+            "teams-advanced-editor" => Self::TeamsAdvancedEditor,
             "teams-delete" => Self::TeamsDelete,
             "teams-select" => Self::TeamsSelect,
             "settings-hotkey" => Self::SettingsHotkey,
@@ -274,7 +282,13 @@ impl VisualState {
             | Self::HomeRunning
             | Self::HomePaused
             | Self::HomeAfterCompletion => Page::Home,
-            Self::TeamsEditor | Self::TeamsDelete | Self::TeamsSelect => Page::Teams,
+            Self::TeamsEditor
+            | Self::TeamsShopEditor
+            | Self::TeamsCombatEditor
+            | Self::TeamsStarlightEditor
+            | Self::TeamsAdvancedEditor
+            | Self::TeamsDelete
+            | Self::TeamsSelect => Page::Teams,
             Self::SettingsHotkey | Self::SettingsSelect | Self::SettingsLatest => Page::Settings,
             Self::ToolboxRunning => Page::Toolbox,
             Self::ResourcesSyncing => Page::Resources,

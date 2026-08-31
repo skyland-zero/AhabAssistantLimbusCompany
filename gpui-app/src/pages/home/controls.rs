@@ -71,46 +71,14 @@ pub(super) fn options_tabs(
         (TaskOptionsTab::Advanced, text("高级设置", "Advanced")),
     ] {
         let active = selected == tab;
-        let mut control = div()
+        let hover = palette_rgb(palette.accent_surface);
+        let foreground = palette_rgb(palette.foreground);
+        let mut control = tab_surface_with_palette(active, &palette)
             .id(format!("home-options-{task:?}-{tab:?}"))
-            .flex()
-            .items_center()
-            .justify_center()
-            .h(px(26.))
-            .px_3()
-            .rounded_md()
             .tab_index(0)
             .cursor_pointer()
-            .text_size(px(12.))
-            .font_weight(if active {
-                FontWeight::MEDIUM
-            } else {
-                FontWeight::NORMAL
-            })
-            .text_color(palette_rgb(if active {
-                palette.foreground
-            } else {
-                palette.muted_foreground
-            }))
-            .bg(palette_rgb(if active {
-                palette.card
-            } else {
-                palette.muted
-            }))
-            .focus_visible(|style| {
-                style
-                    .border_1()
-                    .border_color(palette_rgb(current_render_palette().ring))
-            })
+            .hover(move |style| style.bg(hover).text_color(foreground))
             .child(label.get(language));
-
-        if !active {
-            control = control.hover(|style| {
-                style
-                    .text_color(palette_rgb(current_render_palette().foreground))
-                    .bg(palette_rgb(current_render_palette().accent_surface))
-            });
-        }
 
         control = control.on_click(cx.listener(move |view, _, _, cx| {
             view.home.set_options_tab(task, tab);

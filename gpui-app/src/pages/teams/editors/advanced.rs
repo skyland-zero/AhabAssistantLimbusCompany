@@ -88,22 +88,20 @@ pub(crate) fn advanced_editor(
         })
         .unwrap_or_else(|| div().into_any_element());
     let observe_content = if config.observe_ego_gift {
-        card(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(observe_field)
-                        .child(add_observe),
-                )
-                .child(gifts),
-        )
-        .p_3()
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .pt_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(observe_field)
+                    .child(add_observe),
+            )
+            .child(gifts)
     } else {
         div()
     };
@@ -119,11 +117,12 @@ pub(crate) fn advanced_editor(
         .rounded_md()
         .tab_index(0)
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(palette_rgb(current_render_palette().input))
         .cursor_pointer()
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
+        .hover(|style| style.bg(palette_rgb(current_render_palette().accent_surface)))
         .text_size(px(11.))
-        .text_color(rgb(crate::app::ACCENT))
+        .text_color(palette_rgb(current_render_palette().brand))
         .child(icon(ICON_PASTE, 14., current_render_palette().brand))
         .child(text("粘贴 / 导入 JSON", "Paste / Import JSON").get(language));
     import_toggle = import_toggle
@@ -218,57 +217,54 @@ pub(crate) fn advanced_editor(
         .flex()
         .flex_col()
         .gap_4()
-        .child(settings_grid(
-            vec![
-                card(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(control_row(
-                            text("观测 E.G.O 饰品", "Observe E.G.O Gifts").get(language),
-                            observe_switch,
-                        ))
-                        .child(
-                            div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                                text(
-                                    "输入名称后点击添加；重复名称不会重复加入。",
-                                    "Enter a gift name and click Add; duplicates are ignored.",
-                                )
-                                .get(language),
-                            ),
-                        )
-                        .child(observe_content),
-                )
-                .p_3()
-                .flex_none(),
-                card(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(control_row(
-                            text("使用队伍专属主题包权重", "Use Custom Theme Pack Weight")
-                                .get(language),
-                            custom_weight,
-                        ))
-                        .child(
-                            div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                                text(
-                                    "保存后由镜牢执行器读取该队伍的主题包权重。",
-                                    "The Mirror executor reads this team's pack weights after Save.",
-                                )
-                                .get(language),
-                            ),
-                        ),
-                )
-                .p_3()
-                .flex_none(),
-            ],
-            220.,
-        ))
         .child(
-            card(
+            editor_card(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(control_row(
+                        text("观测 E.G.O 饰品", "Observe E.G.O Gifts").get(language),
+                        observe_switch,
+                    ))
+                    .child(
+                        div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                            text(
+                                "输入名称后点击添加；重复名称不会重复加入。",
+                                "Enter a gift name and click Add; duplicates are ignored.",
+                            )
+                            .get(language),
+                        ),
+                    )
+                    .child(observe_content),
+            )
+            .flex_none(),
+        )
+        .child(
+            editor_card(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(control_row(
+                        text("使用队伍专属主题包权重", "Use Custom Theme Pack Weight")
+                            .get(language),
+                        custom_weight,
+                    ))
+                    .child(
+                        div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                            text(
+                                "保存后由镜牢执行器读取该队伍的主题包权重。",
+                                "The Mirror executor reads this team's pack weights after Save.",
+                            )
+                            .get(language),
+                        ),
+                    ),
+            )
+            .flex_none(),
+        )
+        .child(
+            editor_card(
                 div()
                     .flex()
                     .flex_col()
@@ -279,14 +275,13 @@ pub(crate) fn advanced_editor(
                             .items_center()
                             .justify_between()
                             .gap_2()
-                            .child(div().text_size(px(13.)).text_color(rgb(TEXT)).child(
+                            .child(editor_section_title(
                                 text("配置导入导出", "Configuration Import / Export").get(language),
                             ))
                             .child(import_toggle),
                     )
                     .child(json_panel),
             )
-            .p_3()
             .flex_none(),
         )
 }

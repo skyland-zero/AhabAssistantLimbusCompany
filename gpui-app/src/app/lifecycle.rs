@@ -595,6 +595,37 @@ impl AhabApp {
                     self.create_team_inputs(cx);
                 }
             }
+            VisualState::TeamsShopEditor => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(cx);
+                    self.teams.set_editor_tab(crate::state::TeamEditorTab::Shop);
+                }
+            }
+            VisualState::TeamsCombatEditor => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(cx);
+                    self.teams
+                        .set_editor_tab(crate::state::TeamEditorTab::Combat);
+                }
+            }
+            VisualState::TeamsStarlightEditor => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(cx);
+                    self.teams
+                        .set_editor_tab(crate::state::TeamEditorTab::Starlight);
+                }
+            }
+            VisualState::TeamsAdvancedEditor => {
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(cx);
+                    self.teams
+                        .set_editor_tab(crate::state::TeamEditorTab::Advanced);
+                }
+            }
             VisualState::TeamsDelete => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.request_delete(team);
