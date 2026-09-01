@@ -32,67 +32,96 @@ class BuiltinTeamPreset:
     setting: Mapping[str, Any]
 
 
+_HOS_RYOSHU_SOLO_SETTING: dict[str, Any] = {
+    "purpose": "mirror",
+    "team_system": 4,
+    "sinners_be_select": 12,
+    "chosen_sinners": [1] * 12,
+    # Array index follows the legacy sinner id order.  The resulting
+    # formation is Ryoshu, Yi Sang, Rodion, weak Meursault, weak
+    # Gregor, Heathcliff, Outis, Hong Lu, Faust, Ishmael, Don, Sinclair.
+    "sinner_order": [2, 9, 11, 1, 4, 8, 6, 10, 3, 12, 7, 5],
+    "shop_strategy": 1,
+    "do_not_heal": True,
+    "do_not_buy": False,
+    "do_not_fuse": False,
+    "do_not_sell": True,
+    "do_not_enhance": False,
+    "use_starlight": True,
+    "opening_items": True,
+    # The first permutation is the guide's displayed starting-gift
+    # order: Cigarette Holder II, Stone Tomb II, Old Wooden Doll II.
+    "opening_items_select": 0,
+    "opening_items_system": 4,
+    "skill_replacement": True,
+    "skill_replacement_select": 0,
+    # The current backend exposes the 1 -> 3 replacement option; the
+    # route keeps the guide's finer S1/S2/S3 target as metadata while
+    # using this safe compatible mode at runtime.
+    "skill_replacement_mode": 1,
+    "defense_for_solo": True,
+    # This remains the compatibility fallback when live roster OCR is
+    # unavailable.  Known counts are handled dynamically at runtime.
+    "defense_for_solo_turns": 5,
+    "reward_cards": True,
+    "reward_cards_select": 3,
+    "max_keyword_refresh": 2,
+    "max_normal_refresh": 3,
+    "use_team_code": True,
+    "team_code": "H4sIAAAAAAAACnMxcUwvD8x2DAh0dgQBc0dPEOVS4ZgOop0iIcKm5WBhVxeIsH8xWNjJORCiuhIiHJAPUe0GEXZ0tLUFAH9Z+5NgAAAA",
+    "observe_ego_gift": True,
+    "observe_ego_gift_selected": [SPIDERWEB_ENTANGLED_IN_RED],
+    "mirror_route_profile": "hos_ryoshu_solo_route",
+}
+
+
 BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
     BuiltinTeamPreset(
-        preset_id="hos_ryoshu_solo",
+        preset_id="hos_ryoshu_solo_normal",
         route_id="hos_ryoshu_solo_route",
-        name_zh="小指良伪单通",
-        name_en="Ryoshu Pseudo-Solo",
+        name_zh="小指良伪单通（普牢）",
+        name_en="Ryoshu Pseudo-Solo (Normal)",
         description_zh=(
             "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。"
-            "按 House of Spiders 攻略配置开局星光、初始饰品和技能替换，适用于 5 层和 15 层路线。"
+            "普通镜牢开局使用默认前四个一级星光。"
         ),
         description_en=(
             "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 "
-            "are prioritized sacrifices. Opening bonuses, starting gifts, and skill replacement "
-            "follow the House of Spiders guide for 5-floor and 15-floor runs."
+            "are prioritized sacrifices. Uses the default first four level-one "
+            "starting bonuses for normal Mirror Dungeons."
         ),
-        floor_hint_zh="自动识别 5/15 层环境；5 层执行 1–5 层，15 层继续执行 6–10 与 11–15 层",
-        floor_hint_en="Auto-detect 5-floor or 15-floor mode; 5-floor runs stop at 5, 15-floor runs continue through 6–15",
+        floor_hint_zh="适用于普通镜牢，执行 1–5 层",
+        floor_hint_en="For normal Mirror Dungeons; runs floors 1–5",
         route_name_zh="House of Spiders 良秀伪单通路线",
         route_name_en="House of Spiders Ryoshu route",
         setting={
-            "purpose": "mirror",
-            "team_system": 4,
-            "sinners_be_select": 12,
-            "chosen_sinners": [1] * 12,
-            # Array index follows the legacy sinner id order.  The resulting
-            # formation is Ryoshu, Yi Sang, Rodion, weak Meursault, weak
-            # Gregor, Heathcliff, Outis, Hong Lu, Faust, Ishmael, Don, Sinclair.
-            "sinner_order": [2, 9, 11, 1, 4, 8, 6, 10, 3, 12, 7, 5],
-            "shop_strategy": 1,
-            "do_not_heal": True,
-            "do_not_buy": False,
-            "do_not_fuse": False,
-            "do_not_sell": True,
-            "do_not_enhance": False,
-            "use_starlight": True,
+            **_HOS_RYOSHU_SOLO_SETTING,
+            "opening_bonus": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+            "remark_name": "小指良伪单通（普牢）",
+        },
+    ),
+    BuiltinTeamPreset(
+        preset_id="hos_ryoshu_solo_hard",
+        route_id="hos_ryoshu_solo_route",
+        name_zh="小指良伪单通（困牢）",
+        name_en="Ryoshu Pseudo-Solo (Hard)",
+        description_zh=(
+            "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。"
+            "困难镜牢开局使用 House of Spiders 攻略的十个 ++ 星光。"
+        ),
+        description_en=(
+            "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 "
+            "are prioritized sacrifices. Uses ten level-++ starting bonuses "
+            "from the House of Spiders guide for hard Mirror Dungeons."
+        ),
+        floor_hint_zh="适用于困难镜牢，执行 1–15 层并开启平行叠加",
+        floor_hint_en="For hard Mirror Dungeons; runs floors 1–15 with Parallel Superposition",
+        route_name_zh="House of Spiders 良秀伪单通路线",
+        route_name_en="House of Spiders Ryoshu route",
+        setting={
+            **_HOS_RYOSHU_SOLO_SETTING,
             "opening_bonus": [3] * 10,
-            "opening_items": True,
-            # The first permutation is the guide's displayed starting-gift
-            # order: Cigarette Holder II, Stone Tomb II, Old Wooden Doll II.
-            "opening_items_select": 0,
-            "opening_items_system": 4,
-            "skill_replacement": True,
-            "skill_replacement_select": 0,
-            # The current backend exposes the 1 -> 3 replacement option; the
-            # route keeps the guide's finer S1/S2/S3 target as metadata while
-            # using this safe compatible mode at runtime.
-            "skill_replacement_mode": 1,
-            "defense_for_solo": True,
-            # This remains the compatibility fallback when live roster OCR is
-            # unavailable.  Known counts are handled dynamically at runtime.
-            "defense_for_solo_turns": 5,
-            "reward_cards": True,
-            "reward_cards_select": 3,
-            "max_keyword_refresh": 2,
-            "max_normal_refresh": 3,
-            "use_team_code": True,
-            "team_code": "H4sIAAAAAAAACnMxcUwvD8x2DAh0dgQBc0dPEOVS4ZgOop0iIcKm5WBhVxeIsH8xWNjJORCiuhIiHJAPUe0GEXZ0tLUFAH9Z+5NgAAAA",
-            "observe_ego_gift": True,
-            "observe_ego_gift_selected": [SPIDERWEB_ENTANGLED_IN_RED],
-            "mirror_route_profile": "hos_ryoshu_solo_route",
-            "remark_name": "小指良伪单通",
+            "remark_name": "小指良伪单通（困牢）",
         },
     ),
     BuiltinTeamPreset(

@@ -1,5 +1,5 @@
 config_version: 1781049600 # 配置文件版本号 (时间戳)
-team_presets_revision: 3 # 内置队伍预设迁移版本
+team_presets_revision: 4 # 内置队伍预设迁移版本
 
 # 游戏设置
 game_title_name: LimbusCompany # 游戏窗口标题。
@@ -226,13 +226,13 @@ teams:
     max_keyword_refresh: 2 # 每次商店访问时定向刷新商品的次数上限
     max_normal_refresh: 3 # 每次商店访问时普通刷新商品的次数上限
     use_starlight: true # 开局星光换钱
-    opening_bonus: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3] # 攻略开局星光：全部选择 ++
+    opening_bonus: [1, 1, 1, 1, 0, 0, 0, 0, 0, 0] # 普牢开局星光：默认前四个一级
     opening_items: true # 按攻略选择初始饰品
     opening_items_select: 0 # Cigarette Holder II / Stone Tomb II / Old Wooden Doll II
     opening_items_system: 4 # 呼吸体系
     defense_for_solo: true # 小指良伪单通
     defense_for_solo_turns: 5 # 伪单通防御回合数
-    remark_name: 小指良伪单通 # 队伍备注名
+    remark_name: 小指良伪单通（普牢） # 队伍备注名
     observe_ego_gift: true # 观测饰品
     observe_ego_gift_selected: [spiderweb_entangled_in_red] # 保留现有蜘蛛巢专属 Gift Search
     skill_replacement: true # 启用技能替换
@@ -245,6 +245,39 @@ teams:
     purpose: mirror # 队伍用途
     team_system: 4 # 队伍使用的体系
     team_number: 3 # 使用的队伍序号
+    sinners_be_select: 12 # 有几名罪人被选中
+    chosen_sinners: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] # 有哪几名罪人被选中
+    sinner_order: [2, 9, 11, 1, 4, 8, 6, 10, 3, 12, 7, 5] # 罪人被选中的顺序
+    shop_strategy: 1 # 商店策略
+    do_not_heal: true # 不治疗
+    do_not_buy: false # 不购买
+    do_not_fuse: false # 不合成
+    do_not_sell: true # 不出售
+    do_not_enhance: false # 不升级
+    reward_cards: true # 奖励卡优先度
+    reward_cards_select: 3 # 自定义奖励卡优先度
+    max_keyword_refresh: 2 # 每次商店访问时定向刷新商品的次数上限
+    max_normal_refresh: 3 # 每次商店访问时普通刷新商品的次数上限
+    use_starlight: true # 开局星光换钱
+    opening_bonus: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3] # 困牢开局星光：全部选择 ++
+    opening_items: true # 按攻略选择初始饰品
+    opening_items_select: 0 # Cigarette Holder II / Stone Tomb II / Old Wooden Doll II
+    opening_items_system: 4 # 呼吸体系
+    defense_for_solo: true # 小指良伪单通
+    defense_for_solo_turns: 5 # 伪单通防御回合数
+    remark_name: 小指良伪单通（困牢） # 队伍备注名
+    observe_ego_gift: true # 观测饰品
+    observe_ego_gift_selected: [spiderweb_entangled_in_red] # 保留现有蜘蛛巢专属 Gift Search
+    skill_replacement: true # 启用技能替换
+    skill_replacement_select: 0 # 优先良秀
+    skill_replacement_mode: 1 # 当前后端可用的 1 -> 3 兼容模式
+    use_team_code: true # 使用攻略编队码
+    team_code: "H4sIAAAAAAAACnMxcUwvD8x2DAh0dgQBc0dPEOVS4ZgOop0iIcKm5WBhVxeIsH8xWNjJORCiuhIiHJAPUe0GEXZ0tLUFAH9Z+5NgAAAA" # 编队码
+    mirror_route_profile: hos_ryoshu_solo_route # 镜牢饰品路线 ID
+  '4':
+    purpose: mirror # 队伍用途
+    team_system: 4 # 队伍使用的体系
+    team_number: 4 # 使用的队伍序号
     sinners_be_select: 10 # 有几名罪人被选中
     chosen_sinners: [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0] # 有哪几名罪人被选中
     sinner_order: [2, 8, 4, 1, 0, 5, 7, 9, 3, 10, 6, 0] # 罪人被选中的顺序

@@ -418,7 +418,7 @@ impl MockState {
 }
 
 fn builtin_team_presets() -> Vec<TeamPreset> {
-    let solo_config = TeamMirrorConfig {
+    let normal_solo_config = TeamMirrorConfig {
         team_system: 4,
         shop_strategy: 1,
         reward_cards: true,
@@ -435,7 +435,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         skill_replacement_select: 0,
         skill_replacement_mode: 1,
         use_starlight: true,
-        opening_bonus: vec![3; 10],
+        opening_bonus: vec![1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
         use_team_code: true,
         team_code: "H4sIAAAAAAAACnMxcUwvD8x2DAh0dgQBc0dPEOVS4ZgOop0iIcKm5WBhVxeIsH8xWNjJORCiuhIiHJAPUe0GEXZ0tLUFAH9Z+5NgAAAA".into(),
         observe_ego_gift: true,
@@ -443,29 +443,42 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         mirror_route_profile: "hos_ryoshu_solo_route".into(),
         ..TeamMirrorConfig::default()
     };
+    let mut hard_solo_config = normal_solo_config.clone();
+    hard_solo_config.opening_bonus = vec![3; 10];
 
-    let solo_team = TeamDetail {
+    let solo_sinners = vec![
+        "ryoshu".into(),
+        "yi_sang".into(),
+        "rodion".into(),
+        "meursault".into(),
+        "gregor".into(),
+        "heathcliff".into(),
+        "outis".into(),
+        "hong_lu".into(),
+        "faust".into(),
+        "ishmael".into(),
+        "don_quixote".into(),
+        "sinclair".into(),
+    ];
+    let normal_solo_team = TeamDetail {
         schemaVersion: 1,
         id: String::new(),
-        name: "小指良伪单通".into(),
-        sinners: vec![
-            "ryoshu".into(),
-            "yi_sang".into(),
-            "rodion".into(),
-            "meursault".into(),
-            "gregor".into(),
-            "heathcliff".into(),
-            "outis".into(),
-            "hong_lu".into(),
-            "faust".into(),
-            "ishmael".into(),
-            "don_quixote".into(),
-            "sinclair".into(),
-        ],
+        name: "小指良伪单通（普牢）".into(),
+        sinners: solo_sinners.clone(),
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
-        mirrorConfig: Some(solo_config),
+        mirrorConfig: Some(normal_solo_config),
+    };
+    let hard_solo_team = TeamDetail {
+        schemaVersion: 1,
+        id: String::new(),
+        name: "小指良伪单通（困牢）".into(),
+        sinners: solo_sinners,
+        purpose: TeamPurpose::Mirror,
+        accessoryScheme: "poise".into(),
+        enabled: false,
+        mirrorConfig: Some(hard_solo_config),
     };
 
     let spider_config = TeamMirrorConfig {
@@ -501,25 +514,46 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
 
     vec![
         TeamPreset {
-            presetId: "hos_ryoshu_solo".into(),
+            presetId: "hos_ryoshu_solo_normal".into(),
             routeId: "hos_ryoshu_solo_route".into(),
             name: LocalizedText {
-                zhCn: "小指良伪单通".into(),
-                enUs: "Ryoshu Pseudo-Solo".into(),
+                zhCn: "小指良伪单通（普牢）".into(),
+                enUs: "Ryoshu Pseudo-Solo (Normal)".into(),
             },
             description: LocalizedText {
-                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。按 House of Spiders 攻略配置开局星光、初始饰品和技能替换。".into(),
-                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Opening bonuses, starting gifts, and skill replacement follow the House of Spiders guide.".into(),
+                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。普通镜牢开局使用默认前四个一级星光。".into(),
+                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Uses the default first four level-one starting bonuses for normal Mirror Dungeons.".into(),
             },
             floorHint: LocalizedText {
-                zhCn: "自动识别 5/15 层环境；5 层执行 1–5 层，15 层继续执行 6–10 与 11–15 层".into(),
-                enUs: "Auto-detect 5-floor or 15-floor mode; 5-floor runs stop at 5, 15-floor runs continue through 6–15.".into(),
+                zhCn: "适用于普通镜牢，执行 1–5 层".into(),
+                enUs: "For normal Mirror Dungeons; runs floors 1–5.".into(),
             },
             routeName: LocalizedText {
                 zhCn: "House of Spiders 良秀伪单通路线".into(),
                 enUs: "House of Spiders Ryoshu route".into(),
             },
-            team: solo_team,
+            team: normal_solo_team,
+        },
+        TeamPreset {
+            presetId: "hos_ryoshu_solo_hard".into(),
+            routeId: "hos_ryoshu_solo_route".into(),
+            name: LocalizedText {
+                zhCn: "小指良伪单通（困牢）".into(),
+                enUs: "Ryoshu Pseudo-Solo (Hard)".into(),
+            },
+            description: LocalizedText {
+                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。困难镜牢开局使用 House of Spiders 攻略的十个 ++ 星光。".into(),
+                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Uses ten level-++ starting bonuses from the House of Spiders guide for hard Mirror Dungeons.".into(),
+            },
+            floorHint: LocalizedText {
+                zhCn: "适用于困难镜牢，执行 1–15 层并开启平行叠加".into(),
+                enUs: "For hard Mirror Dungeons; runs floors 1–15 with Parallel Superposition.".into(),
+            },
+            routeName: LocalizedText {
+                zhCn: "House of Spiders 良秀伪单通路线".into(),
+                enUs: "House of Spiders Ryoshu route".into(),
+            },
+            team: hard_solo_team,
         },
         TeamPreset {
             presetId: "spiderweb_family".into(),

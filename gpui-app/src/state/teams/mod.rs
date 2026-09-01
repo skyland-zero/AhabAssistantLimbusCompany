@@ -124,34 +124,53 @@ mod tests {
     #[test]
     fn built_in_presets_have_stable_ids_and_complete_routes() {
         let state = TeamsState::default();
-        assert_eq!(state.presets.len(), 2);
-        let solo = state
+        assert_eq!(state.presets.len(), 3);
+        let normal = state
             .presets
             .iter()
-            .find(|preset| preset.presetId == "hos_ryoshu_solo")
+            .find(|preset| preset.presetId == "hos_ryoshu_solo_normal")
             .unwrap();
-        assert_eq!(solo.routeId, "hos_ryoshu_solo_route");
-        assert_eq!(solo.team.sinners.len(), 12);
+        let hard = state
+            .presets
+            .iter()
+            .find(|preset| preset.presetId == "hos_ryoshu_solo_hard")
+            .unwrap();
+        assert_eq!(normal.routeId, "hos_ryoshu_solo_route");
+        assert_eq!(hard.routeId, "hos_ryoshu_solo_route");
+        assert_eq!(normal.team.sinners.len(), 12);
+        assert_eq!(hard.team.sinners.len(), 12);
+        assert_eq!(normal.team.name, "小指良伪单通（普牢）");
+        assert_eq!(hard.team.name, "小指良伪单通（困牢）");
         assert_eq!(
-            solo.team
+            normal
+                .team
                 .mirrorConfig
                 .as_ref()
                 .unwrap()
                 .mirror_route_profile,
             "hos_ryoshu_solo_route"
         );
-        assert!(!solo.description.zhCn.is_empty());
+        assert_eq!(
+            normal.team.mirrorConfig.as_ref().unwrap().opening_bonus,
+            vec![1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            hard.team.mirrorConfig.as_ref().unwrap().opening_bonus,
+            vec![3; 10]
+        );
+        assert!(!normal.description.zhCn.is_empty());
+        assert!(!hard.description.zhCn.is_empty());
     }
 
     #[test]
     fn selecting_empty_slot_saves_the_complete_preset_to_requested_slot() {
         let mut state = TeamsState::default();
         state.open_preset_picker_for_slot(4);
-        assert!(state.select_preset("hos_ryoshu_solo").unwrap());
+        assert!(state.select_preset("hos_ryoshu_solo_normal").unwrap());
         let editor = state.editor.as_ref().unwrap();
         assert_eq!(editor.requested_team_number, Some(4));
         assert!(editor.team.id.is_empty());
-        assert_eq!(editor.team.name, "小指良伪单通");
+        assert_eq!(editor.team.name, "小指良伪单通（普牢）");
         assert_eq!(
             editor
                 .team
@@ -168,7 +187,7 @@ mod tests {
         let mut state = TeamsState::default();
         let target = state.teams[0].clone();
         state.open_preset_picker_for_team(&target);
-        assert!(!state.select_preset("hos_ryoshu_solo").unwrap());
+        assert!(!state.select_preset("hos_ryoshu_solo_hard").unwrap());
         assert!(state.editor.is_none());
         assert!(state.preset_overwrite.is_some());
 
@@ -176,7 +195,7 @@ mod tests {
         let editor = state.editor.as_ref().unwrap();
         assert_eq!(editor.team.id, target.id);
         assert_eq!(editor.team.enabled, target.enabled);
-        assert_eq!(editor.team.name, "小指良伪单通");
+        assert_eq!(editor.team.name, "小指良伪单通（困牢）");
     }
 
     #[test]

@@ -574,19 +574,26 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
     app = make_application()
     presets = app.team_preset_list()
 
-    assert [preset["presetId"] for preset in presets] == ["hos_ryoshu_solo", "spiderweb_family"]
-    solo = presets[0]
-    assert solo["routeId"] == "hos_ryoshu_solo_route"
-    assert solo["team"]["id"] == ""
-    assert len(solo["team"]["sinners"]) == 12
-    assert solo["team"]["mirrorConfig"]["mirror_route_profile"] == "hos_ryoshu_solo_route"
-    assert solo["team"]["mirrorConfig"]["observe_ego_gift_selected"] == ["spiderweb_entangled_in_red"]
-    assert solo["team"]["mirrorConfig"]["opening_bonus"] == [3] * 10
-    assert solo["team"]["mirrorConfig"]["opening_items"] is True
-    assert solo["team"]["mirrorConfig"]["opening_items_system"] == 4
-    assert solo["team"]["mirrorConfig"]["use_team_code"] is True
-    assert solo["team"]["mirrorConfig"]["skill_replacement"] is True
-    assert solo["description"]["zhCn"]
+    assert [preset["presetId"] for preset in presets] == [
+        "hos_ryoshu_solo_normal",
+        "hos_ryoshu_solo_hard",
+        "spiderweb_family",
+    ]
+    normal, hard = presets[:2]
+    assert normal["routeId"] == "hos_ryoshu_solo_route"
+    assert hard["routeId"] == "hos_ryoshu_solo_route"
+    for solo in (normal, hard):
+        assert solo["team"]["id"] == ""
+        assert len(solo["team"]["sinners"]) == 12
+        assert solo["team"]["mirrorConfig"]["mirror_route_profile"] == "hos_ryoshu_solo_route"
+        assert solo["team"]["mirrorConfig"]["observe_ego_gift_selected"] == ["spiderweb_entangled_in_red"]
+        assert solo["team"]["mirrorConfig"]["opening_items"] is True
+        assert solo["team"]["mirrorConfig"]["opening_items_system"] == 4
+        assert solo["team"]["mirrorConfig"]["use_team_code"] is True
+        assert solo["team"]["mirrorConfig"]["skill_replacement"] is True
+        assert solo["description"]["zhCn"]
+    assert normal["team"]["mirrorConfig"]["opening_bonus"] == [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
+    assert hard["team"]["mirrorConfig"]["opening_bonus"] == [3] * 10
     app.close()
 
 
@@ -736,29 +743,35 @@ def test_team_save_requires_ryoshu_and_two_family_members_for_pseudo_solo() -> N
 def test_builtin_team_preset_merge_preserves_custom_teams_and_queue() -> None:
     config = object.__new__(Config)
     config._defaults = {
-        "team_presets_revision": 1,
+        "team_presets_revision": 4,
         "teams": {
-            "2": {"remark_name": "小指良伪单通", "team_number": 2},
-            "3": {"remark_name": "蜘蛛巢全家桶", "team_number": 3},
+            "2": {"remark_name": "小指良伪单通（普牢）", "team_number": 2},
+            "3": {"remark_name": "小指良伪单通（困牢）", "team_number": 3},
+            "4": {"remark_name": "蜘蛛巢全家桶", "team_number": 4},
         },
     }
     loaded = {
-        "team_presets_revision": 0,
-        "teams": {"1": {"remark_name": "我的队伍"}, "2": {"remark_name": "旧自定义队伍"}},
+        "team_presets_revision": 3,
+        "teams": {
+            "1": {"remark_name": "我的队伍"},
+            "2": {"remark_name": "小指良伪单通"},
+            "3": {"remark_name": "蜘蛛巢全家桶"},
+        },
         "teams_active_queue": [1, 2],
     }
 
     assert config._merge_builtin_team_presets(loaded) is True
     assert loaded["teams"]["1"]["remark_name"] == "我的队伍"
-    assert loaded["teams"]["2"]["remark_name"] == "旧自定义队伍"
-    assert loaded["teams"]["3"]["remark_name"] == "小指良伪单通"
-    assert loaded["teams"]["4"]["remark_name"] == "蜘蛛巢全家桶"
-    assert loaded["teams"]["3"]["team_number"] == 3
+    assert loaded["teams"]["2"]["remark_name"] == "小指良伪单通"
+    assert loaded["teams"]["3"]["remark_name"] == "蜘蛛巢全家桶"
+    assert loaded["teams"]["4"]["remark_name"] == "小指良伪单通（普牢）"
+    assert loaded["teams"]["5"]["remark_name"] == "小指良伪单通（困牢）"
     assert loaded["teams"]["4"]["team_number"] == 4
+    assert loaded["teams"]["5"]["team_number"] == 5
     assert loaded["teams_active_queue"] == [1, 2]
-    assert loaded["team_presets_revision"] == 1
+    assert loaded["team_presets_revision"] == 4
 
-    removed_after_migration = {"team_presets_revision": 1, "teams": {"1": {"remark_name": "我的队伍"}}}
+    removed_after_migration = {"team_presets_revision": 4, "teams": {"1": {"remark_name": "我的队伍"}}}
     assert config._merge_builtin_team_presets(removed_after_migration) is False
     assert list(removed_after_migration["teams"]) == ["1"]
 

@@ -35,7 +35,13 @@ _LEGACY_WINDOW_POSITION = {
     3: "free",
 }
 
-_BUILTIN_TEAM_PRESET_NAMES = frozenset({"小指良伪单通", "蜘蛛巢全家桶"})
+_BUILTIN_TEAM_PRESET_NAMES = frozenset(
+    {
+        "小指良伪单通（普牢）",
+        "小指良伪单通（困牢）",
+        "蜘蛛巢全家桶",
+    }
+)
 
 
 class Config(metaclass=SingletonMeta):
