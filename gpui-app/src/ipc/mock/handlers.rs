@@ -114,6 +114,7 @@ impl MockState {
                             isMirrorInfinite: infinite,
                             updatedAt: Some(0),
                         },
+                        lastMirror: self.stats.lastMirror.clone(),
                         today: self.stats.today.clone(),
                         week: self.stats.week.clone(),
                         updatedAt: 0,

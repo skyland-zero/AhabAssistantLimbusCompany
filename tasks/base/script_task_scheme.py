@@ -105,16 +105,17 @@ def onetime_mir_process(team_setting: TeamSetting, team_num: int):
     try:
         mirror_adventure = Mirror(team_setting, team_num)
         if mirror_adventure.run():
+            completion_stats = mirror_adventure.last_completion_stats or {}
             del mirror_adventure
             mirror_adventure = None
             back_init_menu()
             make_enkephalin_module()
-            return True
+            return completion_stats
         else:
-            return False
+            return None
     except Exception as e:
         log.exception(f"镜牢行动出错: {e}")
-        return False
+        return None
 
 
 def to_get_reward():
@@ -372,10 +373,10 @@ def Mirror_task():
                 continue
         # 执行一次镜牢任务，根据执行结果进行处理
         mirror_result = onetime_mir_process(team_setting, team_num)
-        if mirror_result:
+        if mirror_result is not None:
             cfg.rotate_team_queue()
             mir_times -= 1
-            mediator.task_completed.emit("mirror", 1)
+            mediator.task_completed.emit("mirror", 1, mirror_result)
             if cfg.hard_mirror and cfg.auto_hard_mirror:
                 chance = cfg.hard_mirror_chance - 1
                 cfg.set_value("hard_mirror_chance", chance)

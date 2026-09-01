@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from time import sleep
 
 import cv2
@@ -119,6 +120,7 @@ class Mirror:
         self.shop_total_time = 0
         self.event_total_time = 0
         self.event_times = 0
+        self.last_completion_stats: dict[str, object] | None = None
 
         self.floor = 0
         self.get_floor_num = True
@@ -856,6 +858,15 @@ class Mirror:
         # 计时结束
         end_time = time.time()
         elapsed_time = end_time - start_time
+        self.last_completion_stats = {
+            "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "totalSeconds": max(0.0, elapsed_time),
+            "battleSeconds": max(0.0, self.battle_total_time),
+            "eventSeconds": max(0.0, self.event_total_time),
+            "shopSeconds": max(0.0, self.shop_total_time),
+            "findRoadSeconds": max(0.0, self.find_road_total_time),
+            "eventCount": max(0, int(self.event_times)),
+        }
 
         if self.plan_runtime.complete:
             team = cfg.config.teams.get(f"{self.team_order}")

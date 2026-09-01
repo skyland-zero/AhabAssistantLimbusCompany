@@ -113,7 +113,8 @@ class EventBus:
     # ---- 运行统计 ----
     # (task_id: daily_task/get_reward/buy_enkephalin/mirror)
     task_started = Event("task_started")
-    # (kind: exp/thread/mirror, count: successful dungeon completions)
+    # (kind: exp/thread/mirror, count: successful dungeon completions,
+    #  optional details: mirror timing record)
     task_completed = Event("task_completed")
 
     # ---- 快捷键监听 ----

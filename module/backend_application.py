@@ -1458,26 +1458,42 @@ class BackendApplication:
             self.emit("execution.stats", stats_payload)
             self.emit("execution.status", self._execution_payload())
 
-    def _on_task_completed(self, kind: Any, count: Any = 1) -> None:
+    def _on_task_completed(self, kind: Any, count: Any = 1, details: Any = None) -> None:
         run_id = self._execution_run_id
         if run_id is None:
             return
+        task_kind = str(kind)
+        mirror_details = details if task_kind == "mirror" and isinstance(details, Mapping) else None
         try:
             amount = int(count)
-            payload = self.stats.record_completion(str(kind), amount, run_id=run_id)
+            payload = self.stats.record_completion(
+                task_kind,
+                amount,
+                run_id=run_id,
+                details=mirror_details,
+            )
         except TypeError, ValueError:
             return
         if payload is not None:
             self.emit("execution.stats", payload)
             if self._execution_state == "running" and not self._execution_stop.is_set():
-                self._queue_notification("enqueue_completion", str(kind), amount)
+                notification_details = payload.get("lastMirror") if task_kind == "mirror" else None
+                if isinstance(notification_details, Mapping):
+                    self._queue_notification("enqueue_completion", task_kind, amount, notification_details)
+                else:
+                    self._queue_notification("enqueue_completion", task_kind, amount)
 
     def _queue_run_notification(self, run_id: str, outcome: str, error: str | None = None) -> None:
-        current_run = self.stats.summary().get("currentRun", {})
+        summary = self.stats.summary()
+        current_run = summary.get("currentRun", {})
         if current_run.get("runId") != run_id:
             return
         if outcome == "final":
-            self._queue_notification("enqueue_final", current_run)
+            final_run = dict(current_run)
+            last_mirror = summary.get("lastMirror")
+            if isinstance(last_mirror, Mapping) and last_mirror.get("runId") == run_id:
+                final_run["lastMirror"] = dict(last_mirror)
+            self._queue_notification("enqueue_final", final_run)
         elif outcome == "failure" and error is not None:
             self._queue_notification("enqueue_failure", error)
 

@@ -179,6 +179,7 @@ class FakeNotificationService:
     def __init__(self) -> None:
         self.tests: list[str] = []
         self.completions: list[tuple[str, str, int]] = []
+        self.completion_details: list[dict[str, Any] | None] = []
         self.finals: list[tuple[str, dict[str, Any]]] = []
         self.failures: list[tuple[str, str]] = []
         self.closed = False
@@ -187,8 +188,15 @@ class FakeNotificationService:
         self.tests.append(spt)
         return {"code": 1000}
 
-    def enqueue_completion(self, spt: str, kind: str, count: int) -> bool:
+    def enqueue_completion(
+        self,
+        spt: str,
+        kind: str,
+        count: int,
+        details: dict[str, Any] | None = None,
+    ) -> bool:
         self.completions.append((spt, kind, count))
+        self.completion_details.append(details)
         return True
 
     def enqueue_final(self, spt: str, current_run: dict[str, Any]) -> bool:
@@ -435,6 +443,37 @@ def test_task_completion_notifications_batch_progress_and_skip_manual_stop(tmp_p
 
     app._queue_run_notification("run-1", "failure", "safe failure")
     assert notifications.failures == [("SPT_progress-value", "safe failure")]
+    app.close()
+
+
+def test_mirror_completion_details_reach_stats_and_notifications(tmp_path) -> None:
+    notifications = FakeNotificationService()
+    app = make_application(
+        stats_path=tmp_path / "runtime_stats.json",
+        notifications=notifications,
+    )
+    app.config.values["wxpusher_spt"] = "SPT_progress-value"
+    app.stats.start_run("run-1", {"mirror": 1})
+    app._execution_run_id = "run-1"
+    app._execution_state = "running"
+    details = {
+        "completedAt": "2026-08-31T08:00:00+09:00",
+        "totalSeconds": 1800.5,
+        "battleSeconds": 1200.25,
+        "eventSeconds": 180.0,
+        "shopSeconds": 90.75,
+        "findRoadSeconds": 329.5,
+        "eventCount": 4,
+    }
+
+    app._on_task_completed("mirror", 1, details)
+
+    expected = {**details, "runId": "run-1"}
+    assert notifications.completion_details == [expected]
+    assert app.stats.summary()["lastMirror"] == expected
+
+    app._queue_run_notification("run-1", "final")
+    assert notifications.finals[0][1]["lastMirror"] == expected
     app.close()
 
 

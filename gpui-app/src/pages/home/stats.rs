@@ -7,7 +7,7 @@ use crate::{
     model::{ExecutionStatsPayload, ExecutionStatusPayload, TasksConfig},
 };
 
-use crate::model::{CurrentRunStats, DailyStatEntry, StatCounts};
+use crate::model::{CurrentRunStats, DailyStatEntry, MirrorCompletionStats, StatCounts};
 
 const STATS_CARD_HEIGHT: f32 = 156.0;
 
@@ -78,6 +78,7 @@ fn render_overview(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div 
         .mr(px(4.0))
         .mt(px(10.0))
         .child(runtime_card(snapshot, root))
+        .child(recent_mirror_card(snapshot))
         .child(
             period_card(snapshot, root)
                 .flex_grow(1.0)
@@ -653,6 +654,142 @@ fn period_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
     .overflow_hidden()
 }
 
+fn recent_mirror_card(snapshot: &StatsSnapshot) -> Div {
+    let language = snapshot.language;
+    let header = div()
+        .h(px(28.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(action_icon(ICON_HISTORY, 14., ACCENT))
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(rgb(TEXT_MUTED))
+                .child(text("最近镜牢", "Recent Mirror").get(language)),
+        );
+
+    let body = match snapshot.stats.lastMirror.as_ref() {
+        Some(record) => recent_mirror_details(record, language),
+        None => div()
+            .flex_1()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(11.0))
+            .text_color(rgb(TEXT_MUTED))
+            .child(text("暂无完成记录", "No completed mirror").get(language)),
+    };
+
+    card(
+        div()
+            .h_full()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(header)
+            .child(body),
+    )
+    .h(px(STATS_CARD_HEIGHT))
+    .flex_grow(1.0)
+    .flex_shrink(1.0)
+    .flex_basis(relative(0.0))
+    .min_w_0()
+    .overflow_hidden()
+}
+
+fn recent_mirror_details(record: &MirrorCompletionStats, language: Language) -> Div {
+    let completed_at = record.completedAt.replace('T', " ");
+    div()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .justify_between()
+        .gap_1()
+        .text_size(px(10.0))
+        .text_color(rgb(TEXT_MUTED))
+        .child(recent_mirror_line(
+            text("完成时间", "Completed").get(language),
+            completed_at,
+        ))
+        .child(recent_mirror_line(
+            text("总耗时", "Total").get(language),
+            format_duration(record.totalSeconds),
+        ))
+        .child(
+            div()
+                .flex()
+                .gap_1()
+                .child(recent_mirror_metric(
+                    text("战斗", "Battle").get(language),
+                    record.battleSeconds,
+                ))
+                .child(recent_mirror_metric(
+                    text("事件", "Events").get(language),
+                    record.eventSeconds,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .gap_1()
+                .child(recent_mirror_metric(
+                    text("商店", "Shop").get(language),
+                    record.shopSeconds,
+                ))
+                .child(recent_mirror_metric(
+                    text("寻路", "Path").get(language),
+                    record.findRoadSeconds,
+                )),
+        )
+        .child(div().text_color(rgb(TEXT_MUTED)).child(format!(
+            "{}：{} {}",
+            text("事件次数", "Event count").get(language),
+            record.eventCount,
+            text("次", "").get(language),
+        )))
+}
+
+fn recent_mirror_line(label: &'static str, value: String) -> Div {
+    div()
+        .flex()
+        .gap_2()
+        .child(div().w(px(48.0)).flex_none().child(label))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_color(rgb(TEXT))
+                .child(value),
+        )
+}
+
+fn recent_mirror_metric(label: &'static str, seconds: f64) -> Div {
+    div()
+        .flex_1()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_1()
+        .bg(rgba((SURFACE_HOVER << 8) | 0x45))
+        .child(div().truncate().child(label))
+        .child(div().text_color(rgb(TEXT)).child(format_duration(seconds)))
+}
+
+fn format_duration(seconds: f64) -> String {
+    let total_seconds = if seconds.is_finite() {
+        seconds.max(0.0).floor() as u64
+    } else {
+        0
+    };
+    let hours = total_seconds / 3600;
+    let minutes = total_seconds % 3600 / 60;
+    let seconds = total_seconds % 60;
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
+}
+
 fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) -> Div {
     let ratio = if infinite || target == 0 {
         0.0
@@ -879,5 +1016,13 @@ mod tests {
         ] {
             assert_eq!(runtime_card_view(phase), RuntimeCardView::Backend);
         }
+    }
+
+    #[test]
+    fn recent_mirror_duration_is_non_negative_and_human_readable() {
+        assert_eq!(format_duration(0.0), "00:00:00");
+        assert_eq!(format_duration(3661.9), "01:01:01");
+        assert_eq!(format_duration(-10.0), "00:00:00");
+        assert_eq!(format_duration(f64::NAN), "00:00:00");
     }
 }

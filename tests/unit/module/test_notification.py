@@ -160,6 +160,37 @@ def test_notification_formatters_cover_batch_final_and_failure_messages() -> Non
     assert failure_summary == "AALC 任务执行失败"
 
 
+def test_mirror_notifications_include_timing_breakdown() -> None:
+    details = {
+        "completedAt": "2026-08-31T08:00:00+09:00",
+        "totalSeconds": 1800.5,
+        "battleSeconds": 1200.25,
+        "eventSeconds": 180.0,
+        "shopSeconds": 90.75,
+        "findRoadSeconds": 329.5,
+        "eventCount": 4,
+    }
+
+    content, summary = format_completion("mirror", 1, details)
+    assert "完成时间：2026-08-31 08:00:00+09:00" in content
+    assert "总耗时：00:30:00" in content
+    assert "战斗：00:20:00" in content
+    assert "事件：00:03:00（4 次）" in content
+    assert "商店：00:01:30" in content
+    assert "寻路：00:05:29" in content
+    assert summary == "镜牢完成 1 次｜总耗时 00:30:00"
+
+    final_content, final_summary = format_final_summary(
+        {
+            "completed": {"exp": 0, "thread": 0, "mirror": 1},
+            "lastMirror": details,
+        }
+    )
+    assert "最近一次镜牢：" in final_content
+    assert "商店：00:01:30" in final_content
+    assert final_summary == "AALC 任务已完成｜镜牢总耗时 00:30:00"
+
+
 def test_config_and_exception_redaction_never_returns_registered_spt() -> None:
     secret = "SPT_redaction-value"
     register_secret(secret)

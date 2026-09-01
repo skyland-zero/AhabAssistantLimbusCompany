@@ -7,6 +7,7 @@ the execution layer to WxPusher.  A future channel can implement the same
 
 from __future__ import annotations
 
+import math
 import queue
 import threading
 import time
@@ -244,12 +245,51 @@ class NotificationQueue:
                 self._items.task_done()
 
 
-def format_completion(kind: str, count: int) -> tuple[str, str]:
+def _format_duration(value: Any) -> str:
+    if isinstance(value, bool):
+        total_seconds = 0
+    else:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = 0.0
+        total_seconds = int(max(0.0, number)) if math.isfinite(number) else 0
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
+def _format_completed_at(value: Any) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip().replace("T", " ", 1)
+    return "未知"
+
+
+def _mirror_detail_lines(details: Mapping[str, Any]) -> list[str]:
+    return [
+        f"完成时间：{_format_completed_at(details.get('completedAt'))}",
+        f"总耗时：{_format_duration(details.get('totalSeconds'))}",
+        f"战斗：{_format_duration(details.get('battleSeconds'))}",
+        f"事件：{_format_duration(details.get('eventSeconds'))}（{_count(details, 'eventCount')} 次）",
+        f"商店：{_format_duration(details.get('shopSeconds'))}",
+        f"寻路：{_format_duration(details.get('findRoadSeconds'))}",
+    ]
+
+
+def format_completion(
+    kind: str,
+    count: int,
+    details: Mapping[str, Any] | None = None,
+) -> tuple[str, str]:
     labels = {"exp": "经验本", "thread": "纽本", "mirror": "镜牢"}
     label = labels.get(kind, "任务")
     amount = max(1, int(count))
     content = f"AALC 任务进度\n{label}完成 {amount} 次"
-    return content, f"{label}完成 {amount} 次"
+    summary = f"{label}完成 {amount} 次"
+    if kind == "mirror" and isinstance(details, Mapping):
+        content = f"AALC 镜牢完成\n{label}完成 {amount} 次\n" + "\n".join(_mirror_detail_lines(details))
+        summary = f"{summary}｜总耗时 {_format_duration(details.get('totalSeconds'))}"
+    return content, summary
 
 
 def format_final_summary(current_run: Mapping[str, Any]) -> tuple[str, str]:
@@ -260,7 +300,12 @@ def format_final_summary(current_run: Mapping[str, Any]) -> tuple[str, str]:
         f"纽本：{_count(completed, 'thread')} 次",
         f"镜牢：{_count(completed, 'mirror')} 次",
     ]
-    return "\n".join(lines), "AALC 任务已完成"
+    last_mirror = current_run.get("lastMirror")
+    summary = "AALC 任务已完成"
+    if isinstance(last_mirror, Mapping):
+        lines.extend(["", "最近一次镜牢：", *_mirror_detail_lines(last_mirror)])
+        summary = f"{summary}｜镜牢总耗时 {_format_duration(last_mirror.get('totalSeconds'))}"
+    return "\n".join(lines), summary
 
 
 def format_failure(error: Any) -> tuple[str, str]:
@@ -296,8 +341,14 @@ class NotificationService:
             "AALC WxPusher 测试通知",
         )
 
-    def enqueue_completion(self, spt: str, kind: str, count: int) -> bool:
-        content, summary = format_completion(kind, count)
+    def enqueue_completion(
+        self,
+        spt: str,
+        kind: str,
+        count: int,
+        details: Mapping[str, Any] | None = None,
+    ) -> bool:
+        content, summary = format_completion(kind, count, details)
         return self._enqueue(spt, content, summary)
 
     def enqueue_final(self, spt: str, current_run: Mapping[str, Any]) -> bool:
