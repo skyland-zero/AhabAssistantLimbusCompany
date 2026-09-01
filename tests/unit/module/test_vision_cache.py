@@ -16,6 +16,7 @@ def make_automation(screenshot: Image.Image) -> Automation:
     automation._frame_dirty = False
     automation._screenshot_array_cache = {}
     automation._ocr_cache = {}
+    automation._match_result_cache = {}
     automation._feature_frame_cache = {}
     automation._latest_screenshot_monotonic = 1.0
     automation._screenshot_lock = threading.RLock()
@@ -23,6 +24,8 @@ def make_automation(screenshot: Image.Image) -> Automation:
     automation._interaction_gate = threading.Event()
     automation._interaction_gate.set()
     automation.img_cache = {}
+    automation.memory_protection = False
+    automation.model = "clam"
     return automation
 
 
@@ -58,6 +61,7 @@ def test_business_input_invalidates_monitor_and_derived_frame_caches() -> None:
     input_handler.mouse_click.return_value = True
     automation.input_handler = input_handler
     automation._ocr_cache[(1, None)] = ({}, [])
+    automation._match_result_cache[("marker",)] = object()
     automation._feature_frame_cache["target"] = ([], None)
     automation._screenshot_array_cache["gray"] = object()
 
@@ -66,6 +70,7 @@ def test_business_input_invalidates_monitor_and_derived_frame_caches() -> None:
     assert automation._frame_dirty is True
     assert automation._latest_screenshot_monotonic == 0.0
     assert automation._ocr_cache == {}
+    assert automation._match_result_cache == {}
     assert automation._feature_frame_cache == {}
     assert automation._screenshot_array_cache == {}
     input_handler.mouse_click.assert_called_once_with(1, 2, times=1)
@@ -90,3 +95,86 @@ def test_feature_template_and_descriptors_are_loaded_once_until_cleared() -> Non
 
     assert load_image.call_count == 2
     assert prepare.call_count == 2
+
+
+def test_image_match_result_is_reused_for_a_known_frame() -> None:
+    automation = make_automation(Image.new("L", (20, 20), 128))
+    template = Image.new("L", (4, 4), 255)
+
+    with (
+        patch.object(automation, "_path_state_is_known", return_value=True),
+        patch("module.automation.automation.ImageUtils.existing_image_paths", return_value=["/marker"]),
+        patch("module.automation.automation.ImageUtils.load_from_specific_path", return_value=template),
+        patch("module.automation.automation.ImageUtils.match_template", return_value=((3, 4), 0.95)) as match,
+    ):
+        assert automation.find_image_element("marker.png", threshold=0.8) == (3, 4)
+        assert automation.find_image_element("marker.png", threshold=0.8) == (3, 4)
+
+    match.assert_called_once()
+
+
+def test_negative_image_match_is_cached_but_invalidated_by_a_new_frame() -> None:
+    automation = make_automation(Image.new("L", (20, 20), 128))
+    template = Image.new("L", (4, 4), 255)
+
+    with (
+        patch.object(automation, "_path_state_is_known", return_value=True),
+        patch("module.automation.automation.ImageUtils.existing_image_paths", return_value=["/marker"]),
+        patch("module.automation.automation.ImageUtils.load_from_specific_path", return_value=template),
+        patch("module.automation.automation.ImageUtils.match_template", return_value=((0, 0), 0.2)) as match,
+    ):
+        assert automation.find_image_element("marker.png", threshold=0.8) is None
+        assert automation.find_image_element("marker.png", threshold=0.8) is None
+        automation._set_business_screenshot(Image.new("L", (20, 20), 64))
+        assert automation.find_image_element("marker.png", threshold=0.8) is None
+
+    assert match.call_count == 2
+
+
+def test_take_screenshot_forces_matching_against_a_new_frame() -> None:
+    automation = make_automation(Image.new("L", (20, 20), 128))
+    template = Image.new("L", (4, 4), 255)
+    screenshots = iter(
+        [
+            Image.new("L", (20, 20), 64),
+            Image.new("L", (20, 20), 32),
+        ]
+    )
+
+    def capture_new_frame():
+        frame = next(screenshots)
+        automation._set_business_screenshot(frame)
+        return frame
+
+    with (
+        patch.object(automation, "_path_state_is_known", return_value=True),
+        patch.object(automation, "take_screenshot", side_effect=capture_new_frame) as take_screenshot,
+        patch("module.automation.automation.ImageUtils.existing_image_paths", return_value=["/marker"]),
+        patch("module.automation.automation.ImageUtils.load_from_specific_path", return_value=template),
+        patch("module.automation.automation.ImageUtils.match_template", return_value=((3, 4), 0.95)) as match,
+    ):
+        assert automation.find_element("marker.png", take_screenshot=True) == (3, 4)
+        assert automation.find_element("marker.png", take_screenshot=True) == (3, 4)
+
+    assert take_screenshot.call_count == 2
+    assert match.call_count == 2
+
+
+def test_multiple_target_match_returns_a_copy_of_the_cached_list() -> None:
+    automation = make_automation(Image.new("L", (20, 20), 128))
+    template = Image.new("L", (4, 4), 255)
+    matches = [(3, 4), (8, 9)]
+
+    with (
+        patch("module.automation.automation.ImageUtils.load_image", return_value=template),
+        patch(
+            "module.automation.automation.ImageUtils.match_template_with_multiple_targets",
+            return_value=list(matches),
+        ) as match,
+    ):
+        first = automation.find_image_with_multiple_targets("gifts.png", threshold=0.8)
+        first.pop()
+        second = automation.find_image_with_multiple_targets("gifts.png", threshold=0.8)
+
+    assert second == matches
+    match.assert_called_once()

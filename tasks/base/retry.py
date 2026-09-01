@@ -2,10 +2,12 @@ import os
 import platform
 import time
 from time import sleep
+from typing import Callable
 
 import psutil
 import win32process
 
+from core.execution_control import check_cancelled, interruptible_sleep
 from module.automation import auto
 from module.config import cfg
 from module.game_and_screen import screen
@@ -162,19 +164,64 @@ def check_times(start_time, timeout=90, logs=True):
         return False
 
 
-def retry():
+def _current_frame_is_reusable() -> bool:
+    return auto.screenshot is not None and not getattr(auto, "_frame_dirty", True)
+
+
+def wait_for_ui_state(
+    check: Callable[[], bool],
+    timeout: float,
+    *,
+    screenshot_ready: bool = False,
+) -> bool:
+    """Poll a post-action UI state without waiting longer than ``timeout``.
+
+    The first check can reuse a freshly captured business frame.  Every later
+    check captures a new frame, so callers never make a transition decision
+    from an input-invalidated screenshot.
+    """
+
+    deadline = time.monotonic() + max(0.0, float(timeout))
+    reuse_frame = screenshot_ready
+    while True:
+        check_cancelled()
+        if reuse_frame and _current_frame_is_reusable():
+            reuse_frame = False
+        else:
+            if auto.take_screenshot() is None:
+                if time.monotonic() >= deadline:
+                    return False
+                interruptible_sleep(min(0.2, max(0.0, deadline - time.monotonic())))
+                continue
+            reuse_frame = False
+
+        if check():
+            return True
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        interval = cfg.screenshot_interval or 0.2
+        interruptible_sleep(min(max(float(interval), 0.01), remaining))
+
+
+def retry(*, screenshot_ready: bool = False):
     """重试连接。
 
-    为保证稳定性，retry 内循环始终刷新截图，避免复用旧帧导致误判。
+    默认情况下 retry 内循环始终刷新截图，避免复用旧帧导致误判。
+    调用方可以在刚完成截图且期间没有输入操作时传入
+    ``screenshot_ready=True``，复用首帧以避免重复截图。
     """
     start_time = time.time()
     selected_session = _active_session()
     is_windows = selected_session.target.kind == "pc" if selected_session is not None else not cfg.config.simulator
     if is_windows:
         saved_hwnd = screen.handle.hwnd
+    reuse_frame = screenshot_ready
     while True:
         if ensure_simulator_game_started():
             start_time = time.time()
+            reuse_frame = False
             continue
         if is_windows and screen.handle.hwnd != saved_hwnd:
             # 句柄发生变化则重置初始时间, 以免误判卡死
@@ -184,16 +231,23 @@ def retry():
             start_time = max(start_time, auto.get_restore_time())
         if check_times(start_time):
             return False
-        if auto.take_screenshot() is None:
-            continue
+        if reuse_frame and _current_frame_is_reusable():
+            reuse_frame = False
+        else:
+            if auto.take_screenshot() is None:
+                continue
+            reuse_frame = False
         if auto.find_element("base/connecting_assets.png"):
+            reuse_frame = False
             continue
         if position := auto.find_element("base/retry_countdown.png"):
             sleep(5)
             auto.mouse_click(position[0], position[1], times=3)
+            reuse_frame = False
             continue
         if auto.click_element("base/retry.png", threshold=0.9):
             auto.mouse_to_blank()
+            reuse_frame = False
             continue
         if (
             auto.find_element("base/retry_countdown.png")
@@ -201,11 +255,14 @@ def retry():
             or auto.find_element("base/try_again.png")
         ):
             auto.click_element("base/retry.png", threshold=0.9)
+            reuse_frame = False
             continue
         if auto.find_element("base/clear_all_caches_assets.png", model="clam"):
             if auto.click_element("base/update_confirm_assets.png"):
+                reuse_frame = False
                 continue
             click_title_screen_safely()
+            reuse_frame = False
             continue
         if auto.click_element("base/only_option_assets.png", model="clam"):
             sleep(5)
@@ -214,6 +271,7 @@ def retry():
                 from tasks.base.script_task_scheme import init_game
 
                 init_game()
+            reuse_frame = False
             continue
         break
 

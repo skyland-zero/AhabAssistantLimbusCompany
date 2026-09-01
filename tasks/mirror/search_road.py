@@ -12,7 +12,7 @@ from module.automation import auto
 from module.config import cfg
 from module.logger import log
 from module.my_error.my_error import InputAttributeError
-from tasks.base.retry import retry
+from tasks.base.retry import retry, wait_for_ui_state
 
 # 道路网格参数基于 2560×1440 游戏截图标定。
 ROAD_COLUMN_GAP = 520
@@ -23,6 +23,16 @@ _node_detector_lock = threading.Lock()
 _node_detector_session = None
 _node_detector_input_name = None
 _node_detector_signature = None
+
+
+def _click_enter_after_selection(timeout: float) -> bool:
+    """Wait for the node confirmation control, keeping the old timeout bound."""
+
+    enter_target = "mirror/road_in_mir/enter_assets.png"
+    if wait_for_ui_state(lambda: bool(auto.find_element(enter_target)), timeout):
+        return bool(auto.click_element(enter_target))
+    # Keep the original fresh-frame fallback for slow or unusual transitions.
+    return bool(auto.click_element(enter_target, take_screenshot=True))
 
 
 def _get_node_detector():
@@ -94,12 +104,10 @@ class MirrorMap:
 
         if next_position := self._get_next_position(next_step):
             auto.mouse_click(next_position[0], next_position[1])
-            sleep(1.25)
-            if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+            if _click_enter_after_selection(1.25):
                 return True
         if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True):
-            sleep(1.25)
-            if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+            if _click_enter_after_selection(1.25):
                 return True
         return False
 
@@ -219,8 +227,7 @@ def search_road_default_distance():
             road = road_list[0]
             if 0 < road[0] < cfg.set_win_size * 16 / 9 and 0 < road[1] < cfg.set_win_size:
                 auto.mouse_click(road[0], road[1])
-                sleep(0.75)
-                if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+                if _click_enter_after_selection(0.75):
                     return True
     # 如果中、下两个节点没有权重3的节点，查看所有节点的权重，选择权重最大的节点进入
     if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
@@ -264,8 +271,7 @@ def search_road_default_distance():
         for road in road_list:
             if 0 < road[0] < cfg.set_win_size * 16 / 9 and 0 < road[1] < cfg.set_win_size:
                 auto.mouse_click(road[0], road[1])
-                sleep(0.75)
-                if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+                if _click_enter_after_selection(0.75):
                     return True
     return False
 
@@ -289,8 +295,7 @@ def search_road_farthest_distance():
             road[1] += bus_position[1]
             if 0 < road[0] < cfg.set_win_size * 16 / 9 and 0 < road[1] < cfg.set_win_size:
                 auto.mouse_click(road[0], road[1])
-                sleep(0.75)
-                if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+                if _click_enter_after_selection(0.75):
                     return True
         auto.mouse_click(bus_position[0], bus_position[1])
         if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
@@ -304,8 +309,7 @@ def search_road_from_road_map(hard_mode=False):
     bus = None
 
     if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True):
-        sleep(0.75)
-        if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+        if _click_enter_after_selection(0.75):
             return True, True
 
     if bus_position := auto.find_element("mirror/mybus_default_distance.png"):

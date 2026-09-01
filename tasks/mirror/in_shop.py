@@ -9,7 +9,7 @@ from module.mirror_routes import MirrorRouteDefinition, get_mirror_route, route_
 from module.ocr import ocr
 from tasks import all_sinners_name, all_sinners_name_zh, all_systems, system_cn_zh
 from tasks.base.back_init_menu import back_init_menu
-from tasks.base.retry import retry
+from tasks.base.retry import retry, wait_for_ui_state
 from tasks.mirror import fusion_result, must_be_abandoned, must_purchase
 from utils.image_utils import ImageUtils
 
@@ -258,8 +258,11 @@ class Shop:
                 sleep(0.5)
                 if auto.click_element("mirror/shop/power_up_confirm_assets.png", take_screenshot=True) is False:
                     return True
-                sleep(3)
-                if retry() is False:
+                wait_for_ui_state(
+                    lambda: bool(auto.find_element("mirror/shop/power_up_assets.png")),
+                    timeout=3,
+                )
+                if retry(screenshot_ready=True) is False:
                     raise self.RestartGame()
             if auto.find_element("mirror/shop/power_up_confirm_assets.png"):
                 return False
@@ -527,8 +530,12 @@ class Shop:
                             break
                     keyword_refresh_count += 1
                     auto.mouse_click_blank()
-                    sleep(3)
-                    if retry() is False:
+                    wait_for_ui_state(
+                        lambda: bool(auto.find_element("mirror/shop/shop_coins_assets.png"))
+                        and not auto.find_element("mirror/shop/refresh_keyword_confirm_assets.png"),
+                        timeout=3,
+                    )
+                    if retry(screenshot_ready=True) is False:
                         raise self.RestartGame()
                     if self.skill_replacement and self.replacement < 3:
                         self.replacement_skill()
@@ -1829,7 +1836,7 @@ class Shop:
                 if auto.take_screenshot() is None:
                     continue
 
-                if retry() is False:
+                if retry(screenshot_ready=True) is False:
                     raise self.RestartGame()
                 if auto.find_element("mirror/road_in_mir/legend_assets.png"):
                     break

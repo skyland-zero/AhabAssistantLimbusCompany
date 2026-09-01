@@ -53,6 +53,7 @@ class Automation(metaclass=SingletonMeta):
         self._frame_dirty = True
         self._screenshot_array_cache = {}
         self._ocr_cache = {}
+        self._match_result_cache = {}
         self._input_lock = threading.RLock()
         self._interaction_gate = threading.Event()
         self._interaction_gate.set()
@@ -240,6 +241,7 @@ class Automation(metaclass=SingletonMeta):
         self._latest_screenshot_monotonic = 0.0
         getattr(self, "_screenshot_array_cache", {}).clear()
         getattr(self, "_ocr_cache", {}).clear()
+        getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
 
     def _set_business_screenshot(self, screenshot: Image) -> None:
@@ -249,6 +251,7 @@ class Automation(metaclass=SingletonMeta):
         self._frame_dirty = False
         getattr(self, "_screenshot_array_cache", {}).clear()
         getattr(self, "_ocr_cache", {}).clear()
+        getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
 
     @staticmethod
@@ -265,6 +268,37 @@ class Automation(metaclass=SingletonMeta):
         else:
             frame_id = 0
         return frame_id, id(screenshot)
+
+    def _match_cache_state_key(self):
+        """Return resource state that can change the result of a template match."""
+
+        return (
+            cfg.set_win_size,
+            tuple(path_manager.pic_path),
+            path_manager.current_theme,
+            path_manager.current_language,
+        )
+
+    def _match_cache_get(self, key):
+        cache = getattr(self, "_match_result_cache", None)
+        if cache is None:
+            cache = self._match_result_cache = {}
+        if key not in cache:
+            return False, None
+        result = cache[key]
+        # Callers may sort/pop multi-target results.  Never let that mutate
+        # the frame cache shared by later lookups.
+        if isinstance(result, list):
+            result = list(result)
+        return True, result
+
+    def _match_cache_put(self, key, result):
+        cache = getattr(self, "_match_result_cache", None)
+        if cache is None:
+            cache = self._match_result_cache = {}
+        if isinstance(result, list):
+            result = list(result)
+        cache[key] = result
 
     def _get_screenshot_array(self, screenshot=None, *, gray=True):
         """Convert a PIL/ndarray screenshot once per frame and color mode."""
@@ -652,6 +686,19 @@ class Automation(metaclass=SingletonMeta):
         在当前截图中查找多个目标图像的位置
         """
         try:
+            cache_key = (
+                "multiple",
+                self._current_frame_key(screenshot_image),
+                target,
+                threshold,
+                self._normalize_crop(my_crop),
+                min_dist,
+                self._match_cache_state_key(),
+            )
+            cache_hit, cached_result = self._match_cache_get(cache_key)
+            if cache_hit:
+                return cached_result
+
             template, bbox = self._load_active_template(target)
             if template is None:
                 raise ValueError("读取图片失败")
@@ -665,6 +712,7 @@ class Automation(metaclass=SingletonMeta):
             )
             if crop_offset != (0, 0):
                 matches = [(x + crop_offset[0], y + crop_offset[1]) for x, y in matches]
+            self._match_cache_put(cache_key, matches)
             if len(matches) == 0:
                 log.debug(f"未找到任何目标图像{target}", stacklevel=additional_stack + 3)
                 return []
@@ -847,6 +895,18 @@ class Automation(metaclass=SingletonMeta):
         寻找特征元素所在的坐标位置
         """
         try:
+            cache_key = (
+                "feature",
+                self._current_frame_key(screenshot_image),
+                target,
+                min_matches,
+                self._normalize_crop(pic_crop),
+                self._match_cache_state_key(),
+            )
+            cache_hit, cached_result = self._match_cache_get(cache_key)
+            if cache_hit:
+                return cached_result
+
             template, template_features = self._load_feature_template(target)
             screenshot = self._get_screenshot_array(screenshot_image, gray=True)
             if cfg.set_win_size < 1440:
@@ -896,6 +956,7 @@ class Automation(metaclass=SingletonMeta):
                 f"匹配目标特征图片：{target.replace('./assets/images/', '')}结果{result}, 找到 {num_matches} 个匹配点",
                 stacklevel=additional_stack + 3,
             )
+            self._match_cache_put(cache_key, result)
             return result
         except Exception as e:
             error_message = str(e)
@@ -908,6 +969,7 @@ class Automation(metaclass=SingletonMeta):
     def clear_img_cache(self) -> None:
         """清除图片缓存"""
         self.img_cache.clear()
+        getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
         gc.collect()  # 强制垃圾回收，清理内存
         log.debug("图片缓存已清除", stacklevel=2)
@@ -1067,6 +1129,26 @@ class Automation(metaclass=SingletonMeta):
                 log.debug(f"无法加载图片: {target}", stacklevel=additional_stack + 3)
                 return None
 
+            match_state = self._match_cache_state_key()
+            cache_key = (
+                "image",
+                self._current_frame_key(screenshot_image),
+                target,
+                threshold,
+                model,
+                self._normalize_crop(my_crop),
+                tuple(existing_paths),
+                match_state,
+            )
+            # Unknown language/theme state is still allowed to resolve from a
+            # match.  Do not cache that first resolution because the call can
+            # update path_manager as a side effect.
+            cache_allowed = cacheable and self._path_state_is_known()
+            if cache_allowed:
+                cache_hit, cached_result = self._match_cache_get(cache_key)
+                if cache_hit:
+                    return cached_result
+
             screenshot = self._get_screenshot_array(screenshot_image, gray=True)
             if my_crop:
                 screenshot = ImageUtils.crop(screenshot, my_crop)
@@ -1095,6 +1177,8 @@ class Automation(metaclass=SingletonMeta):
                     }
                 )
                 if matched and self._path_state_is_known():
+                    if cache_allowed:
+                        self._match_cache_put(cache_key, center)
                     return center
 
             if not results:
@@ -1104,7 +1188,11 @@ class Automation(metaclass=SingletonMeta):
             self._update_path_state_from_match_results(results, additional_stack=additional_stack)
             for result in results:
                 if result["matched"]:
+                    if cache_allowed and self._match_cache_state_key() == match_state:
+                        self._match_cache_put(cache_key, result["center"])
                     return result["center"]
+            if cache_allowed and self._match_cache_state_key() == match_state:
+                self._match_cache_put(cache_key, None)
         except Exception as e:
             log.error(f"寻找图片失败:{e}")
         return None
