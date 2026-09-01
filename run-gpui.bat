@@ -7,7 +7,7 @@ if exist "%~dp0.venv\Scripts\python.exe" (
 )
 
 echo Starting Ahab GPUI App...
-cargo +nightly run --manifest-path gpui-app/Cargo.toml %*
+cargo run --manifest-path gpui-app/Cargo.toml %*
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
