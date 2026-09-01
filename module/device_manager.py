@@ -9,10 +9,13 @@ active runtime session and keeps HWND/ADB objects out of the IPC contract.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import subprocess
 import threading
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
@@ -586,10 +589,14 @@ class DeviceManager:
         if target.kind == "mumu":
             if target.instance_number is None:
                 raise DeviceError("MuMu 实例编号缺失")
+            try:
+                port = self._port_from_endpoint(target.endpoint) if target.endpoint else self._mumu_port(target.instance_number)
+            except DeviceError:
+                port = self._mumu_port(target.instance_number)
             self._set_runtime_config(
                 simulator=True,
                 simulator_type=0,
-                simulator_port=self._mumu_port(target.instance_number),
+                simulator_port=port,
                 mumu_instance_number=target.instance_number,
             )
             return
@@ -782,10 +789,131 @@ class DeviceManager:
         return matches[0] if matches else None
 
     def _discover_mumu_targets(self) -> list[DeviceTarget]:
-        if not self._find_mumu_manager():
+        manager = self._find_mumu_manager()
+        if not manager:
             return []
-        instance = self._configured_mumu_instance()
-        return [self._make_mumu_target(instance)]
+
+        info = self._query_mumu_info(manager, "all")
+        targets = self._targets_from_mumu_info(info)
+        if targets:
+            return targets
+
+        # Older MuMu builds may not implement ``info -v all``.  Preserve
+        # compatibility by probing the configured instance, but only expose
+        # it when MuMu confirms that the player actually exists.
+        if info is None:
+            configured = self._configured_mumu_instance()
+            return self._targets_from_mumu_info(
+                self._query_mumu_info(manager, str(configured))
+            )
+        return []
+
+    @classmethod
+    def _query_mumu_info(cls, manager: str, vmindex: str) -> dict[str, Any] | None:
+        """Query MuMu player metadata without constructing a controller."""
+        no_window_flag = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            result = subprocess.run(
+                [manager, "info", "-v", vmindex],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                creationflags=no_window_flag,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            log.debug("查询 MuMu 实例信息失败（%s）：%s", vmindex, error)
+            return None
+
+        output = result.stdout.strip()
+        if not output:
+            log.debug("查询 MuMu 实例信息返回空结果（%s）", vmindex)
+            return None
+
+        try:
+            payload = json.loads(
+                "\n".join(line for line in output.splitlines() if "Active code page" not in line)
+            )
+        except json.JSONDecodeError as error:
+            log.debug("解析 MuMu 实例信息失败（%s）：%s", vmindex, error)
+            return None
+
+        if not isinstance(payload, dict):
+            log.debug("MuMu 实例信息格式无效（%s）", vmindex)
+            return None
+
+        error_code = payload.get("errcode")
+        try:
+            has_error = error_code is not None and int(error_code) != 0
+        except (TypeError, ValueError):
+            has_error = True
+        if has_error:
+            log.debug(
+                "MuMu 实例不可用（%s）：%s",
+                vmindex,
+                payload.get("errmsg", f"errcode={error_code}"),
+            )
+            return None
+        return payload
+
+    @classmethod
+    def _targets_from_mumu_info(cls, info: Mapping[str, Any] | None) -> list[DeviceTarget]:
+        if not info:
+            return []
+
+        records: list[tuple[str, Mapping[str, Any]]] = []
+        # ``info -v all`` returns {"1": {...}, "2": {...}}, while a single
+        # player query returns the player object itself on some versions.
+        if "index" in info:
+            records.append((str(info.get("index", "")), info))
+        else:
+            for key, value in info.items():
+                if isinstance(value, Mapping):
+                    records.append((str(key), value))
+
+        targets: list[DeviceTarget] = []
+        seen: set[int] = set()
+        for key, record in records:
+            record_error = record.get("errcode")
+            try:
+                if record_error is not None and int(record_error) != 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            raw_index = record.get("index", key)
+            try:
+                instance = int(raw_index)
+            except (TypeError, ValueError):
+                continue
+            if instance < 0 or instance in seen:
+                continue
+            seen.add(instance)
+
+            host = record.get("adb_host_ip") or record.get("adb_host") or "127.0.0.1"
+            raw_port = record.get("adb_port")
+            endpoint = None
+            try:
+                port = int(raw_port)
+                if 1 <= port <= 65535:
+                    endpoint = f"{host}:{port}"
+            except (TypeError, ValueError):
+                port = cls._mumu_port(instance)
+
+            if endpoint is None:
+                port = cls._mumu_port(instance)
+            state = record.get("player_state")
+            detail = f"实例 {instance} · ADB {port}"
+            if isinstance(state, str) and state:
+                detail += f" · {state}"
+            targets.append(
+                cls._make_mumu_target(
+                    instance,
+                    endpoint=endpoint,
+                    detail=detail,
+                )
+            )
+        return targets
 
     def _discover_adb_targets(self) -> list[DeviceTarget]:
         try:
@@ -811,13 +939,20 @@ class DeviceManager:
         return result
 
     @staticmethod
-    def _make_mumu_target(instance: int) -> DeviceTarget:
-        endpoint = f"127.0.0.1:{DeviceManager._mumu_port(instance)}"
+    def _make_mumu_target(
+        instance: int,
+        *,
+        name: str | None = None,
+        endpoint: str | None = None,
+        detail: str | None = None,
+    ) -> DeviceTarget:
+        port = DeviceManager._mumu_port(instance)
+        endpoint = endpoint or f"127.0.0.1:{port}"
         return DeviceTarget(
             DeviceInfo(
                 f"mumu:{instance}",
-                f"MuMu 模拟器 #{instance}",
-                f"实例 {instance} · ADB {DeviceManager._mumu_port(instance)}",
+                name or f"MuMu 模拟器 #{instance}",
+                detail or f"实例 {instance} · ADB {port}",
             ),
             "mumu",
             endpoint=endpoint,

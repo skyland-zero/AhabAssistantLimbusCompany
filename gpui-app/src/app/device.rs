@@ -245,14 +245,12 @@ impl AhabApp {
                 }
 
                 if view.home.device_status == crate::model::ConnectionStatus::Disconnected {
-                    let last_id_opt = view
-                        .state
-                        .settings
-                        .lastDeviceId
-                        .clone()
-                        .filter(|id| view.home.devices.iter().any(|d| &d.id == id));
-                    if let Some(last_id) = last_id_opt {
-                        view.select_device(last_id, cx);
+                    let auto_device_id = preferred_device_id(
+                        &view.home.devices,
+                        view.state.settings.lastDeviceId.as_deref(),
+                    );
+                    if let Some(device_id) = auto_device_id {
+                        view.select_device(device_id, cx);
                     }
                 }
                 cx.notify();
@@ -282,5 +280,60 @@ impl AhabApp {
             });
         })
         .detach();
+    }
+}
+
+fn preferred_device_id(
+    devices: &[crate::model::DeviceInfo],
+    last_device_id: Option<&str>,
+) -> Option<String> {
+    if let Some(last_device_id) = last_device_id
+        && devices
+            .iter()
+            .any(|device| device.id.as_str() == last_device_id)
+    {
+        return Some(last_device_id.to_owned());
+    }
+
+    (devices.len() == 1).then(|| devices[0].id.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::preferred_device_id;
+    use crate::model::DeviceInfo;
+
+    fn devices(ids: &[&str]) -> Vec<DeviceInfo> {
+        ids.iter()
+            .map(|id| DeviceInfo {
+                id: (*id).to_owned(),
+                name: (*id).to_owned(),
+                detail: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn keeps_a_valid_last_device_preference() {
+        let available = devices(&["mumu:2", "mumu:3"]);
+        assert_eq!(
+            preferred_device_id(&available, Some("mumu:3")),
+            Some("mumu:3".to_owned())
+        );
+    }
+
+    #[test]
+    fn selects_the_only_device_when_the_last_device_is_missing() {
+        let available = devices(&["mumu:2"]);
+        assert_eq!(
+            preferred_device_id(&available, Some("mumu:0")),
+            Some("mumu:2".to_owned())
+        );
+    }
+
+    #[test]
+    fn does_not_guess_when_multiple_devices_are_available() {
+        let available = devices(&["mumu:2", "mumu:3"]);
+        assert_eq!(preferred_device_id(&available, Some("mumu:0")), None);
     }
 }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import threading
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -55,7 +57,94 @@ def test_device_ids_are_stable_and_do_not_contain_hwnd() -> None:
     target = DeviceManager._make_mumu_target(2)
     assert target.info.id == "mumu:2"
     assert target.endpoint == "127.0.0.1:16448"
-    assert target.info.id == "mumu:2"
+
+
+def test_mumu_discovery_uses_existing_instances_from_manager(monkeypatch) -> None:
+    manager = DeviceManager()
+    payload = {
+        "1": {
+            "index": "1",
+            "name": "MuMu安卓设备-1",
+            "player_state": "start_finished",
+            "adb_host_ip": "127.0.0.1",
+            "adb_port": 16416,
+        }
+    }
+    calls: list[list[str]] = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
+    monkeypatch.setattr(device_manager_module.subprocess, "run", run)
+
+    targets = manager._discover_mumu_targets()
+
+    assert [target.info.id for target in targets] == ["mumu:1"]
+    assert targets[0].info.name == "MuMu 模拟器 #1"
+    assert targets[0].endpoint == "127.0.0.1:16416"
+    assert calls == [["MuMuManager.exe", "info", "-v", "all"]]
+
+
+def test_mumu_discovery_supports_multiple_and_stopped_instances(monkeypatch) -> None:
+    manager = DeviceManager()
+    payload = {
+        "0": {
+            "index": "0",
+            "errcode": -200,
+            "errmsg": "player index not found",
+        },
+        "2": {
+            "index": "2",
+            "player_state": "shutdown",
+            "adb_host_ip": "127.0.0.1",
+            "adb_port": 16448,
+        },
+        "3": {
+            "index": "3",
+            "player_state": "start_finished",
+            "adb_host_ip": "127.0.0.1",
+            "adb_port": 16480,
+        },
+    }
+
+    monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
+    monkeypatch.setattr(
+        device_manager_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr=""),
+    )
+
+    targets = manager._discover_mumu_targets()
+
+    assert [target.info.id for target in targets] == ["mumu:2", "mumu:3"]
+    assert [target.endpoint for target in targets] == [
+        "127.0.0.1:16448",
+        "127.0.0.1:16480",
+    ]
+
+
+def test_mumu_discovery_does_not_fabricate_configured_instance_on_manager_error(monkeypatch) -> None:
+    manager = DeviceManager()
+    calls: list[list[str]] = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        return SimpleNamespace(
+            returncode=1,
+            stdout=json.dumps({"errcode": -200, "errmsg": "player index not found"}),
+            stderr="",
+        )
+
+    monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
+    monkeypatch.setattr(device_manager_module.subprocess, "run", run)
+
+    assert manager._discover_mumu_targets() == []
+    assert calls == [
+        ["MuMuManager.exe", "info", "-v", "all"],
+        ["MuMuManager.exe", "info", "-v", "0"],
+    ]
 
 
 def test_connection_methods_identify_mumu_ipc_and_adb_paths() -> None:

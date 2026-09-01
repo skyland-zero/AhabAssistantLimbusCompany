@@ -500,50 +500,74 @@ class MumuControl(AbstractInput):
         self.connect()
 
     def start(self):
-        try:
-            if self.can_attach_without_launch():
-                log.debug(
-                    "MuMu 实例已在运行，跳过 control launch 和启动等待，直接连接 NemuIpc"
-                )
-                self.attach_existing()
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                self._start_once()
                 return
+            except userStopError:
+                raise
+            except (NemuIpcError, NemuIpcIncompatible):
+                # A missing player, an IPC incompatibility, or a failed IPC
+                # handshake is not repaired by recursively launching again.
+                raise
+            except Exception as error:
+                last_error = error
+                if attempt == 0:
+                    log.warning(
+                        "start: 启动过程异常 (%s: %s)，刷新MuMu路径后重试一次",
+                        type(error).__name__,
+                        error,
+                    )
+                    self.mumu_control_api_backend()
+        raise RuntimeError(
+            f"无法启动 MuMu 实例 {self.multi_instance_number}：{last_error}"
+        ) from last_error
 
-            log.debug(f"开始启动MUMU模拟器实例编号{self.multi_instance_number}")
-            keptlive = self.get_app_keptlive()
-            if keptlive:
-                log.info("检测到启用了应用后台保活功能，即将关闭")
-                if self.get_launch_status() == "start_finished":
-                    log.info("检测到模拟器处于启用状态，为关闭应用后台保活，需执行重启")
-                    self.stop()
-                self.disable_app_keptlive()
-            else:
-                log.debug("未启用应用后台保活功能,可正常运行")
-            # 使用mumumanager控制模拟器开启与关闭
-            command = [
-                self.exe_path,
-                "control",
-                "-v",
-                str(self.multi_instance_number),
-                "launch",
-            ]
-            run_as_user(command)
-            # 等待模拟器启动完成
-            for _ in range(cfg.start_emulator_timeout):
-                time.sleep(1)
-                if self.get_launch_status() == "start_finished":
-                    log.debug("start: 模拟器启动状态确认为 start_finished")
-                    break
-            else:
-                log.warning(f"start: 模拟器启动等待超时 ({cfg.start_emulator_timeout}s), 状态可能仍为未启动")
-            self.load_dll()
-            log.debug(f"MUMU模拟器编号{self.multi_instance_number}启动完成")
-            self.connect()
-        except userStopError:
-            raise
-        except Exception as e:
-            log.warning(f"start: 启动过程异常 ({type(e).__name__}: {e}), 触发 fallback 重试")
-            self.mumu_control_api_backend()
-            self.start()
+    def _start_once(self):
+        if self.can_attach_without_launch():
+            log.debug(
+                "MuMu 实例已在运行，跳过 control launch 和启动等待，直接连接 NemuIpc"
+            )
+            self.attach_existing()
+            return
+
+        log.debug(f"开始启动MUMU模拟器实例编号{self.multi_instance_number}")
+        keptlive = self.get_app_keptlive()
+        if keptlive:
+            log.info("检测到启用了应用后台保活功能，即将关闭")
+            if self.get_launch_status() == "start_finished":
+                log.info("检测到模拟器处于启用状态，为关闭应用后台保活，需执行重启")
+                self.stop()
+            self.disable_app_keptlive()
+        else:
+            log.debug("未启用应用后台保活功能,可正常运行")
+        # 使用mumumanager控制模拟器开启与关闭
+        command = [
+            self.exe_path,
+            "control",
+            "-v",
+            str(self.multi_instance_number),
+            "launch",
+        ]
+        run_as_user(command)
+        # 等待模拟器启动完成
+        try:
+            start_timeout = max(1, int(cfg.get_value("start_emulator_timeout", 120)))
+        except (TypeError, ValueError):
+            start_timeout = 120
+        for _ in range(start_timeout):
+            time.sleep(1)
+            if self.get_launch_status() == "start_finished":
+                log.debug("start: 模拟器启动状态确认为 start_finished")
+                break
+        else:
+            raise NemuIpcError(
+                f"MuMu 实例 {self.multi_instance_number} 启动超时（{start_timeout}s）"
+            )
+        self.load_dll()
+        log.debug(f"MUMU模拟器编号{self.multi_instance_number}启动完成")
+        self.connect()
 
     def close_simulator(self):
         command = [
@@ -743,7 +767,26 @@ class MumuControl(AbstractInput):
             encoding="utf-8",
             creationflags=no_window_flag,
         )
-        info = json.loads(proc.stdout)
+        try:
+            info = json.loads(proc.stdout)
+        except (TypeError, json.JSONDecodeError) as error:
+            raise NemuIpcError(
+                f"无法读取 MuMu 实例 {self.multi_instance_number} 的启动状态"
+            ) from error
+        if not isinstance(info, dict):
+            raise NemuIpcError(
+                f"MuMu 实例 {self.multi_instance_number} 的启动状态格式无效"
+            )
+        error_code = info.get("errcode")
+        try:
+            has_error = error_code is not None and int(error_code) != 0
+        except (TypeError, ValueError):
+            has_error = True
+        if has_error:
+            message = info.get("errmsg", f"errcode={error_code}")
+            raise NemuIpcError(
+                f"MuMu 实例 {self.multi_instance_number} 不存在或不可用：{message}"
+            )
         try:
             if "player_state" in info:
                 return info["player_state"]
