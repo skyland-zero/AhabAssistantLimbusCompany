@@ -419,9 +419,16 @@ fn preset_card(
     .w_full()
     .min_h(px(170.))
     .p_3()
+    .bg(palette_rgb(palette.secondary))
+    .border_1()
+    .border_color(palette_rgb(palette.input))
     .tab_index(0)
     .cursor_pointer()
-    .hover(|style| style.bg(palette_rgb(current_render_palette().secondary)))
+    .hover(|style| {
+        style
+            .bg(palette_rgb(current_render_palette().accent_surface))
+            .border_color(palette_rgb(current_render_palette().brand))
+    })
     .on_click(cx.listener(move |view, _, _, cx| {
         view.select_team_preset(&preset_id, cx);
     }));
@@ -441,7 +448,7 @@ fn preset_picker_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>, language:
     let target_label = preset_target_label(&picker.target, language);
     let palette = current_render_palette();
     let presets = app.teams.presets.clone();
-    let mut preset_grid = div().w_full().grid().grid_cols(2).gap_3();
+    let mut preset_grid = div().w_full().grid().grid_cols(2).gap_4();
     for preset in presets {
         preset_grid = preset_grid.child(preset_card(preset, app, cx, language));
     }
