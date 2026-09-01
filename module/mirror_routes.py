@@ -98,8 +98,8 @@ class MirrorRouteDefinition:
     gifts: tuple[GiftRouteTarget, ...] = ()
     recipes: tuple[GiftFusionRecipe, ...] = ()
     # A route can be entered in either a short (5-floor) or a full
-    # (15-floor) mirror.  The progress marker selects one of these at
-    # runtime; it is intentionally not encoded in the team preset.
+    # (15-floor) mirror.  The task mode selects one of these at runtime; the
+    # progress marker only describes the current five-floor segment.
     floor_counts: tuple[int, ...] = (5,)
     # Exact floor windows take precedence over the broad legacy stages.  This
     # avoids matching ``Line 1`` as a substring of ``Line 10`` while keeping

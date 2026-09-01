@@ -1,6 +1,7 @@
 import time
 from time import sleep
 
+import cv2
 import numpy as np
 
 from core.pseudo_solo import BattleRosterObserver, PseudoSoloDefenseState
@@ -9,7 +10,12 @@ from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
-from module.mirror_plan_runtime import MirrorPlanProgressError, MirrorPlanRuntime
+from module.mirror_plan_runtime import (
+    MirrorPlanProgressError,
+    MirrorPlanRuntime,
+    extract_mirror_floor,
+    select_mirror_floor_count,
+)
 from module.mirror_routes import MirrorRouteDefinition, get_mirror_route
 from module.my_error.my_error import (
     InputAttributeError,
@@ -60,7 +66,13 @@ class Mirror:
         self.team_number = team_setting.team_number  # 选择的编队名
         self.team_code_loaded = False
         self.mirror_route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
-        self.plan_runtime = MirrorPlanRuntime(self.mirror_route.floor_counts)
+        self.hard_switch = bool(cfg.hard_mirror)
+        selected_floor_count = select_mirror_floor_count(self.mirror_route.floor_counts, self.hard_switch)
+        self.plan_runtime = MirrorPlanRuntime(self.mirror_route.floor_counts, floor_count=selected_floor_count)
+        log.info(
+            f"镜牢路线{self.mirror_route.route_id or 'default'}任务模式={'困难' if self.hard_switch else '普通'}，"
+            f"目标{selected_floor_count}层"
+        )
         self.shop = Shop(team_setting)
         self.system = all_systems[team_setting.team_system]  # 选择的体系
         self.avoid_skill_3 = team_setting.avoid_skill_3  # 是否避免使用3技能
@@ -99,7 +111,6 @@ class Mirror:
 
         self.start_time = time.time()
         self.first_battle = True  # 判断是否首次进入战斗，如果是则重新配队
-        self.hard_switch = cfg.hard_mirror
         self.use_custom_theme_pack_weight = team_setting.use_custom_theme_pack_weight  # 是否启用自定义主题包权重
         # 统计时间
         self.find_road_total_time = 0
@@ -120,6 +131,9 @@ class Mirror:
         self.pass_coins = None
 
         self.bequest_from_the_previous_game = False
+        self.resumed_from_existing_game = False
+        self.parallel_mode_enable_attempts = 0
+        self.parallel_mode_confirmed = False
 
     def _time_call(self, fn, *args, **kwargs):
         """调用 fn 并返回 (result, elapsed_time)，用于显式计时替代装饰器返回值。"""
@@ -146,6 +160,100 @@ class Mirror:
             return True
         return team_formation(self.sinner_team, self.chosen_sinners)
 
+    def _parallel_mode_bbox(self):
+        bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_to_mir/infinity_mirror_bbox.png"))
+        return (
+            bbox[2] - 70,
+            bbox[1],
+            bbox[2] + 100,
+            bbox[3],
+        )
+
+    def _read_parallel_mode(self, *, take_screenshot: bool = False) -> bool | None:
+        """Read the parallel-superposition switch from its small OCR region."""
+
+        if take_screenshot:
+            auto.take_screenshot()
+        ocr_result = auto.find_text_element(None, self._parallel_mode_bbox(), only_text=True)
+        if not ocr_result:
+            return None
+        normalized = "".join(str(text).casefold().replace(" ", "") for text in ocr_result)
+        if "off" in normalized or "关闭" in normalized:
+            return False
+        if "on" in normalized or "开启" in normalized:
+            return True
+        return None
+
+    def _read_absolute_floor(self) -> int | None:
+        """Read the absolute 1-based floor title when entering/resuming a map."""
+
+        floor_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_in_mir/get_floor_bbox.png"))
+        for attempt in range(3):
+            screenshot = auto.take_screenshot(gray=False)
+            if screenshot is None:
+                continue
+            crop = ImageUtils.crop(np.array(screenshot), floor_bbox)
+            candidates = (crop, cv2.bitwise_not(crop))
+            for candidate in candidates:
+                try:
+                    result = ocr.run(candidate)
+                except Exception as error:
+                    log.debug(f"楼层标题OCR失败：{error}")
+                    continue
+                ocr_text = "".join(getattr(result, "txts", ()) or ())
+                floor = extract_mirror_floor(ocr_text)
+                if floor is not None:
+                    log.debug(f"楼层标题OCR[{attempt + 1}]得到：{ocr_text}，绝对楼层：{floor}")
+                    return floor
+            if attempt < 2:
+                sleep(0.3)
+        return None
+
+    def _handle_mirror_extension(self) -> bool:
+        """Accept or reject the five-floor extension prompt for this run."""
+
+        if not auto.find_element("mirror/infinity_mirror_assets.png"):
+            return False
+
+        if not self.plan_runtime.can_advance_segment:
+            auto.click_element("mirror/infinity_mirror_close_assets.png")
+            return True
+
+        if self.plan_runtime.floor_count != 15:
+            auto.click_element("mirror/infinity_mirror_close_assets.png")
+            return True
+
+        confirmed = auto.click_element(
+            "mirror/road_to_mir/infinity_mirror_enter_assets.png",
+            take_screenshot=True,
+        )
+        if not confirmed:
+            confirmed = auto.click_element(
+                "mirror/road_to_mir/enter_mirror_confirm.png",
+                take_screenshot=True,
+            )
+        if not confirmed:
+            message = "困难镜牢需要继续进入下一段，但未找到平行叠加确认按钮"
+            self.plan_runtime.record_deviation(message)
+            log.error(message)
+            raise cannotOperateGameError(message)
+
+        sleep(0.5)
+        if auto.find_element("mirror/infinity_mirror_assets.png", take_screenshot=True):
+            message = "困难镜牢平行叠加续层确认未生效，已停止本轮路线"
+            self.plan_runtime.record_deviation(message)
+            log.error(message)
+            raise cannotOperateGameError(message)
+        try:
+            next_floor = self.plan_runtime.advance_segment()
+        except MirrorPlanProgressError as error:
+            self.plan_runtime.record_deviation(str(error))
+            log.error(str(error))
+            raise cannotOperateGameError(str(error)) from error
+        self.get_floor_num = True
+        log.info(f"困难镜牢已确认继续，下一段从实际第{next_floor + 1}层开始")
+        return True
+
     def road_to_mir(self):
         loop_count = 30
         auto.model = "clam"
@@ -166,22 +274,63 @@ class Mirror:
                 self.bequest_from_the_previous_game = True
                 return True
             if auto.find_element("mirror/shop/shop_coins_assets.png"):  # 防止卡死在商店
+                self.resumed_from_existing_game = True
                 break
             if auto.find_element("mirror/road_in_mir/legend_assets.png"):
+                self.resumed_from_existing_game = True
                 break
             if auto.click_element("mirror/road_to_mir/resume_assets.png"):
+                self.resumed_from_existing_game = True
                 break
-            if auto.click_element("mirror/road_to_mir/enter_mirror_assets.png", threshold=0.78):
-                break
-            infinity_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_to_mir/infinity_mirror_bbox.png"))
-            infinity_bbox = (
-                infinity_bbox[2] - 70,
-                infinity_bbox[1],
-                infinity_bbox[2] + 100,
-                infinity_bbox[3],
-            )  # 临时修复措施，调整裁切大小
-            if not auto.find_text_element(["off", "ff"], infinity_bbox):
-                auto.click_element("mirror/road_to_mir/infinity_mirror_enter_assets.png")
+            parallel_mode = self._read_parallel_mode()
+            if self.plan_runtime.floor_count == 15 and not self.parallel_mode_confirmed:
+                if parallel_mode is False:
+                    if self.parallel_mode_enable_attempts >= 2:
+                        message = "困难镜牢目标为15层，但无法自动开启平行叠加模式"
+                        self.plan_runtime.record_deviation(message)
+                        log.error(message)
+                        raise cannotOperateGameError(message)
+                    if auto.click_element("mirror/road_to_mir/enter_mirror_assets.png", threshold=0.78):
+                        self.parallel_mode_enable_attempts += 1
+                        sleep(0.5)
+                        continue
+                    message = "困难镜牢目标为15层，但未找到开启平行叠加模式的控件"
+                    self.plan_runtime.record_deviation(message)
+                    log.error(message)
+                    raise cannotOperateGameError(message)
+                if parallel_mode is True:
+                    if auto.click_element("mirror/road_to_mir/infinity_mirror_enter_assets.png"):
+                        self.parallel_mode_confirmed = True
+                        sleep(0.5)
+                        continue
+                    self.parallel_mode_confirmed = True
+                else:
+                    if self.parallel_mode_enable_attempts < 2 and auto.click_element(
+                        "mirror/road_to_mir/enter_mirror_assets.png", threshold=0.78
+                    ):
+                        self.parallel_mode_enable_attempts += 1
+                        sleep(0.5)
+                        continue
+                    if auto.find_element("mirror/road_to_mir/enter_assets.png"):
+                        message = "困难镜牢目标为15层，但无法确认平行叠加模式已开启"
+                        self.plan_runtime.record_deviation(message)
+                        log.error(message)
+                        raise cannotOperateGameError(message)
+
+            if self.plan_runtime.floor_count != 15:
+                if auto.click_element("mirror/road_to_mir/enter_mirror_assets.png", threshold=0.78):
+                    break
+
+            if self.plan_runtime.floor_count != 15:
+                infinity_bbox = self._parallel_mode_bbox()
+                if not auto.find_text_element(["off", "ff"], infinity_bbox):
+                    auto.click_element("mirror/road_to_mir/infinity_mirror_enter_assets.png")
+            if self.plan_runtime.floor_count == 15 and not self.parallel_mode_confirmed:
+                if auto.find_element("mirror/road_to_mir/enter_assets.png"):
+                    message = "困难镜牢目标为15层，但无法确认平行叠加模式已开启"
+                    self.plan_runtime.record_deviation(message)
+                    log.error(message)
+                    raise cannotOperateGameError(message)
             if auto.click_element("mirror/road_to_mir/enter_assets.png"):
                 sleep(0.5)
                 continue
@@ -491,9 +640,8 @@ class Mirror:
                 self.select_observe_ego_gift()
                 continue
 
-            # 取消十层
-            if auto.find_element("mirror/infinity_mirror_assets.png"):
-                auto.click_element("mirror/infinity_mirror_close_assets.png")
+            # 5层结束后，普通流程关闭续层，困难15层流程自动确认续层。
+            if self._handle_mirror_extension():
                 continue
 
             if auto.find_element("home/first_prompt_assets.png", model="clam") and auto.find_element(
@@ -1656,6 +1804,15 @@ class Mirror:
         self.shop.in_shop(self.floor)
 
     def get_which_floor(self):
+        absolute_floor = None
+        if not self.plan_runtime.progress_observed:
+            absolute_floor = self._read_absolute_floor()
+            if self.resumed_from_existing_game and absolute_floor is None:
+                message = "无法从恢复的镜牢地图读取绝对楼层，不能安全套用饰品路线"
+                self.plan_runtime.record_deviation(message)
+                log.error(message)
+                raise cannotOperateGameError(message)
+
         auto.click_element("mirror/road_in_mir/setting_assets.png", take_screenshot=True)
         sleep(1)
 
@@ -1682,6 +1839,7 @@ class Mirror:
                 self.floor = self.plan_runtime.detect_floor(
                     not_passed_floor_count,
                     initial=not self.plan_runtime.progress_observed,
+                    absolute_floor=absolute_floor - 1 if absolute_floor is not None else None,
                 )
             except MirrorPlanProgressError as error:
                 self.plan_runtime.record_deviation(str(error))
@@ -1690,7 +1848,10 @@ class Mirror:
                     (to_window_position[0] - 200 * cfg.set_win_size / 1440, to_window_position[1])
                 )
                 raise cannotOperateGameError(str(error)) from error
-            log.debug(f"当前镜牢层数: {self.floor}")
+            log.debug(
+                f"当前镜牢层数: 内部{self.floor}（实际第{self.floor + 1}层，目标{self.plan_runtime.floor_count}层，"
+                f"当前段剩余标记{not_passed_floor_count}个）"
+            )
             self.get_floor_num = False
             auto.mouse_action_with_pos((to_window_position[0] - 200 * cfg.set_win_size / 1440, to_window_position[1]))
             self.mirror_map.refresh_floor(self.floor)
