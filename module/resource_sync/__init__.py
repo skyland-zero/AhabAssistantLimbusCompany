@@ -20,7 +20,6 @@ from .source import get_default_sources
 from .state import LOCAL_STATE_PATH
 from .worker import ResourceCheckPayload, ResourceSyncWorker, ResourceWorkerMode
 
-
 __all__ = [
     "DEFAULT_LOCAL_IMAGES_DIR",
     "LOCAL_STATE_PATH",

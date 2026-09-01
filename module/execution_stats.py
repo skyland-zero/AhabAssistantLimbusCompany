@@ -33,7 +33,7 @@ def _positive_int(value: Any) -> int:
         return 0
     try:
         return max(0, int(value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 
@@ -286,12 +286,10 @@ class ExecutionStatsStore:
             daily = raw.get("daily", {})
             if isinstance(daily, Mapping):
                 self._daily = {
-                    str(key): _normalise_counts(value)
-                    for key, value in daily.items()
-                    if self._valid_date_key(key)
+                    str(key): _normalise_counts(value) for key, value in daily.items() if self._valid_date_key(key)
                 }
             self._prune(game_day(self._now()))
-        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        except OSError, ValueError, TypeError, json.JSONDecodeError:
             # A broken history file must never prevent the sidecar from
             # starting.  The next successful completion will repair it.
             self._daily = {}
@@ -305,7 +303,7 @@ class ExecutionStatsStore:
                 self.path,
                 json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             )
-        except (OSError, UnicodeError, TypeError, ValueError):
+        except OSError, UnicodeError, TypeError, ValueError:
             # Statistics are observability data; never fail an automation run
             # because its optional history file cannot be written.
             return

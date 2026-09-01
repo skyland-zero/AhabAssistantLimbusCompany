@@ -102,7 +102,7 @@ def _decode_public_key(value: bytes | str):
         raw = text.encode("ascii")
     try:
         decoded = base64.b64decode(raw, validate=True)
-    except (ValueError, binascii.Error):
+    except ValueError, binascii.Error:
         try:
             decoded = bytes.fromhex(raw.decode("ascii"))
         except (ValueError, UnicodeDecodeError) as error:

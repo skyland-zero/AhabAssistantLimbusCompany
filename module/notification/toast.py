@@ -10,9 +10,6 @@ try:
         ToastDuration,
         ToastImage,
         ToastImagePosition,
-        ToastInputSelectionBox,
-        ToastInputTextBox,
-        ToastSelection,
     )
 
     IMPORT_SUCCESS = True
@@ -34,7 +31,6 @@ except ImportError:
             ToastImagePosition,
         )
 
-import sys
 import winreg
 from enum import Enum
 from pathlib import Path

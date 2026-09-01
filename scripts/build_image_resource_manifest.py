@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
-from pathlib import Path
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 # 兼容直接执行 python scripts/xxx.py 的场景，主动补上项目根目录导入路径。
 if __package__ in {None, ""}:
@@ -265,13 +265,12 @@ def main() -> int:
     args = parser.parse_args()
 
     # 第二步：生成 manifest 与 7z 资源包两类构建产物。
-    manifest = build_manifest_artifacts(
+    build_manifest_artifacts(
         source_dir=args.source_dir,
         output_manifest_path=args.output_manifest_path,
         output_package_path=args.output_package_path,
         generated_at=args.generated_at,
     )
-
 
     return 0
 

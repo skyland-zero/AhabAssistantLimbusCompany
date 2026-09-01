@@ -554,11 +554,7 @@ def identify_road(bus_position, nodes_column, bus_row, screenshot=None):
         start=1,
     ):
         for source in source_nodes:
-            source_position = (
-                bus_row
-                if column_number == 1
-                else _position_from_y(source[1][1], bus_position, bus_row)
-            )
+            source_position = bus_row if column_number == 1 else _position_from_y(source[1][1], bus_position, bus_row)
 
             for target in target_nodes:
                 x_gap = target[1][0] - source[1][0]

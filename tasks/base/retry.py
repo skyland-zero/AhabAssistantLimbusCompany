@@ -72,13 +72,8 @@ def click_title_screen_safely() -> None:
     """标题页点击入口，避开账号、清缓存和中间弹窗区域。"""
     global _last_title_screen_tap_time
     selected_session = _active_session()
-    selected_is_simulator = (
-        selected_session is not None
-        and selected_session.target.kind in ("mumu", "adb")
-    )
-    if (selected_session is None and not cfg.simulator) or (
-        selected_session is not None and not selected_is_simulator
-    ):
+    selected_is_simulator = selected_session is not None and selected_session.target.kind in ("mumu", "adb")
+    if (selected_session is None and not cfg.simulator) or (selected_session is not None and not selected_is_simulator):
         auto.mouse_click_blank()
         return
 
@@ -139,7 +134,7 @@ def kill_game():
                 if proc_name and cfg.game_process_name.lower() in proc_name.lower():
                     game_running = True
                     break
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            except psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess:
                 # 忽略已终止、无权限或僵尸进程
                 continue
         if not game_running:
@@ -154,7 +149,9 @@ def check_times(start_time, timeout=90, logs=True):
     """检查是否卡死超时，若是则尝试关闭重启游戏"""
     now_time = time.time()
     if logs and int(now_time - start_time) > 9 and int(now_time - start_time) % 10 == 0:
-        log.info(f"初始时间为{time.strftime('%H:%M:%S', time.localtime(start_time))}，此刻时间为{time.strftime('%H:%M:%S', time.localtime(now_time))}，已卡死{int(now_time - start_time)}秒")
+        log.info(
+            f"初始时间为{time.strftime('%H:%M:%S', time.localtime(start_time))}，此刻时间为{time.strftime('%H:%M:%S', time.localtime(now_time))}，已卡死{int(now_time - start_time)}秒"
+        )
         sleep(1)
     if now_time - start_time > timeout:
         log.info(f"已卡死超过{timeout}秒，尝试关闭重启游戏")
@@ -172,11 +169,7 @@ def retry():
     """
     start_time = time.time()
     selected_session = _active_session()
-    is_windows = (
-        selected_session.target.kind == "pc"
-        if selected_session is not None
-        else not cfg.config.simulator
-    )
+    is_windows = selected_session.target.kind == "pc" if selected_session is not None else not cfg.config.simulator
     if is_windows:
         saved_hwnd = screen.handle.hwnd
     while True:

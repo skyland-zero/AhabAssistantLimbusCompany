@@ -318,7 +318,7 @@ class MumuControl(AbstractInput):
                 # bad port number '598265' in '127.0.0.1:598265'
                 elif "bad port" in msg:
                     log.error(f"断开连接失败，端口号{port}不正确，可能是拼写错误或不规范")
-        except:
+        except Exception:
             pass
 
     def _ensure_adb_device(self):
@@ -344,9 +344,7 @@ class MumuControl(AbstractInput):
                 # next attempt.
                 self.device = None
                 log.error(f"启动游戏失败，失败原因为{error}")
-                log.error(
-                    "启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动"
-                )
+                log.error("启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动")
                 if self.package_list is False:
                     self.package_list = True
                     command = [
@@ -358,7 +356,9 @@ class MumuControl(AbstractInput):
                         "info",
                         "-i",
                     ]
-                    no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+                    no_window_flag = (
+                        subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+                    )
                     try:
                         result = subprocess.run(
                             command,
@@ -402,7 +402,7 @@ class MumuControl(AbstractInput):
                         )
                         if key:
                             break
-                    except:
+                    except Exception:
                         continue
                 if not key:
                     log.debug("mumu_control_api_backend: 未在注册表中找到任何匹配的MuMu安装项")
@@ -410,7 +410,7 @@ class MumuControl(AbstractInput):
                 self.install_path = os.path.dirname(winreg.QueryValueEx(key, "DisplayIcon")[0]).strip('"')
                 mumu_version, _ = winreg.QueryValueEx(key, "DisplayVersion")
                 winreg.CloseKey(key)
-            except:
+            except Exception:
                 log.error(
                     "读取注册表失败，无法获取MuMu安装路径，也可能是未安装MuMu模拟器，或使用了某种特供版本",
                     exc_info=True,
@@ -507,7 +507,7 @@ class MumuControl(AbstractInput):
                 return
             except userStopError:
                 raise
-            except (NemuIpcError, NemuIpcIncompatible):
+            except NemuIpcError, NemuIpcIncompatible:
                 # A missing player, an IPC incompatibility, or a failed IPC
                 # handshake is not repaired by recursively launching again.
                 raise
@@ -520,15 +520,11 @@ class MumuControl(AbstractInput):
                         error,
                     )
                     self.mumu_control_api_backend()
-        raise RuntimeError(
-            f"无法启动 MuMu 实例 {self.multi_instance_number}：{last_error}"
-        ) from last_error
+        raise RuntimeError(f"无法启动 MuMu 实例 {self.multi_instance_number}：{last_error}") from last_error
 
     def _start_once(self):
         if self.can_attach_without_launch():
-            log.debug(
-                "MuMu 实例已在运行，跳过 control launch 和启动等待，直接连接 NemuIpc"
-            )
+            log.debug("MuMu 实例已在运行，跳过 control launch 和启动等待，直接连接 NemuIpc")
             self.attach_existing()
             return
 
@@ -554,7 +550,7 @@ class MumuControl(AbstractInput):
         # 等待模拟器启动完成
         try:
             start_timeout = max(1, int(cfg.get_value("start_emulator_timeout", 120)))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             start_timeout = 120
         for _ in range(start_timeout):
             time.sleep(1)
@@ -562,9 +558,7 @@ class MumuControl(AbstractInput):
                 log.debug("start: 模拟器启动状态确认为 start_finished")
                 break
         else:
-            raise NemuIpcError(
-                f"MuMu 实例 {self.multi_instance_number} 启动超时（{start_timeout}s）"
-            )
+            raise NemuIpcError(f"MuMu 实例 {self.multi_instance_number} 启动超时（{start_timeout}s）")
         self.load_dll()
         log.debug(f"MUMU模拟器编号{self.multi_instance_number}启动完成")
         self.connect()
@@ -593,7 +587,7 @@ class MumuControl(AbstractInput):
             log.debug(f"MUMU模拟器编号{self.multi_instance_number}关闭完成")
         except userStopError:
             raise
-        except:
+        except Exception:
             self.mumu_control_api_backend()
             self.stop()
 
@@ -608,7 +602,7 @@ class MumuControl(AbstractInput):
                 return os.path.join(os.path.dirname(self.install_path), "nx_device", "12.0", "shell")
             else:
                 return self.install_path
-        except:
+        except Exception:
             self.mumu_control_api_backend()
             self.get_device_path()
 
@@ -616,7 +610,7 @@ class MumuControl(AbstractInput):
         # 获取MuMuManager.exe所在的路径
         return self.exe_path
 
-    def get_nemu_client_path(self,version):
+    def get_nemu_client_path(self, version):
         # 获取external_renderer_ipc.dll所在的路径
         try:
             if self.mumu_version == 5:
@@ -630,7 +624,7 @@ class MumuControl(AbstractInput):
                 )
             else:
                 return os.path.join(self.install_path, "sdk", "external_renderer_ipc.dll")
-        except:
+        except Exception:
             self.mumu_control_api_backend()
             self.get_nemu_client_path(version)
 
@@ -737,7 +731,7 @@ class MumuControl(AbstractInput):
                 capture_output=True,
                 creationflags=no_window_flag,
             )
-        except:
+        except Exception:
             self.mumu_control_api_backend()
             self.disable_app_keptlive()
 
@@ -752,7 +746,7 @@ class MumuControl(AbstractInput):
                 capture_output=True,
                 creationflags=no_window_flag,
             )
-        except:
+        except Exception:
             self.mumu_control_api_backend()
             self.enable_app_keptlive()
 
@@ -770,23 +764,17 @@ class MumuControl(AbstractInput):
         try:
             info = json.loads(proc.stdout)
         except (TypeError, json.JSONDecodeError) as error:
-            raise NemuIpcError(
-                f"无法读取 MuMu 实例 {self.multi_instance_number} 的启动状态"
-            ) from error
+            raise NemuIpcError(f"无法读取 MuMu 实例 {self.multi_instance_number} 的启动状态") from error
         if not isinstance(info, dict):
-            raise NemuIpcError(
-                f"MuMu 实例 {self.multi_instance_number} 的启动状态格式无效"
-            )
+            raise NemuIpcError(f"MuMu 实例 {self.multi_instance_number} 的启动状态格式无效")
         error_code = info.get("errcode")
         try:
             has_error = error_code is not None and int(error_code) != 0
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             has_error = True
         if has_error:
             message = info.get("errmsg", f"errcode={error_code}")
-            raise NemuIpcError(
-                f"MuMu 实例 {self.multi_instance_number} 不存在或不可用：{message}"
-            )
+            raise NemuIpcError(f"MuMu 实例 {self.multi_instance_number} 不存在或不可用：{message}")
         try:
             if "player_state" in info:
                 return info["player_state"]
@@ -1234,13 +1222,9 @@ class MumuControl(AbstractInput):
 
         self.up()
 
-    def mouse_swipe_for_scroll(
-        self, x, y, duration=0.3, dx=0, dy=0, move_back=True
-    ) -> None:
+    def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
         """Swipe a scrollable view through MuMu's native touch injection."""
-        points = insert_swipe(
-            p0=(x, y), p3=(x + dx, y + dy), speed=8, min_distance=1
-        )
+        points = insert_swipe(p0=(x, y), p3=(x + dx, y + dy), speed=8, min_distance=1)
         self.down(x, y)
         try:
             for point in points:

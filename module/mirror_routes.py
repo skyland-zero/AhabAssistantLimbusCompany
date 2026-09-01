@@ -825,8 +825,7 @@ DEFAULT_ROUTE = MirrorRouteDefinition(
 )
 
 ROUTES: dict[str, MirrorRouteDefinition] = {
-    route.route_id: route
-    for route in (HOS_RYOSHU_SOLO_ROUTE, SPIDERWEB_FAMILY_ROUTE, DEFAULT_ROUTE)
+    route.route_id: route for route in (HOS_RYOSHU_SOLO_ROUTE, SPIDERWEB_FAMILY_ROUTE, DEFAULT_ROUTE)
 }
 
 # These aliases cover the first development shape of the built-in catalog and

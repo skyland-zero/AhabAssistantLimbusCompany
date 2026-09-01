@@ -16,16 +16,28 @@ protected_prefixes = [
 expected_deleted_prefixes = ["app/"]
 
 allowed_protected_files = [
+    # Ruff lint/format cleanup for the public automation exports and input path.
+    "module/automation/__init__.py",
     "module/automation/automation.py",
+    "module/automation/input_handlers/input.py",
     "module/automation/input_handlers/simulator/mumu_control.py",
+    "module/automation/input_handlers/simulator/pyminitouch/__init__.py",
+    "module/automation/input_handlers/simulator/pyminitouch/actions.py",
     "module/automation/input_handlers/simulator/simulator_control.py",
     "module/automation/screenshot.py",
+    # Ruff lint/format cleanup in the config exports and Windows game helpers.
+    "module/config/__init__.py",
     "module/config/config.py",
     "module/config/config_typing.py",
     # Fork-owned credential redaction used by the GPUI/sidecar settings path.
     "module/config/redaction.py",
     "module/config/theme_pack_catalog.py",
+    "module/game_and_screen/game.py",
+    "module/game_and_screen/hdr.py",
     "module/game_and_screen/screen.py",
+    # Ruff lint/format cleanup in legacy task entry points and utilities.
+    "tasks/base/__init__.py",
+    "tasks/base/back_init_menu.py",
     "tasks/base/make_enkephalin_module.py",
     "tasks/base/retry.py",
     "tasks/base/script_task_scheme.py",
@@ -50,7 +62,9 @@ allowed_protected_files = [
     "tasks/tools/screenshot_module.py",
     "tasks/tools/ui_style.py",
     # Fork-owned template matching and ORB descriptor reuse optimizations.
+    "utils/archive_7z.py",
     "utils/image_utils.py",
+    "utils/schedule_helper.py",
     "utils/utils.py",
 ]
 

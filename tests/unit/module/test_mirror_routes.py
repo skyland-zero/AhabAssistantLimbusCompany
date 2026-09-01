@@ -26,11 +26,14 @@ def test_hos_route_exposes_short_and_full_floor_windows() -> None:
 
 def test_route_priority_is_ordered_and_unknown_gifts_fall_back() -> None:
     targets = HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(5)
-    assert route_target_priority(
-        HOS_RYOSHU_SOLO_ROUTE,
-        5,
-        lambda target: target.gift_id == "sharp_needle_and_thread",
-    ) == 40
+    assert (
+        route_target_priority(
+            HOS_RYOSHU_SOLO_ROUTE,
+            5,
+            lambda target: target.gift_id == "sharp_needle_and_thread",
+        )
+        == 40
+    )
     assert targets[0].priority < targets[-1].priority
     assert route_target_priority(HOS_RYOSHU_SOLO_ROUTE, 5, lambda _: False) is None
 
@@ -57,12 +60,8 @@ def test_hos_route_has_unique_process_gifts_and_required_targets() -> None:
     assert HOS_RYOSHU_SOLO_ROUTE.gift_target("sharp_needle_and_thread").required
     assert HOS_RYOSHU_SOLO_ROUTE.gift_target("bridle").required
     assert HOS_RYOSHU_SOLO_ROUTE.gift_target("mid_range_k_corp_ampule").required
-    assert "lunar_memory" not in {
-        gift.gift_id for gift in HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(11)
-    }
-    assert "mid_range_k_corp_ampule" in {
-        gift.gift_id for gift in HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(11)
-    }
+    assert "lunar_memory" not in {gift.gift_id for gift in HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(11)}
+    assert "mid_range_k_corp_ampule" in {gift.gift_id for gift in HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(11)}
 
 
 def test_unknown_route_id_keeps_default_behavior() -> None:

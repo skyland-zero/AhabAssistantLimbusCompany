@@ -33,6 +33,7 @@ async def _run(args: argparse.Namespace) -> None:
     from module.device_manager import get_device_manager
     from module.rpc_dispatcher import RpcDispatcher
     from module.websocket_server import WebSocketServer
+
     stop_event = asyncio.Event()
 
     def request_stop(_signal: int | None = None, _frame: object | None = None) -> None:
@@ -45,7 +46,7 @@ async def _run(args: argparse.Namespace) -> None:
     for signum in (signal.SIGINT, signal.SIGTERM):
         try:
             signal.signal(signum, request_stop)
-        except (AttributeError, OSError, ValueError):
+        except AttributeError, OSError, ValueError:
             pass
 
     manager = get_device_manager()

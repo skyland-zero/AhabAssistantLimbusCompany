@@ -234,10 +234,6 @@ def enumerate_hdr_displays() -> list[HdrDisplayInfo]:
 def get_monitor_hdr_info(hmonitor: int) -> HdrDisplayInfo | None:
     """Return HDR information for the selected Windows monitor."""
     return next(
-        (
-            info
-            for info in enumerate_hdr_displays()
-            if info.monitor_handle == int(hmonitor)
-        ),
+        (info for info in enumerate_hdr_displays() if info.monitor_handle == int(hmonitor)),
         None,
     )

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .manifest import RESOURCE_SYNC_SCHEMA_VERSION, _reject_unknown_keys

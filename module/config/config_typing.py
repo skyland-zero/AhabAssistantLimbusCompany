@@ -207,6 +207,7 @@ class TeamSetting(BaseModel):
     mirror_normal_count: int = 0
     """普通镜牢次数"""
 
+
 class ConfigModel(BaseModel):
     """配置模型"""
 

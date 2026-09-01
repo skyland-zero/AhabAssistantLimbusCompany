@@ -142,7 +142,7 @@ class MNTDevice(object):
 
             adbutils.adb.kill_server()
             self.start()
-        except:
+        except Exception:
             self.start()
         # real connection
         self.connection = MNTConnection(self.server.port)
@@ -183,11 +183,7 @@ class MNTDevice(object):
 
     def _normalize_touch_coordinates(self, x, y):
         """将屏幕像素坐标规格化为 minitouch 使用的整数坐标。"""
-        if (
-            int(self.connection.max_x) > 1440
-            and self.real_width != 0
-            and self.real_height != 0
-        ):
+        if int(self.connection.max_x) > 1440 and self.real_width != 0 and self.real_height != 0:
             x = (x / self.real_width) * int(self.connection.max_x)
             y = (y / self.real_height) * int(self.connection.max_y)
         return int(x), int(y)
@@ -235,7 +231,7 @@ class MNTDevice(object):
             _builder.publish(self.connection)
 
     def _send_swipe_plan_in_one_batch(self, plan, pressure=100):
-        '''将滑动计划作为一批连续的按下、移动、抬起指令发送。'''
+        """将滑动计划作为一批连续的按下、移动、抬起指令发送。"""
         if not plan:
             return
 
@@ -336,10 +332,6 @@ class MNTDevice(object):
             all_points.append(last_target)
 
         total = len(all_points)
-        unique = len(set(all_points))
-        head = all_points[:10]
-        tail = all_points[-10:] if total > 10 else []
-
         # 统计连续重复点数量
         consecutive_dups = 0
         for idx in range(1, total):

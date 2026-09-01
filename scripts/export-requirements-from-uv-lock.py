@@ -19,8 +19,8 @@ def main():
 
     result = subprocess.run(cmd, text=True, capture_output=True)
     if result.returncode != 0:
-        print("uv export failed:", file=sys.stderr)
-        print(result.stderr, file=sys.stderr)
+        sys.stderr.write("uv export failed:\n")
+        sys.stderr.write(result.stderr)
         sys.exit(result.returncode)
 
     filtered = []

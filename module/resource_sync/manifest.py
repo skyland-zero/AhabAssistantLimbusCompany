@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import json
+from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 # 资源清单协议版本仍保持为 1，并统一承载整包同步所需的元数据字段。

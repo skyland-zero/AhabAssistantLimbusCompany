@@ -91,20 +91,14 @@ class Shop:
         # A target remains valuable after its acquisition window closes.  The
         # selection window is floor-scoped, but protection is run-scoped so a
         # floor-1 material cannot be consumed before a later fusion.
-        protected_ids = {
-            target.gift_id for target in self.route.gifts if target.protected
-        }
+        protected_ids = {target.gift_id for target in self.route.gifts if target.protected}
         protected_ids.update(
             gift_id
             for recipe in self.route.recipes
             if recipe.end_floor >= max(1, self.current_layer)
             for gift_id in (recipe.result_gift_id, *recipe.material_gift_ids)
         )
-        return [
-            target
-            for target in self.route.gifts
-            if target.protected and target.gift_id in protected_ids
-        ]
+        return [target for target in self.route.gifts if target.protected and target.gift_id in protected_ids]
 
     def _route_gift_id_for_crop(
         self,
@@ -114,9 +108,7 @@ class Shop:
         include_recipe_targets: bool = False,
     ) -> str | None:
         allowed = set(gift_ids) if gift_ids is not None else None
-        for target in self._route_targets_for_matching(
-            include_recipe_targets=include_recipe_targets
-        ):
+        for target in self._route_targets_for_matching(include_recipe_targets=include_recipe_targets):
             if allowed is not None and target.gift_id not in allowed:
                 continue
             if target.asset and auto.find_element(target.asset, my_crop=crop, threshold=0.75):
@@ -440,7 +432,9 @@ class Shop:
                         auto.mouse_click_blank(times=3)
                         continue
                     else:
-                        if auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png",take_screenshot=True):
+                        if auto.click_element(
+                            "mirror/road_in_mir/ego_gift_get_confirm_assets.png", take_screenshot=True
+                        ):
                             sleep(0.5)
                         auto.mouse_click_blank(times=3)
                         sleep(1)
@@ -474,7 +468,9 @@ class Shop:
                             auto.mouse_click_blank(times=3)
                             continue
                         else:
-                            if auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png",take_screenshot=True):
+                            if auto.click_element(
+                                "mirror/road_in_mir/ego_gift_get_confirm_assets.png", take_screenshot=True
+                            ):
                                 sleep(0.5)
                             auto.mouse_click_blank(times=3)
                             sleep(1)
@@ -690,9 +686,7 @@ class Shop:
             )
             for point in points or []:
                 if not any(
-                    abs(point[0] - existing[0]) <= 40
-                    and abs(point[1] - existing[1]) <= 40
-                    for existing in seen
+                    abs(point[0] - existing[0]) <= 40 and abs(point[1] - existing[1]) <= 40 for existing in seen
                 ):
                     seen.append(point)
         for point in seen:
@@ -1403,11 +1397,7 @@ class Shop:
             right = int(round(_ENHANCE_SCAN_REGION_REL["right"] * width))
             bottom = int(round(_ENHANCE_SCAN_REGION_REL["bottom"] * height))
 
-            return [
-                point
-                for point in points
-                if left <= int(point[0]) <= right and top <= int(point[1]) <= bottom
-            ]
+            return [point for point in points if left <= int(point[0]) <= right and top <= int(point[1]) <= bottom]
 
         def check_enhanced(pos):
             for p in self.enhance_gifts_list:

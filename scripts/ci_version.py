@@ -121,14 +121,12 @@ def build_ci_version(
     )
 
     # 只统计最新正式 release 发布之后的同通道 run，失败或取消的 run 也占号。
-    runs_after_release = [
-        run
-        for run in runs
-        if reserves_channel_number(run, channel, latest_release.published_at)
-    ]
+    runs_after_release = [run for run in runs if reserves_channel_number(run, channel, latest_release.published_at)]
     runs_after_release.sort(key=lambda run: (run.get("run_number", 0), run.get("id", 0)))
 
-    current_index = next((index for index, run in enumerate(runs_after_release) if run.get("id") == current_run_id), None)
+    current_index = next(
+        (index for index, run in enumerate(runs_after_release) if run.get("id") == current_run_id), None
+    )
     if current_index is not None:
         build_number = current_index + 1
     elif current_run_number is not None:
@@ -188,9 +186,7 @@ def load_releases_and_runs(args: argparse.Namespace) -> tuple[list[dict[str, Any
     # 在线模式下分别拉取 release 列表和当前 workflow 的运行记录。
     releases_url = f"{args.github_api_url}/repos/{args.repo}/releases"
     workflow_path = quote(args.workflow_file, safe="")
-    runs_url = (
-        f"{args.github_api_url}/repos/{args.repo}/actions/workflows/{workflow_path}/runs"
-    )
+    runs_url = f"{args.github_api_url}/repos/{args.repo}/actions/workflows/{workflow_path}/runs"
 
     releases = fetch_paginated_collection(releases_url, "items", args.github_token)
     runs = fetch_paginated_collection(runs_url, "workflow_runs", args.github_token)

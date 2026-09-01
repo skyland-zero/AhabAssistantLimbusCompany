@@ -133,21 +133,14 @@ class PseudoSoloDefenseState:
             return changed
 
         required_turns = defense_turns_for_live_count(live_count)
-        changed = (
-            floor_changed
-            or self._base_state.remaining_turns != required_turns
-            or self._stop_confirmed
-        )
+        changed = floor_changed or self._base_state.remaining_turns != required_turns or self._stop_confirmed
         self._base_state.remaining_turns = required_turns
         self._stop_confirmed = False
         reset_observer = getattr(self._observer, "reset", None)
         if callable(reset_observer):
             reset_observer()
         if changed:
-            log.info(
-                f"第{floor}层队伍页检测到{live_count}名存活己方人格，"
-                f"伪单通连续防御调整为{required_turns}回合"
-            )
+            log.info(f"第{floor}层队伍页检测到{live_count}名存活己方人格，伪单通连续防御调整为{required_turns}回合")
         return changed
 
     def reset_for_run(self) -> None:

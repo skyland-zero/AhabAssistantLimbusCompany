@@ -171,7 +171,9 @@ class WebSocketServer:
             key = payload.get("deviceId") or payload.get("toolId") or payload.get("runId")
             for index in range(len(self._outbound) - 1, -1, -1):
                 queued_event, queued_payload, _ = self._outbound[index]
-                queued_key = queued_payload.get("deviceId") or queued_payload.get("toolId") or queued_payload.get("runId")
+                queued_key = (
+                    queued_payload.get("deviceId") or queued_payload.get("toolId") or queued_payload.get("runId")
+                )
                 if queued_event == event and queued_key == key:
                     del self._outbound[index]
                     break
@@ -205,7 +207,7 @@ class WebSocketServer:
                     continue
                 try:
                     request = json.loads(raw)
-                except (TypeError, json.JSONDecodeError):
+                except TypeError, json.JSONDecodeError:
                     await self._send(connection, self._error(None, -32700, "无法解析 JSON"))
                     continue
                 if not isinstance(request, dict):
@@ -234,7 +236,7 @@ class WebSocketServer:
             if isinstance(raw, bytes):
                 raise TypeError("binary hello")
             hello = json.loads(raw)
-        except (asyncio.TimeoutError, ConnectionClosed, TypeError, json.JSONDecodeError):
+        except asyncio.TimeoutError, ConnectionClosed, TypeError, json.JSONDecodeError:
             await connection.close(code=1008, reason="authentication required")
             return False
 
@@ -247,7 +249,9 @@ class WebSocketServer:
         return True
 
     async def _handle_request(self, connection: ServerConnection, request: dict[str, Any]) -> None:
-        executor = self._mutation_executor if self.dispatcher.is_mutating(request.get("method")) else self._read_executor
+        executor = (
+            self._mutation_executor if self.dispatcher.is_mutating(request.get("method")) else self._read_executor
+        )
         if executor is None:
             await self._send(connection, self._error(request.get("id"), -32000, "后端服务尚未启动"))
             return
@@ -298,7 +302,9 @@ class WebSocketServer:
         clients = tuple(self._clients)
         if not clients:
             return
-        results = await asyncio.gather(*(self._send_encoded(client, message) for client in clients), return_exceptions=True)
+        results = await asyncio.gather(
+            *(self._send_encoded(client, message) for client in clients), return_exceptions=True
+        )
         for client, result in zip(clients, results):
             if isinstance(result, Exception):
                 self._clients.discard(client)

@@ -565,7 +565,10 @@ fn preset_overwrite_overlay(
     let target = overwrite.target.clone();
     let preset = overwrite.preset.clone();
     let palette = current_render_palette();
-    let target_label = preset_target_label(&TeamPresetTarget::Existing(target.clone()), language);
+    let target_label = preset_target_label(
+        &TeamPresetTarget::Existing(Box::new(target.clone())),
+        language,
+    );
     let mut cancel = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
         .id("team-preset-overwrite-cancel")
         .h(px(32.))

@@ -483,10 +483,7 @@ def script_task() -> None | int:
     device_manager = get_device_manager()
     selected_session = device_manager.active_session
     if selected_session is not None:
-        if (
-            selected_session.target.kind == "mumu"
-            and ACTION_EXIT_EMULATOR.value in actions
-        ):
+        if selected_session.target.kind == "mumu" and ACTION_EXIT_EMULATOR.value in actions:
             device_manager.release_after_task()
     elif cfg.simulator:
         if cfg.simulator_type == 0:

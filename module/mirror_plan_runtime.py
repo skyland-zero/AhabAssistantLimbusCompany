@@ -40,9 +40,7 @@ class MirrorPlanRuntime:
     def complete(self) -> bool:
         """Whether every floor in the detected run has a recorded start."""
 
-        return self.floor_count is not None and all(
-            self.floor_times[index] > 0 for index in range(self.floor_count)
-        )
+        return self.floor_count is not None and all(self.floor_times[index] > 0 for index in range(self.floor_count))
 
     def detect_floor(self, not_passed_floor_count: int, *, initial: bool = False) -> int:
         """Resolve the current floor from the visible not-passed marker count.
@@ -69,9 +67,7 @@ class MirrorPlanRuntime:
                 selected_count = candidate_counts[0]
             else:
                 supported = "/".join(str(count) for count in self.supported_floor_counts)
-                raise MirrorPlanProgressError(
-                    f"无法区分{supported}层镜牢路线（剩余标记{remaining}个），已暂停等待确认"
-                )
+                raise MirrorPlanProgressError(f"无法区分{supported}层镜牢路线（剩余标记{remaining}个），已暂停等待确认")
             self.floor_count = selected_count
 
         if remaining > self.floor_count:

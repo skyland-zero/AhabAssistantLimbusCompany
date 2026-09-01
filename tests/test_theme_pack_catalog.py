@@ -189,10 +189,7 @@ def test_english_ocr_fallbacks_are_short_unique_fragments() -> None:
         **_interface_dict("THEME_PACK_IMAGE_MAP"),
         **_interface_dict("THEME_PACK_HARD_IMAGE_MAP"),
     }
-    english_names = {
-        key: Path(filename).stem.lower().replace(" ", "")
-        for key, filename in image_maps.items()
-    }
+    english_names = {key: Path(filename).stem.lower().replace(" ", "") for key, filename in image_maps.items()}
     english_names["mnestic"] = "mnesticexperience"
 
     for fallback, main in _interface_dict("EN_OCR_ALTERNATIVES").items():
@@ -222,12 +219,11 @@ def test_english_keywords_do_not_cover_each_other() -> None:
     }
     covers = set()
     for index, first in enumerate(keywords):
-        for second in keywords[index + 1:]:
+        for second in keywords[index + 1 :]:
             if first.lower() in second.lower() or second.lower() in first.lower():
                 covers.add(frozenset((first, second)))
     assert covers == expected_covers, (
-        f"英文关键词存在未登记的覆盖关系：{covers - expected_covers}；"
-        f"登记但实际不覆盖：{expected_covers - covers}"
+        f"英文关键词存在未登记的覆盖关系：{covers - expected_covers}；登记但实际不覆盖：{expected_covers - covers}"
     )
 
 
@@ -244,9 +240,7 @@ def test_weights_match_between_languages() -> None:
         mismatched = {
             en_key: (weight, mapping[en_key], cn_weights[mapping[en_key]])
             for en_key, weight in en_weights.items()
-            if en_key in mapping
-            and mapping[en_key] in cn_weights
-            and weight != cn_weights[mapping[en_key]]
+            if en_key in mapping and mapping[en_key] in cn_weights and weight != cn_weights[mapping[en_key]]
         }
         assert mismatched == {}, f"{en_section} 与 {cn_section} 权重不一致：{mismatched}"
 

@@ -40,7 +40,6 @@ class ResourceSyncWorker(Thread):
     订阅方若涉及 UI 操作需自行封送回主线程（见 app.event_bridge）。
     """
 
-
     def __init__(
         self,
         *,

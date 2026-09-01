@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 # 优先复用项目内置的 7za.exe，避免运行环境额外依赖系统安装的 7-Zip。
 SEVEN_ZIP_EXECUTABLE_RELATIVE_PATH = Path("assets/binary/7za.exe")

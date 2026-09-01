@@ -50,9 +50,7 @@ def redact_text(value: Any, secrets: Iterable[Any] = ()) -> str:
     with _secret_lock:
         registered = set(_secret_values)
     candidates = registered | {
-        str(secret)
-        for secret in secrets
-        if secret not in (None, "") and isinstance(secret, str)
+        str(secret) for secret in secrets if secret not in (None, "") and isinstance(secret, str)
     }
     for secret in sorted(candidates, key=len, reverse=True):
         result = result.replace(secret, REDACTED_VALUE)

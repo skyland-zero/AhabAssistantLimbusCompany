@@ -86,9 +86,7 @@ def test_wxpusher_http_error_retries_transient_status() -> None:
         calls += 1
         return next(responses)
 
-    result = WxPusherClient(post=post, sleeper=sleeps.append).send_message(
-        "SPT_http-value", "content", "summary"
-    )
+    result = WxPusherClient(post=post, sleeper=sleeps.append).send_message("SPT_http-value", "content", "summary")
 
     assert result["code"] == 1000
     assert calls == 3
@@ -152,9 +150,7 @@ def test_notification_formatters_cover_batch_final_and_failure_messages() -> Non
     assert content.endswith("经验本完成 3 次")
     assert summary == "经验本完成 3 次"
 
-    final_content, final_summary = format_final_summary(
-        {"completed": {"exp": 1, "thread": 2, "mirror": 3}}
-    )
+    final_content, final_summary = format_final_summary({"completed": {"exp": 1, "thread": 2, "mirror": 3}})
     assert "经验本：1 次" in final_content
     assert "纽本：2 次" in final_content
     assert final_summary == "AALC 任务已完成"

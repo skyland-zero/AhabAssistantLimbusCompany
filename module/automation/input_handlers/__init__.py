@@ -90,9 +90,7 @@ class AbstractInput:
         手势按下后快速脱离长按判定区域，并在到达终点后立即抬起。
         此处是接口占位；实际输入由具体适配器实现。
         """
-        raise InterruptedError(
-            f"输入适配器 {self.__class__.__name__} 未实现 mouse_swipe_for_scroll"
-        )
+        raise InterruptedError(f"输入适配器 {self.__class__.__name__} 未实现 mouse_swipe_for_scroll")
 
     def mouse_drag_down(self, x, y, reverse=1, move_back=True) -> None:
         """鼠标从指定位置向下拖动

@@ -55,7 +55,6 @@ class UpdateThread(Thread):
     需将回调封送回主线程（见 app.event_bridge.connect_queued）。
     """
 
-
     def __init__(self, timeout, flag):
         """
         初始化更新线程。
@@ -323,7 +322,7 @@ def is_valid_url(url):
     try:
         result = urlparse(url)
         return result.scheme.lower() == "https" and bool(result.hostname)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 

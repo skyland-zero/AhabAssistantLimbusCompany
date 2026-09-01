@@ -92,9 +92,7 @@ class DeviceManager:
         self._status_listeners: list[StatusListener] = []
         self._notice_listeners: list[StatusListener] = []
         self._busy_checker: Callable[[], bool] = lambda: False
-        self._runtime_snapshot = {
-            key: cfg.get_value(key) for key in self._RUNTIME_CONFIG_KEYS
-        }
+        self._runtime_snapshot = {key: cfg.get_value(key) for key in self._RUNTIME_CONFIG_KEYS}
 
     @property
     def active_id(self) -> str | None:
@@ -175,8 +173,7 @@ class DeviceManager:
             # A configured MuMu endpoint should be represented by the stable
             # MuMu id rather than by a second generic ADB row.
             if target.endpoint and any(
-                known.endpoint == target.endpoint and known.kind == "mumu"
-                for known in targets.values()
+                known.endpoint == target.endpoint and known.kind == "mumu" for known in targets.values()
             ):
                 continue
             targets[target.info.id] = target
@@ -590,7 +587,11 @@ class DeviceManager:
             if target.instance_number is None:
                 raise DeviceError("MuMu 实例编号缺失")
             try:
-                port = self._port_from_endpoint(target.endpoint) if target.endpoint else self._mumu_port(target.instance_number)
+                port = (
+                    self._port_from_endpoint(target.endpoint)
+                    if target.endpoint
+                    else self._mumu_port(target.instance_number)
+                )
             except DeviceError:
                 port = self._mumu_port(target.instance_number)
             self._set_runtime_config(
@@ -608,7 +609,7 @@ class DeviceManager:
         else:
             try:
                 port = int(cfg.get_value("simulator_port", 0) or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 port = 0
         self._set_runtime_config(
             simulator=True,
@@ -803,9 +804,7 @@ class DeviceManager:
         # it when MuMu confirms that the player actually exists.
         if info is None:
             configured = self._configured_mumu_instance()
-            return self._targets_from_mumu_info(
-                self._query_mumu_info(manager, str(configured))
-            )
+            return self._targets_from_mumu_info(self._query_mumu_info(manager, str(configured)))
         return []
 
     @classmethod
@@ -832,9 +831,7 @@ class DeviceManager:
             return None
 
         try:
-            payload = json.loads(
-                "\n".join(line for line in output.splitlines() if "Active code page" not in line)
-            )
+            payload = json.loads("\n".join(line for line in output.splitlines() if "Active code page" not in line))
         except json.JSONDecodeError as error:
             log.debug("解析 MuMu 实例信息失败（%s）：%s", vmindex, error)
             return None
@@ -846,7 +843,7 @@ class DeviceManager:
         error_code = payload.get("errcode")
         try:
             has_error = error_code is not None and int(error_code) != 0
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             has_error = True
         if has_error:
             log.debug(
@@ -879,12 +876,12 @@ class DeviceManager:
             try:
                 if record_error is not None and int(record_error) != 0:
                     continue
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             raw_index = record.get("index", key)
             try:
                 instance = int(raw_index)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if instance < 0 or instance in seen:
                 continue
@@ -897,7 +894,7 @@ class DeviceManager:
                 port = int(raw_port)
                 if 1 <= port <= 65535:
                     endpoint = f"{host}:{port}"
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 port = cls._mumu_port(instance)
 
             if endpoint is None:
@@ -989,14 +986,14 @@ class DeviceManager:
         value = cfg.get_value("mumu_instance_number", -1)
         try:
             value = int(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             value = -1
         if value >= 0:
             return value
         port = cfg.get_value("simulator_port", 16384)
         try:
             port = int(port)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             port = 16384
         if port >= 16384 and (port - 16384) % 32 == 0:
             return (port - 16384) // 32
@@ -1028,9 +1025,9 @@ class DeviceManager:
                     shell_manager = os.path.join(os.path.dirname(install_path), "shell", "MuMuManager.exe")
                     if os.path.isfile(shell_manager):
                         return shell_manager
-                except (FileNotFoundError, OSError):
+                except FileNotFoundError, OSError:
                     continue
-        except (ImportError, OSError):
+        except ImportError, OSError:
             return None
         return None
 

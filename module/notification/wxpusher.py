@@ -28,8 +28,7 @@ WXPUSHER_MIN_INTERVAL = 0.5  # approximately two requests per second
 class NotificationSender(Protocol):
     """Transport abstraction retained for future notification channels."""
 
-    def send_message(self, spt: str, content: str, summary: str) -> Mapping[str, Any]:
-        ...
+    def send_message(self, spt: str, content: str, summary: str) -> Mapping[str, Any]: ...
 
 
 class WxPusherError(RuntimeError):
@@ -104,7 +103,7 @@ class WxPusherClient:
                     raise WxPusherError("WxPusher 响应格式错误")
                 try:
                     code = int(result.get("code", -1))
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     code = -1
                 if code != WXPUSHER_SUCCESS_CODE:
                     raise WxPusherError("WxPusher API 返回错误")
@@ -273,7 +272,7 @@ def format_failure(error: Any) -> tuple[str, str]:
 def _count(values: Mapping[str, Any], key: str) -> int:
     try:
         return max(0, int(values.get(key, 0)))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 

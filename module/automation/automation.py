@@ -660,7 +660,9 @@ class Automation(metaclass=SingletonMeta):
             if my_crop:
                 crop_offset = (int(round(my_crop[0])), int(round(my_crop[1])))
                 screenshot = ImageUtils.crop(screenshot, my_crop)
-            matches = ImageUtils.match_template_with_multiple_targets(screenshot, template, threshold, min_dist=min_dist)
+            matches = ImageUtils.match_template_with_multiple_targets(
+                screenshot, template, threshold, min_dist=min_dist
+            )
             if crop_offset != (0, 0):
                 matches = [(x + crop_offset[0], y + crop_offset[1]) for x, y in matches]
             if len(matches) == 0:

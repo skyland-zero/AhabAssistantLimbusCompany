@@ -182,9 +182,7 @@ def test_dispatcher_uses_canonical_device_methods() -> None:
     manager = StubDeviceManager()
     dispatcher = RpcDispatcher(manager, version="test")
 
-    listed = dispatcher.dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "device.list"}
-    )
+    listed = dispatcher.dispatch({"jsonrpc": "2.0", "id": 1, "method": "device.list"})
     assert listed["result"][0]["id"] == "pc:limbus"
 
     connected = dispatcher.dispatch(
@@ -201,17 +199,13 @@ def test_dispatcher_uses_canonical_device_methods() -> None:
 
 def test_dispatcher_rejects_invalid_device_params() -> None:
     dispatcher = RpcDispatcher(StubDeviceManager(), version="test")
-    response = dispatcher.dispatch(
-        {"jsonrpc": "2.0", "id": 3, "method": "device.connect", "params": {}}
-    )
+    response = dispatcher.dispatch({"jsonrpc": "2.0", "id": 3, "method": "device.connect", "params": {}})
     assert response["error"]["code"] == -32602
 
 
 def test_dispatcher_rejects_unknown_methods() -> None:
     dispatcher = RpcDispatcher(StubDeviceManager(), version="test")
-    response = dispatcher.dispatch(
-        {"jsonrpc": "2.0", "id": 4, "method": "not.implemented"}
-    )
+    response = dispatcher.dispatch({"jsonrpc": "2.0", "id": 4, "method": "not.implemented"})
     assert response["error"]["code"] == -32601
 
 
@@ -459,7 +453,10 @@ def test_cold_mumu_failure_reports_disconnected_asynchronously(monkeypatch) -> N
     statuses: list[dict[str, Any]] = []
     notices: list[dict[str, Any]] = []
     manager.add_status_listener(
-        lambda _event, payload: (statuses.append(payload), failed.set() if payload["status"] == "disconnected" else None)
+        lambda _event, payload: (
+            statuses.append(payload),
+            failed.set() if payload["status"] == "disconnected" else None,
+        )
     )
     manager.add_notice_listener(lambda _event, payload: notices.append(payload))
 

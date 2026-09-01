@@ -654,7 +654,7 @@ class BackendApplication:
         for raw_number, setting in sorted(teams.items(), key=self._team_sort_key):
             try:
                 number = int(raw_number)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if number > 0:
                 details.append(self._team_detail(number, setting, number in queue))
@@ -779,7 +779,7 @@ class BackendApplication:
                 seen.add(pack_id)
                 try:
                     raw_weight = int(raw_weight)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     raw_weight = 0
                 packs.append(
                     {
@@ -845,7 +845,7 @@ class BackendApplication:
 
             value = json.loads(state_path.read_text(encoding="utf-8"))
             local_version = str(value.get("last_applied_manifest_id") or "unknown")
-        except (OSError, ValueError, TypeError):
+        except OSError, ValueError, TypeError:
             pass
         return [
             {
@@ -1465,7 +1465,7 @@ class BackendApplication:
         try:
             amount = int(count)
             payload = self.stats.record_completion(str(kind), amount, run_id=run_id)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return
         if payload is not None:
             self.emit("execution.stats", payload)
@@ -1513,7 +1513,7 @@ class BackendApplication:
         for key in teams:
             try:
                 number = int(key)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if number > 0:
                 numbers.append(number)
@@ -1523,7 +1523,7 @@ class BackendApplication:
     def _team_sort_key(item: tuple[Any, Any]) -> tuple[int, str]:
         try:
             return int(item[0]), str(item[0])
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return 0, str(item[0])
 
     def _team_detail(self, number: int, setting: Any, enabled: bool) -> dict[str, Any]:

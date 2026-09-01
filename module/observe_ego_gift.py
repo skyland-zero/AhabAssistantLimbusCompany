@@ -15,9 +15,7 @@ MAX_OBSERVE_EGO_GIFTS = 3
 
 SPIDERWEB_ENTANGLED_IN_RED = "spiderweb_entangled_in_red"
 SPIDERWEB_ENTANGLED_IN_RED_NAME = "赤红纠缠的蜘蛛巢"
-SPIDERWEB_ENTANGLED_IN_RED_ASSET = (
-    "mirror/road_to_mir/observe_ego_gift/general_gift/spiderweb_entangled_in_red.png"
-)
+SPIDERWEB_ENTANGLED_IN_RED_ASSET = "mirror/road_to_mir/observe_ego_gift/general_gift/spiderweb_entangled_in_red.png"
 
 # The historical gift asset was ``general_gift_3_32.png``.  The current
 # selector uses eight columns, so item 32 is row 4, column 8.

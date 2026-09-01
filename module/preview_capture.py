@@ -93,11 +93,7 @@ class PreviewCapture:
             raise ValueError("预览设备 ID 不能为空")
 
         with self._lock:
-            if (
-                self._device_id == device_id
-                and self._thread is not None
-                and self._thread.is_alive()
-            ):
+            if self._device_id == device_id and self._thread is not None and self._thread.is_alive():
                 return False
 
         self.stop()

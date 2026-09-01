@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 # 兼容直接执行 python scripts/xxx.py 的场景，主动补上项目根目录导入路径。
 if __package__ in {None, ""}:

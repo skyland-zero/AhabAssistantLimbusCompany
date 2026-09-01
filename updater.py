@@ -1,3 +1,5 @@
+# ruff: noqa: T201
+
 import json
 import os
 import shutil
@@ -236,7 +238,11 @@ class Updater:
             ),
         ]
         selected = next(
-            ((manifest, signature) for manifest, signature in candidates if os.path.exists(manifest) or os.path.exists(signature)),
+            (
+                (manifest, signature)
+                for manifest, signature in candidates
+                if os.path.exists(manifest) or os.path.exists(signature)
+            ),
             None,
         )
         if selected is None:
@@ -317,12 +323,16 @@ class Updater:
                 continue  # 更新器自身位于 update_temp（安装根目录内），不能杀自己
             try:
                 exe_path = proc.exe()
-            except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+            except psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess:
                 continue
             # 覆盖 AALC 及安装目录内的附属进程（如 adb 服务），否则其可执行文件会被占用无法覆盖
             is_install_binary = os.path.normcase(exe_path).startswith(install_root)
             process_name = proc.info.get("name") or ""
-            if process_name in self.process_names or any(name in process_name for name in self.process_names) or is_install_binary:
+            if (
+                process_name in self.process_names
+                or any(name in process_name for name in self.process_names)
+                or is_install_binary
+            ):
                 try:
                     proc.terminate()
                     try:

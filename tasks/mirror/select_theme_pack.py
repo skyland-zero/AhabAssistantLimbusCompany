@@ -79,9 +79,7 @@ def select_theme_pack(
             matched = False
             for key, value in list(weights.items()):
                 matched_aliases = [
-                    index
-                    for index, alias in enumerate(route_aliases)
-                    if alias and _theme_alias_matches(key, alias)
+                    index for index, alias in enumerate(route_aliases) if alias and _theme_alias_matches(key, alias)
                 ]
                 if matched_aliases:
                     matched = True
@@ -89,12 +87,12 @@ def select_theme_pack(
                     # alternatives (for example Falling Flowers before A
                     # Certain World), while all matches still outrank the
                     # ordinary theme weights.
-                    route_weight = int(theme_list.preferred_thresholds) + 1 + (
-                        len(route_aliases) - min(matched_aliases)
+                    route_weight = (
+                        int(theme_list.preferred_thresholds) + 1 + (len(route_aliases) - min(matched_aliases))
                     )
                     try:
                         weights[key] = max(int(value), route_weight)
-                    except (TypeError, ValueError):
+                    except TypeError, ValueError:
                         weights[key] = route_weight
             return matched
 
@@ -153,11 +151,11 @@ def select_theme_pack(
                     (normal_bbox[0] + normal_bbox[2]) // 2,
                     (normal_bbox[1] + normal_bbox[3]) // 2,
                 )
-                sleep(2) # 等待卡包加载动画完成
+                sleep(2)  # 等待卡包加载动画完成
                 continue
         else:
             if auto.click_element("mirror/theme_pack/hard_assets.png"):
-                sleep(2) # 等待卡包加载动画完成
+                sleep(2)  # 等待卡包加载动画完成
                 continue
             elif difficulty == "hard":
                 hard_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/theme_pack/hard_assets.png"))
@@ -165,7 +163,7 @@ def select_theme_pack(
                     (hard_bbox[0] + hard_bbox[2]) // 2,
                     (hard_bbox[1] + hard_bbox[3]) // 2,
                 )
-                sleep(2) # 等待卡包加载动画完成
+                sleep(2)  # 等待卡包加载动画完成
                 continue
 
         try:

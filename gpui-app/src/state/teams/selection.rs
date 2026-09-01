@@ -76,7 +76,7 @@ impl TeamsState {
         self.preset_overwrite = None;
         self.open_select = None;
         self.preset_picker = Some(TeamPresetPickerState {
-            target: TeamPresetTarget::Existing(team.clone()),
+            target: TeamPresetTarget::Existing(Box::new(team.clone())),
         });
         self.feedback = None;
     }
@@ -115,7 +115,10 @@ impl TeamsState {
                 Ok(true)
             }
             TeamPresetTarget::Existing(target) => {
-                self.preset_overwrite = Some(TeamPresetOverwriteState { target, preset });
+                self.preset_overwrite = Some(TeamPresetOverwriteState {
+                    target: *target,
+                    preset,
+                });
                 Ok(false)
             }
         }

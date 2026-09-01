@@ -328,6 +328,7 @@ class SimulatorControl(AbstractInput):
 
         msg = f"点击位置:({x},{y})"
         log.debug(msg)
+
         def _tap():
             for _ in range(times):
                 self.simulator_device.shell(f"input tap {x} {y}")
@@ -459,24 +460,18 @@ class SimulatorControl(AbstractInput):
 
         self._call_with_reconnect("滑动", _drag)
 
-    def mouse_swipe_for_scroll(
-        self, x, y, duration=0.3, dx=0, dy=0, move_back=True
-    ) -> None:
+    def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
         if self.simulator_device is None:
             self.get_simulator()
 
         if self.simulator_bluestacks:
             end_x = max(1, min(x + dx, self.simulator_max_x - 1))
             end_y = max(1, min(y + dy, self.simulator_max_y - 1))
-            plan = build_scroll_swipe_plan(
-                x, y, end_x - x, end_y - y, duration
-            )
+            plan = build_scroll_swipe_plan(x, y, end_x - x, end_y - y, duration)
         else:
             plan = [
                 (self._scale(*point), move_duration)
-                for point, move_duration in build_scroll_swipe_plan(
-                    x, y, dx, dy, duration
-                )
+                for point, move_duration in build_scroll_swipe_plan(x, y, dx, dy, duration)
             ]
 
         def _swipe():

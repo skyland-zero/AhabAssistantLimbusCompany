@@ -39,4 +39,3 @@ def test_normalize_observe_gifts_deduplicates_skips_invalid_and_caps_at_three() 
             "not-a-gift",
         ]
     ) == [SPIDERWEB_ENTANGLED_IN_RED, "bleed_3_1_1", "burn_3_1_1"]
-

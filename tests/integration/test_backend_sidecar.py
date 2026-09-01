@@ -55,15 +55,8 @@ async def _exercise_real_sidecar() -> None:
                 "device.list",
             ]
             for request_id, method in enumerate(methods, start=1):
-                await client.send(
-                    json.dumps(
-                        {"jsonrpc": "2.0", "id": request_id, "method": method}
-                    )
-                )
-            responses = [
-                json.loads(await asyncio.wait_for(client.recv(), timeout=3))
-                for _ in methods
-            ]
+                await client.send(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method}))
+            responses = [json.loads(await asyncio.wait_for(client.recv(), timeout=3)) for _ in methods]
             assert all("error" not in response for response in responses), responses
             responses_by_id = {response["id"]: response["result"] for response in responses}
             assert responses_by_id[1] == "pong"
@@ -97,9 +90,7 @@ async def _exercise_real_sidecar() -> None:
             invalid = json.loads(await asyncio.wait_for(client.recv(), timeout=3))
             assert invalid["error"]["code"] == -32602
 
-            await client.send(
-                json.dumps({"jsonrpc": "2.0", "id": 99, "method": "app.shutdown"})
-            )
+            await client.send(json.dumps({"jsonrpc": "2.0", "id": 99, "method": "app.shutdown"}))
             shutdown = json.loads(await asyncio.wait_for(client.recv(), timeout=3))
             assert shutdown["result"] is True
         await asyncio.to_thread(process.wait, 10)

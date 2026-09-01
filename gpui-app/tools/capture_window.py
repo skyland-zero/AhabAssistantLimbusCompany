@@ -1,3 +1,5 @@
+# ruff: noqa: T201
+
 """Capture a native Windows client area at a deterministic logical size.
 
 This intentionally captures the client area rather than the desktop so GPUI
@@ -27,10 +29,10 @@ def make_process_dpi_aware() -> None:
         # PROCESS_PER_MONITOR_DPI_AWARE = 2; this fallback works on older
         # Windows versions where SetProcessDpiAwarenessContext is unavailable.
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except (AttributeError, OSError):
+    except AttributeError, OSError:
         try:
             ctypes.windll.user32.SetProcessDPIAware()
-        except (AttributeError, OSError):
+        except AttributeError, OSError:
             pass
 
 
@@ -72,7 +74,7 @@ def client_size(hwnd: int) -> tuple[int, int]:
 def dpi_for_window(hwnd: int) -> int:
     try:
         return int(ctypes.windll.user32.GetDpiForWindow(hwnd)) or 96
-    except (AttributeError, OSError):
+    except AttributeError, OSError:
         return 96
 
 
@@ -186,9 +188,7 @@ def main() -> None:
     make_process_dpi_aware()
     hwnd = wait_for_window(args.title, args.timeout, args.pid)
     focus_window(hwnd)
-    expected_width, expected_height = resize_client(
-        hwnd, args.logical_width, args.logical_height
-    )
+    expected_width, expected_height = resize_client(hwnd, args.logical_width, args.logical_height)
     time.sleep(max(args.settle_ms, 0) / 1000.0)
     actual_width, actual_height = client_size(hwnd)
     if (actual_width, actual_height) != (expected_width, expected_height):

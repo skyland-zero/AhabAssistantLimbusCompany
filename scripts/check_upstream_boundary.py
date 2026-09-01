@@ -31,12 +31,7 @@ def changed_paths(base: str) -> set[str]:
         _git("diff", "--cached", "--name-only"),
         _git("ls-files", "--others", "--exclude-standard"),
     )
-    return {
-        line.strip().replace("\\", "/")
-        for output in outputs
-        for line in output.splitlines()
-        if line.strip()
-    }
+    return {line.strip().replace("\\", "/") for output in outputs for line in output.splitlines() if line.strip()}
 
 
 def main() -> int:
@@ -49,14 +44,8 @@ def main() -> int:
     protected = tuple(config["protected_prefixes"])
     allowed = set(config["allowed_protected_files"])
     expected_deleted = tuple(config.get("expected_deleted_prefixes", ()))
-    violations = sorted(
-        path for path in changed_paths(base) if path.startswith(protected) and path not in allowed
-    )
-    restored = [
-        prefix
-        for prefix in expected_deleted
-        if (ROOT / prefix.rstrip("/")).exists()
-    ]
+    violations = sorted(path for path in changed_paths(base) if path.startswith(protected) and path not in allowed)
+    restored = [prefix for prefix in expected_deleted if (ROOT / prefix.rstrip("/")).exists()]
     if not violations and not restored:
         sys.stdout.write(f"upstream boundary: OK against {base}\n")
         return 0
@@ -69,9 +58,7 @@ def main() -> int:
         sys.stderr.write("Unreviewed edits were found in upstream-owned paths:\n")
     for path in violations:
         sys.stderr.write(f"  - {path}\n")
-    sys.stderr.write(
-        "Move the change behind a fork-owned adapter or document it in upstream-boundary.toml.\n"
-    )
+    sys.stderr.write("Move the change behind a fork-owned adapter or document it in upstream-boundary.toml.\n")
     return 1
 
 

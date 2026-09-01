@@ -128,7 +128,7 @@ impl TeamSlot {
 #[derive(Clone, Debug)]
 pub enum TeamPresetTarget {
     EmptySlot(u32),
-    Existing(TeamDetail),
+    Existing(Box<TeamDetail>),
 }
 
 #[derive(Clone, Debug)]

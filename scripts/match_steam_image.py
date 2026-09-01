@@ -1,3 +1,5 @@
+# ruff: noqa: E402, T201
+
 """
 启动 Steam 游戏并截图，对指定目标图片进行模板匹配验证，输出各语言/主题下的匹配得分和坐标，
 用于确认某张资源图能否在当前游戏画面上被正确识别。
@@ -13,7 +15,6 @@ import sys
 import time
 from ctypes import c_void_p, windll
 from pathlib import Path
-
 
 # =============================================================================
 # 初始化区域：DPI、项目路径、依赖导入、参数、Steam 游戏窗口、截图
@@ -130,4 +131,6 @@ for score, model, relative_path, center, bbox in results:
 
 best = results[0]
 print()
-print(f"最高匹配: image={best[2]}, model={best[1]}, score={best[0]:.6f}, center={best[3]}, matched={best[0] >= threshold}")
+print(
+    f"最高匹配: image={best[2]}, model={best[1]}, score={best[0]:.6f}, center={best[3]}, matched={best[0] >= threshold}"
+)

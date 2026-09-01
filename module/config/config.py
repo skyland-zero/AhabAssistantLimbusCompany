@@ -247,7 +247,7 @@ class Config(metaclass=SingletonMeta):
         for raw_number, setting in teams.items():
             try:
                 number = int(raw_number)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 number = 0
             if number > 0:
                 used_numbers.add(number)
@@ -270,7 +270,7 @@ class Config(metaclass=SingletonMeta):
 
             try:
                 preferred_number = int(raw_number)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 preferred_number = 0
             if preferred_number <= 0 or preferred_number in used_numbers:
                 team_number = max(used_numbers, default=0) + 1
@@ -385,7 +385,7 @@ class Config(metaclass=SingletonMeta):
                             if i > 0:
                                 log.info(f"已从较早的备份文件 {backup_file.name} 恢复配置")
                             break
-                        except (ValidationError, ValueError, TypeError):
+                        except ValidationError, ValueError, TypeError:
                             if i < len(backup_files) - 1:
                                 log.info(f"备份文件 {backup_file.name} 恢复失败，尝试下一个备份文件")
                             else:
@@ -459,7 +459,7 @@ class Config(metaclass=SingletonMeta):
         for team_key in teams:
             try:
                 team_num = int(team_key)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if team_num > 0:
                 team_numbers.append(team_num)

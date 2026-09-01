@@ -222,7 +222,7 @@ def check_game_running() -> bool:
         try:
             if cfg.game_process_name in psutil.Process(_game_pid_cache).name():
                 return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except psutil.NoSuchProcess, psutil.AccessDenied:
             pass  # 回退到完整扫描
 
     for proc in psutil.process_iter(["name"]):
@@ -233,7 +233,7 @@ def check_game_running() -> bool:
             if cfg.game_process_name in proc_name:
                 _game_pid_cache = proc.pid
                 return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess:
             # 忽略已终止、无权限或僵尸进程
             continue
 
@@ -253,7 +253,9 @@ def run_as_user(command: list[str], timeout: int = 30):
 
     def run_cmd(cmd: str, ignore_error: bool = False):
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10, creationflags=no_window_flag)
+            res = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=10, creationflags=no_window_flag
+            )
             if res.returncode != 0 and not ignore_error:
                 log.debug(f"命令执行失败: {cmd}\n错误: {res.stderr.strip()}")
             return res
@@ -280,9 +282,7 @@ def run_as_user(command: list[str], timeout: int = 30):
 
         # 3. 创建任务
         username = os.environ.get("USERNAME")
-        create_cmd = (
-            f'schtasks /create /f /tn "{task_name}" /sc once /st 23:59 /ru "{username}" /tr "wscript.exe \'{vbs_path}\'"'
-        )
+        create_cmd = f'schtasks /create /f /tn "{task_name}" /sc once /st 23:59 /ru "{username}" /tr "wscript.exe \'{vbs_path}\'"'
         create_result = run_cmd(create_cmd)
         if create_result is None or create_result.returncode != 0:
             _fallback_launch()

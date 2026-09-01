@@ -20,11 +20,7 @@ from utils.singletonmeta import SingletonMeta
 class TranslationFormatter(colorlog.ColoredFormatter):
     """自定义日志格式化器，用于日志消息国际化"""
 
-    project_root = (
-        Path(sys.executable).resolve().parent
-        if getattr(sys, "frozen", False)
-        else Path.cwd()
-    )
+    project_root = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path.cwd()
 
     def format(self, record):
         record.msg = tr("Logger", str(record.msg))
@@ -91,6 +87,7 @@ class UILogDispatcher:
             self._buffer.clear()
 
         self.cleared.emit()
+
 
 ui_log_dispatcher = UILogDispatcher()
 
