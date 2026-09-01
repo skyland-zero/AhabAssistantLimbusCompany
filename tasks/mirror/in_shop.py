@@ -55,6 +55,8 @@ class Shop:
         self.max_normal_refresh = team_setting.max_normal_refresh
         self.ignore_shop = team_setting.ignore_shop  # 忽略的商店楼层
         self.route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
+        self.skill_replacement_target_counts = self.route.skill_replacement_target_counts
+        self._route_skill_target_logged = False
         self.current_layer = 0
         self.pseudo_solo_active = False
         self._route_fused_gift_ids = set()
@@ -1690,6 +1692,15 @@ class Shop:
         """
         msg = "执行商店技能替换任务"
         log.debug(msg)
+        if any(self.skill_replacement_target_counts) and not self._route_skill_target_logged:
+            self._route_skill_target_logged = True
+            target = "、".join(
+                f"S{index}×{count}" for index, count in enumerate(self.skill_replacement_target_counts, 1)
+            )
+            log.warning(
+                f"当前技能替换界面仅支持全局模式，攻略目标为{target}；"
+                f"按配置的1→{2 if self.skill_replacement_mode == 0 else 3}兼容执行"
+            )
         self.replacement = 0
         # 检查是否在超级商店
         is_super_shop = auto.find_element("mirror/shop/super_shop_assets.png")

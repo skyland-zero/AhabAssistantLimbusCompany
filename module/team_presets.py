@@ -40,14 +40,15 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
         name_en="Ryoshu Pseudo-Solo",
         description_zh=(
             "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。"
-            "适用于 5 层和 15 层 House of Spiders 路线。"
+            "按 House of Spiders 攻略配置开局星光、初始饰品和技能替换，适用于 5 层和 15 层路线。"
         ),
         description_en=(
             "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 "
-            "are prioritized sacrifices for the 5-floor and 15-floor House of Spiders route."
+            "are prioritized sacrifices. Opening bonuses, starting gifts, and skill replacement "
+            "follow the House of Spiders guide for 5-floor and 15-floor runs."
         ),
-        floor_hint_zh="5 层执行前半段，15 层沿现有镜牢流程继续执行后续阶段",
-        floor_hint_en="Use stages 1–5 for a 5-floor run, then continue through the existing 15-floor flow",
+        floor_hint_zh="自动识别 5/15 层环境；5 层执行 1–5 层，15 层继续执行 6–10 与 11–15 层",
+        floor_hint_en="Auto-detect 5-floor or 15-floor mode; 5-floor runs stop at 5, 15-floor runs continue through 6–15",
         route_name_zh="House of Spiders 良秀伪单通路线",
         route_name_en="House of Spiders Ryoshu route",
         setting={
@@ -66,6 +67,18 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
             "do_not_sell": True,
             "do_not_enhance": False,
             "use_starlight": True,
+            "opening_bonus": [3] * 10,
+            "opening_items": True,
+            # The first permutation is the guide's displayed starting-gift
+            # order: Cigarette Holder II, Stone Tomb II, Old Wooden Doll II.
+            "opening_items_select": 0,
+            "opening_items_system": 4,
+            "skill_replacement": True,
+            "skill_replacement_select": 0,
+            # The current backend exposes the 1 -> 3 replacement option; the
+            # route keeps the guide's finer S1/S2/S3 target as metadata while
+            # using this safe compatible mode at runtime.
+            "skill_replacement_mode": 1,
             "defense_for_solo": True,
             # This remains the compatibility fallback when live roster OCR is
             # unavailable.  Known counts are handled dynamically at runtime.
@@ -74,8 +87,8 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
             "reward_cards_select": 3,
             "max_keyword_refresh": 2,
             "max_normal_refresh": 3,
-            "use_team_code": False,
-            "team_code": "",
+            "use_team_code": True,
+            "team_code": "H4sIAAAAAAAACnMxcUwvD8x2DAh0dgQBc0dPEOVS4ZgOop0iIcKm5WBhVxeIsH8xWNjJORCiuhIiHJAPUe0GEXZ0tLUFAH9Z+5NgAAAA",
             "observe_ego_gift": True,
             "observe_ego_gift_selected": [SPIDERWEB_ENTANGLED_IN_RED],
             "mirror_route_profile": "hos_ryoshu_solo_route",

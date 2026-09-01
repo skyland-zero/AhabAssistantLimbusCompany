@@ -10,6 +10,35 @@ from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
 
 
+def _normalize_theme_name(value: object) -> str:
+    """Normalize OCR/theme-list labels without losing CJK characters."""
+
+    return "".join(character.casefold() for character in str(value) if character.isalnum())
+
+
+def _theme_alias_matches(theme_name: object, alias: str) -> bool:
+    """Match a route alias while keeping numbered lines unambiguous."""
+
+    normalized_name = _normalize_theme_name(theme_name)
+    normalized_alias = _normalize_theme_name(alias)
+    if not normalized_name or not normalized_alias:
+        return False
+    if normalized_name == normalized_alias:
+        return True
+    if normalized_alias not in normalized_name:
+        return False
+
+    # ``Line 1`` must not match ``Line 10``.  Other aliases may still use the
+    # tolerant substring behavior needed by localized theme labels.
+    alias_start = normalized_name.index(normalized_alias)
+    alias_end = alias_start + len(normalized_alias)
+    if normalized_alias[-1].isdigit() and alias_end < len(normalized_name):
+        return not normalized_name[alias_end].isdigit()
+    if normalized_alias[0].isdigit() and alias_start > 0:
+        return not normalized_name[alias_start - 1].isdigit()
+    return True
+
+
 @begin_and_finish_time_log(task_name="选择镜牢主题包")
 # 选择镜牢主题包
 def select_theme_pack(
@@ -43,21 +72,36 @@ def select_theme_pack(
     # Route priorities are a temporary overlay on the existing theme-pack
     # weights.  The user's global/team weight files remain untouched, and an
     # absent or unmatched route simply keeps the old behavior.
-    route_stage = route.stage_for_floor(floor) if route is not None and floor is not None else None
-    if route_stage is not None:
-        aliases = tuple(alias.casefold().replace(" ", "") for alias in route_stage.theme_pack_names)
+    route_aliases = route.theme_pack_names_for_floor(floor) if route is not None and floor is not None else ()
+    if route_aliases:
 
         def boost_route_weights(weights):
+            matched = False
             for key, value in list(weights.items()):
-                normalized_key = str(key).casefold().replace(" ", "")
-                if any(alias in normalized_key or normalized_key in alias for alias in aliases if alias):
+                matched_aliases = [
+                    index
+                    for index, alias in enumerate(route_aliases)
+                    if alias and _theme_alias_matches(key, alias)
+                ]
+                if matched_aliases:
+                    matched = True
+                    # Earlier aliases are preferred when the guide lists
+                    # alternatives (for example Falling Flowers before A
+                    # Certain World), while all matches still outrank the
+                    # ordinary theme weights.
+                    route_weight = int(theme_list.preferred_thresholds) + 1 + (
+                        len(route_aliases) - min(matched_aliases)
+                    )
                     try:
-                        weights[key] = max(int(value), int(theme_list.preferred_thresholds) + 1)
+                        weights[key] = max(int(value), route_weight)
                     except (TypeError, ValueError):
-                        weights[key] = int(theme_list.preferred_thresholds) + 1
+                        weights[key] = route_weight
+            return matched
 
-        boost_route_weights(theme_pack_list_zh)
-        boost_route_weights(theme_pack_list_en)
+        route_matched = boost_route_weights(theme_pack_list_zh)
+        route_matched = boost_route_weights(theme_pack_list_en) or route_matched
+        if not route_matched:
+            log.debug(f"当前楼层未匹配到路线主题包名称，使用现有权重兜底：第{floor}层")
     # 游戏更新后新增的主题包尚未收录时的兜底权重，取自「未知 / unknown」配置项
     unknown_weight = int(theme_pack_list_zh.get("未知", theme_pack_list_en.get("unknown", -5)))
     refresh_times = 3

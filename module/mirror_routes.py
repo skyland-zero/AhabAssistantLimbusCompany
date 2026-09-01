@@ -25,6 +25,7 @@ class GiftRouteTarget:
     priority: int
     protected: bool = True
     asset: str | None = None
+    required: bool = False
 
     def applies_to(self, floor: int) -> bool:
         logical_floor = max(1, floor)
@@ -96,6 +97,19 @@ class MirrorRouteDefinition:
     stages: tuple[MirrorRouteStage, ...] = ()
     gifts: tuple[GiftRouteTarget, ...] = ()
     recipes: tuple[GiftFusionRecipe, ...] = ()
+    # A route can be entered in either a short (5-floor) or a full
+    # (15-floor) mirror.  The progress marker selects one of these at
+    # runtime; it is intentionally not encoded in the team preset.
+    floor_counts: tuple[int, ...] = (5,)
+    # Exact floor windows take precedence over the broad legacy stages.  This
+    # avoids matching ``Line 1`` as a substring of ``Line 10`` while keeping
+    # the old stage catalog available to callers that only need boundaries.
+    floor_theme_pack_names: tuple[tuple[int, int, tuple[str, ...]], ...] = ()
+    # The guide expresses skill replacement as the desired S1/S2/S3 counts.
+    # The current shop UI exposes only a global replacement mode, so the
+    # adapter can report this target and apply its compatible fallback without
+    # pretending the two representations are identical.
+    skill_replacement_target_counts: tuple[int, int, int] = (0, 0, 0)
 
     def stage_for_floor(self, floor: int) -> MirrorRouteStage | None:
         return next((stage for stage in self.stages if stage.contains(floor)), None)
@@ -119,6 +133,16 @@ class MirrorRouteDefinition:
     def gift_target(self, gift_id: str) -> GiftRouteTarget | None:
         return next((gift for gift in self.gifts if gift.gift_id == gift_id), None)
 
+    def theme_pack_names_for_floor(self, floor: int) -> tuple[str, ...]:
+        """Return the most precise theme-pack aliases for ``floor``."""
+
+        logical_floor = max(1, int(floor))
+        for start_floor, end_floor, names in self.floor_theme_pack_names:
+            if start_floor <= logical_floor <= end_floor:
+                return names
+        stage = self.stage_for_floor(logical_floor)
+        return stage.theme_pack_names if stage is not None else ()
+
 
 _HOS_GIFTS = (
     GiftRouteTarget(
@@ -131,7 +155,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "frozen_cries",
-        ("冻结的哭声", "冰冻的哭声"),
+        ("冻结的哭声", "冰冻的哭声", "冰封的哀嚎"),
         ("Frozen Cries",),
         1,
         2,
@@ -139,31 +163,24 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "haunted_shoes",
-        ("闹鬼的鞋", "鬼鞋"),
+        ("闹鬼的鞋", "鬼鞋", "鬼附鞋"),
         ("Haunted Shoes",),
         1,
         2,
         20,
     ),
     GiftRouteTarget(
-        "hoarfrost_footprint",
-        ("霜冻足迹", "霜花足迹"),
-        ("Hoarfrost Footprint",),
-        1,
-        5,
-        30,
-    ),
-    GiftRouteTarget(
         "sharp_needle_and_thread",
-        ("锋利的针线", "锐利的针线"),
+        ("锋利的针线", "锐利的针线", "锐利的针与线"),
         ("Sharp Needle & Thread", "Sharp Needle and Thread"),
         1,
         5,
         40,
+        required=True,
     ),
     GiftRouteTarget(
         "tango_marinade",
-        ("探戈腌料",),
+        ("探戈腌料", "探戈鸡酱料"),
         ("Tango Marinade",),
         1,
         5,
@@ -171,7 +188,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "hot_n_juicy_drumstick",
-        ("又热又多汁的鸡腿", "热辣多汁的鸡腿"),
+        ("又热又多汁的鸡腿", "热辣多汁的鸡腿", "火热多汁琵琶腿"),
         ("Hot ’n Juicy Drumstick", "Hot 'n Juicy Drumstick"),
         1,
         5,
@@ -179,7 +196,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "contaminated_needle_and_thread",
-        ("被污染的针线", "污染的针线"),
+        ("被污染的针线", "污染的针线", "脏污的针与线"),
         ("Contaminated Needle & Thread", "Contaminated Needle and Thread"),
         1,
         5,
@@ -187,15 +204,31 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "spicebush_branch",
-        ("香料灌木枝", "香料灌木的枝条"),
+        ("香料灌木枝", "香料灌木的枝条", "山茶花枝"),
         ("Spicebush Branch",),
         3,
         5,
         80,
     ),
     GiftRouteTarget(
+        "chief_butler_secret_arts",
+        ("首席管家的秘籍",),
+        ("Chief Butler's Secret Arts", "Chief Butler’s Secret Arts"),
+        3,
+        5,
+        82,
+    ),
+    GiftRouteTarget(
+        "handheld_mirror",
+        ("手镜",),
+        ("Handheld Mirror",),
+        3,
+        5,
+        84,
+    ),
+    GiftRouteTarget(
         "ragged_umbrella",
-        ("破旧的雨伞", "破旧雨伞"),
+        ("破旧的雨伞", "破旧雨伞", "破损的雨伞"),
         ("Ragged Umbrella",),
         3,
         5,
@@ -211,7 +244,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "darkflame_smoking_pipe",
-        ("暗焰烟斗",),
+        ("暗焰烟斗", "黑焰烟斗"),
         ("Darkflame Smoking Pipe",),
         4,
         5,
@@ -219,7 +252,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "implicit_contract_renewal",
-        ("默示契约续订", "隐性契约续订"),
+        ("默示契约续订", "隐性契约续订", "默示契约更新"),
         ("Implicit Contract Renewal",),
         4,
         5,
@@ -243,23 +276,24 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "spicebush_glasses_mailed_letter",
-        ("香料灌木、眼镜与寄出的信", "香料灌木、眼镜和寄出的信"),
+        ("香料灌木、眼镜与寄出的信", "香料灌木、眼镜和寄出的信", "山茶花、眼镜和送达的信"),
         ("Spicebush, Glasses, and Mailed Letter",),
+        3,
         5,
-        15,
         135,
     ),
     GiftRouteTarget(
         "bridle",
-        ("马勒", "缰绳"),
+        ("马勒", "缰绳", "枷锁"),
         ("Bridle",),
         6,
         10,
         140,
+        required=True,
     ),
     GiftRouteTarget(
         "false_halo",
-        ("虚假的光环",),
+        ("虚假的光环", "虚假的光相"),
         ("False Halo",),
         6,
         10,
@@ -275,15 +309,87 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "jolly_plushie",
-        ("欢乐的毛绒玩具", "快乐玩偶"),
+        ("欢乐的毛绒玩具", "快乐玩偶", "快乐的毛绒玩偶"),
         ("Jolly Plushie",),
         6,
         10,
         170,
     ),
     GiftRouteTarget(
+        "shadow_monster",
+        ("影子怪物",),
+        ("Shadow Monster",),
+        6,
+        10,
+        171,
+    ),
+    GiftRouteTarget(
+        "gift",
+        ("礼物",),
+        ("Gift",),
+        6,
+        10,
+        172,
+    ),
+    GiftRouteTarget(
+        "pom_pom_hat",
+        ("毛球帽",),
+        ("Pom-pom Hat", "Pom Pom Hat"),
+        6,
+        10,
+        173,
+    ),
+    GiftRouteTarget(
+        "huge_gift_sack",
+        ("巨大的礼物袋",),
+        ("Huge Gift Sack",),
+        6,
+        10,
+        174,
+    ),
+    GiftRouteTarget(
+        "sad_plushie",
+        ("悲伤的毛绒玩偶",),
+        ("Sad Plushie",),
+        6,
+        10,
+        175,
+    ),
+    GiftRouteTarget(
+        "snuffed_lantern",
+        ("熄灭的提灯",),
+        ("Snuffed Lantern",),
+        6,
+        10,
+        176,
+    ),
+    GiftRouteTarget(
+        "snuffed_candlestick",
+        ("熄灭的烛台",),
+        ("Snuffed Candlestick",),
+        6,
+        10,
+        177,
+    ),
+    GiftRouteTarget(
+        "packaging_box",
+        ("包装盒",),
+        ("Packaging Box",),
+        6,
+        10,
+        178,
+    ),
+    GiftRouteTarget(
+        "packaging_ribbon",
+        ("包装缎带",),
+        ("Packaging Ribbon",),
+        6,
+        10,
+        179,
+    ),
+    GiftRouteTarget(
         "emergency_investigator_badge",
-        ("紧急调查员徽章",),
+        ("紧急调查员徽章", "紧急授予型搜查官徽章"),
         ("Emergency Investigator Badge",),
         6,
         10,
@@ -291,7 +397,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "piece_of_relationship",
-        ("关系的一部分",),
+        ("关系的一部分", "缘分残片"),
         ("Piece of Relationship",),
         6,
         10,
@@ -299,7 +405,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "warning_notice",
-        ("警告通知",),
+        ("警告通知", "警告函"),
         ("Warning Notice",),
         6,
         10,
@@ -307,18 +413,58 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "prepaid_time_receipt",
-        ("预付时间收据",),
+        ("预付时间收据", "预支时间收据"),
         ("Prepaid Time Receipt",),
         6,
         10,
         196,
     ),
     GiftRouteTarget(
+        "silver_watch_case",
+        ("银色表壳", "银色的表壳"),
+        ("Silver Watch Case",),
+        6,
+        10,
+        186,
+    ),
+    GiftRouteTarget(
+        "faded_watch_case",
+        ("褪色的表壳",),
+        ("Faded Watch Case",),
+        6,
+        10,
+        187,
+    ),
+    GiftRouteTarget(
+        "etched_clock_hands",
+        ("刻蚀的时针", "蚀刻的时针"),
+        ("Etched Clock Hands",),
+        6,
+        10,
+        188,
+    ),
+    GiftRouteTarget(
+        "rusted_clock_hands",
+        ("生锈的时针",),
+        ("Rusted Clock Hands",),
+        6,
+        10,
+        189,
+    ),
+    GiftRouteTarget(
+        "entanglement_override_sequencer",
+        ("纠缠覆盖序列器",),
+        ("Entanglement Override Sequencer",),
+        6,
+        10,
+        197,
+    ),
+    GiftRouteTarget(
         "lunar_memory",
         ("月之记忆",),
         ("Lunar Memory",),
         6,
-        15,
+        10,
         200,
         asset="mirror/shop/level_IV_gifts/lunar_memory.png",
     ),
@@ -332,7 +478,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "bongy_plush",
-        ("Bongy 毛绒玩具", "Bongy毛绒玩具"),
+        ("Bongy 毛绒玩具", "Bongy毛绒玩具", "小凤玩偶"),
         ("Bongy Plush",),
         6,
         10,
@@ -348,7 +494,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "searing_brass",
-        ("灼热黄铜",),
+        ("灼热黄铜", "灼热的铜管"),
         ("Searing Brass",),
         6,
         10,
@@ -356,7 +502,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "entangled_fate",
-        ("纠缠的命运",),
+        ("纠缠的命运", "纠缠的缘分"),
         ("Entangled Fate",),
         6,
         10,
@@ -364,15 +510,16 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "mid_range_k_corp_ampule",
-        ("中程 K 公司安瓿", "中程K公司安瓿"),
+        ("中程 K 公司安瓿", "中程K公司安瓿", "量产型K公司安瓿"),
         ("Mid-range K Corp. Ampule", "Mid-range K Corp Ampule"),
         11,
         15,
         210,
+        required=True,
     ),
     GiftRouteTarget(
         "contempt_of_the_gaze_of_contempt",
-        ("蔑视之眼的蔑视",),
+        ("蔑视之眼的蔑视", "轻蔑的视线的轻蔑"),
         ("Contempt of the Gaze of Contempt",),
         11,
         15,
@@ -380,7 +527,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "unhatched_embers",
-        ("未孵化的余烬",),
+        ("未孵化的余烬", "未孵化的火种"),
         ("Unhatched Embers",),
         11,
         15,
@@ -388,7 +535,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "for_the_capo",
-        ("献给首领", "给首领"),
+        ("献给首领", "给首领", "为了指挥官"),
         ("For the Capo",),
         11,
         15,
@@ -396,7 +543,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "kkomis_mini_gift",
-        ("Kkomi 的小礼物", "Kkomi的小礼物"),
+        ("Kkomi 的小礼物", "Kkomi的小礼物", "可米的小小礼物"),
         ("Kkomi’s Mini-Gift", "Kkomi's Mini-Gift"),
         11,
         15,
@@ -404,7 +551,7 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "shatterbound_cannon",
-        ("碎裂束缚之炮",),
+        ("碎裂束缚之炮", "注定破碎的火炮"),
         ("Shatterbound Cannon",),
         11,
         15,
@@ -412,11 +559,37 @@ _HOS_GIFTS = (
     ),
     GiftRouteTarget(
         "coveting_thorn",
-        ("觊觎之刺",),
+        ("觊觎之刺", "贪欲之棘"),
         ("Coveting Thorn",),
         11,
         15,
         260,
+    ),
+    # Safe alternatives listed by the guide.  They remain lower priority
+    # than the preferred floor-11 gifts but are still protected when found.
+    GiftRouteTarget(
+        "bridle_of_infinity",
+        ("无限的枷锁",),
+        ("Bridle of Infinity",),
+        11,
+        15,
+        270,
+    ),
+    GiftRouteTarget(
+        "bloodtinged_ichthyic_odor",
+        ("血染的鱼腥味",),
+        ("Bloodtinged Ichthyic Odor",),
+        11,
+        15,
+        271,
+    ),
+    GiftRouteTarget(
+        "into_certain_library_book",
+        ("某个图书馆的书",),
+        ("Into a Certain Library's Book", "Into a Certain Library’s Book"),
+        11,
+        15,
+        272,
     ),
 )
 
@@ -443,14 +616,83 @@ _HOS_RECIPES = (
     ),
     GiftFusionRecipe(
         result_gift_id="spicebush_glasses_mailed_letter",
-        result_names_zh=("香料灌木、眼镜与寄出的信", "香料灌木、眼镜和寄出的信"),
-        result_names_en=("Spicebush, Glasses, and Mailed Letter",),
+        result_names_zh=(
+            "香料灌木、眼镜与寄出的信",
+            "香料灌木、眼镜和寄出的信",
+            "山茶花、眼镜和送达的信",
+        ),
+        result_names_en=(
+            "Spicebush, Glasses, and Mailed Letter",
+            "Spicebush, Glasses and Mailed Letter",
+        ),
         material_gift_ids=("spicebush_branch", "broken_glasses", "unmailed_letter"),
         start_floor=5,
         end_floor=15,
         priority=30,
         keyword="rupture",
         skip_if_pseudo_solo=True,
+    ),
+)
+
+# The guide names a concrete theme-pack choice for floors 1–5 and a set of
+# interchangeable choices for floors 6–10 and 11–15.  Keep these windows
+# separate from the legacy three-stage bounds above: the former are used for
+# exact runtime boosting, while the latter remain a useful public summary of
+# the route's progression.
+_HOS_FLOOR_THEME_PACKS = (
+    (1, 1, ("The Unloving", "无法去爱", "无慈悲", "unloving")),
+    (2, 2, ("Hell's Chicken", "地狱鸡", "chick")),
+    (
+        3,
+        3,
+        ("Falling Flowers", "落花", "flowers", "A Certain World", "某个世界", "certain"),
+    ),
+    (4, 4, ("Full-Stopped by a Bullet", "由子弹画下的句点", "句点", "bullet")),
+    (5, 5, ("The Unchanging", "无改变", "unchanging")),
+    (
+        6,
+        10,
+        (
+            "Line 2",
+            "2号线",
+            "Line 1",
+            "1号线",
+            "line",
+            "Miracle in District 20 BokGak",
+            "区的奇",
+            "miracle",
+            "Timekilling Time BokGak",
+            "时间杀人",
+            "time",
+            "Textbook",
+            "教材",
+            "Text",
+        ),
+    ),
+    (
+        11,
+        15,
+        (
+            "Code Purple",
+            "紫色编码",
+            "codepurple",
+            "violet",
+            "Line 3",
+            "3号线",
+            "line",
+            "Chachihu",
+            "chachihu",
+            "A Midspring Night's Dream 2",
+            "仲春之夜",
+            "Textbook",
+            "教材",
+            "Text",
+            "Line 5",
+            "5号线",
+            "Bridle of Infinity",
+            "Bloodtinged Ichthyic Odor",
+            "Into a Certain Library's Book",
+        ),
     ),
 )
 
@@ -495,7 +737,7 @@ HOS_RYOSHU_SOLO_ROUTE = MirrorRouteDefinition(
                 "Miracle in District 20 BokGak",
                 "miracle",
             ),
-            tuple(gift.gift_id for gift in _HOS_GIFTS if gift.end_floor <= 5),
+            tuple(gift.gift_id for gift in _HOS_GIFTS if gift.start_floor <= 5 and gift.end_floor >= 1),
         ),
         MirrorRouteStage(
             6,
@@ -525,7 +767,7 @@ HOS_RYOSHU_SOLO_ROUTE = MirrorRouteDefinition(
                 "Textbook",
                 "Text",
             ),
-            tuple(gift.gift_id for gift in _HOS_GIFTS if 6 <= gift.start_floor <= 10),
+            tuple(gift.gift_id for gift in _HOS_GIFTS if gift.start_floor <= 10 and gift.end_floor >= 6),
         ),
         MirrorRouteStage(
             11,
@@ -556,11 +798,14 @@ HOS_RYOSHU_SOLO_ROUTE = MirrorRouteDefinition(
                 "Bloodtinged Ichthyic Odor",
                 "Into a Certain Library's Book",
             ),
-            tuple(gift.gift_id for gift in _HOS_GIFTS if gift.start_floor >= 11),
+            tuple(gift.gift_id for gift in _HOS_GIFTS if gift.start_floor <= 15 and gift.end_floor >= 11),
         ),
     ),
     gifts=_HOS_GIFTS,
     recipes=_HOS_RECIPES,
+    floor_counts=(5, 15),
+    floor_theme_pack_names=_HOS_FLOOR_THEME_PACKS,
+    skill_replacement_target_counts=(1, 1, 4),
 )
 
 SPIDERWEB_FAMILY_ROUTE = MirrorRouteDefinition(

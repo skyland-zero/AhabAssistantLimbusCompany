@@ -15,6 +15,15 @@ def test_hos_route_switches_stages_at_five_and_ten() -> None:
     assert HOS_RYOSHU_SOLO_ROUTE.stage_for_floor(15).end_floor == 15
 
 
+def test_hos_route_exposes_short_and_full_floor_windows() -> None:
+    assert HOS_RYOSHU_SOLO_ROUTE.floor_counts == (5, 15)
+    assert "unloving" in HOS_RYOSHU_SOLO_ROUTE.theme_pack_names_for_floor(1)
+    assert "chick" in HOS_RYOSHU_SOLO_ROUTE.theme_pack_names_for_floor(2)
+    assert HOS_RYOSHU_SOLO_ROUTE.theme_pack_names_for_floor(3)[0] == "Falling Flowers"
+    assert "Line 1" in HOS_RYOSHU_SOLO_ROUTE.theme_pack_names_for_floor(6)
+    assert "Line 3" in HOS_RYOSHU_SOLO_ROUTE.theme_pack_names_for_floor(11)
+
+
 def test_route_priority_is_ordered_and_unknown_gifts_fall_back() -> None:
     targets = HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(5)
     assert route_target_priority(
@@ -37,6 +46,23 @@ def test_route_registers_bounded_process_fusions_and_their_materials() -> None:
     assert recipes[0].keyword == "sinking"
     assert recipes[-1].skip_if_pseudo_solo
     assert HOS_RYOSHU_SOLO_ROUTE.gift_target("ragged_umbrella") is not None
+
+
+def test_hos_route_has_unique_process_gifts_and_required_targets() -> None:
+    gifts = HOS_RYOSHU_SOLO_ROUTE.gifts
+    assert len({gift.gift_id for gift in gifts}) == len(gifts)
+    assert HOS_RYOSHU_SOLO_ROUTE.gift_target("chief_butler_secret_arts") is not None
+    assert HOS_RYOSHU_SOLO_ROUTE.gift_target("shadow_monster") is not None
+    assert HOS_RYOSHU_SOLO_ROUTE.gift_target("packaging_ribbon") is not None
+    assert HOS_RYOSHU_SOLO_ROUTE.gift_target("sharp_needle_and_thread").required
+    assert HOS_RYOSHU_SOLO_ROUTE.gift_target("bridle").required
+    assert HOS_RYOSHU_SOLO_ROUTE.gift_target("mid_range_k_corp_ampule").required
+    assert "lunar_memory" not in {
+        gift.gift_id for gift in HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(11)
+    }
+    assert "mid_range_k_corp_ampule" in {
+        gift.gift_id for gift in HOS_RYOSHU_SOLO_ROUTE.gift_targets_for_floor(11)
+    }
 
 
 def test_unknown_route_id_keeps_default_behavior() -> None:

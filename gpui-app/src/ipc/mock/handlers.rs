@@ -426,7 +426,16 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
     solo_config.do_not_heal = true;
     solo_config.do_not_sell = true;
     solo_config.use_starlight = true;
+    solo_config.opening_bonus = vec![3; 10];
+    solo_config.opening_items = true;
+    solo_config.opening_items_select = 0;
+    solo_config.opening_items_system = 4;
     solo_config.defense_for_solo = true;
+    solo_config.skill_replacement = true;
+    solo_config.skill_replacement_select = 0;
+    solo_config.skill_replacement_mode = 1;
+    solo_config.use_team_code = true;
+    solo_config.team_code = "H4sIAAAAAAAACnMxcUwvD8x2DAh0dgQBc0dPEOVS4ZgOop0iIcKm5WBhVxeIsH8xWNjJORCiuhIiHJAPUe0GEXZ0tLUFAH9Z+5NgAAAA".into();
     solo_config.observe_ego_gift = true;
     solo_config.observe_ego_gift_selected = vec![SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID.to_owned()];
     solo_config.max_keyword_refresh = 2;
@@ -495,12 +504,12 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
                 enUs: "Ryoshu Pseudo-Solo".into(),
             },
             description: LocalizedText {
-                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。".into(),
-                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices.".into(),
+                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。按 House of Spiders 攻略配置开局星光、初始饰品和技能替换。".into(),
+                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Opening bonuses, starting gifts, and skill replacement follow the House of Spiders guide.".into(),
             },
             floorHint: LocalizedText {
-                zhCn: "5 层执行前半段，15 层沿现有镜牢流程继续执行后续阶段".into(),
-                enUs: "Use stages 1–5 for a 5-floor run and continue through the existing 15-floor flow.".into(),
+                zhCn: "自动识别 5/15 层环境；5 层执行 1–5 层，15 层继续执行 6–10 与 11–15 层".into(),
+                enUs: "Auto-detect 5-floor or 15-floor mode; 5-floor runs stop at 5, 15-floor runs continue through 6–15.".into(),
             },
             routeName: LocalizedText {
                 zhCn: "House of Spiders 良秀伪单通路线".into(),

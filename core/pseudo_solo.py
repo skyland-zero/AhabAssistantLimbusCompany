@@ -116,20 +116,26 @@ class PseudoSoloDefenseState:
         observation = (floor, live_count)
         if self._last_team_page_observation == observation:
             return False
+        previous_observation = self._last_team_page_observation
+        floor_changed = previous_observation is not None and previous_observation[0] != floor
         self._last_team_page_observation = observation
         self._last_live_count = live_count
 
         if live_count <= 1:
-            changed = self._base_state.remaining_turns > 0 or not self._stop_confirmed
+            changed = floor_changed or self._base_state.remaining_turns > 0 or not self._stop_confirmed
             self._base_state.remaining_turns = 0
             self._stop_confirmed = True
+            reset_observer = getattr(self._observer, "reset", None)
+            if changed and callable(reset_observer):
+                reset_observer()
             if changed:
                 log.info(f"第{floor}层队伍页确认仅剩{live_count}名己方人格，停止连续防御")
             return changed
 
         required_turns = defense_turns_for_live_count(live_count)
         changed = (
-            self._base_state.remaining_turns != required_turns
+            floor_changed
+            or self._base_state.remaining_turns != required_turns
             or self._stop_confirmed
         )
         self._base_state.remaining_turns = required_turns

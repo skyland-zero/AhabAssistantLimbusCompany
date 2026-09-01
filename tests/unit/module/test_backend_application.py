@@ -583,6 +583,11 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
     assert solo["team"]["mirrorConfig"]["observe_ego_gift_selected"] == [
         "spiderweb_entangled_in_red"
     ]
+    assert solo["team"]["mirrorConfig"]["opening_bonus"] == [3] * 10
+    assert solo["team"]["mirrorConfig"]["opening_items"] is True
+    assert solo["team"]["mirrorConfig"]["opening_items_system"] == 4
+    assert solo["team"]["mirrorConfig"]["use_team_code"] is True
+    assert solo["team"]["mirrorConfig"]["skill_replacement"] is True
     assert solo["description"]["zhCn"]
     app.close()
 

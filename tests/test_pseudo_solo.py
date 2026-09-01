@@ -84,6 +84,19 @@ def test_dynamic_state_uses_live_team_count_instead_of_fixed_budget() -> None:
     assert base_state.remaining_turns == 0
 
 
+def test_dynamic_state_restarts_same_roster_count_on_a_new_floor() -> None:
+    base_state = FakeDefenseState(5)
+    observer = FakeTeamPageObserver(live_count=2)
+    state = PseudoSoloDefenseState(base_state, observer)
+
+    assert state.observe_team_page(2) is True
+    state.consume_turn()
+    assert base_state.remaining_turns == 0
+
+    assert state.observe_team_page(3) is True
+    assert base_state.remaining_turns == 1
+
+
 def test_dynamic_state_stops_for_single_survivor_and_keeps_fallback_on_unknown() -> None:
     base_state = FakeDefenseState(2)
     observer = FakeTeamPageObserver()

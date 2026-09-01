@@ -304,7 +304,7 @@ fn team_card(
             .child(enabled_switch)
     };
 
-    let mut sinner_badges = div().flex().flex_wrap().gap_1();
+    let mut sinner_badges = div().w_full().min_w_0().flex().flex_wrap().gap_1();
     for (index, sinner) in team.sinners.iter().enumerate() {
         sinner_badges = sinner_badges.child(badge(
             format!("#{} {}", index + 1, app.teams.sinner_name(sinner)),
@@ -313,44 +313,34 @@ fn team_card(
     }
 
     let scheme = normalized_scheme(&team.accessoryScheme);
-    let mut header = div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .flex_wrap()
-        .child(
-            div()
-                .min_w_0()
-                .text_size(px(14.))
-                .text_color(rgb(TEXT))
-                .child(team.name.clone()),
-        )
-        .child(badge(
-            purpose_label(team.purpose, language),
-            BadgeTone::Neutral,
-        ));
-    if !is_luxcavation {
-        header = header.child(scheme_badge(scheme, language));
-        if !team.enabled {
-            header = header.child(badge(
-                text("已停用", "Disabled").get(language),
-                BadgeTone::Neutral,
-            ));
-        }
-    }
+    let header = div()
+        .w_full()
+        .min_w_0()
+        .text_size(px(14.))
+        .text_color(rgb(TEXT))
+        .child(team.name.clone());
 
     let mut details = div()
+        .w_full()
+        .min_w_0()
         .flex()
         .items_center()
         .flex_wrap()
-        .gap_2()
+        .gap_1()
         .text_size(px(11.))
-        .text_color(rgb(TEXT_MUTED))
-        .child(if matches!(language, Language::ZhCn) {
-            format!("{} 人格", team.sinners.len())
-        } else {
-            format!("{} sinners", team.sinners.len())
-        });
+        .text_color(rgb(TEXT_MUTED));
+    details = details.child(badge(
+        purpose_label(team.purpose, language),
+        BadgeTone::Neutral,
+    ));
+    if !is_luxcavation {
+        details = details.child(scheme_badge(scheme, language));
+    }
+    details = details.child(if matches!(language, Language::ZhCn) {
+        format!("{} 人格", team.sinners.len())
+    } else {
+        format!("{} sinners", team.sinners.len())
+    });
     if has_starlight {
         details = details.child(
             div()
@@ -384,37 +374,39 @@ fn team_card(
             BadgeTone::Accent,
         ));
     }
-    if !is_luxcavation && config.use_team_code {
+    if !is_luxcavation && !team.enabled {
         details = details.child(badge(
-            text("编队码", "Team code").get(language),
+            text("已停用", "Disabled").get(language),
             BadgeTone::Neutral,
         ));
     }
 
-    let mut content = div().flex_1().min_w_0().flex().flex_col().gap_2();
+    let actions = div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap_1()
+        .child(enabled_control)
+        .child(overwrite)
+        .child(edit)
+        .child(delete);
+
+    let mut top_row = div().w_full().flex().items_center().gap_2();
     if let Some(number) = slot_number {
-        content = content.child(badge(format!("#{number:02}"), BadgeTone::Accent));
+        top_row = top_row.child(badge(format!("#{number:02}"), BadgeTone::Accent));
     }
-    content = content.child(header).child(details).child(sinner_badges);
+    top_row = top_row.child(div().flex_1()).child(actions);
 
     card(
         div()
+            .w_full()
             .flex()
-            .items_start()
-            .flex_wrap()
-            .gap_3()
-            .child(content)
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap_1()
-                    .child(enabled_control)
-                    .child(overwrite)
-                    .child(edit)
-                    .child(delete),
-            ),
+            .flex_col()
+            .gap_1()
+            .child(top_row)
+            .child(header)
+            .child(details)
+            .child(sinner_badges),
     )
     .p_3()
     .opacity(if is_luxcavation || team.enabled {

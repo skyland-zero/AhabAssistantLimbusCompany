@@ -9,6 +9,7 @@ from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
+from module.mirror_plan_runtime import MirrorPlanProgressError, MirrorPlanRuntime
 from module.mirror_routes import MirrorRouteDefinition, get_mirror_route
 from module.my_error.my_error import (
     InputAttributeError,
@@ -59,6 +60,7 @@ class Mirror:
         self.team_number = team_setting.team_number  # 选择的编队名
         self.team_code_loaded = False
         self.mirror_route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
+        self.plan_runtime = MirrorPlanRuntime(self.mirror_route.floor_counts)
         self.shop = Shop(team_setting)
         self.system = all_systems[team_setting.team_system]  # 选择的体系
         self.avoid_skill_3 = team_setting.avoid_skill_3  # 是否避免使用3技能
@@ -108,7 +110,9 @@ class Mirror:
 
         self.floor = 0
         self.get_floor_num = True
-        self.floor_times = [-9999.0 for i in range(5)]  # 负值代表缺失值
+        # Keep the legacy attribute as a compatibility view for integrations;
+        # the route runtime owns its size and completion rule.
+        self.floor_times = self.plan_runtime.floor_times
         self.LOOP_COUNT = 250
 
         self.mirror_map = MirrorMap(hard_mode=self.hard_switch)
@@ -288,18 +292,20 @@ class Mirror:
                 if self.re_formation_each_floor:
                     self.first_battle = True
                 try:
-                    floor_num = self.floor  # 0,1,2,3,4
+                    floor_num = self.floor
+                    now = time.time()
+                    previous_floor_start = self.plan_runtime.record_floor_start(floor_num, now)
                     if floor_num != 0:
-                        if self.floor_times[floor_num - 1] > 0:
-                            floor_time = time.time() - self.floor_times[floor_num - 1]
+                        if previous_floor_start is not None:
+                            floor_time = now - previous_floor_start
                             msg = f"启动后第{self.floor}层卡包"
                         else:
-                            floor_time = time.time() - self.floor_times[0]
+                            floor_time = now - self.floor_times[0]
                             msg = f"启动后第{self.floor}层卡包，该楼层时间不完整"
                         to_log_with_time(msg, floor_time)
-                    self.floor_times[floor_num] = time.time()
-                except:
-                    log.info("楼层异常，可能是OCR识别错误，本轮镜牢层间的时间记录无效")
+                except MirrorPlanProgressError as error:
+                    self.plan_runtime.record_deviation(str(error))
+                    log.info(f"楼层时间记录跳过：{error}")
                 self.get_floor_num = True
                 main_loop_count += 50
                 continue
@@ -683,7 +689,7 @@ class Mirror:
         end_time = time.time()
         elapsed_time = end_time - start_time
 
-        if all(self.floor_times[i] > 0 for i in range(5)):  # 判断是否完整走了五层
+        if self.plan_runtime.complete:
             team = cfg.config.teams.get(f"{self.team_order}")
             if team:
                 team_history = {
@@ -735,11 +741,12 @@ class Mirror:
                 log.warning(f"无法找到编队{self.team_number}的历史记录，无法更新数据")
             log.debug(team_history)
 
-        try:
-            last_floor_time = time.time() - self.floor_times[self.floor - 1]
+        last_floor_start = self.plan_runtime.last_floor_start(self.floor)
+        if last_floor_start is not None:
+            last_floor_time = time.time() - last_floor_start
             msg = f"启动后第{self.floor}层卡包"
             to_log_with_time(msg, last_floor_time)
-        except:
+        else:
             log.info("楼层异常，可能是OCR识别错误，本轮镜牢层间的时间记录无效")
 
         # 输出战斗总时间
@@ -1080,7 +1087,9 @@ class Mirror:
         if team_setting and team_setting.use_team_code and team_setting.team_code:
             self.team_code_loaded = load_team_code_in_game(team_setting.team_code)
             if not self.team_code_loaded:
-                log.warning("编队码加载失败，继续使用当前队伍配置")
+                message = "攻略编队码加载失败，已停止本轮镜牢，避免使用错误编队"
+                log.error(message)
+                raise cannotOperateGameError(message)
         loop_count = 30
         auto.model = "clam"
         while auto.find_element("mirror/road_to_mir/dreaming_star/coins_assets.png") is None:
@@ -1648,10 +1657,21 @@ class Mirror:
                 find_type="image_with_multiple_targets",
                 my_crop=floor_progress_crop,
                 take_screenshot=True,
-                min_dist= 80 * scale
-            )
+                min_dist=80 * scale,
+            ) or []
             not_passed_floor_count = len(not_passed_floors)
-            self.floor = 5 - not_passed_floor_count
+            try:
+                self.floor = self.plan_runtime.detect_floor(
+                    not_passed_floor_count,
+                    initial=not self.plan_runtime.progress_observed,
+                )
+            except MirrorPlanProgressError as error:
+                self.plan_runtime.record_deviation(str(error))
+                log.error(str(error))
+                auto.mouse_action_with_pos(
+                    (to_window_position[0] - 200 * cfg.set_win_size / 1440, to_window_position[1])
+                )
+                raise cannotOperateGameError(str(error)) from error
             log.debug(f"当前镜牢层数: {self.floor}")
             self.get_floor_num = False
             auto.mouse_action_with_pos(
