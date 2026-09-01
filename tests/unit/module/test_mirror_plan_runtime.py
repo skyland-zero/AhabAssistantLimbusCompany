@@ -62,6 +62,12 @@ def test_marker_count_five_is_tolerated_before_the_first_marker_is_consumed() ->
     assert runtime.detect_floor(3) == 1
 
 
+def test_short_resume_marker_count_resolves_the_fourth_floor() -> None:
+    runtime = MirrorPlanRuntime((5, 15), floor_count=5)
+
+    assert runtime.detect_floor(1) == 3
+
+
 def test_unconfirmed_segment_reset_is_rejected() -> None:
     runtime = MirrorPlanRuntime((5, 15), floor_count=15)
 

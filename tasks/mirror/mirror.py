@@ -11,6 +11,7 @@ from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
 from module.mirror_plan_runtime import (
+    MIRROR_SEGMENT_LENGTH,
     MirrorPlanProgressError,
     MirrorPlanRuntime,
     extract_mirror_floor,
@@ -187,12 +188,28 @@ class Mirror:
     def _read_absolute_floor(self) -> int | None:
         """Read the absolute 1-based floor title when entering/resuming a map."""
 
-        floor_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_in_mir/get_floor_bbox.png"))
+        floor_image = ImageUtils.load_image("mirror/road_in_mir/get_floor_bbox.png")
+        if floor_image is None:
+            log.warning("无法加载镜牢楼层标题识别区域")
+            return None
+        floor_bbox = ImageUtils.get_bbox(floor_image)
+        # The tight non-zero bounding box makes RapidOCR split the title into
+        # fragments and frequently drop the trailing floor number.  Keep a
+        # small amount of surrounding UI background so the detector can see
+        # the complete title line (the same title asset works reliably with
+        # this padding at 1080p and 1440p).
+        padding = max(12, int(round((floor_bbox[3] - floor_bbox[1]) * 0.5)))
+        padded_floor_bbox = (
+            floor_bbox[0] - padding,
+            floor_bbox[1] - padding,
+            floor_bbox[2] + padding,
+            floor_bbox[3] + padding,
+        )
         for attempt in range(3):
             screenshot = auto.take_screenshot(gray=False)
             if screenshot is None:
                 continue
-            crop = ImageUtils.crop(np.array(screenshot), floor_bbox)
+            crop = ImageUtils.crop(np.array(screenshot), padded_floor_bbox)
             candidates = (crop, cv2.bitwise_not(crop))
             for candidate in candidates:
                 try:
@@ -1805,13 +1822,15 @@ class Mirror:
 
     def get_which_floor(self):
         absolute_floor = None
-        if not self.plan_runtime.progress_observed:
+        if self.resumed_from_existing_game and not self.plan_runtime.progress_observed:
             absolute_floor = self._read_absolute_floor()
-            if self.resumed_from_existing_game and absolute_floor is None:
-                message = "无法从恢复的镜牢地图读取绝对楼层，不能安全套用饰品路线"
-                self.plan_runtime.record_deviation(message)
-                log.error(message)
-                raise cannotOperateGameError(message)
+            if absolute_floor is None:
+                if self.plan_runtime.floor_count is not None and self.plan_runtime.floor_count > MIRROR_SEGMENT_LENGTH:
+                    message = "无法从恢复的15层镜牢地图读取绝对楼层，不能安全套用饰品路线"
+                    self.plan_runtime.record_deviation(message)
+                    log.error(message)
+                    raise cannotOperateGameError(message)
+                log.warning("恢复的5层镜牢标题楼层读取失败，将使用未通过标记计算当前具体楼层")
 
         auto.click_element("mirror/road_in_mir/setting_assets.png", take_screenshot=True)
         sleep(1)
