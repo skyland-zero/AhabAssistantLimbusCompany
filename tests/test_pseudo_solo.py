@@ -7,6 +7,7 @@ from core.pseudo_solo import (
     BattleRosterObserver,
     PseudoSoloDefenseState,
     PseudoSoloObservation,
+    defense_turns_for_live_count,
 )
 
 
@@ -60,40 +61,42 @@ def test_dynamic_state_does_not_stop_on_unknown_observation() -> None:
     assert state.remaining_turns == 5
 
 
-def test_dynamic_state_rearms_only_for_a_later_floor_with_revived_teammates() -> None:
-    base_state = FakeDefenseState(2)
+def test_dynamic_state_uses_live_team_count_instead_of_fixed_budget() -> None:
+    base_state = FakeDefenseState(5)
     observer = FakeTeamPageObserver(live_count=12)
     state = PseudoSoloDefenseState(base_state, observer)
 
-    state.consume_turn()
-    state.consume_turn()
-    assert state.defense_cycle_complete is True
+    assert state.observe_team_page(2) is True
+    assert base_state.remaining_turns == 11
+    assert defense_turns_for_live_count(12) == 11
 
+    state.consume_turn()
     assert state.observe_team_page(2) is False
+    assert base_state.remaining_turns == 10
+    assert observer.reset_calls == 1
+
+    observer.live_count = 2
+    assert state.observe_team_page(2) is True
+    assert base_state.remaining_turns == 1
+
+    observer.live_count = 1
+    assert state.observe_team_page(2) is True
     assert base_state.remaining_turns == 0
 
-    assert state.observe_team_page(3) is True
-    assert base_state.remaining_turns == 2
-    assert observer.reset_calls == 1
 
-    assert state.observe_team_page(3) is False
-    assert base_state.remaining_turns == 2
-    assert observer.reset_calls == 1
-
-
-def test_dynamic_state_does_not_rearm_for_single_or_unknown_team_page() -> None:
+def test_dynamic_state_stops_for_single_survivor_and_keeps_fallback_on_unknown() -> None:
     base_state = FakeDefenseState(2)
     observer = FakeTeamPageObserver()
     state = PseudoSoloDefenseState(base_state, observer)
-    state.consume_turn()
-    state.consume_turn()
 
     assert state.observe_team_page(3) is False
+    assert base_state.remaining_turns == 2
     observer.live_count = 1
-    assert state.observe_team_page(3) is False
-    observer.live_count = 12
-    assert state.observe_team_page(3) is False
+    assert state.observe_team_page(3) is True
     assert base_state.remaining_turns == 0
+    observer.live_count = 12
+    assert state.observe_team_page(4) is True
+    assert base_state.remaining_turns == 11
 
 
 def test_observer_requires_two_distinct_frames(monkeypatch) -> None:

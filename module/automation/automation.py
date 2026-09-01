@@ -192,6 +192,11 @@ class Automation(metaclass=SingletonMeta):
     def mouse_click_blank(self, *args, **kwargs):
         return self._run_business_interaction("mouse_click_blank", *args, **kwargs)
 
+    def mouse_move(self, *args, **kwargs):
+        """移动鼠标而不点击，用于读取游戏内悬浮提示。"""
+
+        return self._run_business_interaction("mouse_move", *args, **kwargs)
+
     def mouse_drag(self, *args, **kwargs):
         return self._run_business_interaction("mouse_drag", *args, **kwargs)
 

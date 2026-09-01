@@ -192,6 +192,9 @@ class TeamSetting(BaseModel):
     team_code: str = ""
     """编队码字符串"""
 
+    mirror_route_profile: str = ""
+    """镜牢饰品路线 ID；空值保持现有默认饰品逻辑。"""
+
     total_mirror_time_hard: List[float] = [0.0, 0.0, 0.0]
     """困难镜牢总用时"""
 

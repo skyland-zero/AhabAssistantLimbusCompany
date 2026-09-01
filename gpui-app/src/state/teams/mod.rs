@@ -11,7 +11,8 @@ pub use types::*;
 use crate::{
     ipc::RpcGateway,
     model::{
-        SinnerInfo, TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPurpose, team_number_from_id,
+        SinnerInfo, TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPreset, TeamPurpose,
+        team_number_from_id,
     },
 };
 
@@ -118,6 +119,64 @@ mod tests {
             config.observe_ego_gift_selected,
             vec!["general_gift_3_32.png".to_owned()]
         );
+    }
+
+    #[test]
+    fn built_in_presets_have_stable_ids_and_complete_routes() {
+        let state = TeamsState::default();
+        assert_eq!(state.presets.len(), 2);
+        let solo = state
+            .presets
+            .iter()
+            .find(|preset| preset.presetId == "hos_ryoshu_solo")
+            .unwrap();
+        assert_eq!(solo.routeId, "hos_ryoshu_solo_route");
+        assert_eq!(solo.team.sinners.len(), 12);
+        assert_eq!(
+            solo.team
+                .mirrorConfig
+                .as_ref()
+                .unwrap()
+                .mirror_route_profile,
+            "hos_ryoshu_solo_route"
+        );
+        assert!(!solo.description.zhCn.is_empty());
+    }
+
+    #[test]
+    fn selecting_empty_slot_saves_the_complete_preset_to_requested_slot() {
+        let mut state = TeamsState::default();
+        state.open_preset_picker_for_slot(4);
+        assert!(state.select_preset("hos_ryoshu_solo").unwrap());
+        let editor = state.editor.as_ref().unwrap();
+        assert_eq!(editor.requested_team_number, Some(4));
+        assert!(editor.team.id.is_empty());
+        assert_eq!(editor.team.name, "小指良伪单通");
+        assert_eq!(
+            editor
+                .team
+                .mirrorConfig
+                .as_ref()
+                .unwrap()
+                .mirror_route_profile,
+            "hos_ryoshu_solo_route"
+        );
+    }
+
+    #[test]
+    fn overwriting_requires_confirmation_and_preserves_enabled_state() {
+        let mut state = TeamsState::default();
+        let target = state.teams[0].clone();
+        state.open_preset_picker_for_team(&target);
+        assert!(!state.select_preset("hos_ryoshu_solo").unwrap());
+        assert!(state.editor.is_none());
+        assert!(state.preset_overwrite.is_some());
+
+        assert!(state.confirm_preset_overwrite().unwrap());
+        let editor = state.editor.as_ref().unwrap();
+        assert_eq!(editor.team.id, target.id);
+        assert_eq!(editor.team.enabled, target.enabled);
+        assert_eq!(editor.team.name, "小指良伪单通");
     }
 
     #[test]

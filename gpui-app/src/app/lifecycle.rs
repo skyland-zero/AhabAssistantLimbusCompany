@@ -96,6 +96,7 @@ impl AhabApp {
             let stats_request = home_rpc.request_async(method::STATS_GET_SUMMARY, None);
             let teams_request = teams_rpc.request_async(method::TEAM_LIST, None);
             let sinners_request = teams_rpc.request_async(method::SINNER_LIST, None);
+            let presets_request = teams_rpc.request_async(method::TEAM_PRESET_LIST, None);
             let themes_request = themes_rpc.request_async(method::THEME_PACK_LIST, None);
             let resources_request = resources_rpc.request_async(method::RESOURCE_STATUS, None);
             let hotkey_request = settings_rpc.request_async(method::HOTKEY_GET, None);
@@ -123,6 +124,9 @@ impl AhabApp {
             let sinners_response = cx
                 .background_executor()
                 .spawn(async move { sinners_request.recv().ok() });
+            let presets_response = cx
+                .background_executor()
+                .spawn(async move { presets_request.recv().ok() });
             let themes_response = cx
                 .background_executor()
                 .spawn(async move { themes_request.recv().ok() });
@@ -142,6 +146,7 @@ impl AhabApp {
             let stats_response = stats_response.await;
             let teams_response = teams_response.await;
             let sinners_response = sinners_response.await;
+            let presets_response = presets_response.await;
             let themes_response = themes_response.await;
             let resources_response = resources_response.await;
             let hotkey_response = hotkey_response.await;
@@ -191,6 +196,13 @@ impl AhabApp {
                     && let Ok(sinners) = serde_json::from_value(value)
                 {
                     view.teams.sinners = sinners;
+                }
+                if let Some(response) = presets_response
+                    && let Ok(Some(value)) =
+                        RpcGateway::decode_response(method::TEAM_PRESET_LIST, response)
+                    && let Ok(presets) = serde_json::from_value(value)
+                {
+                    view.teams.presets = presets;
                 }
                 if let Some(response) = themes_response
                     && let Ok(Some(value)) =

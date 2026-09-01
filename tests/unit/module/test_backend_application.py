@@ -570,6 +570,23 @@ def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection
     app.close()
 
 
+def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates() -> None:
+    app = make_application()
+    presets = app.team_preset_list()
+
+    assert [preset["presetId"] for preset in presets] == ["hos_ryoshu_solo", "spiderweb_family"]
+    solo = presets[0]
+    assert solo["routeId"] == "hos_ryoshu_solo_route"
+    assert solo["team"]["id"] == ""
+    assert len(solo["team"]["sinners"]) == 12
+    assert solo["team"]["mirrorConfig"]["mirror_route_profile"] == "hos_ryoshu_solo_route"
+    assert solo["team"]["mirrorConfig"]["observe_ego_gift_selected"] == [
+        "spiderweb_entangled_in_red"
+    ]
+    assert solo["description"]["zhCn"]
+    app.close()
+
+
 def test_team_save_allocates_id_and_isolates_luxcavation_from_mirror_queue() -> None:
     app = make_application()
     app.config.config.teams = {

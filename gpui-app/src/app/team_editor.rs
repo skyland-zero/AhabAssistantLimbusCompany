@@ -27,6 +27,44 @@ impl AhabApp {
         cx.notify();
     }
 
+    pub fn open_team_preset_picker_for_slot(&mut self, number: u32, cx: &mut Context<Self>) {
+        self.teams.open_preset_picker_for_slot(number);
+        self.clear_team_inputs();
+        cx.notify();
+    }
+
+    pub fn open_team_preset_picker_for_team(&mut self, team: &TeamDetail, cx: &mut Context<Self>) {
+        self.teams.open_preset_picker_for_team(team);
+        self.clear_team_inputs();
+        cx.notify();
+    }
+
+    pub fn select_team_preset(&mut self, preset_id: &str, cx: &mut Context<Self>) {
+        self.clear_team_inputs();
+        match self.teams.select_preset(preset_id) {
+            Ok(true) => self.save_team_editor(cx),
+            Ok(false) => {}
+            Err(error) => self.teams.feedback = Some(error),
+        }
+        cx.notify();
+    }
+
+    pub fn cancel_team_preset_flow(&mut self, cx: &mut Context<Self>) {
+        self.teams.close_preset_picker();
+        self.teams.close_preset_overwrite();
+        cx.notify();
+    }
+
+    pub fn confirm_team_preset_overwrite(&mut self, cx: &mut Context<Self>) {
+        self.clear_team_inputs();
+        match self.teams.confirm_preset_overwrite() {
+            Ok(true) => self.save_team_editor(cx),
+            Ok(false) => {}
+            Err(error) => self.teams.feedback = Some(error),
+        }
+        cx.notify();
+    }
+
     pub fn set_team_enabled(&mut self, team: &TeamDetail, enabled: bool, cx: &mut Context<Self>) {
         if self.teams.rpc.is_sidecar() {
             let params = match self.teams.begin_team_enabled(team, enabled) {

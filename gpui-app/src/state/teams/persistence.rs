@@ -23,9 +23,12 @@ impl TeamsState {
             rpc: RpcGateway::new(client),
             teams: Vec::new(),
             sinners: Vec::new(),
+            presets: Vec::new(),
             filter: TeamFilter::All,
             editor: None,
             delete_target: None,
+            preset_picker: None,
+            preset_overwrite: None,
             open_select: None,
             feedback: None,
             saving: false,
@@ -48,6 +51,10 @@ impl TeamsState {
             .unwrap_or_default();
         self.sinners = self
             .request_value(method::SINNER_LIST, None)
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default();
+        self.presets = self
+            .request_value(method::TEAM_PRESET_LIST, None)
             .and_then(|value| serde_json::from_value(value).ok())
             .unwrap_or_default();
     }

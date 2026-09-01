@@ -125,15 +125,35 @@ impl TeamSlot {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum TeamPresetTarget {
+    EmptySlot(u32),
+    Existing(TeamDetail),
+}
+
+#[derive(Clone, Debug)]
+pub struct TeamPresetPickerState {
+    pub target: TeamPresetTarget,
+}
+
+#[derive(Clone, Debug)]
+pub struct TeamPresetOverwriteState {
+    pub target: TeamDetail,
+    pub preset: TeamPreset,
+}
+
 /// State and RPC boundary for the Teams page. The page only mutates this
 /// object and calls `cx.notify`; all contract serialization remains here.
 pub struct TeamsState {
     pub rpc: RpcGateway,
     pub teams: Vec<TeamDetail>,
     pub sinners: Vec<SinnerInfo>,
+    pub presets: Vec<TeamPreset>,
     pub filter: TeamFilter,
     pub editor: Option<TeamEditorState>,
     pub delete_target: Option<TeamDetail>,
+    pub preset_picker: Option<TeamPresetPickerState>,
+    pub preset_overwrite: Option<TeamPresetOverwriteState>,
     pub open_select: Option<TeamSelect>,
     pub feedback: Option<String>,
     pub saving: bool,

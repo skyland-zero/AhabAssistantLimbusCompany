@@ -660,6 +660,19 @@ class BackendApplication:
                 details.append(self._team_detail(number, setting, number in queue))
         return details
 
+    def team_preset_list(self) -> list[dict[str, Any]]:
+        """Return the read-only built-in team preset catalog.
+
+        Presets are templates rather than persisted teams.  Their complete
+        team payload is normalized through the same projection used by
+        ``team.list`` so the GPUI picker can save it without knowing Python's
+        legacy ``chosen_sinners``/``sinner_order`` representation.
+        """
+
+        from module.team_presets import builtin_team_presets
+
+        return builtin_team_presets(self._team_detail)
+
     def team_save(self, params: Any) -> dict[str, Any]:
         values = self._require_mapping(params, "team.save")
         team_id = values.get("id", "")
@@ -1590,6 +1603,11 @@ class BackendApplication:
 
         team_code = values.get("team_code", getattr(defaults, "team_code", ""))
         mirror["team_code"] = team_code if isinstance(team_code, str) else ""
+        route_profile = values.get(
+            "mirror_route_profile",
+            getattr(defaults, "mirror_route_profile", ""),
+        )
+        mirror["mirror_route_profile"] = route_profile if isinstance(route_profile, str) else ""
         selected_gifts = (
             values.get(
                 "observe_ego_gift_selected",
@@ -1721,6 +1739,13 @@ class BackendApplication:
                 continue
             if key == "team_code":
                 setattr(setting, key, BackendApplication._require_string(value, f"team.save.mirrorConfig.{key}"))
+                continue
+            if key == "mirror_route_profile":
+                setattr(
+                    setting,
+                    key,
+                    BackendApplication._require_string(value, f"team.save.mirrorConfig.{key}").strip(),
+                )
                 continue
             if key == "opening_bonus":
                 values = BackendApplication._require_int_list(value, f"team.save.mirrorConfig.{key}")

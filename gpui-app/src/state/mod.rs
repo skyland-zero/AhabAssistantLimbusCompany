@@ -10,6 +10,6 @@ pub use other::{
     ToolboxState,
 };
 pub use teams::{
-    MirrorBool, MirrorU8, SYSTEM_LABELS, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamSelect,
-    TeamSlot, TeamsState,
+    MirrorBool, MirrorU8, SYSTEM_LABELS, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamPresetTarget,
+    TeamSelect, TeamSlot, TeamsState,
 };

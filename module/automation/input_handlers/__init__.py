@@ -66,6 +66,11 @@ class AbstractInput:
         """
         raise InterruptedError(f"未实现的输入方法 {self.__class__.__name__}.mouse_click_blank")
 
+    def mouse_move(self, coordinate=(1, 1)) -> None:
+        """将鼠标移动到指定坐标，不触发点击。"""
+
+        raise InterruptedError(f"未实现的输入方法 {self.__class__.__name__}.mouse_move")
+
     # 普通拖拽会在终点停留后再抬起，用于确实需要“拖住”的场景。
     def mouse_drag(self, x, y, drag_time=0.1, dx=0, dy=0, move_back=True) -> None:
         """鼠标从指定位置拖动到另一个位置

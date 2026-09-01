@@ -35,6 +35,12 @@ allowed_protected_files = [
     # pseudo-solo defense adapter); replay these small changes after taking
     # the upstream mirror runner during synchronization.
     "tasks/mirror/mirror.py",
+    # Fork-owned route adapter hooks.  The route catalog stays outside the
+    # protected tree; these files only pass the selected route into existing
+    # reward, theme, shop, fusion, and OCR operations.
+    "module/automation/input_handlers/__init__.py",
+    "tasks/mirror/in_shop.py",
+    "tasks/mirror/select_theme_pack.py",
     # Fork-owned mirror pathfinding and detector/session reuse optimizations.
     "tasks/mirror/search_road.py",
     "tasks/teams/team_formation.py",

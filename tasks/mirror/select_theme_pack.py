@@ -4,6 +4,7 @@ from module.automation import TextMatchResult, auto
 from module.config import cfg, theme_list
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
+from module.mirror_routes import MirrorRouteDefinition
 from tasks.base.back_init_menu import back_init_menu
 from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
@@ -11,7 +12,13 @@ from utils.path_manager import path_manager
 
 @begin_and_finish_time_log(task_name="选择镜牢主题包")
 # 选择镜牢主题包
-def select_theme_pack(hard_switch=False, floor=None, team_num=None, use_custom_theme_pack_weight=False):
+def select_theme_pack(
+    hard_switch=False,
+    floor=None,
+    team_num=None,
+    use_custom_theme_pack_weight=False,
+    route: MirrorRouteDefinition | None = None,
+):
     loop_count = 30
     auto.model = "clam"
     scale = cfg.set_win_size / 1080
@@ -32,6 +39,25 @@ def select_theme_pack(hard_switch=False, floor=None, team_num=None, use_custom_t
         theme_pack_list_en = theme_list.get_effective_theme_pack_list(
             hard_switch, "en", team_num, use_custom_theme_pack_weight
         )
+
+    # Route priorities are a temporary overlay on the existing theme-pack
+    # weights.  The user's global/team weight files remain untouched, and an
+    # absent or unmatched route simply keeps the old behavior.
+    route_stage = route.stage_for_floor(floor) if route is not None and floor is not None else None
+    if route_stage is not None:
+        aliases = tuple(alias.casefold().replace(" ", "") for alias in route_stage.theme_pack_names)
+
+        def boost_route_weights(weights):
+            for key, value in list(weights.items()):
+                normalized_key = str(key).casefold().replace(" ", "")
+                if any(alias in normalized_key or normalized_key in alias for alias in aliases if alias):
+                    try:
+                        weights[key] = max(int(value), int(theme_list.preferred_thresholds) + 1)
+                    except (TypeError, ValueError):
+                        weights[key] = int(theme_list.preferred_thresholds) + 1
+
+        boost_route_weights(theme_pack_list_zh)
+        boost_route_weights(theme_pack_list_en)
     # 游戏更新后新增的主题包尚未收录时的兜底权重，取自「未知 / unknown」配置项
     unknown_weight = int(theme_pack_list_zh.get("未知", theme_pack_list_en.get("unknown", -5)))
     refresh_times = 3

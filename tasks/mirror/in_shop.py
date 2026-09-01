@@ -5,6 +5,7 @@ from PIL import Image
 from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.logger import log
+from module.mirror_routes import MirrorRouteDefinition, get_mirror_route, route_target_priority
 from module.ocr import ocr
 from tasks import all_sinners_name, all_sinners_name_zh, all_systems, system_cn_zh
 from tasks.base.back_init_menu import back_init_menu
@@ -53,6 +54,10 @@ class Shop:
         self.max_keyword_refresh = team_setting.max_keyword_refresh
         self.max_normal_refresh = team_setting.max_normal_refresh
         self.ignore_shop = team_setting.ignore_shop  # 忽略的商店楼层
+        self.route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
+        self.current_layer = 0
+        self.pseudo_solo_active = False
+        self._route_fused_gift_ids = set()
 
         self.aggressive_also_enhance = team_setting.aggressive_also_enhance  # 激进合成期间也升级饰品
 
@@ -66,6 +71,167 @@ class Shop:
         # 用于记录已升级的ego饰品
         self.enhance_gifts_list = []
         self.first_gift_enhance = False
+
+    def set_layer(self, layer: int) -> None:
+        """Set the current mirror layer used by the selected gift route."""
+
+        self.current_layer = max(0, int(layer))
+
+    def set_pseudo_solo_active(self, active: bool) -> None:
+        """Tell route recipes when multi-identity effects are no longer valid."""
+
+        self.pseudo_solo_active = bool(active)
+
+    def _route_targets_for_matching(self, *, include_recipe_targets: bool = False):
+        targets = list(self.route.gift_targets_for_floor(self.current_layer))
+        if not include_recipe_targets:
+            return targets
+        # A target remains valuable after its acquisition window closes.  The
+        # selection window is floor-scoped, but protection is run-scoped so a
+        # floor-1 material cannot be consumed before a later fusion.
+        protected_ids = {
+            target.gift_id for target in self.route.gifts if target.protected
+        }
+        protected_ids.update(
+            gift_id
+            for recipe in self.route.recipes
+            if recipe.end_floor >= max(1, self.current_layer)
+            for gift_id in (recipe.result_gift_id, *recipe.material_gift_ids)
+        )
+        return [
+            target
+            for target in self.route.gifts
+            if target.protected and target.gift_id in protected_ids
+        ]
+
+    def _route_gift_id_for_crop(
+        self,
+        crop,
+        gift_ids=None,
+        *,
+        include_recipe_targets: bool = False,
+    ) -> str | None:
+        allowed = set(gift_ids) if gift_ids is not None else None
+        for target in self._route_targets_for_matching(
+            include_recipe_targets=include_recipe_targets
+        ):
+            if allowed is not None and target.gift_id not in allowed:
+                continue
+            if target.asset and auto.find_element(target.asset, my_crop=crop, threshold=0.75):
+                return target.gift_id
+            if auto.find_language_text(
+                list(target.names_zh),
+                list(target.names_en),
+                crop,
+            ):
+                return target.gift_id
+        return None
+
+    def _route_priority_for_crop(self, crop) -> int | None:
+        """Match the active route's gift names in one OCR crop."""
+
+        return route_target_priority(
+            self.route,
+            self.current_layer,
+            lambda target: self._route_gift_id_for_crop(crop, [target.gift_id]) is not None,
+        )
+
+    def route_gift_priority_for_crop(self, crop, layer: int | None = None) -> int | None:
+        """Return the route priority for a visible reward/shop gift crop.
+
+        The public wrapper lets the mirror reward selector pass its current
+        floor without mutating the shop's state.  ``None`` means that the
+        route is inactive for this floor or the gift name was not recognized.
+        """
+
+        previous_layer = self.current_layer
+        if layer is not None:
+            self.set_layer(layer)
+        try:
+            return self._route_priority_for_crop(crop)
+        finally:
+            self.current_layer = previous_layer
+
+    def _route_priority_at_position(
+        self,
+        position,
+        *,
+        hover: bool = False,
+    ) -> int | None:
+        """Read a route gift at an inventory position.
+
+        Gift names are often only exposed by the game's hover tooltip.  The
+        fast crop check handles visible names; the optional hover path is used
+        only by destructive fusion filtering so route targets can be removed
+        from the candidate list before any click occurs.
+        """
+
+        gift_id = self._route_gift_id_at_position(
+            position,
+            hover=hover,
+            include_recipe_targets=True,
+        )
+        if gift_id is None:
+            return None
+        target = self.route.gift_target(gift_id)
+        return target.priority if target is not None else None
+
+    def _route_gift_id_at_position(
+        self,
+        position,
+        *,
+        gift_ids=None,
+        hover: bool = False,
+        include_recipe_targets: bool = False,
+    ) -> str | None:
+        """Match a route gift at an inventory coordinate, optionally by hover."""
+
+        if not self.route.gifts or not position or len(position) < 2:
+            return None
+        scale = cfg.set_win_size / 1440
+        x, y = float(position[0]), float(position[1])
+        crop = (
+            max(0.0, x - 150 * scale),
+            max(0.0, y - 180 * scale),
+            min(cfg.set_win_size * 16 / 9, x + 260 * scale),
+            min(cfg.set_win_size, y + 220 * scale),
+        )
+        gift_id = self._route_gift_id_for_crop(
+            crop,
+            gift_ids,
+            include_recipe_targets=include_recipe_targets,
+        )
+        if gift_id is not None or not hover:
+            return gift_id
+
+        try:
+            auto.mouse_move((x, y))
+            sleep(0.2)
+            if auto.take_screenshot() is None:
+                return None
+            return self._route_gift_id_for_crop(
+                crop,
+                gift_ids,
+                include_recipe_targets=include_recipe_targets,
+            )
+        except Exception as error:
+            log.debug(f"读取路线饰品悬浮提示失败: {error}")
+            return None
+        finally:
+            auto.mouse_to_blank()
+
+    def _remove_route_targets(self, positions, *, hover: bool = False):
+        """Filter route targets out of a destructive inventory operation."""
+
+        if not self.route.gifts or not positions:
+            return positions
+        protected = []
+        for position in positions:
+            if self._route_priority_at_position(position, hover=hover) is not None:
+                protected.append(position)
+        if protected:
+            log.debug(f"保护{len(protected)}个当前路线饰品，跳过通用合成/出售")
+        return [position for position in positions if position not in protected]
 
     class RestartGame(Exception):
         pass
@@ -176,8 +342,32 @@ class Shop:
                             "mirror/road_in_mir/ego_gift_get_confirm_assets.png",
                             take_screenshot=True,
                         )
-                        while auto.take_screenshot() is None:
-                            continue
+                while auto.take_screenshot() is None:
+                    continue
+
+            # Route targets are evaluated before the generic system purchase
+            # pass.  A route is data-driven, so adding another preset does not
+            # require another branch in this shop workflow.
+            if self.route.gifts:
+                for target in self.route.gift_targets_for_floor(self.current_layer):
+                    target_position = auto.find_language_text(
+                        list(target.names_zh),
+                        list(target.names_en),
+                    )
+                    if not target_position:
+                        continue
+                    auto.mouse_click(target_position[0], target_position[1])
+                    sleep(1)
+                    if auto.click_element("mirror/shop/purchase_assets.png", take_screenshot=True):
+                        sleep(1)
+                        auto.click_element(
+                            "mirror/road_in_mir/ego_gift_get_confirm_assets.png",
+                            take_screenshot=True,
+                        )
+                        complete_count += 1
+                        log.info(f"按路线优先购买饰品：{target.gift_id}")
+                    else:
+                        auto.mouse_click_blank(times=2)
 
             if self.fuse_aggressive_switch:
                 log.debug("开始购买强化素材")
@@ -344,6 +534,172 @@ class Shop:
 
             break
 
+    def _route_fusion_inventory_positions(self):
+        """Return the current fusion inventory grid using the existing anchor."""
+
+        points = auto.find_element(
+            "mirror/shop/fuse_label.png",
+            find_type="image_with_multiple_targets",
+            threshold=0.85,
+            take_screenshot=True,
+        )
+        if not points:
+            return []
+        anchor = max(points, key=lambda point: (point[1], point[0]))
+        scale = cfg.set_win_size / 1440
+        first_gift = (anchor[0] + 95 * scale, anchor[1] + 135 * scale)
+        return [
+            (
+                first_gift[0] + 190 * (index % 5) * scale,
+                first_gift[1] + 190 * (index // 5) * scale,
+            )
+            for index in range(10)
+        ]
+
+    def _route_result_position(self, recipe, dividing_line):
+        """Find a route recipe result without assuming a language."""
+
+        position = auto.find_language_text(
+            list(recipe.result_names_zh),
+            list(recipe.result_names_en),
+        )
+        if not position:
+            return None
+        if dividing_line is not None and position[1] >= dividing_line:
+            return None
+        return position
+
+    def _select_route_recipe_materials(self, recipe, positions) -> bool:
+        """Select each known material once; fail closed when OCR is uncertain."""
+
+        used_positions = []
+        for material_id in recipe.material_gift_ids:
+            for position in positions:
+                if position in used_positions:
+                    continue
+                if (
+                    self._route_gift_id_at_position(
+                        position,
+                        gift_ids=(material_id,),
+                        hover=True,
+                    )
+                    == material_id
+                ):
+                    auto.mouse_click(position[0], position[1])
+                    used_positions.append(position)
+                    break
+            else:
+                return False
+        return True
+
+    def _complete_route_fusion(self) -> bool:
+        """Complete one selected recipe with the existing bounded retry loop."""
+
+        for _ in range(15):
+            if auto.take_screenshot() is None:
+                continue
+            if auto.find_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png"):
+                auto.click_element(
+                    "mirror/road_in_mir/ego_gift_get_confirm_assets.png",
+                    take_screenshot=True,
+                )
+                return True
+            if auto.click_element(
+                "mirror/shop/enhance_and_fuse_and_sell_confirm_assets.png",
+                model="normal",
+            ):
+                continue
+            if retry() is False:
+                raise self.RestartGame()
+        return False
+
+    def fuse_route_gifts(self) -> bool:
+        """Attempt the route's explicit recipes before generic fusion.
+
+        Recipe execution is deliberately conservative: it requires an OCR
+        result label, all material labels, and the existing fusion controls.
+        If any part is missing, it cancels the selection and leaves the
+        generic path to continue with those materials protected.
+        """
+
+        if not self.route.recipes or not self.fuse_switch:
+            return False
+        if self.only_aggressive_fuse or self.only_system_fuse:
+            return False
+
+        completed = False
+        for recipe in self.route.fusion_recipes_for_floor(self.current_layer):
+            if recipe.skip_if_pseudo_solo and self.pseudo_solo_active:
+                log.debug(f"进入伪单通状态，跳过多人格路线配方：{recipe.result_gift_id}")
+                continue
+            if self.enter_fuse(recipe.keyword) is False:
+                break
+            inventory_positions = self._route_fusion_inventory_positions()
+            if recipe.result_gift_id in self._route_fused_gift_ids or any(
+                self._route_gift_id_at_position(
+                    position,
+                    gift_ids=(recipe.result_gift_id,),
+                    hover=True,
+                    include_recipe_targets=True,
+                )
+                == recipe.result_gift_id
+                for position in inventory_positions
+            ):
+                log.debug(f"路线成品已存在，跳过重复合成：{recipe.result_gift_id}")
+                auto.mouse_click_blank(times=3)
+                continue
+            points = auto.find_element(
+                "mirror/shop/fuse_label.png",
+                find_type="image_with_multiple_targets",
+                threshold=0.85,
+                take_screenshot=True,
+            )
+            dividing_line = max((point[1] for point in points), default=None)
+            result_position = self._route_result_position(recipe, dividing_line)
+            if not result_position:
+                auto.mouse_click_blank(times=3)
+                continue
+            auto.mouse_click(result_position[0], result_position[1])
+            positions = self._route_fusion_inventory_positions()
+            if not self._select_route_recipe_materials(recipe, positions):
+                auto.mouse_click_blank(times=3)
+                log.debug(f"路线配方材料识别不完整，跳过：{recipe.result_gift_id}")
+                continue
+            if self._complete_route_fusion():
+                completed = True
+                self._route_fused_gift_ids.add(recipe.result_gift_id)
+                log.info(f"按路线优先合成饰品：{recipe.result_gift_id}")
+            else:
+                auto.mouse_click_blank(times=3)
+                log.debug(f"路线配方合成未完成，跳过：{recipe.result_gift_id}")
+        return completed
+
+    def _route_enhance_candidates(self):
+        """Find visible route gifts before the generic system upgrade pass."""
+
+        if not self.route.gifts:
+            return []
+        candidates = []
+        seen = []
+        for system in all_systems.values():
+            points = auto.find_element(
+                f"mirror/shop/enhance_gifts/{system}.png",
+                find_type="image_with_multiple_targets",
+            )
+            for point in points or []:
+                if not any(
+                    abs(point[0] - existing[0]) <= 40
+                    and abs(point[1] - existing[1]) <= 40
+                    for existing in seen
+                ):
+                    seen.append(point)
+        for point in seen:
+            priority = self._route_priority_at_position(point, hover=True)
+            if priority is not None:
+                candidates.append((priority, point))
+        candidates.sort(key=lambda item: (item[0], item[1][1], item[1][0]))
+        return [point for _, point in candidates]
+
     def fuse_useless_gifts_aggressive(self):
         """合成无用饰品_激进版"""
 
@@ -443,6 +799,10 @@ class Shop:
                         protect_coord.append(coord)
                 for coord in protect_coord:
                     gift_list = processing_coordinates(gift_list, coord)
+
+            # The aggressive path can otherwise select any visible inventory
+            # gift.  Remove OCR-matched route targets before the first click.
+            gift_list = self._remove_route_targets(gift_list, hover=True)
 
             # 直到合成概率90%
             for coord in gift_list:
@@ -589,6 +949,10 @@ class Shop:
                 ):
                     my_list = protect_coordinates(my_list, protect_gift)
 
+            # Do not consume a route target merely because it is not one of
+            # the generic protected system/abandoned assets.
+            my_list = self._remove_route_targets(my_list, hover=True)
+
             # 选择3样无用饰品，不足则退出合成
             if len(my_list) <= 2:
                 if block is False:
@@ -731,6 +1095,7 @@ class Shop:
                     find_type="image_with_multiple_targets",
                     take_screenshot=True,
                 )
+                all_system_gift = self._remove_route_targets(all_system_gift, hover=True)
                 if len(all_system_gift) > 0:
                     for g in all_system_gift:
                         if g[1] < dividing_line:
@@ -827,9 +1192,11 @@ class Shop:
                     if sell_gift := auto.find_element(my_sell_system):
                         if second is not None and protect_coordinates(sell_gift, second):
                             continue
-                        else:
-                            auto.mouse_click(sell_gift[0], sell_gift[1])
-                            sleep(cfg.mouse_action_interval)
+                        if self._route_priority_at_position(sell_gift, hover=True) is not None:
+                            log.debug(f"保护当前路线饰品，跳过出售：{sell_system}")
+                            continue
+                        auto.mouse_click(sell_gift[0], sell_gift[1])
+                        sleep(cfg.mouse_action_interval)
                         auto.click_element(
                             "mirror/shop/enhance_and_fuse_and_sell_confirm_assets.png",
                             model="normal",
@@ -872,16 +1239,18 @@ class Shop:
             sleep(1)
             break
 
-    def enter_fuse(self):
+    def enter_fuse(self, keyword=None):
         loop_count = 15
         auto.model = "clam"
         auto.mouse_to_blank()
         log.debug("开始执行饰品合成前置模块")
+        requested_keyword = keyword
+        keyword = keyword or self.system
         while True:
             if auto.take_screenshot() is None:
                 continue
 
-            if (
+            if requested_keyword is None and (
                 self.fuse_IV is True
                 and self.second_system is True
                 and self.fuse_second_IV is False
@@ -895,7 +1264,7 @@ class Shop:
                         sleep(0.5)
                         break
             else:
-                if auto.click_element(f"mirror/shop/keyword/keyword_{self.system}.png"):
+                if auto.click_element(f"mirror/shop/keyword/keyword_{keyword}.png"):
                     while auto.take_screenshot() is None:
                         continue
                     if auto.click_element("mirror/shop/fuse_gift_confirm_assets.png", model="normal"):
@@ -920,6 +1289,11 @@ class Shop:
         return True
 
     def fuse_gift(self):
+        # Route-specific recipes must get the first chance to consume their
+        # own materials; the generic fusion passes protect those materials but
+        # cannot reconstruct a themed recipe by themselves.
+        self.fuse_route_gifts()
+
         # 激进合成
         if self.fuse_aggressive_switch and not self.only_system_fuse:
             log.debug("开始执行第一次激进合成")
@@ -1076,6 +1450,20 @@ class Shop:
                 continue
 
             next_gift = True
+
+            for route_gift in self._route_enhance_candidates():
+                if check_enhanced(route_gift):
+                    continue
+                auto.mouse_click(route_gift[0], route_gift[1])
+                if self.ego_gift_to_power_up() is False:
+                    return False
+                self.enhance_gifts_list.append(route_gift)
+                log.info("按路线优先升级路线饰品")
+                next_gift = False
+                break
+
+            if next_gift is False:
+                continue
 
             # 升级本体系四级
             if not system_level_IV:
@@ -1333,6 +1721,7 @@ class Shop:
 
     # 在商店的处理
     def in_shop(self, layer):
+        self.set_layer(layer)
         heal = False
         sell = False
         buy = False

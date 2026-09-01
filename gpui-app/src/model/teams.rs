@@ -1,7 +1,37 @@
 use serde::{Deserialize, Serialize};
 
+use super::Language;
+
 pub const SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID: &str = "spiderweb_entangled_in_red";
 pub const MAX_OBSERVE_EGO_GIFTS: usize = 3;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[allow(non_snake_case)]
+pub struct LocalizedText {
+    pub zhCn: String,
+    pub enUs: String,
+}
+
+impl LocalizedText {
+    pub fn get(&self, language: Language) -> &str {
+        match language {
+            Language::ZhCn => &self.zhCn,
+            Language::EnUs => &self.enUs,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[allow(non_snake_case)]
+pub struct TeamPreset {
+    pub presetId: String,
+    pub routeId: String,
+    pub name: LocalizedText,
+    pub description: LocalizedText,
+    pub floorHint: LocalizedText,
+    pub routeName: LocalizedText,
+    pub team: TeamDetail,
+}
 
 /// The formation page reserves the first twenty numbers as stable UI slots.
 /// This is intentionally a presentation limit; the backend may still expose
@@ -68,6 +98,8 @@ pub struct TeamMirrorConfig {
     pub use_custom_theme_pack_weight: bool,
     pub observe_ego_gift: bool,
     pub observe_ego_gift_selected: Vec<String>,
+    #[serde(default)]
+    pub mirror_route_profile: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -137,6 +169,7 @@ impl Default for TeamMirrorConfig {
             use_custom_theme_pack_weight: false,
             observe_ego_gift: false,
             observe_ego_gift_selected: Vec::new(),
+            mirror_route_profile: String::new(),
         }
     }
 }

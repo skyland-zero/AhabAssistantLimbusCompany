@@ -189,6 +189,7 @@ impl MockState {
                 }
             }
             method::TEAM_LIST => Ok(serde_json::to_value(&self.teams).unwrap()),
+            method::TEAM_PRESET_LIST => Ok(serde_json::to_value(builtin_team_presets()).unwrap()),
             method::TEAM_SAVE => {
                 let raw: Value = Self::params(request.params, "team.save requires an object")?;
                 let raw_object = raw
@@ -414,6 +415,121 @@ impl MockState {
             Err(error) => RpcResponse::failure(id, error),
         }
     }
+}
+
+fn builtin_team_presets() -> Vec<TeamPreset> {
+    let mut solo_config = TeamMirrorConfig::default();
+    solo_config.team_system = 4;
+    solo_config.shop_strategy = 1;
+    solo_config.reward_cards = true;
+    solo_config.reward_cards_select = 3;
+    solo_config.do_not_heal = true;
+    solo_config.do_not_sell = true;
+    solo_config.use_starlight = true;
+    solo_config.defense_for_solo = true;
+    solo_config.observe_ego_gift = true;
+    solo_config.observe_ego_gift_selected = vec![SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID.to_owned()];
+    solo_config.max_keyword_refresh = 2;
+    solo_config.max_normal_refresh = 3;
+    solo_config.mirror_route_profile = "hos_ryoshu_solo_route".into();
+
+    let solo_team = TeamDetail {
+        schemaVersion: 1,
+        id: String::new(),
+        name: "小指良伪单通".into(),
+        sinners: vec![
+            "ryoshu".into(),
+            "yi_sang".into(),
+            "rodion".into(),
+            "meursault".into(),
+            "gregor".into(),
+            "heathcliff".into(),
+            "outis".into(),
+            "hong_lu".into(),
+            "faust".into(),
+            "ishmael".into(),
+            "don_quixote".into(),
+            "sinclair".into(),
+        ],
+        purpose: TeamPurpose::Mirror,
+        accessoryScheme: "poise".into(),
+        enabled: false,
+        mirrorConfig: Some(solo_config),
+    };
+
+    let mut spider_config = TeamMirrorConfig::default();
+    spider_config.team_system = 4;
+    spider_config.use_team_code = true;
+    spider_config.team_code = "H4sIAAAAAAAACg3MQRJAMAxA0UthZ/HTFGE6ZKx6gtS4ALfnHeDpq0QERyQVCXqs5hV9aOE3hTTLBb2bn0ZeuNwr+52yiguPlW1GB6LZn9QzpxZ0eLUJGMcPt8GoUGAAAAA=".into();
+    spider_config.observe_ego_gift = true;
+    spider_config.observe_ego_gift_selected = vec![SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID.to_owned()];
+    spider_config.mirror_route_profile = "spiderweb_family_route".into();
+    let spider_team = TeamDetail {
+        schemaVersion: 1,
+        id: String::new(),
+        name: "蜘蛛巢全家桶".into(),
+        sinners: vec![
+            "ryoshu".into(),
+            "yi_sang".into(),
+            "rodion".into(),
+            "don_quixote".into(),
+            "hong_lu".into(),
+            "outis".into(),
+            "heathcliff".into(),
+            "faust".into(),
+            "ishmael".into(),
+            "sinclair".into(),
+        ],
+        purpose: TeamPurpose::Mirror,
+        accessoryScheme: "poise".into(),
+        enabled: false,
+        mirrorConfig: Some(spider_config),
+    };
+
+    vec![
+        TeamPreset {
+            presetId: "hos_ryoshu_solo".into(),
+            routeId: "hos_ryoshu_solo_route".into(),
+            name: LocalizedText {
+                zhCn: "小指良伪单通".into(),
+                enUs: "Ryoshu Pseudo-Solo".into(),
+            },
+            description: LocalizedText {
+                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。".into(),
+                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices.".into(),
+            },
+            floorHint: LocalizedText {
+                zhCn: "5 层执行前半段，15 层沿现有镜牢流程继续执行后续阶段".into(),
+                enUs: "Use stages 1–5 for a 5-floor run and continue through the existing 15-floor flow.".into(),
+            },
+            routeName: LocalizedText {
+                zhCn: "House of Spiders 良秀伪单通路线".into(),
+                enUs: "House of Spiders Ryoshu route".into(),
+            },
+            team: solo_team,
+        },
+        TeamPreset {
+            presetId: "spiderweb_family".into(),
+            routeId: "spiderweb_family_route".into(),
+            name: LocalizedText {
+                zhCn: "蜘蛛巢全家桶".into(),
+                enUs: "House of Spiders Full Roster".into(),
+            },
+            description: LocalizedText {
+                zhCn: "保留现有蜘蛛巢专属 Gift Search 的全家桶编队。".into(),
+                enUs: "The full House of Spiders roster with the existing exclusive Gift Search.".into(),
+            },
+            floorHint: LocalizedText {
+                zhCn: "沿用当前镜牢流程".into(),
+                enUs: "Uses the current mirror-dungeon flow.".into(),
+            },
+            routeName: LocalizedText {
+                zhCn: "蜘蛛巢默认路线".into(),
+                enUs: "Spiderweb default route".into(),
+            },
+            team: spider_team,
+        },
+    ]
 }
 
 fn has_executable_task(tasks: &TasksConfig) -> bool {

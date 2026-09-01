@@ -112,15 +112,14 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             .min_h(px(240.)),
         );
     } else {
-        let mut fixed_cards = div().flex().flex_wrap().gap_3().items_stretch();
+        let mut fixed_cards = div().w_full().grid().grid_cols(2).gap_3().items_stretch();
         for slot in fixed_slots {
             let item = if let Some(team) = slot.team {
                 team_card(app, cx, team, Some(slot.number), language)
             } else {
                 empty_slot_card(app, cx, slot.number, language)
             };
-            fixed_cards =
-                fixed_cards.child(item.flex_basis(px(360.)).flex_grow(1.).flex_shrink(1.));
+            fixed_cards = fixed_cards.child(item.w_full());
         }
         if has_fixed_slots {
             cards = cards.child(fixed_cards);
@@ -136,7 +135,7 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                         .child(text("额外编队", "Extra teams").get(language)),
                 );
             }
-            let mut extra_cards = div().flex().flex_wrap().gap_3().items_stretch();
+            let mut extra_cards = div().w_full().grid().grid_cols(2).gap_3().items_stretch();
             for team in extra_teams {
                 extra_cards = extra_cards.child(
                     team_card(
@@ -146,9 +145,7 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                         team_number_from_id(&team.id),
                         language,
                     )
-                    .flex_basis(px(360.))
-                    .flex_grow(1.)
-                    .flex_shrink(1.),
+                    .w_full(),
                 );
             }
             cards = cards.child(extra_cards);
@@ -204,6 +201,8 @@ fn team_card(
     let edit_team_for_key = edit_team.clone();
     let delete_team = team.clone();
     let delete_team_for_key = delete_team.clone();
+    let overwrite_team = team.clone();
+    let overwrite_team_for_key = overwrite_team.clone();
     let toggle_team = team.clone();
     let toggle_team_for_key = toggle_team.clone();
     let toggle_target = !team.enabled;
@@ -255,6 +254,26 @@ fn team_card(
             cx.notify();
         }
     }));
+
+    let mut overwrite = button(
+        text("从预设覆盖", "Apply preset").get(language),
+        ButtonVariant::Outline,
+    )
+    .id(format!("overwrite-team-{team_id}"))
+    .h(px(30.))
+    .px_2()
+    .py_0()
+    .text_size(px(10.))
+    .on_click(cx.listener(move |view, _, _, cx| {
+        view.open_team_preset_picker_for_team(&overwrite_team, cx);
+    }));
+    overwrite =
+        overwrite.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                view.open_team_preset_picker_for_team(&overwrite_team_for_key, cx);
+            }
+        }));
 
     let mut enabled_switch = switch(team.enabled).id(format!("toggle-team-{team_id}"));
     if toggle_pending {
@@ -379,16 +398,23 @@ fn team_card(
     content = content.child(header).child(details).child(sinner_badges);
 
     card(
-        div().flex().items_start().gap_3().child(content).child(
-            div()
-                .flex()
-                .flex_none()
-                .items_center()
-                .gap_1()
-                .child(enabled_control)
-                .child(edit)
-                .child(delete),
-        ),
+        div()
+            .flex()
+            .items_start()
+            .flex_wrap()
+            .gap_3()
+            .child(content)
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap_1()
+                    .child(enabled_control)
+                    .child(overwrite)
+                    .child(edit)
+                    .child(delete),
+            ),
     )
     .p_3()
     .opacity(if is_luxcavation || team.enabled {
@@ -433,6 +459,35 @@ fn empty_slot_card(
         }
     }));
 
+    let mut choose_preset = div()
+        .id(format!("preset-team-slot-{number}"))
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1()
+        .h(px(30.))
+        .px_3()
+        .rounded_md()
+        .tab_index(0)
+        .cursor_pointer()
+        .border_1()
+        .border_color(palette_rgb(current_render_palette().brand))
+        .text_size(px(11.))
+        .text_color(palette_rgb(current_render_palette().brand))
+        .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
+        .child(icon(ICON_COPY, 13., current_render_palette().brand))
+        .child(text("从预设编队选择", "Choose preset").get(language))
+        .on_click(cx.listener(move |view, _, _, cx| {
+            view.open_team_preset_picker_for_slot(number, cx);
+        }));
+    choose_preset =
+        choose_preset.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                view.open_team_preset_picker_for_slot(number, cx);
+            }
+        }));
+
     card(
         div()
             .flex()
@@ -464,7 +519,15 @@ fn empty_slot_card(
                             ),
                     ),
             )
-            .child(create),
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .justify_end()
+                    .gap_2()
+                    .child(create)
+                    .child(choose_preset),
+            ),
     )
     .p_3()
     .opacity(0.75)

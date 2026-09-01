@@ -9,6 +9,7 @@ from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
+from module.mirror_routes import MirrorRouteDefinition, get_mirror_route
 from module.my_error.my_error import (
     InputAttributeError,
     backMainWinError,
@@ -57,6 +58,7 @@ class Mirror:
         self.chosen_sinners = team_setting.chosen_sinners
         self.team_number = team_setting.team_number  # 选择的编队名
         self.team_code_loaded = False
+        self.mirror_route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
         self.shop = Shop(team_setting)
         self.system = all_systems[team_setting.team_system]  # 选择的体系
         self.avoid_skill_3 = team_setting.avoid_skill_3  # 是否避免使用3技能
@@ -276,7 +278,13 @@ class Mirror:
             # 选择楼层主题包的情况
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
                 sleep(2)
-                select_theme_pack(self.hard_switch, self.floor, self.team_order, self.use_custom_theme_pack_weight)
+                select_theme_pack(
+                    self.hard_switch,
+                    self.floor,
+                    self.team_order,
+                    self.use_custom_theme_pack_weight,
+                    route=self.mirror_route,
+                )
                 if self.re_formation_each_floor:
                     self.first_battle = True
                 try:
@@ -348,6 +356,7 @@ class Mirror:
             if auto.find_element("teams/identify_assets.png"):
                 if self.defense_for_solo_state is not None:
                     self.defense_for_solo_state.observe_team_page(self.floor)
+                    self.shop.set_pseudo_solo_active(self.defense_for_solo_state.live_count == 1)
                 # 如果第一次启动脚本，还没进行编队，就先编队
                 if self.first_battle:
                     if self._form_team_for_battle():
@@ -1204,6 +1213,7 @@ class Mirror:
         self.first_battle = True
         if self.defense_for_solo_state is not None:
             self.defense_for_solo_state.reset_for_run()
+            self.shop.set_pseudo_solo_active(False)
         self.start_time = time.time()
 
     def event_handling(self):
@@ -1345,6 +1355,11 @@ class Mirror:
         my_scale = cfg.set_win_size / 1440
         auto.model = "clam"
         auto.mouse_to_blank()
+
+        def route_priority(bbox):
+            return self.shop.route_gift_priority_for_crop(bbox, self.floor)
+
+        route_fallback_priority = 10**6
         if type == 2:
             pos = auto.find_element("mirror/road_in_mir/acquire_ego_gift_refuse_assets.png")
             auto.mouse_click(pos[0] - 500 * my_scale, pos[1] - 500 * my_scale)
@@ -1383,11 +1398,18 @@ class Mirror:
                                 if len(ocr_result) >= 2:
                                     continue
                         is_owned = bool(auto.find_language_text("已持有", "Owned", bbox))
-                        gift_candidates.append((is_owned, button))
+                        priority = route_priority(bbox)
+                        gift_candidates.append(
+                            (
+                                is_owned,
+                                priority if priority is not None else route_fallback_priority,
+                                button,
+                            )
+                        )
 
                     if gift_candidates:
-                        gift_candidates.sort(key=lambda gift: gift[0])
-                        button = gift_candidates[0][1]
+                        gift_candidates.sort(key=lambda gift: (gift[0], gift[1]))
+                        button = gift_candidates[0][2]
                         auto.mouse_click(button[0], button[1])
                         auto.click_element(
                             "mirror/road_in_mir/acquire_ego_gift_select_assets.png",
@@ -1434,7 +1456,6 @@ class Mirror:
                             return False
                         return
                 else:
-                    system_nums = 0
                     for button in acquire_card:
                         bbox = (
                             button[0] - 50 * my_scale,
@@ -1447,14 +1468,22 @@ class Mirror:
                             if ocr_result:
                                 continue
                         is_owned = bool(auto.find_language_text("已持有", "Owned", bbox))
-                        gift_candidate = (is_owned, button)
+                        priority = route_priority(bbox)
+                        gift_candidate = (
+                            is_owned,
+                            priority if priority is not None else route_fallback_priority,
+                            2,
+                            button,
+                        )
+                        if priority is not None:
+                            log.debug(f"识别到当前阶段路线饰品，优先级为{priority}")
                         if auto.find_element(
                             f"mirror/road_in_mir/acquire_ego_gift/{self.system}.png",
                             my_crop=bbox,
                             threshold=0.85,
                         ):
-                            my_list.insert(0, gift_candidate)
-                            system_nums += 1
+                            gift_candidate = (*gift_candidate[:2], 0, gift_candidate[3])
+                            my_list.append(gift_candidate)
                         else:
                             if self.second_system and (
                                 self.second_system_setting == 0
@@ -1465,12 +1494,13 @@ class Mirror:
                                     my_crop=bbox,
                                     threshold=0.85,
                                 ):
-                                    my_list.insert(system_nums, gift_candidate)
+                                    gift_candidate = (*gift_candidate[:2], 1, gift_candidate[3])
+                                    my_list.append(gift_candidate)
                                     continue
                             my_list.append(gift_candidate)
-                    my_list.sort(key=lambda gift: gift[0])
+                    my_list.sort(key=lambda gift: (gift[0], gift[1], gift[2]))
                     owned_gifts = sum(gift[0] for gift in my_list)
-                    my_list = [gift[1] for gift in my_list]
+                    my_list = [gift[3] for gift in my_list]
                     if owned_gifts:
                         log.debug(f"检测到{owned_gifts}个已持有EGO饰品，已降低选择优先级")
                 select_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_in_mir/ego_gift_get_bbox.png"))

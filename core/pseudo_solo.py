@@ -18,7 +18,6 @@ from module.config import cfg
 from module.logger import log
 
 PSEUDO_SOLO_OBSERVATION_STABILITY = 2
-PSEUDO_SOLO_REARM_FLOOR = 3
 DEAD_MARKER_THRESHOLD = 0.9
 DEAD_MARKER_MIN_DISTANCE = 80
 
@@ -29,6 +28,12 @@ class PseudoSoloObservation(StrEnum):
     UNKNOWN = "unknown"
     MULTIPLE_SURVIVORS = "multiple_survivors"
     SINGLE_SURVIVOR = "single_survivor"
+
+
+def defense_turns_for_live_count(live_count: int) -> int:
+    """Return the turns needed for every living ally except the solo unit."""
+
+    return max(int(live_count) - 1, 0)
 
 
 class _DefenseState(Protocol):
@@ -53,9 +58,13 @@ class PseudoSoloDefenseState:
     ) -> None:
         self._base_state = base_state
         self._observer = observer
-        self._turn_limit = max(0, base_state.remaining_turns)
+        # The configured value is only a compatibility fallback.  A reliable
+        # team-page count replaces it with ``live_count - 1`` for each new
+        # roster state.
+        self._fallback_turn_limit = max(0, base_state.remaining_turns)
         self._stop_confirmed = False
-        self._team_page_checked_floor: int | None = None
+        self._last_team_page_observation: tuple[int, int] | None = None
+        self._last_live_count: int | None = None
 
     @property
     def remaining_turns(self) -> int:
@@ -80,20 +89,22 @@ class PseudoSoloDefenseState:
 
         return self._stop_confirmed or self._base_state.remaining_turns <= 0
 
+    @property
+    def live_count(self) -> int | None:
+        """Return the last reliable team-page count, if one was observed."""
+
+        return self._last_live_count
+
     def observe_team_page(self, floor: int) -> bool:
-        """Rearm once when a later floor shows revived teammates.
+        """Synchronize the defense budget with the visible live roster.
 
-        A floor transition alone is not enough to restart the defense cycle:
-        gifts may keep the fallen identities dead.  The caller invokes this
-        while the team-selection page is visible, where a definitive live
-        roster count can distinguish a solo roster from revived teammates.
+        The team-selection page is the authoritative place to count living
+        allies.  For every newly observed roster state, the pseudo-solo budget
+        is exactly the number of living teammates besides Ryoshu.  Repeated
+        frames with the same count do not reset a partially consumed budget.
+        If the count cannot be read, the configured compatibility fallback is
+        left untouched.
         """
-
-        if floor < PSEUDO_SOLO_REARM_FLOOR:
-            return False
-        if self._team_page_checked_floor == floor or not self.defense_cycle_complete:
-            return False
-
         read_live_count = getattr(self._observer, "read_team_page_live_count", None)
         if not callable(read_live_count):
             return False
@@ -101,24 +112,45 @@ class PseudoSoloDefenseState:
         if live_count is None:
             return False
 
-        self._team_page_checked_floor = floor
-        if live_count <= 1:
+        live_count = max(0, int(live_count))
+        observation = (floor, live_count)
+        if self._last_team_page_observation == observation:
             return False
+        self._last_team_page_observation = observation
+        self._last_live_count = live_count
 
-        self._base_state.remaining_turns = self._turn_limit
+        if live_count <= 1:
+            changed = self._base_state.remaining_turns > 0 or not self._stop_confirmed
+            self._base_state.remaining_turns = 0
+            self._stop_confirmed = True
+            if changed:
+                log.info(f"第{floor}层队伍页确认仅剩{live_count}名己方人格，停止连续防御")
+            return changed
+
+        required_turns = defense_turns_for_live_count(live_count)
+        changed = (
+            self._base_state.remaining_turns != required_turns
+            or self._stop_confirmed
+        )
+        self._base_state.remaining_turns = required_turns
         self._stop_confirmed = False
         reset_observer = getattr(self._observer, "reset", None)
         if callable(reset_observer):
             reset_observer()
-        log.info(f"第{floor}层检测到{live_count}名己方人格复活，重新启用伪单通防御")
-        return True
+        if changed:
+            log.info(
+                f"第{floor}层队伍页检测到{live_count}名存活己方人格，"
+                f"伪单通连续防御调整为{required_turns}回合"
+            )
+        return changed
 
     def reset_for_run(self) -> None:
         """Restore the initial cycle when the mirror run is restarted."""
 
-        self._base_state.remaining_turns = self._turn_limit
+        self._base_state.remaining_turns = self._fallback_turn_limit
         self._stop_confirmed = False
-        self._team_page_checked_floor = None
+        self._last_team_page_observation = None
+        self._last_live_count = None
         reset_observer = getattr(self._observer, "reset", None)
         if callable(reset_observer):
             reset_observer()

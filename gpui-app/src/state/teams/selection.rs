@@ -56,6 +56,87 @@ impl TeamsState {
         self.feedback = None;
     }
 
+    pub fn open_preset_picker_for_slot(&mut self, number: u32) {
+        if !(1..=TEAM_SLOT_COUNT).contains(&number) {
+            return;
+        }
+        self.editor = None;
+        self.delete_target = None;
+        self.preset_overwrite = None;
+        self.open_select = None;
+        self.preset_picker = Some(TeamPresetPickerState {
+            target: TeamPresetTarget::EmptySlot(number),
+        });
+        self.feedback = None;
+    }
+
+    pub fn open_preset_picker_for_team(&mut self, team: &TeamDetail) {
+        self.editor = None;
+        self.delete_target = None;
+        self.preset_overwrite = None;
+        self.open_select = None;
+        self.preset_picker = Some(TeamPresetPickerState {
+            target: TeamPresetTarget::Existing(team.clone()),
+        });
+        self.feedback = None;
+    }
+
+    pub fn close_preset_picker(&mut self) {
+        self.preset_picker = None;
+    }
+
+    pub fn close_preset_overwrite(&mut self) {
+        self.preset_overwrite = None;
+    }
+
+    /// Select a built-in preset. Empty slots return `true` to indicate that
+    /// the caller should immediately save the prepared editor; existing
+    /// teams return `false` because they first require confirmation.
+    pub fn select_preset(&mut self, preset_id: &str) -> Result<bool, String> {
+        let Some(picker) = self.preset_picker.take() else {
+            return Err("当前没有打开预设选择器".to_owned());
+        };
+        let Some(preset) = self
+            .presets
+            .iter()
+            .find(|item| item.presetId == preset_id)
+            .cloned()
+        else {
+            self.preset_picker = Some(picker);
+            return Err("未找到所选内置预设".to_owned());
+        };
+
+        match picker.target {
+            TeamPresetTarget::EmptySlot(number) => {
+                let mut team = preset.team;
+                team.id.clear();
+                self.editor = Some(TeamEditorState::new_with_slot(team, Some(number)));
+                self.feedback = None;
+                Ok(true)
+            }
+            TeamPresetTarget::Existing(target) => {
+                self.preset_overwrite = Some(TeamPresetOverwriteState { target, preset });
+                Ok(false)
+            }
+        }
+    }
+
+    /// Prepare the selected preset for an overwrite after the confirmation
+    /// button has been pressed. The target record id and enabled state are
+    /// deliberately copied from the existing team; all other business fields
+    /// come from the preset template.
+    pub fn confirm_preset_overwrite(&mut self) -> Result<bool, String> {
+        let Some(overwrite) = self.preset_overwrite.take() else {
+            return Err("当前没有待确认的预设覆盖操作".to_owned());
+        };
+        let mut team = overwrite.preset.team;
+        team.id = overwrite.target.id;
+        team.enabled = overwrite.target.enabled;
+        self.editor = Some(TeamEditorState::new(team));
+        self.feedback = None;
+        Ok(true)
+    }
+
     pub fn close_editor(&mut self) {
         self.editor = None;
         self.close_select();
