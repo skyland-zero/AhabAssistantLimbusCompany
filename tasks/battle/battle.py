@@ -21,6 +21,9 @@ from utils.image_utils import ImageUtils
 from utils.utils import find_skill3
 
 DEFENSE_FOR_SOLO_TURN_LIMIT = 5
+# MuMu's scaled battle UI can render the left skill anchor below the general
+# image-match threshold even when the battle command row is fully visible.
+DEFENSE_GEAR_THRESHOLD = 0.75
 
 
 @dataclass
@@ -126,7 +129,7 @@ class Battle:
         use_first_round_defense = first_turn and defense_first_round and not defense_for_solo_used_this_turn
         limited_defense_succeeded = False
         if (use_limited_defense or use_first_round_defense) and auto.find_element(
-            "battle/gear_left.png", threshold=0.9
+            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD
         ):
             if use_limited_defense:
                 msg = f"小指良单通连续防御（剩余{defense_for_solo_state.remaining_turns}回合），开始战斗"
@@ -152,10 +155,12 @@ class Battle:
                 sleep(0.5)
                 auto.key_press("enter")
         elif self.defense_all_time:
-            if auto.find_element("battle/gear_left.png", threshold=0.9):
+            if auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD):
                 msg = "使用全员防御模式开始战斗"
                 self._defense_this_round()
-        elif (avoid_skill_3 or prioritize_skill_3) and auto.find_element("battle/gear_left.png", threshold=0.9):
+        elif (avoid_skill_3 or prioritize_skill_3) and auto.find_element(
+            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD
+        ):
             use_prioritize_skill_3 = prioritize_skill_3 and not avoid_skill_3
             mode_name = "优先" if use_prioritize_skill_3 else "避免"
             msg = f"使用{mode_name}3技能模式开始战斗"
@@ -673,10 +678,10 @@ class Battle:
         try:
             scale = cfg.set_win_size / 1440
 
-            gear_left = auto.find_element("battle/gear_left.png")
+            gear_left = auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD)
 
             gear_1 = [gear_left[0] + 100 * scale, gear_left[1] - 35 * scale]
-            gear_right = auto.find_element("battle/gear_right.png")
+            gear_right = auto.find_element("battle/gear_right.png", threshold=DEFENSE_GEAR_THRESHOLD)
             gear_2 = [gear_right[0] - 100 * scale, gear_right[1]]
 
             bbox = (gear_1[0], gear_1[1] - 15 * scale, gear_2[0], gear_1[1])

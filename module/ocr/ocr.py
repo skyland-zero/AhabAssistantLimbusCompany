@@ -59,6 +59,9 @@ class OCR(metaclass=SingletonMeta):
             else:
                 raise ValueError(f"不支持的图像维度: {image_array.ndim}")
 
+            if image_array.size == 0 or img_cv_gray.shape[0] == 0 or img_cv_gray.shape[1] == 0:
+                return RapidOCROutput()
+
             # 自适应均衡化(均值化后更亮)
             processed_image = self._clahe.apply(img_cv_gray)
             results = self.engine(processed_image)

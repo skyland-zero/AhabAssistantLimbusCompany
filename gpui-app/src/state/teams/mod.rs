@@ -150,6 +150,8 @@ mod tests {
                 .mirror_route_profile,
             "hos_ryoshu_solo_route"
         );
+        assert!(normal.team.mirrorConfig.as_ref().unwrap().do_not_fuse);
+        assert!(!hard.team.mirrorConfig.as_ref().unwrap().do_not_fuse);
         assert_eq!(
             normal.team.mirrorConfig.as_ref().unwrap().opening_bonus,
             vec![1, 1, 1, 1, 0, 0, 0, 0, 0, 0]

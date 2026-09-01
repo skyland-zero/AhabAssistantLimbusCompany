@@ -592,6 +592,8 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
         assert solo["team"]["mirrorConfig"]["use_team_code"] is True
         assert solo["team"]["mirrorConfig"]["skill_replacement"] is True
         assert solo["description"]["zhCn"]
+    assert normal["team"]["mirrorConfig"]["do_not_fuse"] is True
+    assert hard["team"]["mirrorConfig"]["do_not_fuse"] is False
     assert normal["team"]["mirrorConfig"]["opening_bonus"] == [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
     assert hard["team"]["mirrorConfig"]["opening_bonus"] == [3] * 10
     app.close()

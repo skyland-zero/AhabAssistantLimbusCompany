@@ -83,12 +83,13 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
         name_en="Ryoshu Pseudo-Solo (Normal)",
         description_zh=(
             "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。"
-            "普通镜牢开局使用默认前四个一级星光。"
+            "普通镜牢开局使用默认前四个一级星光，并跳过商店饰品合成以优先速刷。"
         ),
         description_en=(
             "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 "
             "are prioritized sacrifices. Uses the default first four level-one "
-            "starting bonuses for normal Mirror Dungeons."
+            "starting bonuses for normal Mirror Dungeons and skips gift fusion "
+            "for faster runs."
         ),
         floor_hint_zh="适用于普通镜牢，执行 1–5 层",
         floor_hint_en="For normal Mirror Dungeons; runs floors 1–5",
@@ -96,6 +97,10 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
         route_name_en="House of Spiders Ryoshu route",
         setting={
             **_HOS_RYOSHU_SOLO_SETTING,
+            # Normal pseudo-solo clears do not depend on keyword-fused gifts;
+            # skip the shop fusion phase to reduce run time.  Hard keeps its
+            # existing conservative fusion setting.
+            "do_not_fuse": True,
             "opening_bonus": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
             "remark_name": "小指良伪单通（普牢）",
         },

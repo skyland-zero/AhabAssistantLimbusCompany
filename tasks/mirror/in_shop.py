@@ -184,12 +184,20 @@ class Shop:
             return None
         scale = cfg.set_win_size / 1440
         x, y = float(position[0]), float(position[1])
+        screen_width, screen_height = self._route_screen_size()
+        # Route fusion builds a fixed ten-slot grid, but the last slots can be
+        # outside a narrower runtime window.  Never pass an empty crop to the
+        # image/OCR backends: OpenCV's CLAHE may spin indefinitely on one.
+        if not (0 <= x < screen_width and 0 <= y < screen_height):
+            return None
         crop = (
             max(0.0, x - 150 * scale),
             max(0.0, y - 180 * scale),
-            min(cfg.set_win_size * 16 / 9, x + 260 * scale),
-            min(cfg.set_win_size, y + 220 * scale),
+            min(screen_width, x + 260 * scale),
+            min(screen_height, y + 220 * scale),
         )
+        if int(round(crop[2])) <= int(round(crop[0])) or int(round(crop[3])) <= int(round(crop[1])):
+            return None
         gift_id = self._route_gift_id_for_crop(
             crop,
             gift_ids,
@@ -213,6 +221,13 @@ class Shop:
             return None
         finally:
             auto.mouse_to_blank()
+
+    @staticmethod
+    def _route_screen_size() -> tuple[float, float]:
+        screenshot_size = getattr(getattr(auto, "screenshot", None), "size", None)
+        if isinstance(screenshot_size, tuple) and len(screenshot_size) == 2:
+            return tuple(map(float, screenshot_size))
+        return float(cfg.set_win_size * 16 / 9), float(cfg.set_win_size)
 
     def _remove_route_targets(self, positions, *, hover: bool = False):
         """Filter route targets out of a destructive inventory operation."""
@@ -545,13 +560,19 @@ class Shop:
             return []
         anchor = max(points, key=lambda point: (point[1], point[0]))
         scale = cfg.set_win_size / 1440
+        screen_width, screen_height = self._route_screen_size()
         first_gift = (anchor[0] + 95 * scale, anchor[1] + 135 * scale)
-        return [
+        positions = [
             (
                 first_gift[0] + 190 * (index % 5) * scale,
                 first_gift[1] + 190 * (index // 5) * scale,
             )
             for index in range(10)
+        ]
+        return [
+            position
+            for position in positions
+            if 0 <= position[0] < screen_width and 0 <= position[1] < screen_height
         ]
 
     def _route_result_position(self, recipe, dividing_line):

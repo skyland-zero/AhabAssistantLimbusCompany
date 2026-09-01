@@ -427,6 +427,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         opening_items_select: 0,
         opening_items_system: 4,
         do_not_heal: true,
+        do_not_fuse: true,
         do_not_sell: true,
         max_keyword_refresh: 2,
         max_normal_refresh: 3,
@@ -444,6 +445,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         ..TeamMirrorConfig::default()
     };
     let mut hard_solo_config = normal_solo_config.clone();
+    hard_solo_config.do_not_fuse = false;
     hard_solo_config.opening_bonus = vec![3; 10];
 
     let solo_sinners = vec![
@@ -521,8 +523,8 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
                 enUs: "Ryoshu Pseudo-Solo (Normal)".into(),
             },
             description: LocalizedText {
-                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。普通镜牢开局使用默认前四个一级星光。".into(),
-                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Uses the default first four level-one starting bonuses for normal Mirror Dungeons.".into(),
+                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。普通镜牢开局使用默认前四个一级星光，并跳过商店饰品合成以优先速刷。".into(),
+                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Uses the default first four level-one starting bonuses for normal Mirror Dungeons and skips gift fusion for faster runs.".into(),
             },
             floorHint: LocalizedText {
                 zhCn: "适用于普通镜牢，执行 1–5 层".into(),

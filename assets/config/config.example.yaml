@@ -218,7 +218,7 @@ teams:
     shop_strategy: 1 # 商店策略
     do_not_heal: true # 不治疗
     do_not_buy: false # 不购买
-    do_not_fuse: false # 不合成
+    do_not_fuse: true # 普牢速刷跳过饰品合成
     do_not_sell: true # 不出售
     do_not_enhance: false # 不升级
     reward_cards: true # 奖励卡优先度
