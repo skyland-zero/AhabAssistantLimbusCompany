@@ -21,14 +21,19 @@ jobs:
       - name: Setup UV for Python
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.12.8"
+          python-version: "3.14.7"
           enable-cache: true
           cache-dependency-glob: |
             **/uv.lock
 
+      - name: Install Python 3.14.7
+        run: uv python install 3.14.7
+
       # 安装依赖
       - name: Install dependencies
         run: |
-          uv sync --frozen
+          uv sync --frozen --python 3.14.7
 
       - name: Setup Rust nightly
         uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly action

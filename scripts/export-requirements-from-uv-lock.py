@@ -2,13 +2,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-# uv export --no-hashes --no-annotate --no-dev --format requirements-txt | Where-Object { -not (($_ -match "darwin" -or $_ -match "linux") -and $_ -match "sys_platform") } > requirements.txt
+# uv export --frozen --no-hashes --no-annotate --no-dev --format requirements-txt | Where-Object { -not (($_ -match "darwin" -or $_ -match "linux") -and $_ -match "sys_platform") } > requirements.txt
 
 
 def main():
     cmd = [
         "uv",
         "export",
+        "--frozen",  # 仅使用 uv.lock，不在导出时重新解析依赖
         "--no-hashes",  # 不包含package哈希
         "--no-annotate",  # 不包含这个包是由谁引入的注释
         "--no-dev",  # 不包含开发依赖

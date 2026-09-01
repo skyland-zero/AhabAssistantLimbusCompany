@@ -225,7 +225,7 @@ AALC 的 GPUI 界面使用系统字体和 GPUI 内置资源，不再额外打包
 # 克隆仓库
 git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
-# 通过uv下载依赖, uv工具自行下载
+# 需要 uv >= 0.12.8；按 .python-version 使用 Python 3.14.7 并安装项目依赖
 uv sync --frozen
 .\\run-gpui.bat
 
@@ -239,7 +239,7 @@ git pull
 # 克隆仓库
 git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
-# 请使用 Python 3.12 或更高版本
+# 请使用 Python 3.14.x
 pip install -r requirements.txt
 # 需要预先安装 Rust nightly
 cargo +nightly run --manifest-path gpui-app/Cargo.toml

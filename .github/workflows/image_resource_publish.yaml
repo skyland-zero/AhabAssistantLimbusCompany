@@ -28,14 +28,19 @@ jobs:
       - name: Setup UV for Python
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.12.8"
+          python-version: "3.14.7"
           enable-cache: true
           cache-dependency-glob: |
             **/uv.lock
 
+      - name: Install Python 3.14.7
+        run: uv python install 3.14.7
+
       # 安装项目依赖，保证脚本运行环境与仓库一致。
       - name: Install dependencies
         run: |
-          uv sync --frozen
+          uv sync --frozen --python 3.14.7
 
       # 构建图片资源清单与 7z 资源包。
       - name: Build image resource artifacts

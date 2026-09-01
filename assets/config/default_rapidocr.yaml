@@ -5,16 +5,20 @@ Global:
     use_cls: true
     use_rec: true
 
+    use_preprocess_img: true
+    use_vertical_padding: true
+
     min_height: 30
     width_height_ratio: 8
-    max_side_len: 1600 # 限制最大边长为1600px
     min_side_len: 30
+    max_side_len: 1600 # 限制最大边长为1600px
 
     return_word_box: false
     return_single_char_box: false
 
     font_path: null
     log_level: "info" # debug / info / warning / error / critical
+    model_root_dir: null
 
 EngineConfig:
     onnxruntime:
@@ -33,7 +37,7 @@ EngineConfig:
             do_copy_in_default_stream: true
 
         use_dml: false
-        dm_ep_cfg: null
+        dml_ep_cfg: null
 
         use_cann: false
         cann_ep_cfg:
