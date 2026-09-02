@@ -17,12 +17,15 @@ build
 dist
 dist_release
 artifacts/
+native/**/target/
 *.pyc
 *.pyd
 
 # 运行时生成的文件
 *.dll
 !3rdparty/PaddleOCR-json_v1.4.1/*.dll
+!assets/binary/scrcpy-ffmpeg/
+!assets/binary/scrcpy-ffmpeg/*.dll
 build.bat
 config_backup
 config.yaml*

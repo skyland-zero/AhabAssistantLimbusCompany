@@ -13,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 RELEASE = DIST / "AALC"
+NATIVE_DECODER_MANIFEST = ROOT / "native" / "scrcpy_decoder" / "Cargo.toml"
+NATIVE_DECODER_BINARY = ROOT / "native" / "scrcpy_decoder" / "target" / "release" / "scrcpy_decoder.dll"
+SCRCPY_RUNTIME_DIR = ROOT / "assets" / "binary" / "scrcpy-ffmpeg"
 
 
 def run(command: list[str], *, cwd: Path = ROOT) -> None:
@@ -30,6 +33,31 @@ def build_python_executable(spec: str) -> None:
             spec,
             "--noconfirm",
             "--clean",
+        ]
+    )
+
+
+def build_native_decoder() -> None:
+    run(
+        [
+            "cargo",
+            "+nightly",
+            "build",
+            "--release",
+            "--manifest-path",
+            str(NATIVE_DECODER_MANIFEST),
+        ]
+    )
+    if not NATIVE_DECODER_BINARY.is_file():
+        raise FileNotFoundError(f"native decoder build output is missing: {NATIVE_DECODER_BINARY}")
+    SCRCPY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(NATIVE_DECODER_BINARY, SCRCPY_RUNTIME_DIR / "scrcpy_decoder.dll")
+    run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "fetch_scrcpy_ffmpeg_runtime.py"),
+            "--output",
+            str(SCRCPY_RUNTIME_DIR),
         ]
     )
 
@@ -122,6 +150,7 @@ def build(version: str) -> Path:
             "gpui-app/Cargo.toml",
         ]
     )
+    build_native_decoder()
     build_python_executable("main_backend.spec")
     build_python_executable("updater.spec")
     stage_release(version)

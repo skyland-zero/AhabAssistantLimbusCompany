@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
 import random
 import socket
 import struct
@@ -12,7 +11,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import av
 import numpy as np
 from adbutils import AdbDevice, adb
 
@@ -21,6 +19,7 @@ from module.logger import log
 
 from .. import AbstractInput
 from . import insert_swipe
+from .native_scrcpy_decoder import NativeScrcpyDecoder, NativeVideoFrame
 
 # Scrcpy protocol constants (v4.1)
 SCRCPY_VERSION = "4.1"
@@ -209,7 +208,7 @@ class ScrcpyControl(AbstractInput):
         self._server_proc: subprocess.Popen | None = None
         self._decode_thread: threading.Thread | None = None
 
-        # The mailbox holds exactly one decoded PyAV frame.  Pixel buffers
+        # The mailbox holds exactly one owned native YUV frame.  Pixel buffers
         # are materialized only when a consumer asks for a specific format.
         self._latest_frame: _DecodedFrame | None = None
         self._frame_lock = threading.Lock()
@@ -585,18 +584,20 @@ class ScrcpyControl(AbstractInput):
 
     @staticmethod
     def _frame_to_rgb(frame) -> np.ndarray:
-        """Convert a decoded PyAV frame to the controller's RGB contract."""
+        """Convert a decoded frame to the controller's RGB contract."""
         return frame.to_ndarray(format="rgb24")
 
     @staticmethod
     def _frame_to_luma(frame) -> np.ndarray:
         """Return the Y/luma plane without going through RGB.
 
-        PyAV exposes the first plane of YUV420P/NV12 frames as a buffer.  A
-        strided view avoids copying decoder padding; callers that require a
-        contiguous array can copy it explicitly.  The ``gray`` fallback is
-        kept for unusual decoder formats and the compatibility switch.
+        The native decoder returns an owned, tightly packed Y plane.  The
+        PyAV-style plane fallback is kept for lightweight test doubles and
+        third-party frame adapters.
         """
+
+        if isinstance(frame, NativeVideoFrame):
+            return frame.to_ndarray(format="gray")
 
         try:
             plane = frame.planes[0]
@@ -648,18 +649,9 @@ class ScrcpyControl(AbstractInput):
         pts = None if is_config else pts_flags & SCRCPY_PACKET_PTS_MASK
         return pts, is_config, is_key_frame, size
 
-    @staticmethod
-    def _create_decoder():
-        """Create a low-delay slice-threaded H.264 decoder."""
-        codec = av.CodecContext.create(SCRCPY_VIDEO_CODEC, "r")
-        try:
-            codec.flags |= av.codec.context.Flags.low_delay
-        except (AttributeError, TypeError):
-            # Older PyAV builds expose codec options but not the Flags enum.
-            codec.options = {"flags": "low_delay"}
-        codec.thread_type = "SLICE"
-        codec.thread_count = max(1, min(4, os.cpu_count() or 4))
-        return codec
+    def _create_decoder(self) -> NativeScrcpyDecoder:
+        """Create the Scrcpy-style native low-delay H.264 decoder."""
+        return NativeScrcpyDecoder(*self.resolution)
 
     def _set_decoder_resync(self, *, reset_attempts: bool = False) -> None:
         with self._state_lock:
@@ -675,12 +667,9 @@ class ScrcpyControl(AbstractInput):
         config_packet = self._last_config_packet
         if not config_packet:
             return
-        packet = av.Packet(config_packet)
-        packet.pts = None
-        packet.dts = None
         try:
             started = time.perf_counter_ns()
-            codec.decode(packet)
+            codec.decode(config_packet, is_config=True)
             self._record_metric("decode_time_ns", time.perf_counter_ns() - started)
             with self._state_lock:
                 self._decoder_has_config = True
@@ -886,12 +875,9 @@ class ScrcpyControl(AbstractInput):
                         self._last_config_packet = bytes(raw_packet)
                         self._last_config_pts = pts
 
-                    packet = av.Packet(raw_packet)
-                    packet.pts = pts
-                    packet.dts = pts
                     started = time.perf_counter_ns()
                     try:
-                        frames = codec.decode(packet)
+                        frames = codec.decode(raw_packet, is_config=is_config)
                     except Exception as error:
                         self._record_metric("decoder_errors")
                         log.debug("Scrcpy 视频 decoder 异常：%s", error)
