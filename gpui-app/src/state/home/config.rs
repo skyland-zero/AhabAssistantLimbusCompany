@@ -92,6 +92,13 @@ impl HomeState {
         });
     }
 
+    pub fn set_hard_mirror_target_floors(&mut self, floors: u32) {
+        if self.is_busy() {
+            return;
+        }
+        self.update_tasks(|tasks| tasks.mirror.hard_mirror_target_floors = floors);
+    }
+
     #[allow(dead_code)]
     pub fn toggle_after_exit_action(&mut self, action: AfterExitAction) {
         self.update_tasks(|tasks| {

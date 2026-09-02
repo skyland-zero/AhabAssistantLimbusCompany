@@ -496,6 +496,9 @@ class ConfigModel(BaseModel):
     hard_mirror: int | bool
     """进行困难镜牢"""
 
+    hard_mirror_target_floors: int
+    """困难镜牢目标层数 (5 或 15)"""
+
     no_weekly_bonuses: int | bool
     """不使用每周加成"""
 
@@ -544,7 +547,7 @@ class ConfigModel(BaseModel):
     mirror_keyboard_simple_pathfinding: bool
     """简单键盘寻路模式：始终按↑选择第一个节点，完全避免鼠标拖动"""
 
-    enable_template_blur: bool = False
+    enable_template_blur: bool
     """是否启用模板高斯模糊（抗Scrcpy/H264压缩噪点，关闭可省CPU）"""
 
     teams: dict[str, TeamSetting]

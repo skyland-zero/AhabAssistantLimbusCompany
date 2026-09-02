@@ -72,7 +72,10 @@ class Mirror:
         self.team_code_loaded = False
         self.mirror_route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
         self.hard_switch = bool(cfg.hard_mirror)
-        selected_floor_count = select_mirror_floor_count(self.mirror_route.floor_counts, self.hard_switch)
+        hard_target = getattr(cfg, "hard_mirror_target_floors", 5)
+        selected_floor_count = select_mirror_floor_count(
+            self.mirror_route.floor_counts, self.hard_switch, hard_target
+        )
         self.plan_runtime = MirrorPlanRuntime(self.mirror_route.floor_counts, floor_count=selected_floor_count)
         log.info(
             f"镜牢路线{self.mirror_route.route_id or 'default'}任务模式={'困难' if self.hard_switch else '普通'}，"

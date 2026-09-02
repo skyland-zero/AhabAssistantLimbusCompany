@@ -126,6 +126,7 @@ skip_enkephalin: False # 跳过换体
 mirror: False # 是否进行自动镜牢
 set_mirror_count: 1 # 镜牢的次数
 hard_mirror: False # 进行困难镜牢
+hard_mirror_target_floors: 5 # 困难镜牢目标层数 (5: 速刷周常/普转困 / 15: 平行叠加)
 no_weekly_bonuses: False # 不使用每周加成
 floor_3_exit: False # 只打三层
 infinite_dungeons: False # 无限刷牢

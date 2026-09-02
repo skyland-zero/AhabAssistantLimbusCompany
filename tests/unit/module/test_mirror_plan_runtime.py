@@ -11,6 +11,9 @@ from module.mirror_plan_runtime import (
 def test_task_mode_selects_the_supported_run_length() -> None:
     assert select_mirror_floor_count((5, 15), hard_mirror=False) == 5
     assert select_mirror_floor_count((5, 15), hard_mirror=True) == 15
+    assert select_mirror_floor_count((5, 15), hard_mirror=True, target_floors=5) == 5
+    assert select_mirror_floor_count((5, 15), hard_mirror=True, target_floors=15) == 15
+    assert select_mirror_floor_count((5,), hard_mirror=True, target_floors=15) == 5
     assert select_mirror_floor_count((5,), hard_mirror=True) == 5
 
 

@@ -162,12 +162,18 @@ impl Default for BuyEnkephalinConfig {
     }
 }
 
+fn default_hard_mirror_target_floors() -> u32 {
+    5
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[allow(non_snake_case)]
 pub struct MirrorConfig {
     pub set_mirror_count: u8,
     pub infinite_dungeons: bool,
     pub hard_mirror: bool,
+    #[serde(default = "default_hard_mirror_target_floors")]
+    pub hard_mirror_target_floors: u32,
     pub no_weekly_bonuses: bool,
     pub floor_3_exit: bool,
     pub save_rewards: bool,
@@ -187,6 +193,7 @@ impl Default for MirrorConfig {
             set_mirror_count: 1,
             infinite_dungeons: false,
             hard_mirror: false,
+            hard_mirror_target_floors: 5,
             no_weekly_bonuses: false,
             floor_3_exit: false,
             save_rewards: false,

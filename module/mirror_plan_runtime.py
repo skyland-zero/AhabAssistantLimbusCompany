@@ -22,18 +22,34 @@ def _normalize_floor_counts(floor_counts) -> tuple[int, ...]:
     return counts
 
 
-def select_mirror_floor_count(supported_floor_counts, hard_mirror: bool) -> int:
-    """Select the run length from the task mode and route capabilities.
+def select_mirror_floor_count(
+    supported_floor_counts,
+    hard_mirror: bool,
+    target_floors: int | None = None,
+) -> int:
+    """Select the run length from the task mode, target configuration, and route capabilities.
 
-    A route may advertise several supported run lengths.  The current game
-    rule is five floors for a normal run and fifteen floors for a hard run.
+    A route may advertise several supported run lengths. A normal run uses five floors.
+    A hard run may target five floors (fast weekly speedrun / 普转困) or fifteen floors
+    (Parallel Superposition / 平行叠加).
     Routes which only expose one length keep that length for compatibility;
     this lets legacy five-floor routes continue working in hard mode without
     pretending that they have a fifteen-floor strategy.
     """
 
     counts = _normalize_floor_counts(supported_floor_counts)
-    preferred_count = 15 if bool(hard_mirror) else 5
+    if bool(hard_mirror):
+        if target_floors is not None:
+            try:
+                target = int(target_floors)
+                if target in counts:
+                    return target
+            except (TypeError, ValueError):
+                pass
+        preferred_count = 15
+    else:
+        preferred_count = 5
+
     if preferred_count in counts:
         return preferred_count
     if 5 in counts:

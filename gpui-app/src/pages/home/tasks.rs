@@ -251,6 +251,42 @@ pub(super) fn mirror_card(
         busy,
         "hard-mirror",
     );
+    let hard_floors = {
+        let current_floors = config.hard_mirror_target_floors;
+        let mut group = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .rounded_lg()
+            .bg(rgb(SURFACE))
+            .p_1();
+        for (target, label) in [
+            (5, text("5层速刷", "5F Fast")),
+            (15, text("15层叠加", "15F Infinity")),
+        ] {
+            let is_selected = current_floors == target || (target == 5 && current_floors != 15);
+            let mut btn = button(
+                label.get(language),
+                if is_selected {
+                    ButtonVariant::Secondary
+                } else {
+                    ButtonVariant::Ghost
+                },
+            )
+            .id(format!("mirror-hard-floors-{target}"))
+            .px_2()
+            .py_0p5()
+            .text_size(px(11.0));
+            if !busy {
+                btn = btn.on_click(cx.listener(move |view, _, _, cx| {
+                    view.home.set_hard_mirror_target_floors(target);
+                    cx.notify();
+                }));
+            }
+            group = group.child(btn);
+        }
+        group
+    };
     let options = [
         (
             text("不使用每周加成", "Do Not Use Weekly Bonuses").get(language),
@@ -353,7 +389,11 @@ pub(super) fn mirror_card(
             ))
             .child(badge(
                 if progress.isHard {
-                    text("困难", "Hard").get(language)
+                    if config.hard_mirror_target_floors == 15 {
+                        text("困难·15层", "Hard (15F)").get(language)
+                    } else {
+                        text("困难·5层", "Hard (5F)").get(language)
+                    }
                 } else {
                     text("普通", "Normal").get(language)
                 },
@@ -361,19 +401,23 @@ pub(super) fn mirror_card(
             ))
     });
     let tab = app.home.options_tab(FixedTaskId::Mirror);
+    let mut general_controls = vec![
+        control_row(text("运行次数", "Run Count").get(language), number),
+        control_row(text("无限模式", "Infinite Mode").get(language), infinite),
+        control_row(text("困难镜牢", "Hard Mirror Dungeon").get(language), hard),
+    ];
+    if config.hard_mirror {
+        general_controls.push(control_row(
+            text("困牢目标", "Hard Target").get(language),
+            hard_floors,
+        ));
+    }
     let general = div()
         .flex()
         .flex_col()
         .gap_2()
         .children(progress)
-        .child(adaptive_settings_grid(
-            language,
-            vec![
-                control_row(text("运行次数", "Run Count").get(language), number),
-                control_row(text("无限模式", "Infinite Mode").get(language), infinite),
-                control_row(text("困难镜牢", "Hard Mirror Dungeon").get(language), hard),
-            ],
-        ));
+        .child(adaptive_settings_grid(language, general_controls));
     let advanced = div()
         .pt_2()
         .border_t_1()
@@ -418,7 +462,11 @@ pub(super) fn mirror_card(
                 preview_tag(
                     text("难度", "Difficulty").get(language),
                     if config.hard_mirror {
-                        text("困难", "Hard").get(language)
+                        if config.hard_mirror_target_floors == 15 {
+                            text("困难·15层", "Hard (15F)").get(language)
+                        } else {
+                            text("困难·5层", "Hard (5F)").get(language)
+                        }
                     } else {
                         text("普通", "Normal").get(language)
                     },
