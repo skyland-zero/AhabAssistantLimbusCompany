@@ -1,6 +1,9 @@
 use std::collections::VecDeque;
 
-use gpui::{Context, Render, ScrollHandle, WeakEntity, Window};
+use gpui::{
+    Context, MouseButton, MouseDownEvent, Render, ScrollHandle, ScrollWheelEvent, WeakEntity,
+    Window, point,
+};
 
 use crate::{app::AhabApp, model::Language};
 
@@ -51,7 +54,7 @@ pub(super) fn logs_card(app: &AhabApp) -> Div {
 }
 
 impl Render for LogPanelView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let language = self.language;
         let log_rows: Vec<_> = self
             .logs
@@ -128,6 +131,24 @@ impl Render for LogPanelView {
             )
             .child(div().flex().items_center().gap_1().child(clear_logs));
 
+        let log_content = div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .child(
+                scroll_area(div().children(log_rows))
+                    .track_scroll(&self.scroll_handle)
+                    .size_full()
+                    .min_h_0()
+                    .px_3()
+                    .py_2()
+                    .on_scroll_wheel(cx.listener(|_view, _: &ScrollWheelEvent, _window, cx| {
+                        cx.notify();
+                    })),
+            )
+            .child(render_log_scrollbar(&self.scroll_handle, cx));
+
         super::panel::panel_card(
             div()
                 .flex()
@@ -135,18 +156,94 @@ impl Render for LogPanelView {
                 .min_h_0()
                 .h_full()
                 .child(logs_header)
-                .child(
-                    scroll_area(div().children(log_rows))
-                        .track_scroll(&self.scroll_handle)
-                        .flex_1()
-                        .min_h_0()
-                        .px_3()
-                        .py_2(),
-                ),
+                .child(log_content),
         )
         .w_full()
         .h_full()
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LogScrollDragGhost;
+
+impl Render for LogScrollDragGhost {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div().w(px(1.0)).h(px(1.0)).bg(rgba(0))
+    }
+}
+
+fn render_log_scrollbar(
+    scroll_handle: &ScrollHandle,
+    cx: &mut Context<LogPanelView>,
+) -> impl IntoElement {
+    let offset_y = scroll_handle.offset().y.as_f32().abs();
+    let max_offset_y = scroll_handle.max_offset().y.as_f32().abs();
+    let viewport_h = scroll_handle.bounds().size.height.as_f32();
+
+    if max_offset_y <= 2.0 || viewport_h <= 10.0 {
+        return div().into_any_element();
+    }
+
+    let total_content_h = viewport_h + max_offset_y;
+    let thumb_ratio = (viewport_h / total_content_h).clamp(0.08, 0.92);
+    let scroll_progress = (offset_y / max_offset_y).clamp(0.0, 1.0);
+    let thumb_top_ratio = scroll_progress * (1.0 - thumb_ratio);
+
+    let mut thumb = div()
+        .id("log-scrollbar-thumb")
+        .absolute()
+        .top(relative(thumb_top_ratio))
+        .h(relative(thumb_ratio))
+        .w_full()
+        .rounded_full()
+        .bg(rgba((TEXT_MUTED << 8) | 0x60))
+        .hover(|style| style.bg(rgba((ACCENT << 8) | 0xaa)))
+        .cursor_pointer();
+
+    thumb = thumb
+        .on_drag(LogScrollDragGhost, |_, _, _, cx| {
+            cx.new(|_| LogScrollDragGhost)
+        })
+        .on_drag_move(cx.listener(
+            |view, event: &gpui::DragMoveEvent<LogScrollDragGhost>, _, cx| {
+                let track_height = event.bounds.size.height.as_f32().max(1.0);
+                let position_y = (event.event.position.y - event.bounds.top()).as_f32();
+                let scroll_ratio = (position_y / track_height).clamp(0.0, 1.0);
+                let max_offset_y = view.scroll_handle.max_offset().y.as_f32().abs();
+                view.scroll_handle
+                    .set_offset(point(px(0.0), px(-scroll_ratio * max_offset_y)));
+                cx.notify();
+            },
+        ));
+
+    let mut track = div()
+        .id("log-scrollbar-track")
+        .absolute()
+        .top(px(2.0))
+        .bottom(px(2.0))
+        .right(px(2.0))
+        .w(px(5.0))
+        .rounded_full()
+        .bg(rgba((SURFACE_HOVER << 8) | 0x30))
+        .hover(|style| style.bg(rgba((SURFACE_HOVER << 8) | 0x60)))
+        .child(thumb);
+
+    track = track.on_mouse_down(
+        MouseButton::Left,
+        cx.listener(|view, event: &MouseDownEvent, _, cx| {
+            let max_offset_y = view.scroll_handle.max_offset().y.as_f32().abs();
+            if max_offset_y > 0.0 {
+                let track_height = view.scroll_handle.bounds().size.height.as_f32().max(1.0);
+                let click_y = (event.position.y - view.scroll_handle.bounds().top()).as_f32();
+                let scroll_ratio = (click_y / track_height).clamp(0.0, 1.0);
+                view.scroll_handle
+                    .set_offset(point(px(0.0), px(-scroll_ratio * max_offset_y)));
+                cx.notify();
+            }
+        }),
+    );
+
+    track.into_any_element()
 }
 
 fn log_marker(level: LogLevel, color: u32) -> gpui::AnyElement {
@@ -178,4 +275,16 @@ fn format_log_time(timestamp: i64) -> String {
     let minutes = (seconds / 60) % 60;
     let seconds = seconds % 60;
     format!("{hours:02}:{minutes:02}:{seconds:02}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_log_time_handles_millis_and_seconds() {
+        assert_eq!(format_log_time(0), "00:00:00");
+        assert_eq!(format_log_time(3661), "01:01:01");
+        assert_eq!(format_log_time(172_803_661_000), "01:01:01");
+    }
 }

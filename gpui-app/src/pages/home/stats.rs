@@ -7,7 +7,7 @@ use crate::{
     model::{ExecutionStatsPayload, ExecutionStatusPayload, TasksConfig},
 };
 
-use crate::model::{CurrentRunStats, DailyStatEntry, MirrorCompletionStats, StatCounts};
+use crate::model::{CurrentRunStats, DailyStatEntry, StatCounts};
 
 const STATS_CARD_HEIGHT: f32 = 156.0;
 
@@ -78,13 +78,7 @@ fn render_overview(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div 
         .mr(px(4.0))
         .mt(px(10.0))
         .child(runtime_card(snapshot, root))
-        .child(recent_mirror_card(snapshot))
-        .child(
-            period_card(snapshot, root)
-                .flex_grow(1.0)
-                .flex_shrink(1.0)
-                .flex_basis(relative(0.0)),
-        )
+        .child(combined_history_card(snapshot, root))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -264,6 +258,7 @@ fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> 
     }
 
     card(content)
+        .p(px(10.0))
         .h(px(STATS_CARD_HEIGHT))
         .min_w_0()
         .overflow_hidden()
@@ -474,7 +469,7 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
         });
 
     let header = div()
-        .h(px(28.0))
+        .h(px(24.0))
         .flex_none()
         .flex()
         .items_center()
@@ -496,7 +491,7 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
         .child(badge(state_text, state_tone));
 
     let task_line = div()
-        .h(px(22.0))
+        .h(px(20.0))
         .flex_none()
         .flex()
         .items_center()
@@ -542,31 +537,65 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
             .h_full()
             .flex()
             .flex_col()
-            .gap_1()
+            .justify_between()
             .child(header)
             .child(task_line)
             .child(metrics),
     )
+    .p(px(10.0))
     .h(px(STATS_CARD_HEIGHT))
     .min_w_0()
     .overflow_hidden()
 }
 
-fn period_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
+fn combined_history_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
     let language = snapshot.language;
-    let today = snapshot.stats.today.clone();
-    let week = snapshot.stats.week.clone();
+    let period_section = period_summary_section(snapshot, root, language);
+    let divider = div()
+        .h(px(1.0))
+        .w_full()
+        .bg(rgba((BORDER << 8) | 0x60))
+        .my(px(3.0));
+    let mirror_section = recent_mirror_section(snapshot, language);
+
+    card(
+        div()
+            .h_full()
+            .flex()
+            .flex_col()
+            .justify_between()
+            .child(period_section)
+            .child(divider)
+            .child(mirror_section),
+    )
+    .p(px(10.0))
+    .h(px(STATS_CARD_HEIGHT))
+    .flex_grow(1.0)
+    .flex_shrink(1.0)
+    .flex_basis(relative(0.0))
+    .min_w_0()
+    .overflow_hidden()
+}
+
+fn period_summary_section(
+    snapshot: &StatsSnapshot,
+    root: &WeakEntity<AhabApp>,
+    language: Language,
+) -> Div {
+    let today = &snapshot.stats.today;
+    let week = &snapshot.stats.week;
+
     let mut details = button(
-        text("查看明细", "View Details").get(language),
+        text("明细", "Details").get(language),
         ButtonVariant::Ghost,
     )
     .id("stats-daily-open")
-    .h(px(26.0))
-    .px_2()
+    .h(px(20.0))
+    .px(px(6.0))
     .py_0()
     .gap_1()
-    .text_size(px(11.0))
-    .child(action_icon(ICON_CALENDAR_CHECK, 13., ACCENT));
+    .text_size(px(10.0))
+    .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -578,7 +607,7 @@ fn period_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
     });
 
     let header = div()
-        .h(px(28.0))
+        .h(px(20.0))
         .flex_none()
         .flex()
         .items_center()
@@ -588,194 +617,208 @@ fn period_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
             div()
                 .flex()
                 .items_center()
-                .gap_2()
-                .child(action_icon(ICON_HISTORY, 14., ACCENT))
+                .gap_1p5()
+                .child(action_icon(ICON_HISTORY, 13., ACCENT))
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(11.0))
                         .text_color(rgb(TEXT_MUTED))
-                        .child(text("今日 / 本周", "Today / Week").get(language)),
+                        .child(text("周期统计 (今日/本周)", "Period Stats (Today/Week)").get(language)),
                 ),
         )
         .child(details);
 
-    let column_header = div()
-        .h(px(18.0))
-        .flex_none()
+    let items = div()
         .flex()
         .items_center()
-        .text_size(px(10.0))
-        .text_color(rgb(TEXT_MUTED))
-        .child(div().flex_1().child(" "))
-        .child(period_value(text("今日", "Today").get(language)))
-        .child(period_value(text("本周", "Week").get(language)));
-
-    let rows = [
-        (text("经验本", "EXP").get(language), today.exp, week.exp),
-        (
+        .gap_1p5()
+        .mt(px(2.0))
+        .child(period_item(
+            text("经验本", "EXP").get(language),
+            today.exp,
+            week.exp,
+        ))
+        .child(period_item(
             text("纽本", "Thread").get(language),
             today.thread,
             week.thread,
-        ),
-        (
+        ))
+        .child(period_item(
             text("镜牢", "Mirror").get(language),
             today.mirror,
             week.mirror,
-        ),
-    ];
-    let mut body = div().flex().flex_col().gap_1().flex_1().min_h_0();
-    for (label, today, week) in rows {
-        body = body.child(
-            div()
-                .h(px(22.0))
-                .flex_none()
-                .flex()
-                .items_center()
-                .text_size(px(12.0))
-                .text_color(rgb(TEXT))
-                .child(div().flex_1().child(label))
-                .child(period_value(today.to_string()))
-                .child(period_value(week.to_string())),
-        );
-    }
+        ));
 
-    card(
-        div()
-            .h_full()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(header)
-            .child(column_header)
-            .child(body),
-    )
-    .h(px(STATS_CARD_HEIGHT))
-    .min_w_0()
-    .overflow_hidden()
+    div()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .child(header)
+        .child(items)
 }
 
-fn recent_mirror_card(snapshot: &StatsSnapshot) -> Div {
-    let language = snapshot.language;
+fn period_item(label: &'static str, today: u32, week: u32) -> Div {
+    div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .justify_between()
+        .gap(px(1.0))
+        .px_2()
+        .py(px(3.0))
+        .rounded_md()
+        .bg(rgba((SURFACE_HOVER << 8) | 0x35))
+        .child(
+            div()
+                .text_size(px(9.5))
+                .text_color(rgb(TEXT_MUTED))
+                .truncate()
+                .child(label),
+        )
+        .child(
+            div()
+                .flex()
+                .items_baseline()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(TEXT))
+                        .child(today.to_string()),
+                )
+                .child(
+                    div()
+                        .text_size(px(9.5))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(format!("/ {week}")),
+                ),
+        )
+}
+
+fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
+    let header_right = match snapshot.stats.lastMirror.as_ref() {
+        Some(record) => div()
+            .flex()
+            .items_center()
+            .gap_1p5()
+            .child(
+                div()
+                    .text_size(px(9.5))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child(format!(
+                        "{}{}",
+                        record.eventCount,
+                        text("次事件", " events").get(language)
+                    )),
+            )
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(ACCENT))
+                    .child(format_duration(record.totalSeconds)),
+            ),
+        None => div(),
+    };
+
     let header = div()
-        .h(px(28.0))
+        .h(px(20.0))
         .flex_none()
         .flex()
         .items_center()
+        .justify_between()
         .gap_2()
-        .child(action_icon(ICON_HISTORY, 14., ACCENT))
         .child(
             div()
-                .text_size(px(12.0))
-                .text_color(rgb(TEXT_MUTED))
-                .child(text("最近镜牢", "Recent Mirror").get(language)),
-        );
+                .flex()
+                .items_center()
+                .gap_1p5()
+                .child(action_icon(ICON_COMPASS, 13., ACCENT))
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(text("最近镜牢", "Recent Mirror").get(language)),
+                ),
+        )
+        .child(header_right);
 
     let body = match snapshot.stats.lastMirror.as_ref() {
-        Some(record) => recent_mirror_details(record, language),
+        Some(record) => div()
+            .flex()
+            .flex_col()
+            .gap(px(2.5))
+            .mt(px(2.0))
+            .child(
+                div()
+                    .flex()
+                    .gap_1p5()
+                    .child(recent_mirror_metric(
+                        text("战斗", "Battle").get(language),
+                        record.battleSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("事件", "Events").get(language),
+                        record.eventSeconds,
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_1p5()
+                    .child(recent_mirror_metric(
+                        text("商店", "Shop").get(language),
+                        record.shopSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("寻路", "Path").get(language),
+                        record.findRoadSeconds,
+                    )),
+            ),
         None => div()
-            .flex_1()
+            .h(px(40.0))
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(11.0))
+            .text_size(px(10.5))
             .text_color(rgb(TEXT_MUTED))
             .child(text("暂无完成记录", "No completed mirror").get(language)),
     };
 
-    card(
-        div()
-            .h_full()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(header)
-            .child(body),
-    )
-    .h(px(STATS_CARD_HEIGHT))
-    .flex_grow(1.0)
-    .flex_shrink(1.0)
-    .flex_basis(relative(0.0))
-    .min_w_0()
-    .overflow_hidden()
-}
-
-fn recent_mirror_details(record: &MirrorCompletionStats, language: Language) -> Div {
-    let completed_at = record.completedAt.replace('T', " ");
     div()
-        .flex_1()
-        .min_h_0()
+        .flex_none()
         .flex()
         .flex_col()
-        .justify_between()
-        .gap_1()
-        .text_size(px(10.0))
-        .text_color(rgb(TEXT_MUTED))
-        .child(recent_mirror_line(
-            text("完成时间", "Completed").get(language),
-            completed_at,
-        ))
-        .child(recent_mirror_line(
-            text("总耗时", "Total").get(language),
-            format_duration(record.totalSeconds),
-        ))
-        .child(
-            div()
-                .flex()
-                .gap_1()
-                .child(recent_mirror_metric(
-                    text("战斗", "Battle").get(language),
-                    record.battleSeconds,
-                ))
-                .child(recent_mirror_metric(
-                    text("事件", "Events").get(language),
-                    record.eventSeconds,
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .gap_1()
-                .child(recent_mirror_metric(
-                    text("商店", "Shop").get(language),
-                    record.shopSeconds,
-                ))
-                .child(recent_mirror_metric(
-                    text("寻路", "Path").get(language),
-                    record.findRoadSeconds,
-                )),
-        )
-        .child(div().text_color(rgb(TEXT_MUTED)).child(format!(
-            "{}：{} {}",
-            text("事件次数", "Event count").get(language),
-            record.eventCount,
-            text("次", "").get(language),
-        )))
-}
-
-fn recent_mirror_line(label: &'static str, value: String) -> Div {
-    div()
-        .flex()
-        .gap_2()
-        .child(div().w(px(48.0)).flex_none().child(label))
-        .child(
-            div()
-                .min_w_0()
-                .truncate()
-                .text_color(rgb(TEXT))
-                .child(value),
-        )
+        .child(header)
+        .child(body)
 }
 
 fn recent_mirror_metric(label: &'static str, seconds: f64) -> Div {
     div()
         .flex_1()
         .min_w_0()
+        .flex()
+        .items_center()
+        .justify_between()
         .rounded_sm()
-        .px_1()
-        .py_1()
-        .bg(rgba((SURFACE_HOVER << 8) | 0x45))
-        .child(div().truncate().child(label))
-        .child(div().text_color(rgb(TEXT)).child(format_duration(seconds)))
+        .px(px(6.0))
+        .py(px(2.0))
+        .bg(rgba((SURFACE_HOVER << 8) | 0x35))
+        .text_size(px(9.5))
+        .child(
+            div()
+                .text_color(rgb(TEXT_MUTED))
+                .truncate()
+                .child(label),
+        )
+        .child(
+            div()
+                .text_color(rgb(TEXT))
+                .font_weight(FontWeight::MEDIUM)
+                .child(format_duration(seconds)),
+        )
 }
 
 fn format_duration(seconds: f64) -> String {
@@ -809,7 +852,7 @@ fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) 
         .justify_between()
         .gap_1()
         .px_2()
-        .py_1()
+        .py_1p5()
         .rounded_md()
         .bg(rgba((SURFACE_HOVER << 8) | 0x45))
         .child(
@@ -821,7 +864,7 @@ fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) 
         )
         .child(
             div()
-                .text_size(px(17.0))
+                .text_size(px(16.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(TEXT))
                 .child(value),
@@ -840,14 +883,6 @@ fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) 
                         .bg(rgb(ACCENT)),
                 ),
         )
-}
-
-fn period_value(value: impl Into<String>) -> Div {
-    div()
-        .w(px(54.0))
-        .flex_none()
-        .text_center()
-        .child(value.into())
 }
 
 fn daily_details_body(
@@ -1024,5 +1059,13 @@ mod tests {
         assert_eq!(format_duration(3661.9), "01:01:01");
         assert_eq!(format_duration(-10.0), "00:00:00");
         assert_eq!(format_duration(f64::NAN), "00:00:00");
+    }
+
+    #[test]
+    fn stats_snapshot_defaults_to_zh_cn_and_empty_stats() {
+        let snapshot = StatsSnapshot::default();
+        assert_eq!(snapshot.language, Language::ZhCn);
+        assert!(snapshot.stats.lastMirror.is_none());
+        assert_eq!(snapshot.stats.today.exp, 0);
     }
 }
