@@ -137,7 +137,7 @@ mod tests {
             .unwrap();
         assert_eq!(normal.routeId, "hos_ryoshu_solo_route");
         assert_eq!(hard.routeId, "hos_ryoshu_solo_route");
-        assert_eq!(normal.team.sinners.len(), 12);
+        assert_eq!(normal.team.sinners.len(), 7);
         assert_eq!(hard.team.sinners.len(), 12);
         assert_eq!(normal.team.name, "小指良伪单通（普牢）");
         assert_eq!(hard.team.name, "小指良伪单通（困牢）");

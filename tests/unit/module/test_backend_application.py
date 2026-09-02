@@ -623,16 +623,21 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
     assert hard["routeId"] == "hos_ryoshu_solo_route"
     for solo in (normal, hard):
         assert solo["team"]["id"] == ""
-        assert len(solo["team"]["sinners"]) == 12
         assert solo["team"]["mirrorConfig"]["mirror_route_profile"] == "hos_ryoshu_solo_route"
         assert solo["team"]["mirrorConfig"]["observe_ego_gift_selected"] == ["spiderweb_entangled_in_red"]
         assert solo["team"]["mirrorConfig"]["opening_items"] is True
         assert solo["team"]["mirrorConfig"]["opening_items_system"] == 4
-        assert solo["team"]["mirrorConfig"]["use_team_code"] is True
-        assert solo["team"]["mirrorConfig"]["skill_replacement"] is True
         assert solo["description"]["zhCn"]
+    assert normal["team"]["mirrorConfig"]["use_team_code"] is False
+    assert hard["team"]["mirrorConfig"]["use_team_code"] is True
+    assert len(normal["team"]["sinners"]) == 7
+    assert len(hard["team"]["sinners"]) == 12
     assert normal["team"]["mirrorConfig"]["do_not_fuse"] is True
+    assert normal["team"]["mirrorConfig"]["do_not_buy"] is True
+    assert normal["team"]["mirrorConfig"]["skill_replacement"] is False
     assert hard["team"]["mirrorConfig"]["do_not_fuse"] is False
+    assert hard["team"]["mirrorConfig"]["do_not_buy"] is False
+    assert hard["team"]["mirrorConfig"]["skill_replacement"] is True
     assert normal["team"]["mirrorConfig"]["opening_bonus"] == [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
     assert hard["team"]["mirrorConfig"]["opening_bonus"] == [3] * 10
     app.close()

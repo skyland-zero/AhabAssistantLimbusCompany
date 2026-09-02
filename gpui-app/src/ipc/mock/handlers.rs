@@ -427,13 +427,16 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         opening_items: true,
         opening_items_select: 0,
         opening_items_system: 4,
-        do_not_heal: true,
+        do_not_buy: true,
         do_not_fuse: true,
+        do_not_enhance: true,
+        do_not_heal: true,
         do_not_sell: true,
+        ignore_shop: vec![true; 5],
         max_keyword_refresh: 2,
         max_normal_refresh: 3,
         defense_for_solo: true,
-        skill_replacement: true,
+        skill_replacement: false,
         skill_replacement_select: 0,
         skill_replacement_mode: 1,
         use_starlight: true,
@@ -446,9 +449,22 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         ..TeamMirrorConfig::default()
     };
     let mut hard_solo_config = normal_solo_config.clone();
+    hard_solo_config.do_not_buy = false;
     hard_solo_config.do_not_fuse = false;
+    hard_solo_config.do_not_enhance = false;
+    hard_solo_config.skill_replacement = true;
+    hard_solo_config.ignore_shop = vec![false; 5];
     hard_solo_config.opening_bonus = vec![3; 10];
 
+    let normal_solo_sinners = vec![
+        "ryoshu".into(),
+        "don_quixote".into(),
+        "heathcliff".into(),
+        "faust".into(),
+        "outis".into(),
+        "yi_sang".into(),
+        "ishmael".into(),
+    ];
     let solo_sinners = vec![
         "ryoshu".into(),
         "yi_sang".into(),
@@ -467,7 +483,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         schemaVersion: 1,
         id: String::new(),
         name: "小指良伪单通（普牢）".into(),
-        sinners: solo_sinners.clone(),
+        sinners: normal_solo_sinners,
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
@@ -524,8 +540,8 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
                 enUs: "Ryoshu Pseudo-Solo (Normal)".into(),
             },
             description: LocalizedText {
-                zhCn: "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。普通镜牢开局使用默认前四个一级星光，并跳过商店饰品合成以优先速刷。".into(),
-                enUs: "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 are prioritized sacrifices. Uses the default first four level-one starting bonuses for normal Mirror Dungeons and skips gift fusion for faster runs.".into(),
+                zhCn: "锁定 7 人编队（良秀首位，中指/环指父辈前置促成斩杀目标裂变），后备席留空实现 1 回合启动。普通镜牢全流程零商店纯 P 速刷（不买、不合、不强化），极大压缩现实过图时间。".into(),
+                enUs: "7-sinner lineup (Ryoshu first, Middle/Ring patriarchs placed early to split kill targets) with empty bench for 1-turn startup. Pure-P zero-shop speedrun for normal Mirror Dungeons (no buy, fuse, or enhance) to minimize real-world run time.".into(),
             },
             floorHint: LocalizedText {
                 zhCn: "适用于普通镜牢，执行 1–5 层".into(),

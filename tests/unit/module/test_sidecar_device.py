@@ -137,6 +137,7 @@ def test_mumu_discovery_does_not_fabricate_configured_instance_on_manager_error(
             stderr="",
         )
 
+    monkeypatch.setattr(manager, "_configured_mumu_instance", lambda: 0)
     monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
     monkeypatch.setattr(device_manager_module.subprocess, "run", run)
 

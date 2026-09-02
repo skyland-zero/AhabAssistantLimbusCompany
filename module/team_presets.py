@@ -82,14 +82,13 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
         name_zh="小指良伪单通（普牢）",
         name_en="Ryoshu Pseudo-Solo (Normal)",
         description_zh=(
-            "良秀首位，李箱与罗佳随后；4–6 号位安排优先牺牲人格。"
-            "普通镜牢开局使用默认前四个一级星光，并跳过商店饰品合成以优先速刷。"
+            "锁定 7 人编队（良秀首位，中指/环指父辈前置促成斩杀目标裂变），后备席留空实现 1 回合启动。"
+            "普通镜牢全流程零商店纯 P 速刷（不买、不合、不强化），极大压缩现实过图时间。"
         ),
         description_en=(
-            "Ryoshu starts first, followed by Yi Sang and Rodion; slots 4–6 "
-            "are prioritized sacrifices. Uses the default first four level-one "
-            "starting bonuses for normal Mirror Dungeons and skips gift fusion "
-            "for faster runs."
+            "7-sinner lineup (Ryoshu first, Middle/Ring patriarchs placed early to split kill targets) "
+            "with empty bench for 1-turn startup. Pure-P zero-shop speedrun for normal Mirror Dungeons "
+            "(no buy, fuse, or enhance) to minimize real-world run time."
         ),
         floor_hint_zh="适用于普通镜牢，执行 1–5 层",
         floor_hint_en="For normal Mirror Dungeons; runs floors 1–5",
@@ -97,10 +96,19 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
         route_name_en="House of Spiders Ryoshu route",
         setting={
             **_HOS_RYOSHU_SOLO_SETTING,
-            # Normal pseudo-solo clears do not depend on keyword-fused gifts;
-            # skip the shop fusion phase to reduce run time.  Hard keeps its
-            # existing conservative fusion setting.
+            "sinners_be_select": 7,
+            "chosen_sinners": [1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0],
+            "sinner_order": [6, 0, 0, 1, 0, 3, 5, 0, 4, 7, 2, 0],
+            "use_team_code": False,
+            "team_code": "",
+            "shop_strategy": 0,
+            "do_not_buy": True,
             "do_not_fuse": True,
+            "do_not_enhance": True,
+            "do_not_sell": True,
+            "do_not_heal": True,
+            "skill_replacement": False,
+            "ignore_shop": [1, 1, 1, 1, 1],
             "opening_bonus": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
             "remark_name": "小指良伪单通（普牢）",
         },
