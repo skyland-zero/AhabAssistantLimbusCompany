@@ -69,6 +69,7 @@ pub enum SystemBool {
     Autostart,
     KeepScreenAwake,
     HdrWarning,
+    TemplateBlur,
     Prerelease,
 }
 

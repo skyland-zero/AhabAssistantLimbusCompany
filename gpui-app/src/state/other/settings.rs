@@ -62,6 +62,7 @@ impl SettingsPageState {
             SystemBool::Autostart => self.system.autostart = value,
             SystemBool::KeepScreenAwake => self.system.experimental_keep_screen_awake = value,
             SystemBool::HdrWarning => self.system.experimental_hdr_warning = value,
+            SystemBool::TemplateBlur => self.system.enable_template_blur = value,
             SystemBool::Prerelease => self.system.update_prerelease_enable = value,
         }
         self.persist_system();
@@ -184,6 +185,7 @@ impl SettingsPageState {
             "autostart": self.system.autostart,
             "experimental_keep_screen_awake": self.system.experimental_keep_screen_awake,
             "experimental_hdr_warning": self.system.experimental_hdr_warning,
+            "enable_template_blur": self.system.enable_template_blur,
             "update_prerelease_enable": self.system.update_prerelease_enable,
             "update_source": self.system.update_source,
             "mirrorchyan_cdk": self.system.mirrorchyan_cdk,

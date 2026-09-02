@@ -544,6 +544,9 @@ class ConfigModel(BaseModel):
     mirror_keyboard_simple_pathfinding: bool
     """简单键盘寻路模式：始终按↑选择第一个节点，完全避免鼠标拖动"""
 
+    enable_template_blur: bool = False
+    """是否启用模板高斯模糊（抗Scrcpy/H264压缩噪点，关闭可省CPU）"""
+
     teams: dict[str, TeamSetting]
     """队伍设置"""
 

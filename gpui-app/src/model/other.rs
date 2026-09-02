@@ -100,12 +100,15 @@ pub struct SystemSettingsConfig {
     pub autostart: bool,
     pub experimental_keep_screen_awake: bool,
     pub experimental_hdr_warning: bool,
+    #[serde(default = "default_enable_template_blur")]
+    pub enable_template_blur: bool,
     pub update_prerelease_enable: bool,
     pub update_source: UpdateSource,
     pub mirrorchyan_cdk: String,
     #[serde(default)]
     pub wxpusher_spt: String,
 }
+fn default_enable_template_blur() -> bool { false }
 impl Default for SystemSettingsConfig {
     fn default() -> Self {
         Self {
@@ -119,6 +122,7 @@ impl Default for SystemSettingsConfig {
             autostart: false,
             experimental_keep_screen_awake: true,
             experimental_hdr_warning: true,
+            enable_template_blur: false,
             update_prerelease_enable: false,
             update_source: UpdateSource::GitHub,
             mirrorchyan_cdk: String::new(),

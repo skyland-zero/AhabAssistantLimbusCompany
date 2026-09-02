@@ -232,20 +232,27 @@ class ImageUtils:
                         min(bbox[2] + 30, width),  # 确保右下角 x 坐标不大于 图片宽
                         min(bbox[3] + 30, height),  # 确保右下角 y 坐标不大于 图片高
                     )
-            # 应用 3x3 高斯模糊，消除 Scrcpy/H.264 的高频压缩噪点
-            blurred_template = cv2.GaussianBlur(template, (3, 3), 0)
-
+            # 模板已在加载时按开关预糊，此处仅对截图高斯；开关关闭时模板未糊，截图也不糊以保持原图匹配
+            from module.config import cfg as _cfg
+            _blur_on = bool(getattr(_cfg, "enable_template_blur", False))
             if bbox is not None and model != "aggressive":
-                screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
-                blurred_crop = cv2.GaussianBlur(screenshot_crop, (3, 3), 0)
-                result = cv2.matchTemplate(blurred_crop, blurred_template, cv2.TM_CCOEFF_NORMED)
+                if _blur_on:
+                    screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+                    blurred_crop = cv2.GaussianBlur(screenshot_crop, (3, 3), 0)
+                    result = cv2.matchTemplate(blurred_crop, template, cv2.TM_CCOEFF_NORMED)
+                else:
+                    screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+                    result = cv2.matchTemplate(screenshot_crop, template, cv2.TM_CCOEFF_NORMED)
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                 h, w = template.shape[:2]
                 center = (bbox[0] + max_loc[0] + w // 2, bbox[1] + max_loc[1] + h // 2)
                 return center, max_val
             else:
-                blurred_screenshot = cv2.GaussianBlur(screenshot, (3, 3), 0)
-                result = cv2.matchTemplate(blurred_screenshot, blurred_template, cv2.TM_CCOEFF_NORMED)
+                if _blur_on:
+                    blurred_screenshot = cv2.GaussianBlur(screenshot, (3, 3), 0)
+                    result = cv2.matchTemplate(blurred_screenshot, template, cv2.TM_CCOEFF_NORMED)
+                else:
+                    result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                 h, w = template.shape[:2]
                 center = (int(max_loc[0]) + w // 2, int(max_loc[1]) + h // 2)
@@ -263,10 +270,13 @@ class ImageUtils:
         再执行原有的最小距离抑制，可以保留目标级别的结果并避免全量排序。
         """
         w, h = ImageUtils.get_image_info(template)
-        # 应用 3x3 高斯模糊，消除 Scrcpy/H.264 的高频压缩噪点
-        blurred_screenshot = cv2.GaussianBlur(screenshot, (3, 3), 0)
-        blurred_template = cv2.GaussianBlur(template, (3, 3), 0)
-        res = cv2.matchTemplate(blurred_screenshot, blurred_template, cv2.TM_CCOEFF_NORMED)
+        # 模板已按开关预糊，仅当开启时对截图高斯
+        from module.config import cfg as _cfg2
+        if bool(getattr(_cfg2, "enable_template_blur", False)):
+            blurred_screenshot = cv2.GaussianBlur(screenshot, (3, 3), 0)
+            res = cv2.matchTemplate(blurred_screenshot, template, cv2.TM_CCOEFF_NORMED)
+        else:
+            res = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
         match_mask = np.asarray(res >= threshold, dtype=np.uint8)
         if not np.any(match_mask):
             log.debug(f"未找到匹配项，最高匹配度为：{np.max(res)}")

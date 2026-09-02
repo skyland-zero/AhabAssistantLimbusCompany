@@ -1011,7 +1011,7 @@ class Automation(metaclass=SingletonMeta):
         log.debug("图片缓存已清除", stacklevel=2)
 
     def _load_template_for_path(self, target: str, target_path: str, cacheable: bool):
-        cache_key = ("template", target, target_path, cfg.set_win_size)
+        cache_key = ("template", target, target_path, cfg.set_win_size, bool(getattr(cfg, "enable_template_blur", False)))
         if cacheable and cache_key in self.img_cache:
             cached = self.img_cache[cache_key]
             return cached["template"], cached["bbox"]
@@ -1024,6 +1024,13 @@ class Automation(metaclass=SingletonMeta):
             template = ImageUtils.crop(template, bbox)
         else:
             bbox = None
+        # 预糊模板：3x3高斯抗Scrcpy/H264噪点，存缓存省每帧重算，受开关控制
+        if template is not None and bool(getattr(cfg, "enable_template_blur", False)):
+            try:
+                blurred = cv2.GaussianBlur(template, (3, 3), 0)
+            except Exception:
+                blurred = template
+            template = blurred
         if cacheable:
             self.img_cache[cache_key] = {"template": template, "bbox": bbox}
         return template, bbox
@@ -1037,6 +1044,7 @@ class Automation(metaclass=SingletonMeta):
             tuple(path_manager.pic_path),
             path_manager.current_theme,
             path_manager.current_language,
+            bool(getattr(cfg, "enable_template_blur", False)),
         )
         cached = self.img_cache.get(cache_key)
         if cached is not None:
@@ -1049,6 +1057,12 @@ class Automation(metaclass=SingletonMeta):
         if target.endswith("assets.png"):
             bbox = ImageUtils.get_bbox(template)
             template = ImageUtils.crop(template, bbox)
+        # 预糊模板：3x3高斯抗Scrcpy/H264噪点，存缓存省每帧重算，受开关控制
+        if template is not None and bool(getattr(cfg, "enable_template_blur", False)):
+            try:
+                template = cv2.GaussianBlur(template, (3, 3), 0)
+            except Exception:
+                pass
         self.img_cache[cache_key] = {"template": template, "bbox": bbox}
         return template, bbox
 

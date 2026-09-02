@@ -103,6 +103,20 @@ pub fn experimental_card(
                     "settings-hdr",
                 ),
             ),
+            setting_row(
+                text("模板高斯模糊", "Template Gaussian Blur").get(language),
+                text(
+                    "抗 Scrcpy H.264 压缩噪点，Scrcpy 建议开启，MuMu 可关闭省 CPU",
+                    "Anti H.264 blur for Scrcpy, on for Scrcpy, off to save CPU on MuMu",
+                )
+                .get(language),
+                setting_switch(
+                    cx,
+                    SystemBool::TemplateBlur,
+                    system.enable_template_blur,
+                    "settings-template-blur",
+                ),
+            ),
         ]));
     settings_card(
         text("实验性功能", "Experimental Features").get(language),
