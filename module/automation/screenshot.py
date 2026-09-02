@@ -399,10 +399,30 @@ class ScreenShot:
             log.error("未连接到 Scrcpy 设备")
             raise ConnectionError("未连接到 Scrcpy 设备")
 
-        image = controller.screenshot()
-        image = Image.fromarray(image)
-        if gray:
-            image = image.convert("L")
+        snapshot = getattr(controller, "snapshot", None)
+        if callable(snapshot):
+            # Scrcpy's luma path reads the Y plane directly.  RGB is only
+            # materialized for previews and callers that explicitly request
+            # a color screenshot.
+            frame = snapshot(mode="luma" if gray else "rgb")
+            image_array = getattr(frame, "image", None)
+            frame_seq = getattr(frame, "seq", None)
+            if image_array is None or not isinstance(frame_seq, int) or isinstance(frame_seq, bool):
+                # A third-party controller may expose an unrelated
+                # ``snapshot`` method. Preserve the legacy ndarray contract
+                # unless this is the Scrcpy FrameSnapshot shape.
+                image = Image.fromarray(controller.screenshot())
+                if gray:
+                    image = image.convert("L")
+            else:
+                image = Image.fromarray(image_array)
+                image.info["scrcpy_frame_seq"] = frame_seq
+                image.info["scrcpy_frame_pts"] = getattr(frame, "pts", None)
+                image.info["scrcpy_decoded_at"] = getattr(frame, "decoded_at", None)
+        else:
+            image = Image.fromarray(controller.screenshot())
+            if gray:
+                image = image.convert("L")
         return image
 
     @staticmethod

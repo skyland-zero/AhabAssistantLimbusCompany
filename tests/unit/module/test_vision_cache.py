@@ -76,6 +76,22 @@ def test_business_input_invalidates_monitor_and_derived_frame_caches() -> None:
     input_handler.mouse_click.assert_called_once_with(1, 2, times=1)
 
 
+def test_scrcpy_business_input_waits_for_a_new_decoder_frame() -> None:
+    automation = make_automation(Image.new("L", (4, 4), 128))
+    input_handler = Mock()
+    input_handler.frame_seq = 7
+    input_handler.mouse_click.return_value = True
+    input_handler.wait_for_next_frame.return_value = True
+    automation.input_handler = input_handler
+
+    assert automation._run_business_interaction("mouse_click", 1, 2, times=1) is True
+
+    input_handler.touch_consumer.assert_called_once_with()
+    input_handler.wait_for_next_frame.assert_called_once()
+    assert input_handler.wait_for_next_frame.call_args.args == (7,)
+    assert input_handler.wait_for_next_frame.call_args.kwargs["timeout"] == 1.0
+
+
 def test_feature_template_and_descriptors_are_loaded_once_until_cleared() -> None:
     automation = make_automation(Image.new("L", (4, 4), 128))
     template = Image.new("L", (4, 4), 255)

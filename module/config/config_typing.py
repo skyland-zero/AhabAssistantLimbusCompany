@@ -337,6 +337,18 @@ class ConfigModel(BaseModel):
     screenshot_interval: float
     """截图间隔时间"""
 
+    scrcpy_max_fps: int
+    """Scrcpy 视频最大帧率"""
+
+    scrcpy_video_bit_rate: int
+    """Scrcpy 视频码率（bps）"""
+
+    scrcpy_use_luma_gray: bool
+    """Scrcpy 业务灰度识别是否直接读取 Y/luma 平面"""
+
+    scrcpy_gesture_settle: float
+    """Scrcpy 触控手势结束后的稳定等待时间（秒）"""
+
     mouse_action_interval: float
     """鼠标操作间隔时间"""
 

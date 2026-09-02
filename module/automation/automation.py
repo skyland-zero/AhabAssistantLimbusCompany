@@ -3,7 +3,6 @@ import math
 import random
 import threading
 import time
-import zlib
 from dataclasses import dataclass
 from typing import Any, List
 
@@ -51,6 +50,7 @@ class Automation(metaclass=SingletonMeta):
         # monotonically increasing id so OCR/feature caches can never cross a
         # physical screenshot boundary.
         self._frame_id = 0
+        self._source_frame_seq: int | None = None
         self._frame_dirty = True
         self._screenshot_array_cache = {}
         self._ocr_cache = {}
@@ -74,6 +74,12 @@ class Automation(metaclass=SingletonMeta):
         before consulting the legacy class-level connection pointers so a
         stale pointer cannot redirect input to another device.
         """
+        # A decoder sequence is scoped to one controller.  Rebinding the
+        # automation layer to another device must not let a new device whose
+        # sequence starts at 1 reuse the previous device's caches.
+        if hasattr(self, "_source_frame_seq"):
+            self._source_frame_seq = None
+            self._mark_screenshot_dirty()
         if self.input_handler:
             self.input_handler = None
 
@@ -174,6 +180,41 @@ class Automation(metaclass=SingletonMeta):
         self._input_lock = threading.RLock()
         self._screenshot_lock = threading.RLock()
 
+    @staticmethod
+    def _input_frame_seq(input_handler) -> int | None:
+        value = getattr(input_handler, "frame_seq", None)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return None
+
+    def _invoke_input_and_wait_for_frame(self, method, *args, **kwargs):
+        """Run an input action and, for Scrcpy, wait for a post-input frame."""
+        input_handler = self.input_handler
+        before_seq = self._input_frame_seq(input_handler)
+        started_at = time.monotonic()
+        if before_seq is not None:
+            touch_consumer = getattr(input_handler, "touch_consumer", None)
+            if callable(touch_consumer):
+                touch_consumer()
+
+        self._mark_screenshot_dirty()
+        result = method(*args, **kwargs)
+
+        if before_seq is not None:
+            wait_for_next_frame = getattr(input_handler, "wait_for_next_frame", None)
+            if not callable(wait_for_next_frame):
+                wait_for_next_frame = getattr(input_handler, "wait_next_frame", None)
+            if callable(wait_for_next_frame):
+                try:
+                    updated = wait_for_next_frame(before_seq, timeout=1.0, started_at=started_at)
+                except TypeError:
+                    # Keep compatibility with lightweight test/dummy
+                    # controllers that expose the two-argument form.
+                    updated = wait_for_next_frame(before_seq, timeout=1.0)
+                if not updated:
+                    log.debug("输入后未在 1 秒内获取到新 Scrcpy 帧，继续使用最新可用画面")
+        return result
+
     def _run_business_interaction(self, method_name: str, *args, **kwargs):
         """在交互门放行且取得输入锁后执行一次业务输入。
 
@@ -188,14 +229,10 @@ class Automation(metaclass=SingletonMeta):
                 check_cancelled()
                 if gate_open and self._interaction_gate.is_set():
                     method = getattr(self.input_handler, method_name)
-                    self._mark_screenshot_dirty()
-                    result = method(*args, **kwargs)
-                    return result
+                    return self._invoke_input_and_wait_for_frame(method, *args, **kwargs)
                 if not gate_open:
                     method = getattr(self.input_handler, method_name)
-                    self._mark_screenshot_dirty()
-                    result = method(*args, **kwargs)
-                    return result
+                    return self._invoke_input_and_wait_for_frame(method, *args, **kwargs)
                 # gate_open 但等待输入锁期间门被关闭:重新等待
 
     def mouse_click(self, x, y, times=1):
@@ -235,9 +272,9 @@ class Automation(metaclass=SingletonMeta):
 
     def monitor_mouse_click(self, x, y, times=1):
         """由系统监控线程点击，不等待该监控线程设置的互斥门。"""
-        self._mark_screenshot_dirty()
         with self._input_lock:
-            result = self.input_handler.mouse_click(x, y, times=times)
+            method = getattr(self.input_handler, "mouse_click")
+            result = self._invoke_input_and_wait_for_frame(method, x, y, times=times)
         return result
 
     def _mark_screenshot_dirty(self) -> None:
@@ -255,32 +292,39 @@ class Automation(metaclass=SingletonMeta):
         getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
 
-    def _set_business_screenshot(self, screenshot: Image) -> None:
-        """Publish a newly captured business frame and invalidate old results.
+    @staticmethod
+    def _screenshot_frame_seq(screenshot) -> int | None:
+        info = getattr(screenshot, "info", None)
+        if not isinstance(info, dict):
+            return None
+        value = info.get("scrcpy_frame_seq")
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return None
 
-        指纹去重：::32 采样 6KB + zlib.crc32 0.02ms，内容相同则复用旧帧，
-        不递增 _frame_id 且不清空 OCR/模板缓存，Scrcpy 0.2s 轮询下省 80% 重算。
+    def _set_business_screenshot(self, screenshot: Image, frame_seq: int | None = None) -> None:
+        """Publish a screenshot and invalidate caches only for a new frame.
+
+        Scrcpy attaches its decoder sequence to the PIL image.  Repeated
+        reads of the same physical frame therefore reuse OCR/template
+        results without scanning pixels with a second CRC pass.  PC/MuMu and
+        external screenshots retain the old object-based fallback semantics.
         """
-        # 仅对 Scrcpy/ADB 流式源做内容去重，PC/MuMu 仍走原逻辑（frame_id 递增）
-        try:
-            if getattr(self, "screenshot", None) is not None and screenshot is not None:
-                # 快速采样指纹：PIL -> numpy -> ::32 视图片段
-                old = getattr(self, "screenshot", None)
-                if old is not None and old.size == screenshot.size and old.mode == screenshot.mode:
-                    # PIL 相同尺寸/模式才比对，避免误判
-                    old_arr = np.ascontiguousarray(np.asarray(old)[::32, ::32])
-                    new_arr = np.ascontiguousarray(np.asarray(screenshot)[::32, ::32])
-                    # zlib.crc32 走 buffer，6KB 级别
-                    old_h = zlib.crc32(old_arr) ^ hash(old_arr.shape)
-                    new_h = zlib.crc32(new_arr) ^ hash(new_arr.shape)
-                    if old_h == new_h:
-                        # 内容相同：复用旧帧对象，保持 _frame_id/id 缓存命中
-                        self._frame_dirty = False
-                        return
-        except Exception:
-            pass
+        if frame_seq is None:
+            frame_seq = self._screenshot_frame_seq(screenshot)
+        previous_seq = getattr(self, "_source_frame_seq", None)
+        if frame_seq is not None and previous_seq == frame_seq:
+            self.screenshot = screenshot
+            self._frame_dirty = False
+            return
+
         self.screenshot = screenshot
-        self._frame_id = getattr(self, "_frame_id", 0) + 1
+        if frame_seq is None:
+            self._source_frame_seq = None
+            self._frame_id = getattr(self, "_frame_id", 0) + 1
+        else:
+            self._source_frame_seq = frame_seq
+            self._frame_id = frame_seq
         self._frame_dirty = False
         getattr(self, "_screenshot_array_cache", {}).clear()
         getattr(self, "_ocr_cache", {}).clear()
@@ -294,12 +338,15 @@ class Automation(metaclass=SingletonMeta):
         return tuple(round(float(value), 4) for value in crop)
 
     def _current_frame_key(self, screenshot=None):
-        """Return a cache key that changes for both new frames and new objects."""
+        """Return a cache key based on decoder sequence when available."""
         if screenshot is None:
             screenshot = getattr(self, "screenshot", None)
             frame_id = getattr(self, "_frame_id", 0)
         else:
             frame_id = 0
+        source_frame_seq = self._screenshot_frame_seq(screenshot)
+        if source_frame_seq is not None:
+            return "scrcpy", source_frame_seq
         return frame_id, id(screenshot)
 
     def _match_cache_state_key(self):
