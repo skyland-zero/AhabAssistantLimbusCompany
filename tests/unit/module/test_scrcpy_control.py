@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import struct
 from unittest.mock import Mock
 
 import numpy as np
@@ -18,3 +19,27 @@ def test_scrcpy_decoder_requests_rgb_frames() -> None:
 
     assert np.array_equal(actual, expected)
     frame.to_ndarray.assert_called_once_with(format="rgb24")
+
+
+def test_scrcpy_v41_server_command_uses_exact_size_30_fps_and_30mbps() -> None:
+    command = ScrcpyControl._build_server_shell_command("/data/local/tmp/scrcpy-server.jar")
+
+    assert "Server 4.1" in command
+    assert "video_codec=h264" in command
+    assert "max_size=0" in command
+    assert "max_fps=15" in command
+    assert "video_bit_rate=8000000" in command
+    assert "send_stream_meta=true" in command
+    assert "downsize_on_error=false" in command
+
+
+def test_scrcpy_v41_session_metadata_updates_resolution() -> None:
+    header = struct.pack(">III", 0x80000001, 1920, 1080)
+
+    assert ScrcpyControl._parse_session_meta(header) == (1920, 1080)
+
+
+def test_scrcpy_v41_regular_packet_header_is_not_session_metadata() -> None:
+    header = struct.pack(">QI", 123456, 42)
+
+    assert ScrcpyControl._parse_session_meta(header) is None

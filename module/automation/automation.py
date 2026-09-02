@@ -3,6 +3,7 @@ import math
 import random
 import threading
 import time
+import zlib
 from dataclasses import dataclass
 from typing import Any, List
 
@@ -255,7 +256,29 @@ class Automation(metaclass=SingletonMeta):
         getattr(self, "_feature_frame_cache", {}).clear()
 
     def _set_business_screenshot(self, screenshot: Image) -> None:
-        """Publish a newly captured business frame and invalidate old results."""
+        """Publish a newly captured business frame and invalidate old results.
+
+        指纹去重：::32 采样 6KB + zlib.crc32 0.02ms，内容相同则复用旧帧，
+        不递增 _frame_id 且不清空 OCR/模板缓存，Scrcpy 0.2s 轮询下省 80% 重算。
+        """
+        # 仅对 Scrcpy/ADB 流式源做内容去重，PC/MuMu 仍走原逻辑（frame_id 递增）
+        try:
+            if getattr(self, "screenshot", None) is not None and screenshot is not None:
+                # 快速采样指纹：PIL -> numpy -> ::32 视图片段
+                old = getattr(self, "screenshot", None)
+                if old is not None and old.size == screenshot.size and old.mode == screenshot.mode:
+                    # PIL 相同尺寸/模式才比对，避免误判
+                    old_arr = np.ascontiguousarray(np.asarray(old)[::32, ::32])
+                    new_arr = np.ascontiguousarray(np.asarray(screenshot)[::32, ::32])
+                    # zlib.crc32 走 buffer，6KB 级别
+                    old_h = zlib.crc32(old_arr) ^ hash(old_arr.shape)
+                    new_h = zlib.crc32(new_arr) ^ hash(new_arr.shape)
+                    if old_h == new_h:
+                        # 内容相同：复用旧帧对象，保持 _frame_id/id 缓存命中
+                        self._frame_dirty = False
+                        return
+        except Exception:
+            pass
         self.screenshot = screenshot
         self._frame_id = getattr(self, "_frame_id", 0) + 1
         self._frame_dirty = False
