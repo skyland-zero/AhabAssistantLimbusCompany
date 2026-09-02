@@ -1607,23 +1607,27 @@ class BackendApplication:
             if self._execution_state == "running" and not self._execution_stop.is_set():
                 notification_details = payload.get("lastMirror") if task_kind == "mirror" else None
                 if isinstance(notification_details, Mapping):
-                    # 失败的镜牢（结算超时）也更新 lastMirror，但按失败通知发送，带统计
+                    # 仅结算超时视为失败通知；其他 failed（如中途放弃/未100%但已回到主界面）不按失败推送，避免正常领取被误报为错误
                     if notification_details.get("failed"):
-                        # 使用失败通知，附带统计明细
-                        from module.notification.wxpusher import _mirror_detail_lines as _detail
-                        details_text = "\n".join(_detail(notification_details))
-                        reason = notification_details.get("failureReason") or "结算超时"
-                        content = f"AALC 镜牢结算失败\n原因：{reason}\n" + details_text
-                        # 直接入队失败通知，复用失败通道但携带统计
-                        spt = self._config_value("wxpusher_spt", "")
-                        if isinstance(spt, str) and spt.strip():
-                            try:
-                                from module.notification.wxpusher import NotificationService
-                                svc = NotificationService()
-                                svc._enqueue(spt, content, "AALC 镜牢结算失败")
-                            except Exception:
-                                pass
-                        # 仍更新 lastMirror，不再发成功通知
+                        if notification_details.get("failureReason") == "settlement_timeout":
+                            # 使用失败通知，附带统计明细
+                            from module.notification.wxpusher import _mirror_detail_lines as _detail
+                            details_text = "\n".join(_detail(notification_details))
+                            reason = notification_details.get("failureReason") or "结算超时"
+                            content = f"AALC 镜牢结算失败\n原因：{reason}\n" + details_text
+                            # 直接入队失败通知，复用失败通道但携带统计
+                            spt = self._config_value("wxpusher_spt", "")
+                            if isinstance(spt, str) and spt.strip():
+                                try:
+                                    from module.notification.wxpusher import NotificationService
+                                    svc = NotificationService()
+                                    svc._enqueue(spt, content, "AALC 镜牢结算失败")
+                                except Exception:
+                                    pass
+                            # 仍更新 lastMirror，不再发成功通知
+                        else:
+                            # 非超时的 failed（如检测到非100%但已回到主界面），不推送失败/成功，避免正常领取被误报
+                            pass
                     else:
                         self._queue_notification("enqueue_completion", task_kind, amount, notification_details)
                 else:

@@ -7,6 +7,8 @@ use crate::{
     model::{ExecutionStatsPayload, ExecutionStatusPayload, TasksConfig},
 };
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::model::{
     CurrentRunStats, DailyStatEntry, MirrorCompletionStats, MirrorTeamStats, StatCounts,
 };
@@ -970,11 +972,7 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
         );
 
     let info_row = {
-        let elapsed_secs = match (current.startedAt, current.updatedAt) {
-            (Some(start), Some(updated)) if updated >= start => ((updated - start) / 1000) as f64,
-            (Some(start), None) => ((snapshot.stats.updatedAt - start) / 1000).max(0) as f64,
-            _ => 0.0,
-        };
+        let elapsed_secs = live_elapsed_secs(current, snapshot.stats.updatedAt, state);
         let elapsed_str = format_duration(elapsed_secs);
         let started_hm = current.startedAt.map(|ms| {
             let secs_of_day = ((ms / 1000) % 86400 + 86400) % 86400;
@@ -1020,6 +1018,18 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
     };
 
     let mirror_block: gpui::AnyElement = if current_task_is_mirror(current_task) && current.runId.is_some() {
+        let is_running = state == ExecutionState::Running;
+        let display_completed = if is_running {
+            if infinite {
+                completed.mirror + 1
+            } else if targets.mirror > 0 {
+                (completed.mirror + 1).min(targets.mirror)
+            } else {
+                completed.mirror + 1
+            }
+        } else {
+            completed.mirror
+        };
         div()
             .flex_none()
             .flex()
@@ -1034,7 +1044,7 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                     .child(
                         div()
                             .h_full()
-                            .w(relative(mirror_progress_ratio(completed.mirror, targets.mirror, infinite)))
+                            .w(relative(mirror_progress_ratio(display_completed, targets.mirror, infinite)))
                             .rounded_full()
                             .bg(rgb(ACCENT)),
                     ),
@@ -1048,12 +1058,12 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                     .text_color(rgb(TEXT_MUTED))
                     .child(format!(
                         "镜牢进度 {}/{}{}",
-                        completed.mirror,
+                        display_completed,
                         if infinite { "∞".to_string() } else { targets.mirror.to_string() },
-                        if state == ExecutionState::Running { " · 进行中" } else { "" }
+                        if is_running { " · 进行中" } else { "" }
                     ))
                     .child(div().text_color(rgb(TEXT)).child(format_duration(
-                        current.startedAt.and_then(|s| current.updatedAt.map(|u| ((u - s) / 1000) as f64)).unwrap_or(0.0)
+                        live_elapsed_secs(current, snapshot.stats.updatedAt, state)
                     ))),
             )
             .into_any_element()
@@ -1293,9 +1303,14 @@ fn recent_mirror_section(
     let header_right = match snapshot.stats.lastMirror.as_ref() {
         Some(record) => {
             let is_failed = record.failed.unwrap_or(false);
+            let is_timeout = record.failureReason.as_deref() == Some("settlement_timeout");
             let status_badge = if is_failed {
                 badge(
-                    text("领取超时", "Claim Timeout").get(language),
+                    if is_timeout {
+                        text("领取超时", "Claim Timeout").get(language)
+                    } else {
+                        text("未完成", "Incomplete").get(language)
+                    },
                     BadgeTone::Danger,
                 )
             } else {
@@ -1455,6 +1470,28 @@ fn recent_mirror_metric(label: &'static str, seconds: f64) -> Div {
                 .font_weight(FontWeight::MEDIUM)
                 .child(format_duration(seconds)),
         )
+}
+
+fn live_elapsed_secs(
+    current: &CurrentRunStats,
+    fallback_updated_at: i64,
+    state: ExecutionState,
+) -> f64 {
+    let Some(started) = current.startedAt else {
+        return 0.0;
+    };
+    let elapsed_ms = if state == ExecutionState::Running && current.runId.is_some() {
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as i64)
+            .unwrap_or(fallback_updated_at);
+        (now_ms - started).max(0)
+    } else if let Some(updated) = current.updatedAt {
+        (updated - started).max(0)
+    } else {
+        (fallback_updated_at - started).max(0)
+    };
+    elapsed_ms as f64 / 1000.0
 }
 
 fn format_duration(seconds: f64) -> String {

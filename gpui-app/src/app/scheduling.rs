@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use gpui::Context;
 
-use super::AhabApp;
+use super::{AhabApp, HomeInvalidation};
 use crate::model::{ExecutionState, LogLevel};
 
 const STOP_TIMEOUT: Duration = Duration::from_secs(15);
@@ -36,6 +36,42 @@ impl AhabApp {
                 );
                 cx.notify();
             });
+        })
+        .detach();
+    }
+
+    pub fn start_stats_ticker(&mut self, cx: &mut Context<Self>) {
+        self.stats_tick_generation = self.stats_tick_generation.wrapping_add(1);
+        let generation = self.stats_tick_generation;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                let should_continue = this
+                    .update(cx, |view, cx| {
+                        if view.stats_tick_generation != generation {
+                            return false;
+                        }
+                        let current = &view.home.stats.currentRun;
+                        let should_tick = current.runId.is_some()
+                            && current.startedAt.is_some()
+                            && (current.state == ExecutionState::Running
+                                || view.home.execution.state == ExecutionState::Running);
+                        if should_tick {
+                            view.notify_home_views(
+                                HomeInvalidation {
+                                    stats: true,
+                                    ..HomeInvalidation::default()
+                                },
+                                cx,
+                            );
+                        }
+                        true
+                    })
+                    .unwrap_or(false);
+                if !should_continue {
+                    break;
+                }
+            }
         })
         .detach();
     }

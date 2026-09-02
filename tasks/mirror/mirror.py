@@ -867,28 +867,33 @@ class Mirror:
         auto.model = "clam"
         failed = None
         settlement_attempt = 0
-        MAX_SETTLEMENT_ATTEMPTS = 3
+        MAX_SETTLEMENT_ATTEMPTS = 5
         BASE_BACKOFF = 1.5
         settlement_success = False
+        # 用于稳健判断是否真正100%：连续2次未找到才视为非100%，避免首帧过渡误判
+        not_found_100_count = 0
         while settlement_attempt < MAX_SETTLEMENT_ATTEMPTS:
             check_cancelled()
             # 自动截图
             if auto.take_screenshot() is None:
                 auto.mouse_to_blank()
                 continue
-            if (
-                not auto.find_element("mirror/claim_reward/complete_mirror_100%_assets.png")
-                and failed is None
-                and cfg.floor_3_exit is False
-            ):
-                failed = True
-            if auto.find_element("mirror/claim_reward/complete_mirror_100%_assets.png") or auto.find_element(
-                "mirror/claim_reward/clear_assets.png"
-            ):
+            has_100 = auto.find_element(
+                "mirror/claim_reward/complete_mirror_100%_assets.png"
+            ) or auto.find_element("mirror/claim_reward/clear_assets.png")
+            if has_100:
                 failed = False
+                not_found_100_count = 0
                 log.debug("镜牢完成度100%，能够正常领取奖励")
-            # 如果回到主界面，退出循环
-            if auto.find_element("home/drive_assets.png"):
+            elif failed is None and cfg.floor_3_exit is False:
+                not_found_100_count += 1
+                # 连续2次截图都未找到100%才标记为未完成，避免单帧误判导致误走forfeit流程
+                if not_found_100_count >= 2:
+                    failed = True
+            # 如果回到主界面，退出循环（兼容多种主界面标识）
+            if auto.find_element("home/drive_assets.png") or auto.find_element(
+                "home/window_assets.png"
+            ) or auto.find_element("home/drive_words_assets.png"):
                 settlement_success = True
                 break
             if auto.click_element("battle/battle_finish_confirm_assets.png"):
@@ -1017,6 +1022,8 @@ class Mirror:
             settlement_attempt += 1
             if settlement_attempt < MAX_SETTLEMENT_ATTEMPTS:
                 delay = BASE_BACKOFF * (2 ** (settlement_attempt - 1))
+                # 5次上限时延迟序列 1.5/3/6/12/24，上限12s避免过长
+                delay = min(delay, 12.0)
                 log.warning(f"结算重试 {settlement_attempt}/{MAX_SETTLEMENT_ATTEMPTS} 失败，{delay:.1f}s后指数退避重试")
                 if settlement_attempt == 1:
                     auto.model = "normal"
@@ -1026,6 +1033,21 @@ class Mirror:
                 sleep(delay)
             log.debug(f"镜牢奖励结算剩余尝试次数{MAX_SETTLEMENT_ATTEMPTS - settlement_attempt}次")
         self.settlement_total_time = time.time() - settlement_start
+        # 纠正误判：已回到主界面但 failed 仍为 True 时，若已成功读取通行证经验或再次检测到100%，则视为成功
+        if settlement_success and failed:
+            if self.pass_coins is not None:
+                failed = False
+                log.debug("结算已回到主界面且已读取通行证经验，撤销失败标记")
+            else:
+                try:
+                    complete_mirror_bbox = ImageUtils.get_bbox(
+                        ImageUtils.load_image("mirror/claim_reward/complete_mirror_100%_assets.png")
+                    )
+                    if auto.find_text_element("100", complete_mirror_bbox):
+                        failed = False
+                        log.debug("结算已回到主界面且检测到100%文字，撤销失败标记")
+                except Exception:
+                    pass
         if not settlement_success:
             # 3次仍未回到主界面，视为领取超时
             end_time = time.time()
@@ -1051,13 +1073,13 @@ class Mirror:
                 to_log_with_time(msg, t)
             log.debug(f"战斗时间:{self.battle_total_time} 事件时间:{self.event_total_time} 商店时间:{self.shop_total_time} 寻路时间:{self.find_road_total_time} 主题包时间:{self.theme_pack_total_time} 奖励卡时间:{self.reward_card_total_time} 饰品时间:{self.ego_gift_total_time} 结算时间:{self.settlement_total_time} 其他时间:{other_time} 总时间:{elapsed_time}")
             to_log_with_time(f"此次镜牢使用{self.system}体系队伍", elapsed_time)
-            log.error("奖励领取失败：已重试3次(1.5s/3s/6s)仍未回到主界面，大概率饼不足，已自动停止任务")
+            log.error(f"奖励领取失败：已重试{MAX_SETTLEMENT_ATTEMPTS}次(1.5s/3s/6s/12s)仍未回到主界面，大概率饼不足，已自动停止任务")
             try:
                 mediator.task_completed.emit("mirror", 1, dict(self.last_completion_stats))
             except Exception:
                 pass
             request_cancellation()
-            raise userStopError("镜牢结算领取超时，已自动停止任务（已重试3次 1.5s/3s/6s）")
+            raise userStopError(f"镜牢结算领取超时，已自动停止任务（已重试{MAX_SETTLEMENT_ATTEMPTS}次 1.5s/3s/6s/12s）")
         if failed:
             # 非超时但判定为未完成（floor_3_exit 等）仍按原逻辑返回
             end_time = time.time()

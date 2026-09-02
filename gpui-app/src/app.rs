@@ -220,6 +220,7 @@ pub struct AhabApp {
     pub(crate) backend_attempt_id: u64,
     pub(crate) backend_epoch: u64,
     pub(crate) stop_timeout_generation: u64,
+    pub(crate) stats_tick_generation: u64,
     pub(crate) theme_persist_timer_generation: Option<u64>,
     pub(crate) preview_control: PreviewControlState,
     pub(crate) window_minimized: bool,

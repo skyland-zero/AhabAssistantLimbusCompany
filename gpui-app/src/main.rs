@@ -103,6 +103,7 @@ fn main() {
                     let mut app = AhabApp::new();
                     app.attach_window(window, cx);
                     app.start_event_pump(window, cx);
+                    app.start_stats_ticker(cx);
                     cx.on_next_frame(window, |view, _window, cx| {
                         view.start_backend_bootstrap(cx);
                     });

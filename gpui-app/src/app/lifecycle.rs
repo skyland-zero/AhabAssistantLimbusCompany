@@ -550,6 +550,7 @@ impl AhabApp {
             backend_attempt_id: 0,
             backend_epoch: 0,
             stop_timeout_generation: 0,
+            stats_tick_generation: 0,
             theme_persist_timer_generation: None,
             preview_control: Default::default(),
             window_minimized: false,
