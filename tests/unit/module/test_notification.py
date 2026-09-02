@@ -168,17 +168,27 @@ def test_mirror_notifications_include_timing_breakdown() -> None:
         "eventSeconds": 180.0,
         "shopSeconds": 90.75,
         "findRoadSeconds": 329.5,
+        "themePackSeconds": 60.0,
+        "rewardCardSeconds": 30.0,
+        "egoGiftSeconds": 45.0,
+        "settlementSeconds": 90.0,
+        "otherSeconds": 10.0,
         "eventCount": 4,
     }
 
     content, summary = format_completion("mirror", 1, details)
     assert "完成时间：2026-08-31 08:00:00+09:00" in content
-    assert "总耗时：00:30:00" in content
-    assert "战斗：00:20:00" in content
-    assert "事件：00:03:00（4 次）" in content
-    assert "商店：00:01:30" in content
-    assert "寻路：00:05:29" in content
-    assert summary == "镜牢完成 1 次｜总耗时 00:30:00"
+    assert "总耗时：30:00" in content
+    assert "战斗：20:00" in content
+    assert "事件：03:00（4 次）" in content
+    assert "商店：01:30" in content
+    assert "寻路：05:29" in content
+    assert "主题包：01:00" in content
+    assert "奖励卡：00:30" in content
+    assert "饰品选择：00:45" in content
+    assert "结算：01:30" in content
+    assert "其他：00:10" in content
+    assert summary == "镜牢完成 1 次｜总耗时 30:00"
 
     final_content, final_summary = format_final_summary(
         {
@@ -187,8 +197,8 @@ def test_mirror_notifications_include_timing_breakdown() -> None:
         }
     )
     assert "最近一次镜牢：" in final_content
-    assert "商店：00:01:30" in final_content
-    assert final_summary == "AALC 任务已完成｜镜牢总耗时 00:30:00"
+    assert "商店：01:30" in final_content
+    assert final_summary == "AALC 任务已完成｜镜牢总耗时 30:00"
 
 
 def test_config_and_exception_redaction_never_returns_registered_spt() -> None:

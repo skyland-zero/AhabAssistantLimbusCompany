@@ -21,7 +21,21 @@ pub struct MirrorCompletionStats {
     pub eventSeconds: f64,
     pub shopSeconds: f64,
     pub findRoadSeconds: f64,
+    #[serde(default)]
+    pub themePackSeconds: f64,
+    #[serde(default)]
+    pub rewardCardSeconds: f64,
+    #[serde(default)]
+    pub egoGiftSeconds: f64,
+    #[serde(default)]
+    pub settlementSeconds: f64,
+    #[serde(default)]
+    pub otherSeconds: f64,
     pub eventCount: u32,
+    #[serde(default)]
+    pub failed: Option<bool>,
+    #[serde(default)]
+    pub failureReason: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

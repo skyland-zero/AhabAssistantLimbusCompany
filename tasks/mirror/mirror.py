@@ -4,7 +4,8 @@ from datetime import datetime
 import cv2
 import numpy as np
 
-from core.execution_control import check_cancelled
+from core.events import mediator
+from core.execution_control import check_cancelled, request_cancellation
 from core.execution_control import interruptible_sleep as sleep
 from core.pseudo_solo import BattleRosterObserver, PseudoSoloDefenseState
 from core.team_squad import validate_pseudo_solo_selection
@@ -25,6 +26,7 @@ from module.my_error.my_error import (
     backMainWinError,
     cannotOperateGameError,
     unableToFindTeamError,
+    userStopError,
 )
 from module.observe_ego_gift import normalize_observe_ego_gifts, resolve_observe_ego_gift
 from module.ocr import ocr
@@ -121,6 +123,11 @@ class Mirror:
         self.shop_total_time = 0
         self.event_total_time = 0
         self.event_times = 0
+        self.theme_pack_total_time = 0
+        self.reward_card_total_time = 0
+        self.ego_gift_total_time = 0
+        self.settlement_total_time = 0
+        self.other_total_time = 0
         self.last_completion_stats: dict[str, object] | None = None
 
         self.floor = 0
@@ -453,13 +460,15 @@ class Mirror:
             # 选择楼层主题包的情况
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
                 sleep(2)
-                select_theme_pack(
+                _, elapsed = self._time_call(
+                    select_theme_pack,
                     self.hard_switch,
                     self.floor,
                     self.team_order,
                     self.use_custom_theme_pack_weight,
                     route=self.mirror_route,
                 )
+                self.theme_pack_total_time += elapsed
                 if self.re_formation_each_floor:
                     self.first_battle = True
                 try:
@@ -598,7 +607,8 @@ class Mirror:
 
             # 如果遇到选择ego饰品的情况
             if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png"):
-                self.acquire_ego_gift()
+                _, elapsed = self._time_call(self.acquire_ego_gift)
+                self.ego_gift_total_time += elapsed
                 continue
             if (
                 main_loop_count < 50
@@ -608,10 +618,12 @@ class Mirror:
                     model="clam",
                 )
             ):
-                self.acquire_ego_gift(type=2)
+                _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
+                self.ego_gift_total_time += elapsed
                 continue
             if main_loop_count < 30 and auto.find_language_text("拒绝饰品", "refuse"):
-                self.acquire_ego_gift(type=2)
+                _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
+                self.ego_gift_total_time += elapsed
                 continue
 
             # 如果遇到获取ego饰品的情况
@@ -632,9 +644,10 @@ class Mirror:
             # 选择奖励卡
             if auto.find_element("mirror/road_in_mir/select_encounter_reward_card_assets.png"):
                 if self.reward_cards:
-                    get_reward_card(self.reward_cards_select)
+                    _, elapsed = self._time_call(get_reward_card, self.reward_cards_select)
                 else:
-                    get_reward_card()
+                    _, elapsed = self._time_call(get_reward_card)
+                self.reward_card_total_time += elapsed
                 continue
 
             # 在主界面时，开始进入镜牢
@@ -700,10 +713,15 @@ class Mirror:
             self.get_reward_in_road()
             return True
 
-        main_loop_count = 20
+        settlement_start = time.time()
         auto.model = "clam"
         failed = None
-        while True:
+        settlement_attempt = 0
+        MAX_SETTLEMENT_ATTEMPTS = 3
+        BASE_BACKOFF = 1.5
+        settlement_success = False
+        while settlement_attempt < MAX_SETTLEMENT_ATTEMPTS:
+            check_cancelled()
             # 自动截图
             if auto.take_screenshot() is None:
                 auto.mouse_to_blank()
@@ -721,6 +739,7 @@ class Mirror:
                 log.debug("镜牢完成度100%，能够正常领取奖励")
             # 如果回到主界面，退出循环
             if auto.find_element("home/drive_assets.png"):
+                settlement_success = True
                 break
             if auto.click_element("battle/battle_finish_confirm_assets.png"):
                 continue
@@ -845,24 +864,94 @@ class Mirror:
             if auto.click_element("home/close_anniversary_event_assets.png"):
                 continue
             retry()
-            main_loop_count -= 1
-            if main_loop_count % 3 == 0:
-                log.debug(f"镜牢奖励识别次数剩余{main_loop_count}次")
-            if main_loop_count < 10:
-                auto.model = "normal"
-                auto.mouse_to_blank(move_back=False)
-                log.debug("识别模式切换到正常模式")
-            if main_loop_count < 5:
-                auto.model = "aggressive"
-                log.debug("识别模式切换到激进模式")
-            if main_loop_count < 0:
-                raise cannotOperateGameError("镜牢奖励领取出错,请手动操作重试")
-
+            settlement_attempt += 1
+            if settlement_attempt < MAX_SETTLEMENT_ATTEMPTS:
+                delay = BASE_BACKOFF * (2 ** (settlement_attempt - 1))
+                log.warning(f"结算重试 {settlement_attempt}/{MAX_SETTLEMENT_ATTEMPTS} 失败，{delay:.1f}s后指数退避重试")
+                if settlement_attempt == 1:
+                    auto.model = "normal"
+                    auto.mouse_to_blank(move_back=False)
+                elif settlement_attempt == 2:
+                    auto.model = "aggressive"
+                sleep(delay)
+            log.debug(f"镜牢奖励结算剩余尝试次数{MAX_SETTLEMENT_ATTEMPTS - settlement_attempt}次")
+        self.settlement_total_time = time.time() - settlement_start
+        if not settlement_success:
+            # 3次仍未回到主界面，视为领取超时
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            other_time = max(0.0, elapsed_time - (self.battle_total_time + self.event_total_time + self.shop_total_time + self.find_road_total_time + self.theme_pack_total_time + self.reward_card_total_time + self.ego_gift_total_time + self.settlement_total_time))
+            self.other_total_time = other_time
+            self.last_completion_stats = {
+                "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "totalSeconds": max(0.0, elapsed_time),
+                "battleSeconds": max(0.0, self.battle_total_time),
+                "eventSeconds": max(0.0, self.event_total_time),
+                "shopSeconds": max(0.0, self.shop_total_time),
+                "findRoadSeconds": max(0.0, self.find_road_total_time),
+                "themePackSeconds": max(0.0, self.theme_pack_total_time),
+                "rewardCardSeconds": max(0.0, self.reward_card_total_time),
+                "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
+                "settlementSeconds": max(0.0, self.settlement_total_time),
+                "otherSeconds": max(0.0, other_time),
+                "eventCount": max(0, int(self.event_times)),
+                "failed": True,
+                "failureReason": "settlement_timeout",
+            }
+            # 输出全部时间统计
+            for msg, t in [
+                ("此次镜牢在战斗", self.battle_total_time),
+                ("此次镜牢在事件", self.event_total_time),
+                ("此次镜牢中在商店", self.shop_total_time),
+                ("此次镜牢中在寻路", self.find_road_total_time),
+                ("此次镜牢在主题包", self.theme_pack_total_time),
+                ("此次镜牢在奖励卡", self.reward_card_total_time),
+                ("此次镜牢在饰品选择", self.ego_gift_total_time),
+                ("此次镜牢在结算", self.settlement_total_time),
+                ("此次镜牢其他耗时", other_time),
+            ]:
+                to_log_with_time(msg, t)
+            log.debug(f"战斗时间:{self.battle_total_time} 事件时间:{self.event_total_time} 商店时间:{self.shop_total_time} 寻路时间:{self.find_road_total_time} 主题包时间:{self.theme_pack_total_time} 奖励卡时间:{self.reward_card_total_time} 饰品时间:{self.ego_gift_total_time} 结算时间:{self.settlement_total_time} 其他时间:{other_time} 总时间:{elapsed_time}")
+            to_log_with_time(f"此次镜牢使用{self.system}体系队伍", elapsed_time)
+            log.error("奖励领取失败：已重试3次(1.5s/3s/6s)仍未回到主界面，大概率饼不足，已自动停止任务")
+            try:
+                mediator.task_completed.emit("mirror", 1, dict(self.last_completion_stats))
+            except Exception:
+                pass
+            request_cancellation()
+            raise userStopError("镜牢结算领取超时，已自动停止任务（已重试3次 1.5s/3s/6s）")
         if failed:
+            # 非超时但判定为未完成（floor_3_exit 等）仍按原逻辑返回
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            other_time = max(0.0, elapsed_time - (self.battle_total_time + self.event_total_time + self.shop_total_time + self.find_road_total_time + self.theme_pack_total_time + self.reward_card_total_time + self.ego_gift_total_time + self.settlement_total_time))
+            self.other_total_time = other_time
+            self.last_completion_stats = {
+                "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "totalSeconds": max(0.0, elapsed_time),
+                "battleSeconds": max(0.0, self.battle_total_time),
+                "eventSeconds": max(0.0, self.event_total_time),
+                "shopSeconds": max(0.0, self.shop_total_time),
+                "findRoadSeconds": max(0.0, self.find_road_total_time),
+                "themePackSeconds": max(0.0, self.theme_pack_total_time),
+                "rewardCardSeconds": max(0.0, self.reward_card_total_time),
+                "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
+                "settlementSeconds": max(0.0, self.settlement_total_time),
+                "otherSeconds": max(0.0, other_time),
+                "eventCount": max(0, int(self.event_times)),
+                "failed": True,
+            }
+            try:
+                mediator.task_completed.emit("mirror", 1, dict(self.last_completion_stats))
+            except Exception:
+                pass
             return False
-        # 计时结束
+        # 计时结束 - 成功路径，补齐所有时间
         end_time = time.time()
         elapsed_time = end_time - start_time
+        # settlement已在上面计时，other为补齐项
+        other_time = max(0.0, elapsed_time - (self.battle_total_time + self.event_total_time + self.shop_total_time + self.find_road_total_time + self.theme_pack_total_time + self.reward_card_total_time + self.ego_gift_total_time + self.settlement_total_time))
+        self.other_total_time = other_time
         self.last_completion_stats = {
             "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
             "totalSeconds": max(0.0, elapsed_time),
@@ -870,7 +959,13 @@ class Mirror:
             "eventSeconds": max(0.0, self.event_total_time),
             "shopSeconds": max(0.0, self.shop_total_time),
             "findRoadSeconds": max(0.0, self.find_road_total_time),
+            "themePackSeconds": max(0.0, self.theme_pack_total_time),
+            "rewardCardSeconds": max(0.0, self.reward_card_total_time),
+            "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
+            "settlementSeconds": max(0.0, self.settlement_total_time),
+            "otherSeconds": max(0.0, other_time),
             "eventCount": max(0, int(self.event_times)),
+            "failed": False,
         }
 
         if self.plan_runtime.complete:
@@ -952,9 +1047,16 @@ class Mirror:
         msg = "此次镜牢中在寻路"
         to_log_with_time(msg, self.find_road_total_time)
 
+        # 新增细项
+        to_log_with_time("此次镜牢在主题包", self.theme_pack_total_time)
+        to_log_with_time("此次镜牢在奖励卡", self.reward_card_total_time)
+        to_log_with_time("此次镜牢在饰品选择", self.ego_gift_total_time)
+        to_log_with_time("此次镜牢在结算", self.settlement_total_time)
+        to_log_with_time("此次镜牢其他耗时", self.other_total_time)
+
         # debug输出时间
         log.debug(
-            f"战斗时间:{self.battle_total_time} 事件时间:{self.event_total_time} 商店时间:{self.shop_total_time} 寻路时间:{self.find_road_total_time} 总时间:{elapsed_time}"
+            f"战斗时间:{self.battle_total_time} 事件时间:{self.event_total_time} 商店时间:{self.shop_total_time} 寻路时间:{self.find_road_total_time} 主题包时间:{self.theme_pack_total_time} 奖励卡时间:{self.reward_card_total_time} 饰品时间:{self.ego_gift_total_time} 结算时间:{self.settlement_total_time} 其他时间:{self.other_total_time} 总时间:{elapsed_time}"
         )
 
         # 输出镜牢总时间

@@ -464,6 +464,11 @@ def test_mirror_completion_details_reach_stats_and_notifications(tmp_path) -> No
         "eventSeconds": 180.0,
         "shopSeconds": 90.75,
         "findRoadSeconds": 329.5,
+        "themePackSeconds": 0.0,
+        "rewardCardSeconds": 0.0,
+        "egoGiftSeconds": 0.0,
+        "settlementSeconds": 0.0,
+        "otherSeconds": 0.0,
         "eventCount": 4,
     }
 

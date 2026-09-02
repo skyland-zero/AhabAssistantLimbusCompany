@@ -155,6 +155,7 @@ class ScrcpyControl(AbstractInput):
         self._first_frame_ready = threading.Event()
         self._last_hash: int | None = None
         self._last_pil = None
+        self._last_request_mono: float = 0.0
 
         self.resolution: tuple[int, int] = (1920, 1080)
         self.device_name: str = ""
@@ -353,7 +354,10 @@ class ScrcpyControl(AbstractInput):
         return width, height
 
     def _decode_loop(self) -> None:
-        """后台持续读取 H.264 视频流并解码为 RGB 图像，单帧覆盖式更新。"""
+        """后台持续读取 H.264 视频流并解码为 RGB 图像，单帧覆盖式更新。
+
+        按需解码：若 0.5s 内无 screenshot() 请求则只收包不解码，静止期 15fps->~0帧，省 150ms/s。
+        """
         codec = av.CodecContext.create("h264", "r")
 
         while self._running:
@@ -378,6 +382,10 @@ class ScrcpyControl(AbstractInput):
 
                 raw_packet = _recv_exact(self._video_socket, size)
                 if len(raw_packet) < size:
+                    continue
+
+                # 按需解码：0.5s 内无请求则丢包不解，省 CPU（0.2s 轮询下静止期几乎不解）
+                if time.monotonic() - self._last_request_mono > 0.5 and self._first_frame_ready.is_set():
                     continue
 
                 packets = codec.parse(raw_packet)
@@ -408,9 +416,10 @@ class ScrcpyControl(AbstractInput):
         """获取当前最新画面（RGB 格式 ndarray，与 MuMu 图像管线一致）。
 
         严格等待 Scrcpy 视频流首帧就绪，不降级至 slow adb screencap。
-        控制器层指纹：::32 采样 6KB + zlib.crc32 0.02ms，命中则复用同一 ndarray 对象，
-        减少一次 6MB 拷贝；Automation 层另有 PIL 指纹去重避免清缓存。
+        控制器层指纹：::32 采样 6KB + zlib.crc32 0.02ms，命中则复用同一对象零拷；
+        Automation 层另有 PIL 指纹去重避免清缓存。
         """
+        self._last_request_mono = time.monotonic()
         if not self._first_frame_ready.wait(timeout=3.0):
             raise RuntimeError(f"Scrcpy 视频流等待超时 ({self.serial})，未能接收到画面帧")
 
@@ -424,10 +433,10 @@ class ScrcpyControl(AbstractInput):
                 h = None
             if h is not None and h == self._last_hash and self._last_pil is not None:
                 return self._last_pil
-            copied = frame.copy()
+            # 零拷：直接复用 _latest_frame 对象（后续 decode 会替换为新对象，旧对象仍被调用方持有）
             self._last_hash = h
-            self._last_pil = copied
-            return copied
+            self._last_pil = frame
+            return frame
 
     def _send_control(self, payload: bytes) -> None:
         """线程安全地向 Control Socket 发送二进制指令。"""

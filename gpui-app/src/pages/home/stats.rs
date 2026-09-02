@@ -9,7 +9,7 @@ use crate::{
 
 use crate::model::{CurrentRunStats, DailyStatEntry, StatCounts};
 
-const STATS_CARD_HEIGHT: f32 = 156.0;
+const STATS_CARD_HEIGHT: f32 = 185.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct StatsSnapshot {
@@ -507,9 +507,101 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 .child(task_text),
         );
 
+    let info_row = {
+        let elapsed_secs = match (current.startedAt, current.updatedAt) {
+            (Some(start), Some(updated)) if updated >= start => ((updated - start) / 1000) as f64,
+            (Some(start), None) => ((snapshot.stats.updatedAt - start) / 1000).max(0) as f64,
+            _ => 0.0,
+        };
+        let elapsed_str = format_duration(elapsed_secs);
+        let started_hm = current.startedAt.map(|ms| {
+            let secs_of_day = ((ms / 1000) % 86400 + 86400) % 86400;
+            // UTC+8 for local display
+            let local = (secs_of_day + 8 * 3600) % 86400;
+            format!("{:02}:{:02}", local / 3600, (local % 3600) / 60)
+        });
+        let is_running = current.runId.is_some() && state == ExecutionState::Running;
+        if is_running && current.startedAt.is_some() {
+            let mut row = div()
+                .h(px(16.0))
+                .flex_none()
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_size(px(10.0))
+                .text_color(rgb(TEXT_MUTED));
+            row = row.child(format!("已运行 {} · 开始 {}", elapsed_str, started_hm.unwrap_or_else(|| "--:--".into())));
+            if current_task_is_mirror(current_task) {
+                let floor_label = if infinite {
+                    "∞".to_string()
+                } else if targets.mirror > 0 {
+                    format!("{}层", targets.mirror)
+                } else {
+                    "5层".to_string()
+                };
+                row = row.child(
+                    div()
+                        .ml_auto()
+                        .px(px(6.0))
+                        .py(px(1.0))
+                        .rounded_sm()
+                        .bg(rgba((ACCENT << 8) | 0x18))
+                        .text_size(px(9.0))
+                        .text_color(rgb(ACCENT))
+                        .child(floor_label),
+                );
+            }
+            row
+        } else {
+            div().h(px(16.0)).flex_none()
+        }
+    };
+
+    let mirror_block: gpui::AnyElement = if current_task_is_mirror(current_task) && current.runId.is_some() {
+        div()
+            .flex_none()
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .h(px(3.0))
+                    .w_full()
+                    .rounded_full()
+                    .bg(rgba((TEXT_MUTED << 8) | 0x24))
+                    .child(
+                        div()
+                            .h_full()
+                            .w(relative(mirror_progress_ratio(completed.mirror, targets.mirror, infinite)))
+                            .rounded_full()
+                            .bg(rgb(ACCENT)),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .text_size(px(9.5))
+                    .text_color(rgb(TEXT_MUTED))
+                    .child(format!(
+                        "镜牢进度 {}/{}{}",
+                        completed.mirror,
+                        if infinite { "∞".to_string() } else { targets.mirror.to_string() },
+                        if state == ExecutionState::Running { " · 进行中" } else { "" }
+                    ))
+                    .child(div().text_color(rgb(TEXT)).child(format_duration(
+                        current.startedAt.and_then(|s| current.updatedAt.map(|u| ((u - s) / 1000) as f64)).unwrap_or(0.0)
+                    ))),
+            )
+            .into_any_element()
+    } else {
+        // 不在镜牢：用 flex 占位把 metrics 压底，不显 “镜牢未运行” 文案
+        div().flex_1().min_h(px(8.0)).into_any_element()
+    };
+
     let metrics = div()
-        .flex_1()
-        .min_h_0()
+        .flex_none()
         .flex()
         .items_stretch()
         .gap_2()
@@ -537,15 +629,29 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
             .h_full()
             .flex()
             .flex_col()
-            .justify_between()
+            .gap(px(4.0))
             .child(header)
             .child(task_line)
+            .child(info_row)
+            .child(mirror_block)
             .child(metrics),
     )
     .p(px(10.0))
     .h(px(STATS_CARD_HEIGHT))
     .min_w_0()
     .overflow_hidden()
+}
+
+fn current_task_is_mirror(task: Option<FixedTaskId>) -> bool {
+    matches!(task, Some(FixedTaskId::Mirror))
+}
+
+fn mirror_progress_ratio(completed: u32, target: u32, infinite: bool) -> f32 {
+    if infinite || target == 0 {
+        if completed == 0 { 0.0 } else { (completed as f32 * 0.15).clamp(0.0, 1.0) }
+    } else {
+        (completed as f32 / target as f32).clamp(0.0, 1.0)
+    }
 }
 
 fn combined_history_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
@@ -555,15 +661,14 @@ fn combined_history_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -
         .h(px(1.0))
         .w_full()
         .bg(rgba((BORDER << 8) | 0x60))
-        .my(px(3.0));
+        .my(px(1.5));
     let mirror_section = recent_mirror_section(snapshot, language);
 
     card(
         div()
-            .h_full()
             .flex()
             .flex_col()
-            .justify_between()
+            .gap(px(2.0))
             .child(period_section)
             .child(divider)
             .child(mirror_section),
@@ -699,27 +804,39 @@ fn period_item(label: &'static str, today: u32, week: u32) -> Div {
 
 fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
     let header_right = match snapshot.stats.lastMirror.as_ref() {
-        Some(record) => div()
-            .flex()
-            .items_center()
-            .gap_1p5()
-            .child(
+        Some(record) => {
+            let is_failed = record.failed.unwrap_or(false);
+            let status_badge = if is_failed {
+                badge(
+                    text("领取超时", "Claim Timeout").get(language),
+                    BadgeTone::Danger,
+                )
+            } else {
                 div()
-                    .text_size(px(9.5))
-                    .text_color(rgb(TEXT_MUTED))
-                    .child(format!(
-                        "{}{}",
-                        record.eventCount,
-                        text("次事件", " events").get(language)
-                    )),
-            )
-            .child(
-                div()
-                    .text_size(px(11.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(ACCENT))
-                    .child(format_duration(record.totalSeconds)),
-            ),
+            };
+            div()
+                .flex()
+                .items_center()
+                .gap_1p5()
+                .child(
+                    div()
+                        .text_size(px(9.5))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(format!(
+                            "{}{}",
+                            record.eventCount,
+                            text("次事件", " events").get(language)
+                        )),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(ACCENT))
+                        .child(format_duration(record.totalSeconds)),
+                )
+                .child(status_badge)
+        }
         None => div(),
     };
 
@@ -762,6 +879,10 @@ fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
                     .child(recent_mirror_metric(
                         text("事件", "Events").get(language),
                         record.eventSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("商店", "Shop").get(language),
+                        record.shopSeconds,
                     )),
             )
             .child(
@@ -769,12 +890,33 @@ fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
                     .flex()
                     .gap_1p5()
                     .child(recent_mirror_metric(
-                        text("商店", "Shop").get(language),
-                        record.shopSeconds,
-                    ))
-                    .child(recent_mirror_metric(
                         text("寻路", "Path").get(language),
                         record.findRoadSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("主题包", "Theme").get(language),
+                        record.themePackSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("奖励卡", "Reward").get(language),
+                        record.rewardCardSeconds,
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_1p5()
+                    .child(recent_mirror_metric(
+                        text("饰品", "Ego").get(language),
+                        record.egoGiftSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("结算", "Claim").get(language),
+                        record.settlementSeconds,
+                    ))
+                    .child(recent_mirror_metric(
+                        text("其他", "Other").get(language),
+                        record.otherSeconds,
                     )),
             ),
         None => div()
@@ -827,10 +969,9 @@ fn format_duration(seconds: f64) -> String {
     } else {
         0
     };
-    let hours = total_seconds / 3600;
-    let minutes = total_seconds % 3600 / 60;
+    let minutes = total_seconds / 60;
     let seconds = total_seconds % 60;
-    format!("{hours:02}:{minutes:02}:{seconds:02}")
+    format!("{minutes:02}:{seconds:02}")
 }
 
 fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) -> Div {
@@ -1055,10 +1196,11 @@ mod tests {
 
     #[test]
     fn recent_mirror_duration_is_non_negative_and_human_readable() {
-        assert_eq!(format_duration(0.0), "00:00:00");
-        assert_eq!(format_duration(3661.9), "01:01:01");
-        assert_eq!(format_duration(-10.0), "00:00:00");
-        assert_eq!(format_duration(f64::NAN), "00:00:00");
+        assert_eq!(format_duration(0.0), "00:00");
+        assert_eq!(format_duration(3661.9), "61:01");
+        assert_eq!(format_duration(1879.2), "31:19");
+        assert_eq!(format_duration(-10.0), "00:00");
+        assert_eq!(format_duration(f64::NAN), "00:00");
     }
 
     #[test]

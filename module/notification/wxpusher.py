@@ -254,9 +254,8 @@ def _format_duration(value: Any) -> str:
         except (TypeError, ValueError):
             number = 0.0
         total_seconds = int(max(0.0, number)) if math.isfinite(number) else 0
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours:02}:{minutes:02}:{seconds:02}"
+    minutes, seconds = divmod(total_seconds, 60)
+    return f"{minutes:02}:{seconds:02}"
 
 
 def _format_completed_at(value: Any) -> str:
@@ -266,14 +265,26 @@ def _format_completed_at(value: Any) -> str:
 
 
 def _mirror_detail_lines(details: Mapping[str, Any]) -> list[str]:
-    return [
+    lines = [
         f"完成时间：{_format_completed_at(details.get('completedAt'))}",
         f"总耗时：{_format_duration(details.get('totalSeconds'))}",
         f"战斗：{_format_duration(details.get('battleSeconds'))}",
         f"事件：{_format_duration(details.get('eventSeconds'))}（{_count(details, 'eventCount')} 次）",
         f"商店：{_format_duration(details.get('shopSeconds'))}",
         f"寻路：{_format_duration(details.get('findRoadSeconds'))}",
+        f"主题包：{_format_duration(details.get('themePackSeconds'))}",
+        f"奖励卡：{_format_duration(details.get('rewardCardSeconds'))}",
+        f"饰品选择：{_format_duration(details.get('egoGiftSeconds'))}",
+        f"结算：{_format_duration(details.get('settlementSeconds'))}",
+        f"其他：{_format_duration(details.get('otherSeconds'))}",
     ]
+    if details.get("failed"):
+        reason = details.get("failureReason")
+        if isinstance(reason, str) and reason.strip():
+            lines.append(f"状态：失败（{reason}）")
+        else:
+            lines.append("状态：失败")
+    return lines
 
 
 def format_completion(

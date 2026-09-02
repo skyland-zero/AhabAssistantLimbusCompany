@@ -70,11 +70,22 @@ def _normalise_mirror_details(value: Any) -> dict[str, Any] | None:
         "eventSeconds": _non_negative_float(value.get("eventSeconds")),
         "shopSeconds": _non_negative_float(value.get("shopSeconds")),
         "findRoadSeconds": _non_negative_float(value.get("findRoadSeconds")),
+        "themePackSeconds": _non_negative_float(value.get("themePackSeconds")),
+        "rewardCardSeconds": _non_negative_float(value.get("rewardCardSeconds")),
+        "egoGiftSeconds": _non_negative_float(value.get("egoGiftSeconds")),
+        "settlementSeconds": _non_negative_float(value.get("settlementSeconds")),
+        "otherSeconds": _non_negative_float(value.get("otherSeconds")),
         "eventCount": _positive_int(value.get("eventCount")),
     }
     run_id = value.get("runId")
     if isinstance(run_id, str) and run_id.strip():
         details["runId"] = run_id.strip()
+    failed = value.get("failed")
+    if isinstance(failed, bool):
+        details["failed"] = failed
+    failure_reason = value.get("failureReason")
+    if isinstance(failure_reason, str) and failure_reason.strip():
+        details["failureReason"] = failure_reason.strip()
     return details
 
 
