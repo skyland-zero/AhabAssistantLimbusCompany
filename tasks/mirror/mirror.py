@@ -49,6 +49,49 @@ from tasks.mirror.select_theme_pack import select_theme_pack
 from tasks.teams.team_formation import check_team, load_team_code_in_game, select_battle_team, team_formation
 from utils.image_utils import ImageUtils
 
+MIRROR_SINNER_IDS = (
+    "yi_sang",
+    "faust",
+    "don_quixote",
+    "ryoshu",
+    "meursault",
+    "hong_lu",
+    "heathcliff",
+    "ishmael",
+    "rodion",
+    "sinclair",
+    "outis",
+    "gregor",
+)
+MIRROR_SINNER_NAMES_ZH = (
+    "李箱",
+    "浮士德",
+    "堂吉诃德",
+    "良秀",
+    "默尔索",
+    "鸿璐",
+    "希斯克利夫",
+    "以实玛利",
+    "罗佳",
+    "辛克莱",
+    "奥提斯",
+    "格雷戈尔",
+)
+MIRROR_SINNER_NAMES_EN = (
+    "Yi Sang",
+    "Faust",
+    "Don Quixote",
+    "Ryoshu",
+    "Meursault",
+    "Hong Lu",
+    "Heathcliff",
+    "Ishmael",
+    "Rodion",
+    "Sinclair",
+    "Outis",
+    "Gregor",
+)
+
 
 # 输出时间统计
 def to_log_with_time(msg, elapsed_time):
@@ -69,6 +112,13 @@ class Mirror:
         self.sinner_team = team_setting.sinner_order  # 选择的罪人序列
         self.chosen_sinners = team_setting.chosen_sinners
         self.team_number = team_setting.team_number  # 选择的编队名
+        configured_name = getattr(team_setting, "remark_name", None)
+        self.team_name = (
+            configured_name.strip()
+            if isinstance(configured_name, str) and configured_name.strip()
+            else f"编队 {self.team_order}"
+        )
+        self.team_sinners = self._ordered_team_sinners(self.chosen_sinners, self.sinner_team)
         self.team_code_loaded = False
         self.mirror_route: MirrorRouteDefinition = get_mirror_route(team_setting.mirror_route_profile)
         self.hard_switch = bool(cfg.hard_mirror)
@@ -154,6 +204,100 @@ class Mirror:
         start = time.time()
         result = fn(*args, **kwargs)
         return result, time.time() - start
+
+    @staticmethod
+    def _ordered_team_sinners(chosen_sinners, sinner_order) -> list[dict[str, str]]:
+        """Snapshot the configured team in the same order used by the UI."""
+
+        selected_indexes = [
+            index
+            for index, selected in enumerate((chosen_sinners or [])[: len(MIRROR_SINNER_IDS)])
+            if selected
+        ]
+        ordered_indexes: dict[int, int] = {}
+        for index in selected_indexes:
+            position = (sinner_order or [])[index] if index < len(sinner_order or []) else 0
+            if (
+                isinstance(position, int)
+                and not isinstance(position, bool)
+                and 1 <= position <= len(selected_indexes)
+                and position not in ordered_indexes
+            ):
+                ordered_indexes[position] = index
+        ordered = [ordered_indexes[position] for position in sorted(ordered_indexes)]
+        ordered.extend(index for index in selected_indexes if index not in ordered)
+        return [
+            {
+                "id": MIRROR_SINNER_IDS[index],
+                "name": MIRROR_SINNER_NAMES_ZH[index],
+                "nameEn": MIRROR_SINNER_NAMES_EN[index],
+            }
+            for index in ordered
+        ]
+
+    def _mirror_team_details(self) -> dict[str, object]:
+        """Return an immutable-at-completion snapshot of the selected team."""
+
+        return {
+            "id": f"team-{self.team_order}",
+            "name": self.team_name,
+            "number": max(0, int(self.team_number)),
+            "sinners": [sinner["id"] for sinner in self.team_sinners],
+            "sinnerNames": [sinner["name"] for sinner in self.team_sinners],
+            "sinnerNamesEn": [sinner["nameEn"] for sinner in self.team_sinners],
+            "system": self.system,
+            "accessoryScheme": self.system,
+        }
+
+    def _build_completion_stats(
+        self,
+        elapsed_time: float,
+        *,
+        failed: bool = False,
+        failure_reason: str | None = None,
+    ) -> dict[str, object]:
+        """Build the persisted timing and run-context snapshot once per run."""
+
+        other_time = max(
+            0.0,
+            elapsed_time
+            - (
+                self.battle_total_time
+                + self.event_total_time
+                + self.shop_total_time
+                + self.find_road_total_time
+                + self.theme_pack_total_time
+                + self.reward_card_total_time
+                + self.ego_gift_total_time
+                + self.settlement_total_time
+            ),
+        )
+        self.other_total_time = other_time
+        details: dict[str, object] = {
+            "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "totalSeconds": max(0.0, elapsed_time),
+            "battleSeconds": max(0.0, self.battle_total_time),
+            "eventSeconds": max(0.0, self.event_total_time),
+            "shopSeconds": max(0.0, self.shop_total_time),
+            "findRoadSeconds": max(0.0, self.find_road_total_time),
+            "themePackSeconds": max(0.0, self.theme_pack_total_time),
+            "rewardCardSeconds": max(0.0, self.reward_card_total_time),
+            "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
+            "settlementSeconds": max(0.0, self.settlement_total_time),
+            "otherSeconds": max(0.0, other_time),
+            "eventCount": max(0, int(self.event_times)),
+            "team": self._mirror_team_details(),
+            "hardMode": bool(self.hard_switch),
+            "mode": "hard" if self.hard_switch else "normal",
+            "floorCount": max(0, int(self.plan_runtime.floor_count or 0)),
+            "routeId": self.mirror_route.route_id or "default",
+            "routeName": self.mirror_route.name_zh,
+            "routeNameEn": self.mirror_route.name_en,
+            "failed": failed,
+        }
+        if failure_reason:
+            details["failureReason"] = failure_reason
+        return details
 
     def _fight(self) -> None:
         _, elapsed = self._time_call(
@@ -713,7 +857,10 @@ class Mirror:
         log.info(msg)
 
         if self.bequest_from_the_previous_game:
+            settlement_start = time.time()
             self.get_reward_in_road()
+            self.settlement_total_time = time.time() - settlement_start
+            self.last_completion_stats = self._build_completion_stats(time.time() - start_time)
             return True
 
         settlement_start = time.time()
@@ -883,24 +1030,12 @@ class Mirror:
             # 3次仍未回到主界面，视为领取超时
             end_time = time.time()
             elapsed_time = end_time - start_time
-            other_time = max(0.0, elapsed_time - (self.battle_total_time + self.event_total_time + self.shop_total_time + self.find_road_total_time + self.theme_pack_total_time + self.reward_card_total_time + self.ego_gift_total_time + self.settlement_total_time))
-            self.other_total_time = other_time
-            self.last_completion_stats = {
-                "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "totalSeconds": max(0.0, elapsed_time),
-                "battleSeconds": max(0.0, self.battle_total_time),
-                "eventSeconds": max(0.0, self.event_total_time),
-                "shopSeconds": max(0.0, self.shop_total_time),
-                "findRoadSeconds": max(0.0, self.find_road_total_time),
-                "themePackSeconds": max(0.0, self.theme_pack_total_time),
-                "rewardCardSeconds": max(0.0, self.reward_card_total_time),
-                "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
-                "settlementSeconds": max(0.0, self.settlement_total_time),
-                "otherSeconds": max(0.0, other_time),
-                "eventCount": max(0, int(self.event_times)),
-                "failed": True,
-                "failureReason": "settlement_timeout",
-            }
+            self.last_completion_stats = self._build_completion_stats(
+                elapsed_time,
+                failed=True,
+                failure_reason="settlement_timeout",
+            )
+            other_time = self.other_total_time
             # 输出全部时间统计
             for msg, t in [
                 ("此次镜牢在战斗", self.battle_total_time),
@@ -927,23 +1062,7 @@ class Mirror:
             # 非超时但判定为未完成（floor_3_exit 等）仍按原逻辑返回
             end_time = time.time()
             elapsed_time = end_time - start_time
-            other_time = max(0.0, elapsed_time - (self.battle_total_time + self.event_total_time + self.shop_total_time + self.find_road_total_time + self.theme_pack_total_time + self.reward_card_total_time + self.ego_gift_total_time + self.settlement_total_time))
-            self.other_total_time = other_time
-            self.last_completion_stats = {
-                "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "totalSeconds": max(0.0, elapsed_time),
-                "battleSeconds": max(0.0, self.battle_total_time),
-                "eventSeconds": max(0.0, self.event_total_time),
-                "shopSeconds": max(0.0, self.shop_total_time),
-                "findRoadSeconds": max(0.0, self.find_road_total_time),
-                "themePackSeconds": max(0.0, self.theme_pack_total_time),
-                "rewardCardSeconds": max(0.0, self.reward_card_total_time),
-                "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
-                "settlementSeconds": max(0.0, self.settlement_total_time),
-                "otherSeconds": max(0.0, other_time),
-                "eventCount": max(0, int(self.event_times)),
-                "failed": True,
-            }
+            self.last_completion_stats = self._build_completion_stats(elapsed_time, failed=True)
             try:
                 mediator.task_completed.emit("mirror", 1, dict(self.last_completion_stats))
             except Exception:
@@ -953,23 +1072,8 @@ class Mirror:
         end_time = time.time()
         elapsed_time = end_time - start_time
         # settlement已在上面计时，other为补齐项
-        other_time = max(0.0, elapsed_time - (self.battle_total_time + self.event_total_time + self.shop_total_time + self.find_road_total_time + self.theme_pack_total_time + self.reward_card_total_time + self.ego_gift_total_time + self.settlement_total_time))
-        self.other_total_time = other_time
-        self.last_completion_stats = {
-            "completedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "totalSeconds": max(0.0, elapsed_time),
-            "battleSeconds": max(0.0, self.battle_total_time),
-            "eventSeconds": max(0.0, self.event_total_time),
-            "shopSeconds": max(0.0, self.shop_total_time),
-            "findRoadSeconds": max(0.0, self.find_road_total_time),
-            "themePackSeconds": max(0.0, self.theme_pack_total_time),
-            "rewardCardSeconds": max(0.0, self.reward_card_total_time),
-            "egoGiftSeconds": max(0.0, self.ego_gift_total_time),
-            "settlementSeconds": max(0.0, self.settlement_total_time),
-            "otherSeconds": max(0.0, other_time),
-            "eventCount": max(0, int(self.event_times)),
-            "failed": False,
-        }
+        self.last_completion_stats = self._build_completion_stats(elapsed_time)
+        other_time = self.other_total_time
 
         if self.plan_runtime.complete:
             team = cfg.config.teams.get(f"{self.team_order}")

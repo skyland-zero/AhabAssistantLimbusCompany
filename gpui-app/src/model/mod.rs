@@ -15,7 +15,7 @@ pub use other::{
 pub use settings::{AppSettings, Language, ThemeMode};
 pub use stats::{
     CurrentRunStats, DailyStatEntry, DailyStatsPayload, ExecutionStatsPayload,
-    MirrorCompletionStats, StatCounts,
+    MirrorCompletionStats, MirrorTeamStats, StatCounts,
 };
 pub use tasks::{
     AfterCompletionConfig, AfterExitAction, AfterPowerAction, BuyEnkephalinConfig, DailyTaskConfig,

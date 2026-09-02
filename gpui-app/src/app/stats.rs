@@ -5,6 +5,7 @@ use crate::ipc::{RpcGateway, contract::method};
 
 impl AhabApp {
     pub fn open_stats_details(&mut self, cx: &mut Context<Self>) {
+        self.home.set_mirror_details_open(false);
         self.home.set_stats_details_open(true);
         self.home.stats_details_loading = true;
         self.home.stats_details_error = None;
@@ -44,6 +45,17 @@ impl AhabApp {
 
     pub fn close_stats_details(&mut self, cx: &mut Context<Self>) {
         self.home.set_stats_details_open(false);
+        cx.notify();
+    }
+
+    pub fn open_mirror_details(&mut self, cx: &mut Context<Self>) {
+        self.home.set_stats_details_open(false);
+        self.home.set_mirror_details_open(true);
+        cx.notify();
+    }
+
+    pub fn close_mirror_details(&mut self, cx: &mut Context<Self>) {
+        self.home.set_mirror_details_open(false);
         cx.notify();
     }
 }

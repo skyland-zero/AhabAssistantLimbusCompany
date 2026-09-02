@@ -26,3 +26,26 @@ def test_manual_formation_is_used_when_team_code_was_not_loaded(monkeypatch) -> 
 
     assert runner._form_team_for_battle() is True
     assert called == [(runner.sinner_team, runner.chosen_sinners)]
+
+
+def test_mirror_team_snapshot_preserves_configured_order_and_context() -> None:
+    runner = object.__new__(mirror_module.Mirror)
+    runner.team_order = 2
+    runner.team_name = "蜘蛛巢全家桶"
+    runner.team_number = 2
+    runner.team_sinners = runner._ordered_team_sinners(
+        [1, 1] + [0] * 10,
+        [2, 1] + [0] * 10,
+    )
+    runner.system = "poise"
+
+    assert runner._mirror_team_details() == {
+        "id": "team-2",
+        "name": "蜘蛛巢全家桶",
+        "number": 2,
+        "sinners": ["faust", "yi_sang"],
+        "sinnerNames": ["浮士德", "李箱"],
+        "sinnerNamesEn": ["Faust", "Yi Sang"],
+        "system": "poise",
+        "accessoryScheme": "poise",
+    }

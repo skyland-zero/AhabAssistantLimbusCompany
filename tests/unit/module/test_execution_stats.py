@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from module.execution_stats import ExecutionStatsStore, game_day
+from module.execution_stats import MIRROR_HISTORY_LIMIT, ExecutionStatsStore, game_day
 
 SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -86,10 +87,48 @@ def test_last_mirror_details_are_normalised_and_persisted(tmp_path) -> None:
     expected = {**mirror_details(), "runId": "run-1"}
     assert payload is not None
     assert payload["lastMirror"] == expected
+    assert payload["mirrorHistory"] == [expected]
     assert store.summary()["lastMirror"] == expected
+    assert store.summary()["mirrorHistory"] == [expected]
 
     reloaded = ExecutionStatsStore(path, now=lambda: current[0])
     assert reloaded.summary()["lastMirror"] == expected
+    assert reloaded.summary()["mirrorHistory"] == [expected]
+
+
+def test_mirror_history_keeps_latest_thirty_records_and_promotes_legacy_last(tmp_path) -> None:
+    current = [datetime(2026, 8, 31, 8, 0, tzinfo=SEOUL)]
+    path = tmp_path / "runtime_stats.json"
+    store = ExecutionStatsStore(path, now=lambda: current[0])
+    store.start_run("run-1", {"mirror": 1})
+
+    for index in range(MIRROR_HISTORY_LIMIT + 5):
+        details = mirror_details()
+        details["completedAt"] = f"2026-08-31T08:{index:02}:00+09:00"
+        details["team"] = {"name": f"队伍 {index}", "number": index + 1, "sinners": ["faust"]}
+        store.record_completion("mirror", 1, run_id="run-1", details=details)
+
+    history = store.summary()["mirrorHistory"]
+    assert len(history) == MIRROR_HISTORY_LIMIT
+    assert history[0]["completedAt"] == "2026-08-31T08:34:00+09:00"
+    assert history[-1]["completedAt"] == "2026-08-31T08:05:00+09:00"
+    assert store.summary()["lastMirror"] == history[0]
+
+    reloaded = ExecutionStatsStore(path, now=lambda: current[0])
+    assert reloaded.summary()["mirrorHistory"] == history
+
+
+def test_legacy_last_mirror_is_available_as_first_history_record(tmp_path) -> None:
+    legacy = mirror_details()
+    path = tmp_path / "runtime_stats.json"
+    path.write_text(
+        '{"schemaVersion":1,"daily":{},"lastMirror":' + json.dumps(legacy) + '}',
+        encoding="utf-8",
+    )
+
+    store = ExecutionStatsStore(path, now=lambda: datetime(2026, 8, 31, 8, 0, tzinfo=SEOUL))
+
+    assert store.summary()["mirrorHistory"] == [legacy]
 
 
 def test_old_stats_file_without_last_mirror_remains_readable(tmp_path) -> None:

@@ -36,6 +36,10 @@ impl HomeState {
         }
     }
 
+    pub fn set_mirror_details_open(&mut self, open: bool) {
+        self.mirror_details_open = open;
+    }
+
     pub fn select_stats_date(&mut self, date: String) {
         self.stats_selected_date = Some(date);
     }

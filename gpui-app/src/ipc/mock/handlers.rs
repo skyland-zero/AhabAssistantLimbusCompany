@@ -115,6 +115,7 @@ impl MockState {
                             updatedAt: Some(0),
                         },
                         lastMirror: self.stats.lastMirror.clone(),
+                        mirrorHistory: self.stats.mirrorHistory.clone(),
                         today: self.stats.today.clone(),
                         week: self.stats.week.clone(),
                         updatedAt: 0,

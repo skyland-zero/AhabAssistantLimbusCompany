@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import threading
+from copy import deepcopy
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -21,6 +22,7 @@ STAT_KINDS = ("exp", "thread", "mirror")
 SCHEMA_VERSION = 1
 RETENTION_DAYS = 56
 DEFAULT_DAILY_DAYS = 30
+MIRROR_HISTORY_LIMIT = 30
 GAME_TIMEZONE = ZoneInfo("Asia/Seoul")
 GAME_DAY_RESET_HOUR = 6
 
@@ -86,7 +88,77 @@ def _normalise_mirror_details(value: Any) -> dict[str, Any] | None:
     failure_reason = value.get("failureReason")
     if isinstance(failure_reason, str) and failure_reason.strip():
         details["failureReason"] = failure_reason.strip()
+
+    team = _normalise_mirror_team(value.get("team"))
+    if team is None:
+        # Accept the flat shape used by early development builds so a record
+        # can still be shown after a sidecar update.
+        flat_team = {
+            key: value.get(key)
+            for key in (
+                "id",
+                "teamId",
+                "name",
+                "teamName",
+                "number",
+                "teamNumber",
+                "sinners",
+                "sinnerNames",
+                "sinnerNamesEn",
+                "system",
+                "teamSystem",
+                "accessoryScheme",
+            )
+            if key in value
+        }
+        team = _normalise_mirror_team(flat_team)
+    if team is not None:
+        details["team"] = team
+
+    for key in ("mode", "routeId", "routeName", "routeNameEn"):
+        item = value.get(key)
+        if isinstance(item, str) and item.strip():
+            details[key] = item.strip()
+    hard_mode = value.get("hardMode")
+    if isinstance(hard_mode, bool):
+        details["hardMode"] = hard_mode
+    elif isinstance(details.get("mode"), str):
+        details["hardMode"] = details["mode"].casefold() in {"hard", "困难", "hard_mirror"}
+    floor_count = value.get("floorCount")
+    if floor_count is not None:
+        details["floorCount"] = _positive_int(floor_count)
     return details
+
+
+def _normalise_mirror_team(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+
+    team: dict[str, Any] = {}
+    for output_key, input_keys in (
+        ("id", ("id", "teamId")),
+        ("name", ("name", "teamName")),
+        ("system", ("system", "teamSystem", "accessoryScheme")),
+        ("accessoryScheme", ("accessoryScheme", "system", "teamSystem")),
+    ):
+        item = next((value.get(key) for key in input_keys if isinstance(value.get(key), str)), None)
+        if isinstance(item, str) and item.strip():
+            team[output_key] = item.strip()
+
+    number = value.get("number", value.get("teamNumber"))
+    if number is not None:
+        number = _positive_int(number)
+        if number > 0:
+            team["number"] = number
+
+    for output_key in ("sinners", "sinnerNames", "sinnerNamesEn"):
+        items = value.get(output_key)
+        if isinstance(items, (list, tuple)):
+            normalized = [item.strip() for item in items if isinstance(item, str) and item.strip()]
+            if normalized:
+                team[output_key] = normalized[:12]
+
+    return team or None
 
 
 def game_day(now: datetime | None = None) -> date:
@@ -120,7 +192,7 @@ class ExecutionStatsStore:
         self._now = now or (lambda: datetime.now(GAME_TIMEZONE))
         self._lock = threading.RLock()
         self._daily: dict[str, dict[str, int]] = {}
-        self._last_mirror: dict[str, Any] | None = None
+        self._mirror_history: list[dict[str, Any]] = []
         self._current: dict[str, Any] = self._empty_current()
         self._load()
 
@@ -218,7 +290,13 @@ class ExecutionStatsStore:
                 if mirror_details is not None:
                     if run_id is not None:
                         mirror_details["runId"] = run_id
-                    self._last_mirror = mirror_details
+                    # Newest records are returned first.  Keeping the list
+                    # bounded here also bounds the persisted JSON payload.
+                    self._mirror_history = [
+                        record for record in self._mirror_history if record != mirror_details
+                    ]
+                    self._mirror_history.insert(0, mirror_details)
+                    self._mirror_history = self._mirror_history[:MIRROR_HISTORY_LIMIT]
             self._prune(game_day(self._now()))
             self._current["updatedAt"] = self._timestamp()
             self._save()
@@ -240,6 +318,7 @@ class ExecutionStatsStore:
                 "schemaVersion": SCHEMA_VERSION,
                 "currentRun": self._copy_current(),
                 "lastMirror": self._copy_last_mirror(),
+                "mirrorHistory": self._copy_mirror_history(),
                 "today": dict(today_counts),
                 "week": week_counts,
                 "updatedAt": self._timestamp(),
@@ -279,6 +358,7 @@ class ExecutionStatsStore:
             "schemaVersion": SCHEMA_VERSION,
             "currentRun": self._copy_current(),
             "lastMirror": self._copy_last_mirror(),
+            "mirrorHistory": self._copy_mirror_history(),
             "today": dict(self._daily.get(game_day(self._now()).isoformat(), _zero_counts())),
             "week": self._week_counts(game_day(self._now())),
             "updatedAt": self._timestamp(),
@@ -302,7 +382,10 @@ class ExecutionStatsStore:
         }
 
     def _copy_last_mirror(self) -> dict[str, Any] | None:
-        return dict(self._last_mirror) if self._last_mirror is not None else None
+        return deepcopy(self._mirror_history[0]) if self._mirror_history else None
+
+    def _copy_mirror_history(self) -> list[dict[str, Any]]:
+        return deepcopy(self._mirror_history[:MIRROR_HISTORY_LIMIT])
 
     def _timestamp(self) -> int:
         current = self._now()
@@ -324,6 +407,7 @@ class ExecutionStatsStore:
             for key, value in self._daily.items()
             if self._valid_date_key(key) and self._parse_date(key) >= cutoff
         }
+        self._mirror_history = self._mirror_history[:MIRROR_HISTORY_LIMIT]
 
     @staticmethod
     def _valid_date_key(value: Any) -> bool:
@@ -347,12 +431,26 @@ class ExecutionStatsStore:
                 self._daily = {
                     str(key): _normalise_counts(value) for key, value in daily.items() if self._valid_date_key(key)
                 }
-            self._last_mirror = _normalise_mirror_details(raw.get("lastMirror"))
+            history: list[dict[str, Any]] = []
+            raw_history = raw.get("mirrorHistory", [])
+            if isinstance(raw_history, list):
+                for item in raw_history:
+                    normalized = _normalise_mirror_details(item)
+                    if normalized is not None and normalized not in history:
+                        history.append(normalized)
+            # Files written before mirrorHistory was introduced only have a
+            # single lastMirror entry.  Promote it without duplicating it
+            # when both fields are present.
+            legacy_last = _normalise_mirror_details(raw.get("lastMirror"))
+            if legacy_last is not None and legacy_last not in history:
+                history.insert(0, legacy_last)
+            self._mirror_history = history[:MIRROR_HISTORY_LIMIT]
             self._prune(game_day(self._now()))
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             # A broken history file must never prevent the sidecar from
             # starting.  The next successful completion will repair it.
             self._daily = {}
+            self._mirror_history = []
 
     def _save(self) -> None:
         if self.path is None:
@@ -362,6 +460,7 @@ class ExecutionStatsStore:
                 "schemaVersion": SCHEMA_VERSION,
                 "daily": self._daily,
                 "lastMirror": self._copy_last_mirror(),
+                "mirrorHistory": self._copy_mirror_history(),
             }
             atomic_write_text(
                 self.path,
@@ -378,6 +477,7 @@ __all__ = [
     "ExecutionStatsStore",
     "GAME_DAY_RESET_HOUR",
     "GAME_TIMEZONE",
+    "MIRROR_HISTORY_LIMIT",
     "RETENTION_DAYS",
     "SCHEMA_VERSION",
     "STAT_KINDS",

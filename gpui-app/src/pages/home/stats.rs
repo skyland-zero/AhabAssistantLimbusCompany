@@ -7,7 +7,9 @@ use crate::{
     model::{ExecutionStatsPayload, ExecutionStatusPayload, TasksConfig},
 };
 
-use crate::model::{CurrentRunStats, DailyStatEntry, StatCounts};
+use crate::model::{
+    CurrentRunStats, DailyStatEntry, MirrorCompletionStats, MirrorTeamStats, StatCounts,
+};
 
 const STATS_CARD_HEIGHT: f32 = 185.0;
 
@@ -408,6 +410,466 @@ pub(super) fn daily_details_overlay(
         .into_any_element()
 }
 
+pub(super) fn mirror_details_overlay(
+    app: &mut AhabApp,
+    cx: &mut Context<AhabApp>,
+) -> gpui::AnyElement {
+    if !app.home.mirror_details_open {
+        return div().into_any_element();
+    }
+
+    let language = app.state.settings.language;
+    let records = if app.home.stats.mirrorHistory.is_empty() {
+        app.home.stats.lastMirror.clone().into_iter().collect()
+    } else {
+        app.home.stats.mirrorHistory.clone()
+    };
+    let mut close = button("", ButtonVariant::Icon)
+        .id("stats-mirror-close")
+        .w(px(30.0))
+        .h(px(30.0))
+        .p_0()
+        .child(action_icon(ICON_X, 15., TEXT_MUTED));
+    close = close.on_click(cx.listener(|view, _, _, cx| {
+        view.close_mirror_details(cx);
+        cx.stop_propagation();
+    }));
+    close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if is_activation_key(event) {
+            window.prevent_default();
+            view.close_mirror_details(cx);
+        }
+    }));
+
+    let header = div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .px(px(18.0))
+        .py(px(12.0))
+        .border_b_1()
+        .border_color(rgb(BORDER))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(action_icon(ICON_SCROLL_TEXT, 17., ACCENT))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(1.0))
+                        .child(
+                            div()
+                                .text_size(px(16.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(TEXT))
+                                .child(text("镜牢明细", "Mirror Details").get(language)),
+                        )
+                        .child(div().text_size(px(10.5)).text_color(rgb(TEXT_MUTED)).child(
+                            format!(
+                                "{} {}/30",
+                                text("最近", "Latest").get(language),
+                                records.len()
+                            ),
+                        )),
+                ),
+        )
+        .child(close);
+
+    let body = mirror_history_body(app, &records, language);
+    let dialog = div()
+        .id("stats-mirror-dialog")
+        .w(px(820.0))
+        .h(px(650.0))
+        .max_w_full()
+        .max_h(relative(0.94))
+        .min_h_0()
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .rounded_lg()
+        .border_1()
+        .border_color(rgb(BORDER))
+        .bg(rgb(SURFACE))
+        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+        .child(header)
+        .child(body);
+
+    let mut surface = div()
+        .id("stats-mirror-overlay")
+        .relative()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_4()
+        .bg(rgba(0x00000080))
+        .on_click(cx.listener(|view, _, _, cx| {
+            view.close_mirror_details(cx);
+        }));
+    surface = surface.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+        if event.keystroke.key.eq_ignore_ascii_case("escape") {
+            window.prevent_default();
+            cx.stop_propagation();
+            view.close_mirror_details(cx);
+        }
+    }));
+
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .child(surface.child(dialog))
+        .into_any_element()
+}
+
+fn mirror_history_body(
+    app: &mut AhabApp,
+    records: &[MirrorCompletionStats],
+    language: Language,
+) -> gpui::AnyElement {
+    if records.is_empty() {
+        return div()
+            .flex_1()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(12.0))
+            .text_color(rgb(TEXT_MUTED))
+            .child(text("暂无镜牢完成记录", "No completed mirror runs").get(language))
+            .into_any_element();
+    }
+
+    let mut list = div()
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .px(px(18.0))
+        .pt(px(14.0))
+        .pb(px(16.0));
+    for (index, record) in records.iter().enumerate() {
+        list = list.child(mirror_history_row(index + 1, record, language));
+    }
+    scroll_area_with_id(app, "stats-mirror-scroll", list)
+        .flex_1()
+        .min_h_0()
+        .into_any_element()
+}
+
+fn mirror_history_row(index: usize, record: &MirrorCompletionStats, language: Language) -> Div {
+    let failed = record.failed.unwrap_or(false);
+    let mode_label = if record.hardMode {
+        text("困难", "Hard").get(language)
+    } else {
+        text("普通", "Normal").get(language)
+    };
+    let status_label = if failed {
+        text("未完成", "Incomplete").get(language)
+    } else {
+        text("已完成", "Completed").get(language)
+    };
+    let status_tone = if failed {
+        BadgeTone::Danger
+    } else {
+        BadgeTone::Success
+    };
+    let team = record.team.as_ref();
+    let team_name = mirror_team_name(team, language);
+    let team_number = team
+        .map(|team| team.number)
+        .filter(|number| *number > 0)
+        .map(|number| format!(" #{number}"))
+        .unwrap_or_default();
+    let sinners = mirror_team_sinners(team, language);
+    let route = mirror_route_name(record, language);
+    let completed_at = record.completedAt.replace('T', " ");
+
+    let heading = div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .child(
+            div()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(10.0))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child(format!("#{index}")),
+                )
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(11.0))
+                        .text_color(rgb(TEXT))
+                        .child(completed_at),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1p5()
+                .child(badge(
+                    mode_label,
+                    if record.hardMode {
+                        BadgeTone::Warning
+                    } else {
+                        BadgeTone::Neutral
+                    },
+                ))
+                .child(badge(status_label, status_tone))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(ACCENT))
+                        .child(format_duration(record.totalSeconds)),
+                ),
+        );
+
+    let metadata = div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_1p5()
+        .text_size(px(10.5))
+        .text_color(rgb(TEXT_MUTED))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_color(rgb(TEXT))
+                .child(format!("{}{}", team_name, team_number)),
+        )
+        .child(
+            div()
+                .text_color(rgb(ACCENT))
+                .child(mirror_system_label(team, language)),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .child(format!("{} · {}", route, sinners)),
+        );
+    let metadata = if let Some(reason) = record.failureReason.as_deref() {
+        metadata.child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_color(rgb(0xff8f8f))
+                .child(format!(
+                    "{}: {}",
+                    text("原因", "Reason").get(language),
+                    reason
+                )),
+        )
+    } else {
+        metadata
+    };
+
+    let mut timing = div().w_full().grid().grid_cols(3).gap_1();
+    for (label, seconds) in [
+        (
+            text("战斗", "Battle").get(language).to_owned(),
+            record.battleSeconds,
+        ),
+        (
+            format!(
+                "{} {}次",
+                text("事件", "Events").get(language),
+                record.eventCount
+            ),
+            record.eventSeconds,
+        ),
+        (
+            text("商店", "Shop").get(language).to_owned(),
+            record.shopSeconds,
+        ),
+        (
+            text("寻路", "Path").get(language).to_owned(),
+            record.findRoadSeconds,
+        ),
+        (
+            text("主题包", "Theme").get(language).to_owned(),
+            record.themePackSeconds,
+        ),
+        (
+            text("奖励卡", "Reward").get(language).to_owned(),
+            record.rewardCardSeconds,
+        ),
+        (
+            text("饰品", "Ego").get(language).to_owned(),
+            record.egoGiftSeconds,
+        ),
+        (
+            text("结算", "Claim").get(language).to_owned(),
+            record.settlementSeconds,
+        ),
+        (
+            text("其他", "Other").get(language).to_owned(),
+            record.otherSeconds,
+        ),
+    ] {
+        timing = timing.child(mirror_history_timing(label, seconds));
+    }
+
+    card(
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(heading)
+            .child(metadata)
+            .child(timing),
+    )
+    .w_full()
+    .p_3()
+}
+
+fn mirror_history_timing(label: String, seconds: f64) -> Div {
+    div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_1()
+        .rounded_sm()
+        .px(px(6.0))
+        .py(px(3.0))
+        .bg(rgba((SURFACE_HOVER << 8) | 0x35))
+        .text_size(px(9.5))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_color(rgb(TEXT_MUTED))
+                .child(label),
+        )
+        .child(
+            div()
+                .text_color(rgb(TEXT))
+                .font_weight(FontWeight::MEDIUM)
+                .child(format_duration(seconds)),
+        )
+}
+
+fn mirror_context_line(record: &MirrorCompletionStats, language: Language) -> Div {
+    let team = record.team.as_ref();
+    let mode = if record.hardMode {
+        text("困难", "Hard").get(language)
+    } else {
+        text("普通", "Normal").get(language)
+    };
+    div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_1p5()
+        .text_size(px(9.5))
+        .text_color(rgb(TEXT_MUTED))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_color(rgb(TEXT))
+                .child(mirror_team_name(team, language)),
+        )
+        .child(
+            div()
+                .text_color(rgb(ACCENT))
+                .child(mirror_system_label(team, language)),
+        )
+        .child(div().text_color(rgb(TEXT_MUTED)).child(mode))
+}
+
+fn mirror_team_name(team: Option<&MirrorTeamStats>, language: Language) -> String {
+    team.and_then(|team| (!team.name.is_empty()).then_some(team.name.clone()))
+        .unwrap_or_else(|| text("未知队伍", "Unknown team").get(language).to_owned())
+}
+
+fn mirror_team_sinners(team: Option<&MirrorTeamStats>, language: Language) -> String {
+    let Some(team) = team else {
+        return text("未记录人格", "Sinners unavailable")
+            .get(language)
+            .to_owned();
+    };
+    let names = if matches!(language, Language::ZhCn) {
+        &team.sinnerNames
+    } else {
+        &team.sinnerNamesEn
+    };
+    let values = if names.is_empty() {
+        &team.sinners
+    } else {
+        names
+    };
+    if values.is_empty() {
+        text("未记录人格", "Sinners unavailable")
+            .get(language)
+            .to_owned()
+    } else {
+        values.join(if matches!(language, Language::ZhCn) {
+            "、"
+        } else {
+            ", "
+        })
+    }
+}
+
+fn mirror_system_label(team: Option<&MirrorTeamStats>, language: Language) -> String {
+    let system = team
+        .map(|team| {
+            if !team.system.is_empty() {
+                team.system.as_str()
+            } else {
+                team.accessoryScheme.as_str()
+            }
+        })
+        .unwrap_or_default();
+    let label = match system {
+        "burn" => text("烧伤", "Burn"),
+        "bleed" => text("流血", "Bleed"),
+        "tremor" => text("震颤", "Tremor"),
+        "rupture" => text("破裂", "Rupture"),
+        "poise" => text("呼吸", "Poise"),
+        "sinking" => text("沉沦", "Sinking"),
+        "charge" => text("充能", "Charge"),
+        "slash" => text("斩击", "Slash"),
+        "pierce" => text("突刺", "Pierce"),
+        "blunt" => text("打击", "Blunt"),
+        _ if system.is_empty() => text("未知体系", "Unknown system"),
+        _ => return system.to_owned(),
+    };
+    label.get(language).to_owned()
+}
+
+fn mirror_route_name(record: &MirrorCompletionStats, language: Language) -> String {
+    let route = if matches!(language, Language::ZhCn) {
+        &record.routeName
+    } else {
+        &record.routeNameEn
+    };
+    if !route.is_empty() {
+        route.clone()
+    } else if !record.routeId.is_empty() {
+        record.routeId.clone()
+    } else {
+        text("默认路线", "Default route").get(language).to_owned()
+    }
+}
+
 fn current_run_card(snapshot: &StatsSnapshot) -> Div {
     let language = snapshot.language;
     let current = &snapshot.stats.currentRun;
@@ -662,7 +1124,7 @@ fn combined_history_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -
         .w_full()
         .bg(rgba((BORDER << 8) | 0x60))
         .my(px(1.5));
-    let mirror_section = recent_mirror_section(snapshot, language);
+    let mirror_section = recent_mirror_section(snapshot, language, root);
 
     card(
         div()
@@ -802,7 +1264,32 @@ fn period_item(label: &'static str, today: u32, week: u32) -> Div {
         )
 }
 
-fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
+fn recent_mirror_section(
+    snapshot: &StatsSnapshot,
+    language: Language,
+    root: &WeakEntity<AhabApp>,
+) -> Div {
+    let mut details = button(
+        text("明细", "Details").get(language),
+        ButtonVariant::Ghost,
+    )
+    .id("stats-mirror-open")
+    .h(px(20.0))
+    .px(px(6.0))
+    .py_0()
+    .gap_1()
+    .text_size(px(10.0))
+    .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
+    let root_for_details = root.clone();
+    details = details.on_click(move |_, _, cx| {
+        if let Some(root) = root_for_details.upgrade() {
+            root.update(cx, |view, cx| {
+                view.open_mirror_details(cx);
+                cx.stop_propagation();
+            });
+        }
+    });
+
     let header_right = match snapshot.stats.lastMirror.as_ref() {
         Some(record) => {
             let is_failed = record.failed.unwrap_or(false);
@@ -839,6 +1326,12 @@ fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
         }
         None => div(),
     };
+    let header_actions = div()
+        .flex()
+        .items_center()
+        .gap_1p5()
+        .child(header_right)
+        .child(details);
 
     let header = div()
         .h(px(20.0))
@@ -860,7 +1353,7 @@ fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
                         .child(text("最近镜牢", "Recent Mirror").get(language)),
                 ),
         )
-        .child(header_right);
+        .child(header_actions);
 
     let body = match snapshot.stats.lastMirror.as_ref() {
         Some(record) => div()
@@ -868,6 +1361,7 @@ fn recent_mirror_section(snapshot: &StatsSnapshot, language: Language) -> Div {
             .flex_col()
             .gap(px(2.5))
             .mt(px(2.0))
+            .child(mirror_context_line(record, language))
             .child(
                 div()
                     .flex()

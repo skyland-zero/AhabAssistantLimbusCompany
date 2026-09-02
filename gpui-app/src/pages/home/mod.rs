@@ -137,6 +137,7 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .right_0()
         .bottom_0()
         .child(stats::daily_details_overlay(app, cx))
+        .child(stats::mirror_details_overlay(app, cx))
         .child(execution::after_completion_editor(
             app,
             cx,
