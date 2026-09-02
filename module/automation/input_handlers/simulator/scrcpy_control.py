@@ -1160,21 +1160,22 @@ class ScrcpyControl(AbstractInput):
         dy: int = 0,
         move_back: bool = True,
     ) -> None:
-        """从 (x, y) 拖拽滑动至 (x+dx, y+dy)。"""
+        """从 (x, y) 拖拽滑动至 (x+dx, y+dy)。对齐 MuMu 的 insert_swipe 贝塞尔+0.5s抬手。"""
         # 对齐 MuMu：不做 resolution 钳位，允许拖到负坐标/超界由系统裁剪，保持距离一致
         x, y, dx, dy = int(x), int(y), int(dx), int(dy)
         x2 = x + dx
         y2 = y + dy
-        duration = max(0.0, float(drag_time))
         points = insert_swipe(p0=(x, y), p3=(x2, y2))
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, x, y))
-        try:
-            self._send_timed_moves(points, duration)
-            settle = self._gesture_settle_duration()
-            if settle:
-                time.sleep(settle)
-        finally:
-            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
+        time.sleep(0.02)
+        for px, py in points[1:]:
+            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+            time.sleep(0.02)
+        if drag_time * 0.3 > 0.5:
+            time.sleep(drag_time * 0.3)
+        else:
+            time.sleep(0.5)
+        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
         self.wait_pause()
 
     def mouse_swipe_for_scroll(
@@ -1186,48 +1187,59 @@ class ScrcpyControl(AbstractInput):
         dy: int = 0,
         move_back: bool = True,
     ) -> None:
-        """列表滚动手势，按 ``duration`` 调度 MOVE 事件。"""
+        """列表滚动手势。对齐 MuMu 的 speed=8/min_distance=1 +0.2s 停留。"""
         x, y, dx, dy = int(x), int(y), int(dx), int(dy)
         x2, y2 = x + dx, y + dy
         points = insert_swipe(p0=(x, y), p3=(x2, y2), speed=8, min_distance=1)
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, x, y))
+        time.sleep(0.02)
         try:
-            self._send_timed_moves(points, max(0.0, float(duration)))
-            settle = self._gesture_settle_duration()
-            if settle:
-                time.sleep(settle)
+            for px, py in points[1:]:
+                self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+                time.sleep(0.02)
+            time.sleep(0.20)
         finally:
             self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
         self.wait_pause()
 
     def mouse_drag_down(self, x: int, y: int, reverse: int = 1, move_back: bool = True) -> None:
-        """向下/向上拖动手势。对齐 MuMu 的 swipe(duration=0.4)。"""
+        """向下/向上拖动手势。对齐 MuMu.swipe(duration=0.4, min_distance=10)。"""
         scale = cfg.set_win_size / 1080
         x, y = int(x), int(y)
-        # MuMu 的 swipe 用 insert_swipe + duration/min_distance 节奏，这里直接复用 mouse_drag 的对齐逻辑
-        self.mouse_drag(x, y, drag_time=0.4, dx=0, dy=int(300 * scale * reverse), move_back=move_back)
+        x2 = x
+        y2 = y + int(300 * scale * reverse)
+        points = insert_swipe(p0=(x, y), p3=(x2, y2), min_distance=10)
+        # MuMu.swipe: for point in points: down(*point); sleep(duration/min_distance) -> 0.04/点 +0.2+0.05
+        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, x, y))
+        time.sleep(0.4 / 10)
+        for px, py in points[1:]:
+            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+            time.sleep(0.4 / 10)
+        time.sleep(0.2)
+        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
+        time.sleep(0.05)
+        self.wait_pause()
 
     def mouse_drag_link(self, position: list, drag_time: float = 0.1, move_back: bool = False) -> None:
         """按路径多点连续拖拽。对齐 MuMu 的分段 insert_swipe。"""
         if not position:
             return
-        # Keep one finger-down gesture across all path segments, while each
-        # segment is time-driven and bounded by the same MOVE limit.
         start_x, start_y = int(position[0][0]), int(position[0][1])
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, start_x, start_y))
+        time.sleep(0.02)
+        p = (start_x, start_y)
+        min_distance = 10
+        for target in position[1:]:
+            tx, ty = int(target[0]), int(target[1])
+            points = insert_swipe(p0=p, p3=(tx, ty), min_distance=min_distance)
+            for px, py in points[1:]:
+                self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+                time.sleep(drag_time / min_distance if min_distance else 0.02)
+            p = (tx, ty)
+        time.sleep(0.5)
         last_x, last_y = int(position[-1][0]), int(position[-1][1])
-        try:
-            p = (start_x, start_y)
-            for target in position[1:]:
-                tx, ty = int(target[0]), int(target[1])
-                points = insert_swipe(p0=p, p3=(tx, ty), min_distance=10)
-                self._send_timed_moves(points, max(0.0, float(drag_time)))
-                p = (tx, ty)
-            settle = self._gesture_settle_duration()
-            if settle:
-                time.sleep(settle)
-        finally:
-            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, last_x, last_y))
+        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, last_x, last_y))
+        time.sleep(0.05)
         self.wait_pause()
 
     def mouse_scroll(self, direction: int = -3) -> bool:
