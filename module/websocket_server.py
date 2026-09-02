@@ -207,7 +207,7 @@ class WebSocketServer:
                     continue
                 try:
                     request = json.loads(raw)
-                except TypeError, json.JSONDecodeError:
+                except (TypeError, json.JSONDecodeError):
                     await self._send(connection, self._error(None, -32700, "无法解析 JSON"))
                     continue
                 if not isinstance(request, dict):
@@ -236,7 +236,7 @@ class WebSocketServer:
             if isinstance(raw, bytes):
                 raise TypeError("binary hello")
             hello = json.loads(raw)
-        except asyncio.TimeoutError, ConnectionClosed, TypeError, json.JSONDecodeError:
+        except (asyncio.TimeoutError, ConnectionClosed, TypeError, json.JSONDecodeError):
             await connection.close(code=1008, reason="authentication required")
             return False
 

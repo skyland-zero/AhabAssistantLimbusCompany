@@ -338,6 +338,10 @@ impl MockState {
                 Ok(json!(true))
             }
             method::TOOL_SCREENSHOT => Ok(json!({"path":"AALC/screenshots/mock.png"})),
+            method::TOOL_RESOLUTION_SET => Ok(
+                json!({"accepted": true, "size": "1920x1080", "density": 240, "reconnected": false}),
+            ),
+            method::TOOL_RESOLUTION_RESET => Ok(json!({"accepted": true, "reconnected": false})),
             method::HOTKEY_GET => Ok(serde_json::to_value(&self.hotkey).unwrap()),
             method::HOTKEY_SET => {
                 self.hotkey = merge_json(&self.hotkey, request.params, "hotkey.set")?;

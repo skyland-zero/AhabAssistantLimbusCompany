@@ -1,6 +1,6 @@
 import random
 import re
-from time import sleep, time
+from time import sleep
 from typing import Callable, TypeVar
 
 import cv2
@@ -12,8 +12,6 @@ from module.config import cfg
 from module.logger import log
 
 from .. import AbstractInput
-from ..scroll_swipe import build_scroll_swipe_plan
-from .pyminitouch import MNTDevice
 
 T = TypeVar("T")
 
@@ -69,35 +67,29 @@ key_list = {
 
 
 class SimulatorControl(AbstractInput):
-    connection_device = None
+    """通用 ADB 模拟器降级控制器（基于 adb shell input）。"""
+
+    connection_device: SimulatorControl | None = None
 
     @staticmethod
-    def clean_connect():
+    def clean_connect() -> None:
         if SimulatorControl.connection_device is None:
             return
         try:
-            SimulatorControl.connection_device.simulator_control.stop()
-        except Exception as e:
-            log.debug(f"清理minitouch连接失败: {e}")
-        try:
             SimulatorControl.connection_device.adb_disconnect()
         except Exception as e:
-            log.debug(f"断开ADB连接失败: {e}")
+            log.debug("断开ADB连接失败: %s", e)
         SimulatorControl.connection_device = None
 
     def __init__(self, endpoint: str | None = None) -> None:
+        super().__init__()
         self.is_pause = False
         self.restore_time = None
         self.simulator_device = None
-        # self.simulator_control = None
-        self.simulator_max_x = None
-        self.simulator_max_y = None
-        # A selected GPUI ADB target is explicit and must not be replaced by
-        # the persisted default port during reconnects.
+        self.simulator_max_x = 1920
+        self.simulator_max_y = 1080
         self._configured_endpoint = endpoint
         self.simulator_port = endpoint
-        self.simulator_bluestacks = False
-
         self.game_package_name = "com.ProjectMoon.LimbusCompany"
 
         self.get_simulator()
@@ -116,7 +108,6 @@ class SimulatorControl(AbstractInput):
                 "sendall",
                 "意外截图",
                 "截图解码失败",
-                "minitouch",
                 "Broken pipe",
             )
         )
@@ -125,19 +116,13 @@ class SimulatorControl(AbstractInput):
         if not bool(cfg.get_value("adb_reconnect_on_error", True)):
             return False
 
-        log.warning(f"检测到模拟器连接失效，正在重建ADB/minitouch连接: {reason}")
-        try:
-            if getattr(self, "simulator_control", None) is not None:
-                self.simulator_control.stop()
-        except Exception as e:
-            log.debug(f"停止旧minitouch连接失败: {e}")
+        log.warning("检测到模拟器连接失效，正在重建ADB连接: %s", reason)
         try:
             self.adb_disconnect()
         except Exception as e:
-            log.debug(f"断开旧ADB连接失败: {e}")
+            log.debug("断开旧ADB连接失败: %s", e)
 
         self.simulator_device = None
-        self.simulator_control = None
         self.simulator_port = self._configured_endpoint
         SimulatorControl.connection_device = None
         sleep(1)
@@ -150,10 +135,10 @@ class SimulatorControl(AbstractInput):
         except Exception as e:
             if not self._is_recoverable_connection_error(e) or not self.reconnect(f"{action}: {e}"):
                 raise
-            log.info(f"模拟器连接已重建，重试操作: {action}")
+            log.info("模拟器连接已重建，重试操作: %s", action)
             return func()
 
-    def start_game(self):
+    def start_game(self) -> None:
         def _start_game():
             if self.simulator_device is None:
                 self.get_simulator()
@@ -162,20 +147,17 @@ class SimulatorControl(AbstractInput):
         try:
             self._call_with_reconnect("启动游戏", _start_game)
         except Exception as e:
-            log.error(f"启动游戏失败，失败原因为{str(e)}")
+            log.error("启动游戏失败，失败原因为%s", e)
             log.error("启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动")
             try:
                 packages = self._call_with_reconnect("获取应用列表", lambda: self.simulator_device.list_packages())
-                log.debug(f"获取到的应用列表列表：{packages}")
-            except Exception as e:
-                log.error(f"获取应用列表失败，失败原因为{str(e)}")
+                log.debug("获取到的应用列表列表：%s", packages)
+            except Exception as e2:
+                log.error("获取应用列表失败，失败原因为%s", e2)
             sleep(5)
             self._call_with_reconnect("启动游戏", _start_game)
 
-    def adb_connect(self):
-        # A selected serial that is already known to the ADB server does not
-        # need adb connect.  Network endpoints still need the explicit connect
-        # step used by the legacy configuration path.
+    def adb_connect(self) -> None:
         if self._configured_endpoint:
             self.simulator_port = self._configured_endpoint
             if ":" not in self._configured_endpoint:
@@ -189,29 +171,23 @@ class SimulatorControl(AbstractInput):
             self.simulator_port = endpoint
         for _ in range(3):
             msg = adb.connect(endpoint)
-            # Connected to 127.0.0.1:59865
-            # Already connected to 127.0.0.1:59865
             if "connected" in msg:
-                log.debug(f"成功连接至:{endpoint},连接信息: {msg}")
+                log.debug("成功连接至:%s,连接信息: %s", endpoint, msg)
                 break
-            # bad port number '598265' in '127.0.0.1:598265'
             elif "bad port" in msg:
-                log.error(f"连接失败，端口号{endpoint}不正确，可能是拼写错误或不规范")
+                log.error("连接失败，端口号%s不正确，可能是拼写错误或不规范", endpoint)
 
-    def adb_disconnect(self):
+    def adb_disconnect(self) -> None:
         if not self.simulator_port or ":" not in str(self.simulator_port):
             return
         try:
             for _ in range(3):
                 msg = adb.disconnect(self.simulator_port)
-                # Connected to 127.0.0.1:59865
-                # Already connected to 127.0.0.1:59865
                 if "disconnected" in msg:
-                    log.debug(f"成功断开连接于:{self.simulator_port},连接信息: {msg}")
+                    log.debug("成功断开连接于:%s,连接信息: %s", self.simulator_port, msg)
                     break
-                # bad port number '598265' in '127.0.0.1:598265'
                 elif "bad port" in msg:
-                    log.error(f"断开连接失败，端口号{self.simulator_port}不正确，可能是拼写错误或不规范")
+                    log.error("断开连接失败，端口号%s不正确，可能是拼写错误或不规范", self.simulator_port)
         except Exception:
             pass
 
@@ -227,34 +203,21 @@ class SimulatorControl(AbstractInput):
 
                 self.simulator_device = adb.device(self.simulator_port)
 
-                # 提取目标设备的序列号
-                target_serial = self.simulator_device.serial
-
-                # 通过序列号获取设备对象
-                self.simulator_control = MNTDevice(target_serial)
-
-                # 提取分辨率（如 1080x1920）
+                # 提取分辨率（如 1080x1920 或 1920x1080）
                 size_output = self.simulator_device.shell(["wm", "size"])
                 match = re.search(r"(\d+)x(\d+)", size_output)
                 if match:
-                    height = int(match.group(2))  # Y: 高度
-                    self.simulator_max_y = height
-                    width = int(match.group(1))  # X: 宽度
+                    width = int(match.group(1))
+                    height = int(match.group(2))
                     self.simulator_max_x = width
-
-                    self.simulator_control.real_width = width
-                    self.simulator_control.real_height = height
-                    if int(self.simulator_control.connection.max_x) > 1440:
-                        self.simulator_bluestacks = True
+                    self.simulator_max_y = height
 
                 SimulatorControl.connection_device = self
-
                 log.debug("连接成功，已将模拟器实例记录至 SimulatorControl.connection_device")
-
                 return self.simulator_device
             except AdbError as e:
                 last_error = e
-                log.error(f"获取模拟器设备失败，ADB 错误: {e}，正在尝试重新连接 ({attempt + 1}/3)")
+                log.error("获取模拟器设备失败，ADB 错误: %s，正在尝试重新连接 (%d/3)", e, attempt + 1)
                 try:
                     self.adb_disconnect()
                 except Exception:
@@ -264,7 +227,7 @@ class SimulatorControl(AbstractInput):
                 sleep(1)
             except Exception as e:
                 last_error = e
-                log.error(f"初始化模拟器时出现未知异常: {e}")
+                log.error("初始化模拟器时出现未知异常: %s", e)
                 break
 
         if last_error is not None:
@@ -287,232 +250,125 @@ class SimulatorControl(AbstractInput):
 
         return self._call_with_reconnect("截图", _screenshot)
 
-    def set_pause(self) -> None:
-        """
-        设置暂停状态
-        """
-        self.is_pause = not self.is_pause  # 设置暂停状态
-        if self.is_pause:
-            msg = "操作将在下一次点击时暂停"
-        else:
-            msg = "继续操作"
-        log.info(msg)
-
-    def wait_pause(self) -> None:
-        """
-        当处于暂停状态时堵塞的进行等待
-        """
-        pause_identity = False
-        while self.is_pause:
-            if pause_identity is not False:
-                log.info("AALC 已暂停")
-                pause_identity = True
-            sleep(1)
-            self.restore_time = time()
-
-    def mouse_click(self, x, y, times=1) -> bool:
-        """在指定坐标上执行点击操作
-
-        Args:
-            x (int): x坐标
-            y (int): y坐标
-            times (int): 点击次数
-            move_back (bool): 是否在点击后将鼠标移动回原位置
-        Returns:
-            bool (True) : 总是返回True表示操作执行完毕
-        """
+    def mouse_click(self, x: int, y: int, times: int = 1) -> bool:
+        """在指定坐标上执行点击操作。"""
         if self.simulator_device is None:
             self.get_simulator()
 
-        pos_x, pos_y = self._scale(x, y)
-
-        msg = f"点击位置:({x},{y})"
-        log.debug(msg)
+        log.debug("点击位置:(%d,%d)", x, y)
 
         def _tap():
             for _ in range(times):
                 self.simulator_device.shell(f"input tap {x} {y}")
-                # 多次点击执行很快所以暂停放到循环外
             return True
 
         self._call_with_reconnect("点击", _tap)
-
         self.wait_pause()
-
         return True
 
-    def mouse_drag_down(self, x, y, reverse=1) -> None:
-        """鼠标从指定位置向下拖动
-
-        Args:
-            x (int): x坐标
-            y (int): y坐标
-            reverse (int): 拖动方向，1表示向下，-1表示向上
-            move_back (bool): 是否在拖动后将鼠标移动回原位置
-        """
+    def mouse_drag_down(self, x: int, y: int, reverse: int = 1) -> None:
+        """向下/向上拖动手势。"""
         if self.simulator_device is None:
             self.get_simulator()
-
         scale = cfg.set_win_size / 1080
         self.mouse_drag(x, y, 0.4, 0, int(300 * scale * reverse))
 
     def mouse_scroll(self, direction: int = -3) -> bool:
-        """占位"""
         return True
 
-    def mouse_click_blank(self, coordinate=(1, 1), times=1) -> bool:
-        """在空白位置点击鼠标
-        Args:
-            coordinate (tuple): 坐标元组 (x, y)
-            times (int): 点击次数
-            move_back (bool): 是否在点击后将鼠标移动回原位置
-        Returns:
-            bool (True) : 总是返回True表示操作执行完毕
-        """
-
-        msg = "点击（1，1）空白位置"
-        log.debug(msg)
+    def mouse_click_blank(self, coordinate: tuple[int, int] = (1, 1), times: int = 1) -> bool:
+        """在空白位置点击鼠标。"""
         x = coordinate[0] + random.randint(0, 10)
         y = coordinate[1] + random.randint(0, 10)
-        for i in range(times):
+        for _ in range(times):
             self.mouse_click(x, y)
-
         self.wait_pause()
         return True
 
-    def mouse_to_blank(self, coordinate=(1, 1), move_back=False) -> None:  # background未重载
-        """占位"""
+    def mouse_to_blank(self, coordinate: tuple[int, int] = (1, 1), move_back: bool = False) -> None:
         return
 
-    def key_press(self, key: str):
-        """模拟键盘输入文本
-        Args:
-            key (str): 按键名称
-        """
+    def key_press(self, key: str) -> None:
+        """模拟键盘输入。"""
         if self.simulator_device is None:
             self.get_simulator()
         try:
-            cmd = f"input keyevent {key_list[key]}"
+            keycode = key_list.get(key.lower(), 66)
+            cmd = f"input keyevent {keycode}"
             self._call_with_reconnect("按键", lambda: self.simulator_device.shell(cmd))
         except Exception as e:
-            log.error(f"输入失败：{e}")
+            log.error("输入失败：%s", e)
 
-    def input_text(self, text: str):
-        """将提供的 `text` 直接输入到模拟器（使用 `adb shell input text`）。"""
+    def input_text(self, text: str) -> None:
+        """输入文本。"""
         if not text:
             log.warning("未提供要输入的文本")
             return
         if self.simulator_device is None:
             self.get_simulator()
         try:
-            # Android 的 input text 需要把空格写成 %s
             send_text = text.replace(" ", "%s")
             self._call_with_reconnect("输入文本", lambda: self.simulator_device.shell(["input", "text", send_text]))
         except Exception as e:
-            log.error(f"输入文本失败：{e}")
+            log.error("输入文本失败：%s", e)
 
-    def _scale(self, x, y):
-        pos_x = self.simulator_max_x - y
-        pos_y = x
-        if pos_x <= 0:
-            pos_x = 1
-        return pos_x, pos_y
-
-    def clear_mnt(self):
-        self.simulator_control.stop()
-
-    def mouse_drag(self, x, y, drag_time=0.2, dx=0, dy=0) -> None:
-        """鼠标从指定位置拖动到另一个位置
-        Args:
-            x (int): 起始x坐标
-            y (int): 起始y坐标
-            drag_time (float): 拖动时间
-            dx (int): x方向拖动距离
-            dy (int): y方向拖动距离
-            move_back (bool): 是否在拖动后将鼠标移动回原位置
-        """
+    def mouse_drag(self, x: int, y: int, drag_time: float = 0.2, dx: int = 0, dy: int = 0) -> None:
+        """鼠标拖拽。"""
         if self.simulator_device is None:
             self.get_simulator()
-
-        if self.simulator_bluestacks:
-            if x + dx > self.simulator_max_x:
-                dx = self.simulator_max_x - x - 1
-            if y + dy > self.simulator_max_y:
-                dy = self.simulator_max_y - y - 1
-            pos_x, pos_y = x, y
-            pos_x_2, pos_y_2 = x + dx, y + dy
-        else:
-            pos_x, pos_y = self._scale(x, y)
-            pos_x_2, pos_y_2 = self._scale(x + dx, y + dy)
+        pos_x_2 = x + dx
+        pos_y_2 = y + dy
+        duration_ms = max(50, int(drag_time * 1000))
 
         def _drag():
-            self.simulator_control.ext_smooth_swipe(
-                [(pos_x, pos_y), (pos_x_2, pos_y_2)],
-                duration=drag_time * 1000 / 10,
-                part=50,
-                no_up=True,
-            )
-            if drag_time * 0.3 > 0.5:
-                sleep(drag_time * 0.3)
-            else:
-                sleep(0.5)
-            self.simulator_control.up()
+            self.simulator_device.shell(f"input swipe {x} {y} {pos_x_2} {pos_y_2} {duration_ms}")
 
         self._call_with_reconnect("滑动", _drag)
 
-    def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
+    def mouse_swipe_for_scroll(
+        self,
+        x: int,
+        y: int,
+        duration: float = 0.3,
+        dx: int = 0,
+        dy: int = 0,
+        move_back: bool = True,
+    ) -> None:
+        """快速滚动滑动。"""
         if self.simulator_device is None:
             self.get_simulator()
-
-        if self.simulator_bluestacks:
-            end_x = max(1, min(x + dx, self.simulator_max_x - 1))
-            end_y = max(1, min(y + dy, self.simulator_max_y - 1))
-            plan = build_scroll_swipe_plan(x, y, end_x - x, end_y - y, duration)
-        else:
-            plan = [
-                (self._scale(*point), move_duration)
-                for point, move_duration in build_scroll_swipe_plan(x, y, dx, dy, duration)
-            ]
+        end_x = x + dx
+        end_y = y + dy
+        duration_ms = max(50, int(duration * 1000))
 
         def _swipe():
-            self.simulator_control._send_swipe_plan_in_one_batch(plan)
+            self.simulator_device.shell(f"input swipe {x} {y} {end_x} {end_y} {duration_ms}")
 
-        self._call_with_reconnect(
-            "快速滑动并立即抬起",
-            _swipe,
-        )
+        self._call_with_reconnect("快速滑动", _swipe)
 
-    def close_current_app(self):
+    def close_current_app(self) -> None:
         if self.simulator_device is None:
             self.get_simulator()
         self._call_with_reconnect("关闭游戏", lambda: self.simulator_device.app_stop(self.game_package_name))
 
     def check_game_alive(self) -> bool:
-        """检查游戏是否存活
-        Returns:
-            bool: True表示游戏存活，False表示游戏未启动或已退出
-        """
+        """检查游戏是否存活。"""
         if self.simulator_device is None:
             self.get_simulator()
         package = self._call_with_reconnect("检查游戏存活", lambda: self.simulator_device.app_current().package)
-        if package != self.game_package_name:
-            return False
-        return True
+        return package == self.game_package_name
 
-    def mouse_drag_link(self, position: list, drag_time=0.15, move_back=False) -> None:
-        """
-        拖动鼠标经过多个中间点（折线），最后松开
-        """
+    def mouse_drag_link(self, position: list, drag_time: float = 0.15, move_back: bool = False) -> None:
+        """多点拉链折线滑动。"""
+        if not position:
+            return
         if self.simulator_device is None:
             self.get_simulator()
-        msg = f"开始拉链，列表{position}"
-        log.debug(msg)
-
-        position_conversion = []
-        for pos in position:
-            position_conversion.append((self.simulator_max_x - pos[1], pos[0]))
+        start = position[0]
+        end = position[-1]
+        duration_ms = max(50, int(drag_time * 1000 * len(position)))
 
         self._call_with_reconnect(
             "链式滑动",
-            lambda: self.simulator_control.swipe(position_conversion, duration=drag_time * 1000),
+            lambda: self.simulator_device.shell(f"input swipe {start[0]} {start[1]} {end[0]} {end[1]} {duration_ms}"),
         )

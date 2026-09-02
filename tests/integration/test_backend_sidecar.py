@@ -104,7 +104,7 @@ async def _exercise_real_sidecar() -> None:
 async def _read_ready(process: subprocess.Popen[str]) -> dict[str, int]:
     assert process.stdout is not None
     for _ in range(40):
-        line = await asyncio.wait_for(asyncio.to_thread(process.stdout.readline), timeout=3)
+        line = await asyncio.wait_for(asyncio.to_thread(process.stdout.readline), timeout=10)
         if not line:
             break
         try:

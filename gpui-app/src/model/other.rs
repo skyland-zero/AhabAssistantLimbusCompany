@@ -13,6 +13,7 @@ pub enum ToolId {
     InfiniteBattle,
     Enkephalin,
     Screenshot,
+    Resolution,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

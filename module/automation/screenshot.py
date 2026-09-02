@@ -383,18 +383,21 @@ class ScreenShot:
             active_session = ScreenShot._active_session()
             if active_session is not None:
                 if getattr(getattr(active_session, "target", None), "kind", None) != "adb":
-                    raise ConnectionError("当前选中设备不是通用 ADB 模拟器")
+                    raise ConnectionError("当前选中设备不是通用 ADB / Scrcpy 设备")
                 controller = active_session.controller
             else:
-                from module.automation.input_handlers.simulator.simulator_control import (
-                    SimulatorControl,
-                )
+                try:
+                    from module.automation.input_handlers.simulator.scrcpy_control import (
+                        ScrcpyControl,
+                    )
 
-                controller = SimulatorControl.connection_device
+                    controller = ScrcpyControl.connection_device
+                except ImportError:
+                    controller = None
 
         if controller is None:
-            log.error("未连接到adb设备")
-            raise ConnectionError("未连接到adb设备")
+            log.error("未连接到 Scrcpy 设备")
+            raise ConnectionError("未连接到 Scrcpy 设备")
 
         image = controller.screenshot()
         image = Image.fromarray(image)

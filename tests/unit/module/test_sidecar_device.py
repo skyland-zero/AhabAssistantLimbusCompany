@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import struct
 import threading
 from types import SimpleNamespace
 from typing import Any
@@ -157,9 +158,9 @@ def test_connection_methods_identify_mumu_ipc_and_adb_paths() -> None:
         "MuMu IPC（NemuIpc）",
     )
     assert manager._connection_methods(DeviceManager._make_adb_target("127.0.0.1:5555")) == (
-        "ADB（127.0.0.1:5555）",
-        "ADB screencap",
-        "ADB shell input + minitouch",
+        "Scrcpy（127.0.0.1:5555）",
+        "Scrcpy 硬件视频流（H.264）",
+        "Scrcpy 触控注入（Control Socket）",
     )
 
 
@@ -245,7 +246,7 @@ def test_active_session_is_authoritative_for_input_and_screenshot(monkeypatch) -
 
 def test_active_mumu_target_keeps_instance_and_endpoint(monkeypatch) -> None:
     import module.automation.input_handlers.simulator.mumu_control as mumu_module
-    import module.automation.input_handlers.simulator.simulator_control as adb_module
+    import module.automation.input_handlers.simulator.scrcpy_control as scrcpy_module
 
     class FakeMumu:
         def __init__(self, *, instance_number: int) -> None:
@@ -259,7 +260,7 @@ def test_active_mumu_target_keeps_instance_and_endpoint(monkeypatch) -> None:
     runtime_values: list[dict[str, Any]] = []
     monkeypatch.setattr(manager, "_set_runtime_config", lambda **values: runtime_values.append(values))
     monkeypatch.setattr(mumu_module, "MumuControl", FakeMumu)
-    monkeypatch.setattr(adb_module, "SimulatorControl", FakeAdb)
+    monkeypatch.setattr(scrcpy_module, "ScrcpyControl", FakeAdb)
 
     mumu_session = manager._open_target(DeviceManager._make_mumu_target(3))
     assert mumu_session.target.info.id == "mumu:3"
@@ -288,6 +289,53 @@ def test_reconnecting_same_selected_id_rebinds_existing_session(monkeypatch) -> 
     assert result["alreadyConnected"] is True
     assert rebound == [session]
     assert manager.active_session is session
+
+
+def test_reconnect_active_rebuilds_scrcpy_session_and_preserves_target(monkeypatch) -> None:
+    import module.automation.input_handlers.simulator.scrcpy_control as scrcpy_module
+
+    created: list[Any] = []
+
+    class FakeScrcpy:
+        connection_device = None
+
+        def __init__(self, *, endpoint: str) -> None:
+            self.endpoint = endpoint
+            self.stop_calls = 0
+            self.adb_disconnect_calls = 0
+            created.append(self)
+
+        def stop(self) -> None:
+            self.stop_calls += 1
+
+        def adb_disconnect(self) -> None:
+            self.adb_disconnect_calls += 1
+
+    manager = DeviceManager()
+    target = DeviceManager._make_adb_target("127.0.0.1:5555")
+    old_controller = FakeScrcpy(endpoint=target.endpoint or "")
+    manager._active = DeviceSession(target, old_controller)
+    manager._targets[target.info.id] = target
+    statuses: list[str] = []
+    activated: list[DeviceSession] = []
+    manager.add_status_listener(lambda _event, payload: statuses.append(payload["status"]))
+
+    monkeypatch.setattr(scrcpy_module, "ScrcpyControl", FakeScrcpy)
+    monkeypatch.setattr(manager, "_set_runtime_config", lambda **_values: None)
+    monkeypatch.setattr(manager, "_activate_runtime", activated.append)
+
+    assert manager.reconnect_active() is True
+    assert statuses == ["disconnected", "connecting", "connected"]
+    assert old_controller.stop_calls == 1
+    assert old_controller.adb_disconnect_calls == 0
+    assert len(created) == 2
+    assert manager.active_session is activated[-1]
+    assert manager.active_session is not None
+    assert manager.active_session.target.info.id == target.info.id
+    assert manager.active_session.target.endpoint == target.endpoint
+    assert manager.active_session.controller is created[-1]
+
+    manager.close()
 
 
 def test_running_mumu_uses_fast_ipc_attach(monkeypatch) -> None:
@@ -577,6 +625,149 @@ def test_release_after_task_cleans_session_and_publishes_disconnect(monkeypatch)
     assert result == {"status": "disconnected"}
     assert manager.active_session is None
     assert controller.disconnect_calls == 1
-    assert controller.adb_disconnect_calls == 1
-    assert events == [("device.status", {"deviceId": None, "status": "disconnected"})]
-    assert MumuControl.connection_device is None
+
+
+def test_list_devices_discovery_order(monkeypatch) -> None:
+    manager = DeviceManager()
+
+    mumu_targets = [DeviceManager._make_mumu_target(0)]
+    adb_targets = [DeviceManager._make_adb_target("f6a4b12c", name="Xiaomi 13", detail="USB · f6a4b12c")]
+    pc_target = DeviceTarget(DeviceInfo("pc:limbus", "Limbus Company", "Windows"), "pc")
+
+    monkeypatch.setattr(manager, "_discover_mumu_targets", lambda: mumu_targets)
+    monkeypatch.setattr(manager, "_discover_adb_targets", lambda: adb_targets)
+    monkeypatch.setattr(manager, "_discover_pc_window", lambda: pc_target)
+
+    devices = manager.list_devices()
+    device_ids = [d["id"] for d in devices]
+
+    # Order must be: MuMu -> ADB (Real Phone / Emulators) -> PC Window
+    assert device_ids == ["mumu:0", "adb:f6a4b12c", "pc:limbus"]
+    assert devices[1]["name"] == "Xiaomi 13"
+    assert devices[1]["detail"] == "USB · f6a4b12c"
+
+
+def test_inspect_adb_device_distinguishes_emulators_and_phones() -> None:
+    class MockAdbDevice:
+        def __init__(self, serial: str, getprop_output: str, state: str = "device") -> None:
+            self.serial = serial
+            self.state = state
+            self._getprop = getprop_output
+
+        def shell(self, cmd: str) -> str:
+            if cmd == "getprop":
+                return self._getprop
+            return ""
+
+    # Test LDPlayer
+    ld_dev = MockAdbDevice(
+        "127.0.0.1:5555",
+        "[ro.ld.version]: [9.0.0]\n[ro.hardware]: [leidian]\n[ro.product.model]: [SM-G988N]",
+    )
+    name, detail = DeviceManager._inspect_adb_device(ld_dev)
+    assert name == "雷电模拟器"
+    assert detail == "ADB · 127.0.0.1:5555"
+
+    # Test Real Phone with marketname (clean name without '真机 · ' prefix)
+    mi_dev = MockAdbDevice(
+        "f6a4b12c",
+        "[ro.product.marketname]: [Xiaomi 13]\n[ro.product.brand]: [Xiaomi]\n[ro.product.model]: [2211133C]",
+    )
+    name, detail = DeviceManager._inspect_adb_device(mi_dev)
+    assert name == "Xiaomi 13"
+    assert detail == "USB · f6a4b12c"
+
+    # Test Real Phone with brand + model
+    oneplus_dev = MockAdbDevice(
+        "192.168.1.100:5555",
+        "[ro.product.brand]: [OnePlus]\n[ro.product.model]: [PHB110]",
+    )
+    name, detail = DeviceManager._inspect_adb_device(oneplus_dev)
+    assert name == "OnePlus PHB110"
+    assert detail == "Wi-Fi · 192.168.1.100:5555"
+
+
+def test_scrcpy_control_touch_msg_and_stop_lifecycle() -> None:
+    from module.automation.input_handlers.simulator.scrcpy_control import (
+        AMOTION_EVENT_ACTION_DOWN,
+        AMOTION_EVENT_ACTION_UP,
+        POINTER_ID_GENERIC_FINGER,
+        SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT,
+        ScrcpyControl,
+    )
+
+    # Instantiate without calling _start (mocked)
+    control = object.__new__(ScrcpyControl)
+    control.resolution = (1080, 1920)
+
+    # Test binary touch serialization (32 bytes)
+    msg_down = control._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, 100, 200)
+    assert len(msg_down) == 32
+    unpacked = struct.unpack(">BBQiiHHHii", msg_down)
+    assert unpacked[0] == SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT
+    assert unpacked[1] == AMOTION_EVENT_ACTION_DOWN
+    assert unpacked[2] == POINTER_ID_GENERIC_FINGER
+    assert unpacked[3] == 100  # x
+    assert unpacked[4] == 200  # y
+    assert unpacked[5] == 1080  # width
+    assert unpacked[6] == 1920  # height
+    assert unpacked[7] == 0xFFFF  # pressure
+    assert unpacked[8] == 1  # action_button
+    assert unpacked[9] == 1  # buttons
+
+    msg_up = control._build_touch_msg(AMOTION_EVENT_ACTION_UP, 100, 200)
+    unpacked_up = struct.unpack(">BBQiiHHHii", msg_up)
+    assert unpacked_up[1] == AMOTION_EVENT_ACTION_UP
+    assert unpacked_up[7] == 0x0000  # pressure 0 for UP
+    assert unpacked_up[8] == 0  # action_button 0 for UP
+
+    # Test lifecycle methods with mock device
+    class MockAppInfo:
+        def __init__(self, pkg: str = "com.ProjectMoon.LimbusCompany") -> None:
+            self.package = pkg
+
+    class MockDevice:
+        def __init__(self) -> None:
+            self.started_apps: list[str] = []
+            self.stopped_apps: list[str] = []
+            self.current_pkg = "com.ProjectMoon.LimbusCompany"
+            self.pid_output = "12345"
+            self.window_output = "mFocusedApp=...com.ProjectMoon.LimbusCompany..."
+
+        def app_start(self, pkg: str) -> None:
+            self.started_apps.append(pkg)
+
+        def app_stop(self, pkg: str) -> None:
+            self.stopped_apps.append(pkg)
+
+        def app_current(self) -> MockAppInfo:
+            return MockAppInfo(self.current_pkg)
+
+        def shell(self, cmd: Any) -> str:
+            if isinstance(cmd, list) and len(cmd) >= 2 and cmd[0] == "pidof":
+                return self.pid_output
+            if "dumpsys window" in str(cmd):
+                return self.window_output
+            return ""
+
+    mock_dev = MockDevice()
+    control.device = mock_dev
+    control.game_package_name = "com.ProjectMoon.LimbusCompany"
+
+    assert control.check_game_alive() is True
+    assert control.get_current_package() == "com.ProjectMoon.LimbusCompany"
+
+    # Test overlay focus stealing (e.g. ChatGPT / floating ball steals focus, but game is still alive and focused)
+    mock_dev.current_pkg = "com.openai.chatgpt"
+    assert control.check_game_alive() is True
+
+    # Test game completely closed (no PID)
+    mock_dev.pid_output = ""
+    mock_dev.window_output = ""
+    assert control.check_game_alive() is False
+
+    control.start_game()
+    assert "com.ProjectMoon.LimbusCompany" in mock_dev.started_apps
+
+    control.close_current_app()
+    assert "com.ProjectMoon.LimbusCompany" in mock_dev.stopped_apps

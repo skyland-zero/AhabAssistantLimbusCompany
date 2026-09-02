@@ -371,7 +371,7 @@ class ConfigModel(BaseModel):
     """启动模拟器超时时间"""
 
     adb_reconnect_on_error: bool
-    """ADB或minitouch连接失效时自动重连"""
+    """ADB连接失效时自动重连"""
 
     check_update: bool
     """检查更新"""

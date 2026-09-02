@@ -1,7 +1,7 @@
-from time import sleep
-
 from PIL import Image
 
+from core.execution_control import check_cancelled
+from core.execution_control import interruptible_sleep as sleep
 from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.logger import log
@@ -217,6 +217,7 @@ class Shop:
                 include_recipe_targets=include_recipe_targets,
             )
         except Exception as error:
+            check_cancelled()
             log.debug(f"读取路线饰品悬浮提示失败: {error}")
             return None
         finally:
@@ -1909,6 +1910,7 @@ class Shop:
                 result = ocr.run(enlarged)
                 return list(result.txts or [])
             except Exception:
+                check_cancelled()
                 log.debug("OCR 放大裁剪识别失败", exc_info=True)
                 return []
 
@@ -1937,5 +1939,6 @@ class Shop:
             else:
                 log.debug(f"剩余金钱：{my_remaining_money}")
         except Exception as e:
+            check_cancelled()
             log.error(f"获取剩余金钱失败：{e}")
         return my_remaining_money

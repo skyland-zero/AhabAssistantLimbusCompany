@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use gpui::Context;
 
-use super::{AhabApp, lifecycle::BackendStartReason};
+use super::AhabApp;
 use crate::model::{ExecutionState, LogLevel};
 
-const STOP_TIMEOUT: Duration = Duration::from_secs(5);
+const STOP_TIMEOUT: Duration = Duration::from_secs(15);
 const THEME_PERSIST_DEBOUNCE: Duration = Duration::from_millis(200);
 
 impl AhabApp {
@@ -31,10 +31,10 @@ impl AhabApp {
                 view.home.mark_stop_timeout_handled();
                 view.log_backend_localized(
                     LogLevel::Warn,
-                    "任务停止超时，开始恢复 Python 后端",
-                    "Task stop timed out; recovering the Python backend",
+                    "任务停止超时，保持 Python 后端和设备连接，等待任务退出",
+                    "Task stop timed out; keeping the Python backend and device connected while the task exits",
                 );
-                view.start_backend_connection(cx, BackendStartReason::Reconnect);
+                cx.notify();
             });
         })
         .detach();

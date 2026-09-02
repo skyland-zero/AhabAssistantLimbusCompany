@@ -1,4 +1,4 @@
-from time import sleep
+from core.execution_control import interruptible_sleep as sleep
 
 from module.automation import TextMatchResult, auto
 from module.config import cfg, theme_list
@@ -92,7 +92,7 @@ def select_theme_pack(
                     )
                     try:
                         weights[key] = max(int(value), route_weight)
-                    except TypeError, ValueError:
+                    except (TypeError, ValueError):
                         weights[key] = route_weight
             return matched
 

@@ -46,7 +46,7 @@ async def _run(args: argparse.Namespace) -> None:
     for signum in (signal.SIGINT, signal.SIGTERM):
         try:
             signal.signal(signum, request_stop)
-        except AttributeError, OSError, ValueError:
+        except (AttributeError, OSError, ValueError):
             pass
 
     manager = get_device_manager()

@@ -23,6 +23,7 @@ hiddenimports.extend(
         "module.automation.automation",
         "module.automation.screenshot",
         "module.automation.input_handlers.simulator.mumu_control",
+        "module.automation.input_handlers.simulator.scrcpy_control",
         "module.automation.input_handlers.simulator.simulator_control",
         "module.resource_sync.service",
         "module.update.checker",
@@ -34,6 +35,7 @@ hiddenimports.extend(
 )
 
 datas = collect_data_files("rapidocr")
+datas.append((str(root / "assets" / "binary" / "scrcpy-server.jar"), "assets/binary"))
 
 a = Analysis(
     [str(root / "main_backend.py")],

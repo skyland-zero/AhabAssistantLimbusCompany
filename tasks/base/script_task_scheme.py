@@ -2,14 +2,14 @@ import platform
 import random
 from datetime import datetime
 from threading import Event, Lock, Thread
-from time import sleep, time
+from time import time
 
 import win32api
 import win32con
 from playsound3 import playsound
 
 from core.events import mediator
-from core.execution_control import interruptible_sleep
+from core.execution_control import check_cancelled, interruptible_sleep
 from core.i18n import noop
 from module.after_completion_types import ACTION_EXIT_EMULATOR
 from module.automation import auto
@@ -94,6 +94,7 @@ def onetime_thread_process(combat_count: int = 1):
 @begin_and_finish_time_log(task_name="一次镜牢")
 # 一次镜牢的过程
 def onetime_mir_process(team_setting: TeamSetting, team_num: int):
+    check_cancelled()
     # 实时检查是否需要切换到困难镜牢
     if cfg.auto_hard_mirror and check_hard_mirror_time():
         log.info("检测到新的困牢周期，实时切换困难镜牢，设置困牢次数为3")
@@ -113,6 +114,8 @@ def onetime_mir_process(team_setting: TeamSetting, team_num: int):
             return completion_stats
         else:
             return None
+    except userStopError:
+        raise
     except Exception as e:
         log.exception(f"镜牢行动出错: {e}")
         return None
@@ -341,6 +344,7 @@ def Mirror_task():
     cfg.normalize_and_sync_team_state(persist=False)
     # 开始执行镜牢任务
     while mir_times > 0:
+        check_cancelled()
         # 检测配置的队伍能否顺利执行
         useful = False
         hard = bool(cfg.hard_mirror)
@@ -398,6 +402,7 @@ def Mirror_task():
 
 def script_task() -> None | int:
     start_time = time()
+    check_cancelled()
     # 获取（启动）游戏对游戏窗口进行设置
     init_game()
     _warn_if_game_monitor_hdr_enabled()
@@ -442,6 +447,7 @@ def script_task() -> None | int:
         task_list.append(("mirror", Mirror_task))
 
     for task_id, task in task_list:
+        check_cancelled()
         mediator.task_started.emit(task_id)
         task()
 
@@ -576,6 +582,6 @@ class my_script_task(Thread):
             if keep_awake_enabled:
                 # 先切回 AALC 再释放线程级防息屏，避免游戏仍持有前台时继续阻止息屏。
                 mediator.request_focus.emit()
-                sleep(0.8)  # 覆盖 WinRT toast 异步归还焦点（延迟约 600ms），再释放防息屏
+                interruptible_sleep(0.8)  # 覆盖 WinRT toast 异步归还焦点（延迟约 600ms），再释放防息屏
                 apply_power_keep_awake(False)
             auto.clear_img_cache()

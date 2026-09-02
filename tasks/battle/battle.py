@@ -2,12 +2,12 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from time import sleep
 from typing import Callable, Optional
 
 import cv2
 import numpy as np
 
+from core.execution_control import check_cancelled, interruptible_sleep, interruptible_sleep as sleep
 from module.automation import auto
 from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log

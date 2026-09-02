@@ -222,7 +222,7 @@ def check_game_running() -> bool:
         try:
             if cfg.game_process_name in psutil.Process(_game_pid_cache).name():
                 return True
-        except psutil.NoSuchProcess, psutil.AccessDenied:
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass  # 回退到完整扫描
 
     for proc in psutil.process_iter(["name"]):
@@ -233,7 +233,7 @@ def check_game_running() -> bool:
             if cfg.game_process_name in proc_name:
                 _game_pid_cache = proc.pid
                 return True
-        except psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             # 忽略已终止、无权限或僵尸进程
             continue
 

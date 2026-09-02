@@ -21,8 +21,7 @@ allowed_protected_files = [
     "module/automation/automation.py",
     "module/automation/input_handlers/input.py",
     "module/automation/input_handlers/simulator/mumu_control.py",
-    "module/automation/input_handlers/simulator/pyminitouch/__init__.py",
-    "module/automation/input_handlers/simulator/pyminitouch/actions.py",
+    "module/automation/input_handlers/simulator/scrcpy_control.py",
     "module/automation/input_handlers/simulator/simulator_control.py",
     "module/automation/screenshot.py",
     # Ruff lint/format cleanup in the config exports and Windows game helpers.

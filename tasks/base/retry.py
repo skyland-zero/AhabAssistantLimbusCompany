@@ -1,13 +1,7 @@
 import os
 import platform
 import time
-from time import sleep
-from typing import Callable
-
-import psutil
-import win32process
-
-from core.execution_control import check_cancelled, interruptible_sleep
+from core.execution_control import check_cancelled, interruptible_sleep, interruptible_sleep as sleep
 from module.automation import auto
 from module.config import cfg
 from module.game_and_screen import screen
@@ -136,7 +130,7 @@ def kill_game():
                 if proc_name and cfg.game_process_name.lower() in proc_name.lower():
                     game_running = True
                     break
-            except psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess:
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 # 忽略已终止、无权限或僵尸进程
                 continue
         if not game_running:

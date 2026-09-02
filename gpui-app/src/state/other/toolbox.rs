@@ -66,6 +66,30 @@ impl ToolboxState {
         }
     }
 
+    pub fn apply_resolution(&mut self) {
+        if self.rpc.is_sidecar() {
+            self.rpc.submit(method::TOOL_RESOLUTION_SET, None);
+            self.feedback = Some("正在修改设备分辨率".to_owned());
+            return;
+        }
+        match self.rpc.request_value(method::TOOL_RESOLUTION_SET, None) {
+            Err(error) => self.feedback = Some(error.message),
+            Ok(result) => self.feedback = Some(resolution_feedback(result.as_ref(), false)),
+        }
+    }
+
+    pub fn reset_resolution(&mut self) {
+        if self.rpc.is_sidecar() {
+            self.rpc.submit(method::TOOL_RESOLUTION_RESET, None);
+            self.feedback = Some("正在还原设备分辨率".to_owned());
+            return;
+        }
+        match self.rpc.request_value(method::TOOL_RESOLUTION_RESET, None) {
+            Err(error) => self.feedback = Some(error.message),
+            Ok(result) => self.feedback = Some(resolution_feedback(result.as_ref(), true)),
+        }
+    }
+
     pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {
         for event in events {
             if event.event == event::TOOL_STATUS
@@ -100,7 +124,50 @@ impl ToolboxState {
             }
             method::TOOL_START => "工具已启动".to_owned(),
             method::TOOL_STOP => "工具已停止".to_owned(),
+            method::TOOL_RESOLUTION_SET => resolution_feedback(value.as_ref(), false),
+            method::TOOL_RESOLUTION_RESET => resolution_feedback(value.as_ref(), true),
             _ => return,
         });
+    }
+}
+
+fn resolution_feedback(result: Option<&serde_json::Value>, reset: bool) -> String {
+    let reconnected = result
+        .and_then(|value| value.get("reconnected"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let message = if reset {
+        "已还原设备分辨率与 DPI"
+    } else {
+        "已修改分辨率为 1080P (240 DPI)"
+    };
+    if reconnected {
+        format!("{message}，Scrcpy 已重连")
+    } else {
+        message.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolution_feedback;
+    use serde_json::json;
+
+    #[test]
+    fn resolution_feedback_reports_scrcpy_reconnect() {
+        let result = json!({"reconnected": true});
+
+        assert_eq!(
+            resolution_feedback(Some(&result), false),
+            "已修改分辨率为 1080P (240 DPI)，Scrcpy 已重连"
+        );
+        assert_eq!(
+            resolution_feedback(Some(&result), true),
+            "已还原设备分辨率与 DPI，Scrcpy 已重连"
+        );
+        assert_eq!(
+            resolution_feedback(Some(&json!({"reconnected": false})), false),
+            "已修改分辨率为 1080P (240 DPI)"
+        );
     }
 }

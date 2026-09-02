@@ -323,7 +323,7 @@ class Updater:
                 continue  # 更新器自身位于 update_temp（安装根目录内），不能杀自己
             try:
                 exe_path = proc.exe()
-            except psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess:
+            except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
                 continue
             # 覆盖 AALC 及安装目录内的附属进程（如 adb 服务），否则其可执行文件会被占用无法覆盖
             is_install_binary = os.path.normcase(exe_path).startswith(install_root)

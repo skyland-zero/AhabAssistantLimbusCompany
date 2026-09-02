@@ -34,7 +34,7 @@ def _positive_int(value: Any) -> int:
         return 0
     try:
         return max(0, int(value))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return 0
 
 
@@ -338,7 +338,7 @@ class ExecutionStatsStore:
                 }
             self._last_mirror = _normalise_mirror_details(raw.get("lastMirror"))
             self._prune(game_day(self._now()))
-        except OSError, ValueError, TypeError, json.JSONDecodeError:
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
             # A broken history file must never prevent the sidecar from
             # starting.  The next successful completion will repair it.
             self._daily = {}
@@ -356,7 +356,7 @@ class ExecutionStatsStore:
                 self.path,
                 json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             )
-        except OSError, UnicodeError, TypeError, ValueError:
+        except (OSError, UnicodeError, TypeError, ValueError):
             # Statistics are observability data; never fail an automation run
             # because its optional history file cannot be written.
             return

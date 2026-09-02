@@ -507,7 +507,7 @@ class MumuControl(AbstractInput):
                 return
             except userStopError:
                 raise
-            except NemuIpcError, NemuIpcIncompatible:
+            except (NemuIpcError, NemuIpcIncompatible):
                 # A missing player, an IPC incompatibility, or a failed IPC
                 # handshake is not repaired by recursively launching again.
                 raise
@@ -550,7 +550,7 @@ class MumuControl(AbstractInput):
         # 等待模拟器启动完成
         try:
             start_timeout = max(1, int(cfg.get_value("start_emulator_timeout", 120)))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             start_timeout = 120
         for _ in range(start_timeout):
             time.sleep(1)
@@ -770,7 +770,7 @@ class MumuControl(AbstractInput):
         error_code = info.get("errcode")
         try:
             has_error = error_code is not None and int(error_code) != 0
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             has_error = True
         if has_error:
             message = info.get("errmsg", f"errcode={error_code}")

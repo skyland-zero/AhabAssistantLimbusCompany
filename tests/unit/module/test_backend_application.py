@@ -6,10 +6,11 @@ from typing import Any
 
 import pytest
 
+from module.automation.input_handlers import AbstractInput
 from module.backend_application import BackendApplication
 from module.config import TeamSetting
 from module.config.config import Config
-from module.device_manager import DeviceManager, DeviceSession
+from module.device_manager import DeviceInfo, DeviceManager, DeviceSession, DeviceTarget
 from module.rpc_dispatcher import RpcDispatcher
 
 
@@ -481,12 +482,16 @@ def test_run_execution_queues_final_failure_and_skips_manual_stop_notifications(
     class FakeWorker:
         def __init__(self, exception=None) -> None:
             self.exception = exception
+            self.terminate_calls = 0
 
         def start(self) -> None:
             return None
 
         def join(self) -> None:
             return None
+
+        def terminate(self) -> None:
+            self.terminate_calls += 1
 
     worker = FakeWorker()
     fake_tasks = ModuleType("tasks.base.script_task_scheme")
@@ -517,6 +522,7 @@ def test_run_execution_queues_final_failure_and_skips_manual_stop_notifications(
     app._execution_state = "running"
     app._execution_stop.set()
     app._run_execution("stopped")
+    assert worker.terminate_calls == 1
     assert len(notifications.finals) == 1
     assert len(notifications.failures) == 1
     app.close()
@@ -942,3 +948,86 @@ def test_manager_release_stops_preview_before_controller_cleanup() -> None:
     assert preview.stop_count == 1
     app.close()
     assert preview.close_count == 1
+
+
+def test_tool_resolution_set_and_reset(monkeypatch) -> None:
+    class MockAdbDevice:
+        def __init__(self, size_output: str = "Physical size: 1080x2400") -> None:
+            self.commands: list[list[str]] = []
+            self.size_output = size_output
+
+        def shell(self, cmd: list[str]) -> str:
+            self.commands.append(cmd)
+            if cmd == ["wm", "size"]:
+                return self.size_output
+            return ""
+
+    class MockController(AbstractInput):
+        def __init__(self, device: Any) -> None:
+            super().__init__()
+            self.device = device
+
+    mock_adb = MockAdbDevice("Physical size: 1080x2400")
+    manager = DeviceManager()
+    target = DeviceManager._make_adb_target("127.0.0.1:5555")
+    controller = MockController(mock_adb)
+    manager._active = DeviceSession(target, controller)
+    reconnect_calls: list[bool] = []
+    monkeypatch.setattr(manager, "reconnect_active", lambda: reconnect_calls.append(True) or True)
+
+    app = BackendApplication(
+        manager,
+        version="test",
+        config=FakeConfig(),
+        theme_list=FakeThemeStore(),
+    )
+    dispatcher = RpcDispatcher(application=app, version="test")
+
+    # Test resolution set on portrait phone (1080x2400 -> base 1080x1920)
+    res_set = dispatcher.dispatch({"jsonrpc": "2.0", "id": 1, "method": "tool.resolution.set"})
+    assert res_set["result"]["accepted"] is True
+    assert res_set["result"]["size"] == "1080x1920"
+    assert res_set["result"]["reconnected"] is True
+    assert ["wm", "size", "1080x1920"] in mock_adb.commands
+    assert ["wm", "density", "240"] in mock_adb.commands
+    assert ["settings", "put", "system", "accelerometer_rotation", "1"] in mock_adb.commands
+
+    # Test resolution set on landscape tablet (2560x1600 -> base 1920x1080)
+    mock_adb.size_output = "Physical size: 2560x1600"
+    res_set_tablet = dispatcher.dispatch({"jsonrpc": "2.0", "id": 10, "method": "tool.resolution.set"})
+    assert res_set_tablet["result"]["accepted"] is True
+    assert res_set_tablet["result"]["size"] == "1920x1080"
+    assert res_set_tablet["result"]["reconnected"] is True
+    assert ["wm", "size", "1920x1080"] in mock_adb.commands
+
+    # Test resolution reset
+    res_reset = dispatcher.dispatch({"jsonrpc": "2.0", "id": 2, "method": "tool.resolution.reset"})
+    assert res_reset["result"]["accepted"] is True
+    assert res_reset["result"]["reconnected"] is True
+    assert ["wm", "size", "reset"] in mock_adb.commands
+    assert ["wm", "density", "reset"] in mock_adb.commands
+
+    def reconnect_failure() -> bool:
+        raise RuntimeError("socket disconnected")
+
+    monkeypatch.setattr(manager, "reconnect_active", reconnect_failure)
+    reconnect_error = dispatcher.dispatch({"jsonrpc": "2.0", "id": 11, "method": "tool.resolution.set"})
+    assert reconnect_error["error"]["code"] == -32020
+    assert "设备分辨率已修改，但 Scrcpy 重连失败" in reconnect_error["error"]["message"]
+
+    monkeypatch.setattr(manager, "reconnect_active", lambda: reconnect_calls.append(True) or True)
+    before_busy_commands = len(mock_adb.commands)
+    app._execution_state = "running"
+    busy = dispatcher.dispatch({"jsonrpc": "2.0", "id": 4, "method": "tool.resolution.set"})
+    assert busy["error"]["code"] == -32020
+    assert "任务运行期间不能修改设备分辨率" in busy["error"]["message"]
+    assert len(mock_adb.commands) == before_busy_commands
+    assert reconnect_calls == [True, True, True]
+
+    # Test PC rejection
+    app._execution_state = "idle"
+    manager._active = DeviceSession(DeviceTarget(DeviceInfo("pc:limbus", "Limbus Company"), "pc"), None)
+    res_pc = dispatcher.dispatch({"jsonrpc": "2.0", "id": 3, "method": "tool.resolution.set"})
+    assert res_pc["error"]["code"] == -32020
+
+    app.close()

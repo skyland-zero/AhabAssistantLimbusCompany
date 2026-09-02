@@ -1,10 +1,11 @@
 import time
 from datetime import datetime
-from time import sleep
 
 import cv2
 import numpy as np
 
+from core.execution_control import check_cancelled
+from core.execution_control import interruptible_sleep as sleep
 from core.pseudo_solo import BattleRosterObserver, PseudoSoloDefenseState
 from core.team_squad import validate_pseudo_solo_selection
 from module.automation import auto
@@ -217,6 +218,7 @@ class Mirror:
                 try:
                     result = ocr.run(candidate)
                 except Exception as error:
+                    check_cancelled()
                     log.debug(f"楼层标题OCR失败：{error}")
                     continue
                 ocr_text = "".join(getattr(result, "txts", ()) or ())
@@ -404,6 +406,7 @@ class Mirror:
         back_menu_count = 0
         # 未到达奖励页不会停止
         while True:
+            check_cancelled()
             if main_loop_count >= 50:
                 auto.model = "clam"  # 防止函数内修改后未还原
             # 自动截图
@@ -797,6 +800,7 @@ class Mirror:
                                 self.pass_coins = int(ocr_result[-1])
                                 break
                         except Exception:
+                            check_cancelled()
                             continue
                     if self.pass_coins is None:
                         for _ in range(5):
@@ -819,6 +823,7 @@ class Mirror:
                                         self.pass_coins = int(ocr_result[-1])
                                         break
                             except Exception:
+                                check_cancelled()
                                 continue
                     if self.pass_coins:
                         msg = f"本次镜牢领取{self.pass_coins}个通行证经验"
@@ -1326,6 +1331,7 @@ class Mirror:
                     return True
             log.debug("未能构建路线图，尝试使用最近节点法重新寻路")
         except Exception as e:
+            check_cancelled()
             log.debug(f"使用onnx模型寻路出错:{e}")
         finally:
             auto.mouse_to_blank()
@@ -1354,6 +1360,7 @@ class Mirror:
             log.error(f"寻路出错:{e}, 尝试重进镜牢")
             pass
         except Exception as e:
+            check_cancelled()
             log.error(f"寻路出错:{e}")
             return False
         if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
@@ -1749,6 +1756,7 @@ class Mirror:
                     return
 
             except Exception as e:
+                check_cancelled()
                 log.error(e)
                 continue
 
@@ -1756,6 +1764,7 @@ class Mirror:
         main_loop_count = 20
         auto.model = "clam"
         while True:
+            check_cancelled()
             if auto.take_screenshot() is None:
                 auto.mouse_to_blank()
                 continue

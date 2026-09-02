@@ -564,13 +564,6 @@ impl AhabApp {
             );
         }
 
-        if let Some(last_id) = app.state.settings.lastDeviceId.as_ref()
-            && app.home.devices.iter().any(|d| &d.id == last_id)
-            && app.home.device_status == crate::model::ConnectionStatus::Disconnected
-        {
-            app.home.select_device(last_id.clone());
-        }
-
         app
     }
 

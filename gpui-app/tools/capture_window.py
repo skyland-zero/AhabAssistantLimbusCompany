@@ -29,10 +29,10 @@ def make_process_dpi_aware() -> None:
         # PROCESS_PER_MONITOR_DPI_AWARE = 2; this fallback works on older
         # Windows versions where SetProcessDpiAwarenessContext is unavailable.
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except AttributeError, OSError:
+    except (AttributeError, OSError):
         try:
             ctypes.windll.user32.SetProcessDPIAware()
-        except AttributeError, OSError:
+        except (AttributeError, OSError):
             pass
 
 
@@ -74,7 +74,7 @@ def client_size(hwnd: int) -> tuple[int, int]:
 def dpi_for_window(hwnd: int) -> int:
     try:
         return int(ctypes.windll.user32.GetDpiForWindow(hwnd)) or 96
-    except AttributeError, OSError:
+    except (AttributeError, OSError):
         return 96
 
 

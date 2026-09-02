@@ -322,7 +322,7 @@ def is_valid_url(url):
     try:
         result = urlparse(url)
         return result.scheme.lower() == "https" and bool(result.hostname)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return False
 
 

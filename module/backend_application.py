@@ -611,14 +611,19 @@ class BackendApplication:
         # The event is the primary cancellation mechanism.  Notify the legacy
         # worker as well so it can stop its retry monitor and wake any
         # worker-owned cancellation hooks without resorting to thread killing.
-        if worker is not None:
-            terminate = getattr(worker, "terminate", None)
-            if callable(terminate):
-                try:
-                    terminate()
-                except Exception:
-                    log.debug("通知任务线程停止失败", exc_info=True)
+        self._request_worker_stop(worker)
         return {"accepted": True, "runId": run_id, "state": "stopping"}
+
+    @staticmethod
+    def _request_worker_stop(worker: Any) -> None:
+        if worker is None:
+            return
+        terminate = getattr(worker, "terminate", None)
+        if callable(terminate):
+            try:
+                terminate()
+            except Exception:
+                log.debug("通知任务线程停止失败", exc_info=True)
 
     def execution_pause(self) -> dict[str, Any]:
         with self._lock:
@@ -654,7 +659,7 @@ class BackendApplication:
         for raw_number, setting in sorted(teams.items(), key=self._team_sort_key):
             try:
                 number = int(raw_number)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
             if number > 0:
                 details.append(self._team_detail(number, setting, number in queue))
@@ -779,7 +784,7 @@ class BackendApplication:
                 seen.add(pack_id)
                 try:
                     raw_weight = int(raw_weight)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     raw_weight = 0
                 packs.append(
                     {
@@ -845,7 +850,7 @@ class BackendApplication:
 
             value = json.loads(state_path.read_text(encoding="utf-8"))
             local_version = str(value.get("last_applied_manifest_id") or "unknown")
-        except OSError, ValueError, TypeError:
+        except (OSError, ValueError, TypeError):
             pass
         return [
             {
@@ -947,6 +952,121 @@ class BackendApplication:
         except Exception:
             log.debug("截图事件编码失败", exc_info=True)
         return {"path": str(path), "accepted": True}
+
+    def _resolve_adb_device(self, session: Any) -> Any:
+        controller = getattr(session, "controller", None)
+        if hasattr(controller, "device") and controller.device is not None:
+            return controller.device
+        if hasattr(controller, "simulator_device") and controller.simulator_device is not None:
+            return controller.simulator_device
+        endpoint = getattr(session.target, "endpoint", None)
+        if endpoint:
+            from adbutils import adb
+
+            try:
+                if ":" in endpoint:
+                    adb.connect(endpoint)
+                return adb.device(endpoint)
+            except Exception:
+                pass
+        from adbutils import adb
+
+        devices = adb.device_list()
+        if devices:
+            return devices[0]
+        return None
+
+    def _ensure_resolution_change_allowed(self) -> None:
+        if self._execution_state != "idle":
+            raise DeviceError("任务运行期间不能修改设备分辨率，请先停止任务")
+
+    def _reconnect_scrcpy_after_resolution(self, active_session: Any, operation: str) -> bool:
+        """Refresh Scrcpy after an Android display-size mutation."""
+        if active_session.target.kind != "adb":
+            return False
+
+        reconnect = getattr(self.device_manager, "reconnect_active", None)
+        if not callable(reconnect):
+            raise DeviceError("当前设备管理器不支持 Scrcpy 重连")
+        try:
+            reconnected = bool(reconnect())
+        except Exception as error:
+            log.exception("%s后重连 Scrcpy 失败", operation)
+            raise DeviceError(f"{operation}，但 Scrcpy 重连失败：{error}") from error
+        if not reconnected:
+            raise DeviceError(f"{operation}，但当前设备不是可重连的 Scrcpy 会话")
+        return True
+
+    def tool_resolution_set(self, _params: Any = None) -> dict[str, Any]:
+        """将当前连接的 Android 设备分辨率修改为 1080P (手机基准 1080x1920，横屏时自动呈 1920x1080) 240 DPI。"""
+        with self._lock:
+            self._ensure_resolution_change_allowed()
+            active_session = self._require_active_runtime()
+            if active_session.target.kind == "pc":
+                raise DeviceError("当前为 Windows 游戏窗口，该工具仅支持 Android 设备")
+
+            device = self._resolve_adb_device(active_session)
+            if device is None:
+                raise DeviceError("未找到可操作的 ADB 设备")
+
+            try:
+                # 查询设备物理原生分辨率以判断原生方向（手机竖屏 vs 平板/模拟器横屏）
+                size_output = device.shell(["wm", "size"]) or ""
+                match = re.search(r"Physical size:\s*(\d+)x(\d+)", size_output)
+                if match:
+                    phys_w = int(match.group(1))
+                    phys_h = int(match.group(2))
+                    is_portrait_native = phys_w < phys_h
+                else:
+                    is_portrait_native = True
+
+                # 手机真机原生为竖屏(Portrait)，基准分辨率必须是 1080x1920。
+                # 当手机横屏（游戏）旋转 90 度后，系统自动计算为 1920x1080 满屏横屏。
+                target_size = "1080x1920" if is_portrait_native else "1920x1080"
+                device.shell(["wm", "size", target_size])
+                device.shell(["wm", "density", "240"])
+                try:
+                    device.shell(["settings", "put", "system", "accelerometer_rotation", "1"])
+                except Exception:
+                    pass
+            except Exception as error:
+                log.exception("修改设备分辨率失败")
+                raise RuntimeError(f"修改设备分辨率失败：{error}") from error
+
+            reconnected = self._reconnect_scrcpy_after_resolution(active_session, "设备分辨率已修改")
+            message = f"设备分辨率已修改为 {target_size} (240 DPI)"
+            if reconnected:
+                message += "，Scrcpy 已重连"
+            self.emit("app.notice", {"level": "info", "message": message})
+            log.info("已通过 ADB 将设备分辨率修改为 %s 240 DPI%s", target_size, "，并已重连 Scrcpy" if reconnected else "")
+            return {"accepted": True, "size": target_size, "density": 240, "reconnected": reconnected}
+
+    def tool_resolution_reset(self, _params: Any = None) -> dict[str, Any]:
+        """还原当前连接的 Android 设备的默认分辨率与 DPI。"""
+        with self._lock:
+            self._ensure_resolution_change_allowed()
+            active_session = self._require_active_runtime()
+            if active_session.target.kind == "pc":
+                raise DeviceError("当前为 Windows 游戏窗口，该工具仅支持 Android 设备")
+
+            device = self._resolve_adb_device(active_session)
+            if device is None:
+                raise DeviceError("未找到可操作的 ADB 设备")
+
+            try:
+                device.shell(["wm", "size", "reset"])
+                device.shell(["wm", "density", "reset"])
+            except Exception as error:
+                log.exception("还原设备分辨率失败")
+                raise RuntimeError(f"还原设备分辨率失败：{error}") from error
+
+            reconnected = self._reconnect_scrcpy_after_resolution(active_session, "设备分辨率已恢复默认")
+            message = "设备分辨率与 DPI 已恢复默认"
+            if reconnected:
+                message += "，Scrcpy 已重连"
+            self.emit("app.notice", {"level": "info", "message": message})
+            log.info("已通过 ADB 将设备分辨率与 DPI 恢复默认%s", "，并已重连 Scrcpy" if reconnected else "")
+            return {"accepted": True, "reconnected": reconnected}
 
     def hotkey_get(self) -> dict[str, Any]:
         return {
@@ -1139,6 +1259,9 @@ class BackendApplication:
                 if self._execution_run_id != run_id:
                     return
                 self._execution_worker = worker
+                stop_requested = self._execution_stop.is_set()
+            if stop_requested:
+                self._request_worker_stop(worker)
             worker.start()
             worker.join()
             worker_error = getattr(worker, "exception", None)
@@ -1472,7 +1595,7 @@ class BackendApplication:
                 run_id=run_id,
                 details=mirror_details,
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return
         if payload is not None:
             self.emit("execution.stats", payload)
@@ -1529,7 +1652,7 @@ class BackendApplication:
         for key in teams:
             try:
                 number = int(key)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
             if number > 0:
                 numbers.append(number)
@@ -1539,7 +1662,7 @@ class BackendApplication:
     def _team_sort_key(item: tuple[Any, Any]) -> tuple[int, str]:
         try:
             return int(item[0]), str(item[0])
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return 0, str(item[0])
 
     def _team_detail(self, number: int, setting: Any, enabled: bool) -> dict[str, Any]:

@@ -118,6 +118,23 @@ pub(super) fn execution_toolbar(
     } else {
         (ICON_PLAY, "Link Start!", ButtonVariant::Default)
     };
+    let run_icon_element: gpui::AnyElement = if state == ExecutionState::Stopping {
+        brand_action_icon(run_icon, 14.)
+            .with_animation(
+                "execution-stop-spin",
+                Animation::new(Duration::from_millis(700))
+                    .repeat()
+                    .with_max_fps(12.0),
+                |svg, progress| {
+                    svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
+                        progress,
+                    )))
+                },
+            )
+            .into_any_element()
+    } else {
+        brand_action_icon(run_icon, 14.).into_any_element()
+    };
     let mut run = button("", run_variant)
         .id("start-stop")
         .h(px(34.0))
@@ -125,7 +142,7 @@ pub(super) fn execution_toolbar(
         .gap(px(6.0))
         .text_size(px(12.0))
         .font_weight(FontWeight::SEMIBOLD)
-        .child(brand_action_icon(run_icon, 14.))
+        .child(run_icon_element)
         .child(run_label);
     if !busy {
         let kbd_bg = if is_dark {

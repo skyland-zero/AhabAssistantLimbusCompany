@@ -3,6 +3,7 @@
 adbutils==2.12.0
 annotated-types==0.8.0
 antlr4-python3-runtime==4.9.3
+av==18.1.0
 certifi==2026.7.22
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
 charset-normalizer==3.5.1
@@ -12,6 +13,7 @@ concurrent-log-handler==0.9.29
 cryptography==50.0.1
 decorator==5.3.1
 deprecation==2.1.0
+evdev==2.0.0 ; 'linux' in sys_platform
 flatbuffers==25.12.19
 idna==3.19
 linkify-it-py==2.2.0
@@ -37,9 +39,16 @@ pydantic-core==2.46.5
 pygetwindow==0.0.9
 pymsgbox==2.0.1
 pynput==1.8.2
+pyobjc-core==12.2.2 ; sys_platform == 'darwin'
+pyobjc-framework-applicationservices==12.2.2 ; sys_platform == 'darwin'
+pyobjc-framework-cocoa==12.2.2 ; sys_platform == 'darwin'
+pyobjc-framework-coretext==12.2.2 ; sys_platform == 'darwin'
+pyobjc-framework-quartz==12.2.2 ; sys_platform == 'darwin'
 pyperclip==1.11.0
 pyrect==0.2.0
 pyscreeze==1.0.1
+python-xlib==0.33 ; 'linux' in sys_platform
+python3-xlib==0.15 ; sys_platform == 'linux'
 pytweening==1.2.0
 pywin32==312
 pyyaml==6.0.3
@@ -47,6 +56,7 @@ rapidocr==3.9.2
 requests==2.34.2
 retry2==0.9.5
 ruamel-yaml==0.19.1
+rubicon-objc==0.5.6 ; sys_platform == 'darwin'
 shapely==2.1.2
 six==1.17.0
 tqdm==4.70.0

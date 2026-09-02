@@ -1,4 +1,4 @@
-from time import sleep
+from core.execution_control import interruptible_sleep as sleep
 
 from module.automation import auto
 from module.config import cfg

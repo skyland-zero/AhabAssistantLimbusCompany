@@ -162,13 +162,11 @@ class DeviceManager:
         """Return currently discoverable targets without opening them."""
         targets: dict[str, DeviceTarget] = {}
 
-        pc_target = self._discover_pc_window()
-        if pc_target is not None:
-            targets[pc_target.info.id] = pc_target
-
+        # 1. 优先扫描 MuMu 模拟器
         for target in self._discover_mumu_targets():
             targets[target.info.id] = target
 
+        # 2. 扫描已连接的 ADB 设备（真机与第三方模拟器，排除已发现的 MuMu 实例）
         for target in self._discover_adb_targets():
             # A configured MuMu endpoint should be represented by the stable
             # MuMu id rather than by a second generic ADB row.
@@ -177,6 +175,11 @@ class DeviceManager:
             ):
                 continue
             targets[target.info.id] = target
+
+        # 3. 扫描 Windows 游戏窗口
+        pc_target = self._discover_pc_window()
+        if pc_target is not None:
+            targets[pc_target.info.id] = pc_target
 
         with self._lock:
             self._targets = targets
@@ -466,6 +469,37 @@ class DeviceManager:
         """Release the active target without closing a game or emulator."""
         return self._release_active(check_busy=True, notice=True)
 
+    def reconnect_active(self) -> bool:
+        """Reconnect the active Scrcpy session without changing the device.
+
+        Android ``wm size`` changes invalidate the dimensions negotiated during
+        the current Scrcpy handshake.  Reusing the selected target here keeps
+        the device identity and ADB endpoint stable while forcing a fresh
+        Scrcpy handshake against the new display dimensions.
+
+        Non-ADB sessions (for example MuMu IPC sessions) do not use
+        ``ScrcpyControl`` and therefore do not need this reconnect path.
+        """
+        if self._busy_checker():
+            raise DeviceError("任务运行期间不能重连设备")
+
+        with self._status_lock:
+            with self._lock:
+                session = self._active
+                if session is None:
+                    raise DeviceError("未连接设备，请先选择并连接设备")
+                if session.target.kind != "adb":
+                    return False
+                device_id = session.target.info.id
+
+            # Stop preview consumers before tearing down the old controller.
+            # ``connect`` will publish the following ``connecting`` and
+            # ``connected`` transitions for the replacement session.
+            self._emit_status(None, "disconnected")
+            self._disconnect_active(restore_config=False)
+            self.connect(device_id)
+            return True
+
     def release_after_task(self) -> dict[str, Any]:
         """Release a session after an explicit task-owned shutdown action.
 
@@ -560,9 +594,13 @@ class DeviceManager:
         if target.endpoint is None:
             raise DeviceError("ADB 设备地址缺失")
         self._set_target_runtime_config(target)
-        from module.automation.input_handlers.simulator.simulator_control import SimulatorControl
+        from module.automation.input_handlers.simulator.scrcpy_control import ScrcpyControl
 
-        return DeviceSession(target, SimulatorControl(endpoint=target.endpoint))
+        try:
+            return DeviceSession(target, ScrcpyControl(endpoint=target.endpoint))
+        except Exception as error:
+            log.exception("启动 Scrcpy 控制器失败（%s）", target.endpoint)
+            raise DeviceError(f"Scrcpy 设备连接失败：{error}") from error
 
     def _activate_runtime(self, session: DeviceSession) -> None:
         # Legacy modules still read these values. Keep them synchronized with
@@ -609,7 +647,7 @@ class DeviceManager:
         else:
             try:
                 port = int(cfg.get_value("simulator_port", 0) or 0)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 port = 0
         self._set_runtime_config(
             simulator=True,
@@ -653,19 +691,35 @@ class DeviceManager:
         elif session.target.kind == "adb":
             controller = session.controller
             if controller is not None:
-                try:
-                    if getattr(controller, "simulator_control", None) is not None:
-                        controller.simulator_control.stop()
-                except Exception as error:
-                    log.debug("停止 minitouch 失败：%s", error)
-                try:
-                    controller.adb_disconnect()
-                except Exception as error:
-                    log.debug("断开 ADB 失败：%s", error)
-            from module.automation.input_handlers.simulator.simulator_control import SimulatorControl
+                stop = getattr(controller, "stop", None)
+                if callable(stop):
+                    try:
+                        stop()
+                    except Exception as error:
+                        log.debug("停止 Scrcpy 失败：%s", error)
+                else:
+                    adb_disconnect = getattr(controller, "adb_disconnect", None)
+                    if not callable(adb_disconnect):
+                        adb_disconnect = None
+                    if callable(adb_disconnect):
+                        try:
+                            adb_disconnect()
+                        except Exception as error:
+                            log.debug("断开 ADB 失败：%s", error)
+            try:
+                from module.automation.input_handlers.simulator.scrcpy_control import ScrcpyControl
 
-            if SimulatorControl.connection_device is controller:
-                SimulatorControl.connection_device = None
+                if ScrcpyControl.connection_device is controller:
+                    ScrcpyControl.connection_device = None
+            except ImportError:
+                pass
+            try:
+                from module.automation.input_handlers.simulator.simulator_control import SimulatorControl
+
+                if SimulatorControl.connection_device is controller:
+                    SimulatorControl.connection_device = None
+            except ImportError:
+                pass
         else:
             from module.game_and_screen import screen
 
@@ -713,9 +767,9 @@ class DeviceManager:
         if target.kind == "adb":
             endpoint = target.endpoint or "未知设备"
             return (
-                f"ADB（{endpoint}）",
-                "ADB screencap",
-                "ADB shell input + minitouch",
+                f"Scrcpy（{endpoint}）",
+                "Scrcpy 硬件视频流（H.264）",
+                "Scrcpy 触控注入（Control Socket）",
             )
 
         screenshot = (
@@ -843,7 +897,7 @@ class DeviceManager:
         error_code = payload.get("errcode")
         try:
             has_error = error_code is not None and int(error_code) != 0
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             has_error = True
         if has_error:
             log.debug(
@@ -876,12 +930,12 @@ class DeviceManager:
             try:
                 if record_error is not None and int(record_error) != 0:
                     continue
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
             raw_index = record.get("index", key)
             try:
                 instance = int(raw_index)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
             if instance < 0 or instance in seen:
                 continue
@@ -894,7 +948,7 @@ class DeviceManager:
                 port = int(raw_port)
                 if 1 <= port <= 65535:
                     endpoint = f"{host}:{port}"
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 port = cls._mumu_port(instance)
 
             if endpoint is None:
@@ -926,14 +980,71 @@ class DeviceManager:
             serial = str(getattr(device, "serial", ""))
             if not serial:
                 continue
-            state = str(getattr(device, "state", "device"))
+            name, detail = self._inspect_adb_device(device)
             result.append(
                 self._make_adb_target(
                     serial,
-                    detail=f"ADB · {serial} · {state}",
+                    name=name,
+                    detail=detail,
                 )
             )
         return result
+
+    @staticmethod
+    def _inspect_adb_device(device: Any) -> tuple[str, str]:
+        """识别 ADB 设备类型（真机型号 vs 第三方模拟器）。"""
+        serial = str(getattr(device, "serial", ""))
+        state = str(getattr(device, "state", "device"))
+        if state != "device":
+            return f"ADB 设备 {serial}", f"ADB · {serial} · {state}"
+
+        is_network = ":" in serial
+        conn_label = "Wi-Fi" if is_network else "USB"
+
+        try:
+            props_raw = device.shell("getprop")
+
+            def get_prop(key: str) -> str:
+                match = re.search(rf"\[{key}\]:\s*\[(.*?)\]", props_raw)
+                return match.group(1).strip() if match else ""
+
+            # 1. 检查各大知名模拟器特征
+            if get_prop("ro.ld.version") or "leidian" in get_prop("ro.hardware").lower():
+                return "雷电模拟器", f"ADB · {serial}"
+            if get_prop("ro.nox.version") or "nox" in get_prop("ro.hardware").lower():
+                return "夜神模拟器", f"ADB · {serial}"
+            if get_prop("ro.microvirt.version") or "microvirt" in get_prop("ro.hardware").lower():
+                return "逍遥模拟器", f"ADB · {serial}"
+            if get_prop("ro.bluestacks.version") or get_prop("bst.instance.name"):
+                return "蓝叠模拟器", f"ADB · {serial}"
+            if "Subsystem for Android" in get_prop("ro.product.model"):
+                return "微软 WSA", f"ADB · {serial}"
+
+            # 2. 检查通用 QEMU / VirtualBox 模拟器
+            is_qemu = get_prop("ro.kernel.qemu") == "1"
+            hardware = get_prop("ro.hardware").lower()
+            if is_qemu or hardware in ("goldfish", "ranchu", "vbox86", "ttvm_x86"):
+                return "Android 模拟器", f"ADB · {serial}"
+
+            # 3. 确认为手机真机：提取友好型号，不带“真机 · ”前缀
+            market_name = get_prop("ro.product.marketname")
+            brand = get_prop("ro.product.brand").strip()
+            model = get_prop("ro.product.model").strip()
+
+            if market_name:
+                phone_name = market_name
+            elif brand and model:
+                if model.lower().startswith(brand.lower()):
+                    phone_name = model
+                else:
+                    phone_name = f"{brand} {model}"
+            else:
+                phone_name = model or brand or "Android 设备"
+
+            return phone_name, f"{conn_label} · {serial}"
+        except Exception as error:
+            log.debug("读取 ADB 设备属性失败（%s）：%s", serial, error)
+            return f"ADB 设备 {serial}", f"ADB · {serial}"
 
     @staticmethod
     def _make_mumu_target(
@@ -957,11 +1068,16 @@ class DeviceManager:
         )
 
     @staticmethod
-    def _make_adb_target(endpoint: str, *, detail: str | None = None) -> DeviceTarget:
+    def _make_adb_target(
+        endpoint: str,
+        *,
+        name: str | None = None,
+        detail: str | None = None,
+    ) -> DeviceTarget:
         return DeviceTarget(
             DeviceInfo(
                 f"adb:{endpoint}",
-                f"ADB 设备 {endpoint}",
+                name or f"ADB 设备 {endpoint}",
                 detail or f"ADB · {endpoint}",
             ),
             "adb",
@@ -986,14 +1102,14 @@ class DeviceManager:
         value = cfg.get_value("mumu_instance_number", -1)
         try:
             value = int(value)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             value = -1
         if value >= 0:
             return value
         port = cfg.get_value("simulator_port", 16384)
         try:
             port = int(port)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             port = 16384
         if port >= 16384 and (port - 16384) % 32 == 0:
             return (port - 16384) // 32
@@ -1025,9 +1141,9 @@ class DeviceManager:
                     shell_manager = os.path.join(os.path.dirname(install_path), "shell", "MuMuManager.exe")
                     if os.path.isfile(shell_manager):
                         return shell_manager
-                except FileNotFoundError, OSError:
+                except (FileNotFoundError, OSError):
                     continue
-        except ImportError, OSError:
+        except (ImportError, OSError):
             return None
         return None
 

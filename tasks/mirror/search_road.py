@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from enum import Enum
-from time import sleep
+from core.execution_control import interruptible_sleep as sleep
 
 import cv2
 import numpy as np

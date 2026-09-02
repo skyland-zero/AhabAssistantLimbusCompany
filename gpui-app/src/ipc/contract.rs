@@ -167,6 +167,8 @@ pub mod method {
     pub const TOOL_START: &str = "tool.start";
     pub const TOOL_STOP: &str = "tool.stop";
     pub const TOOL_SCREENSHOT: &str = "tool.screenshot";
+    pub const TOOL_RESOLUTION_SET: &str = "tool.resolution.set";
+    pub const TOOL_RESOLUTION_RESET: &str = "tool.resolution.reset";
     pub const HOTKEY_GET: &str = "hotkey.get";
     pub const HOTKEY_SET: &str = "hotkey.set";
     pub const SYSTEM_SETTINGS_GET: &str = "systemSettings.get";

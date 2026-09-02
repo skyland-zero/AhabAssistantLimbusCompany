@@ -96,7 +96,7 @@ class Automation(metaclass=SingletonMeta):
             if active_kind == "mumu":
                 log.debug("使用选中 MuMu 模拟器输入模块")
             else:
-                log.debug("使用选中 ADB 模拟器输入模块")
+                log.debug("使用选中 ADB / Scrcpy 输入模块")
         elif active_kind == "pc":
             self._init_windows_input()
         elif cfg.simulator:
@@ -108,10 +108,20 @@ class Automation(metaclass=SingletonMeta):
                 if MumuControl.connection_device is not None:
                     self.input_handler = MumuControl.connection_device
             else:
-                from .input_handlers.simulator.simulator_control import SimulatorControl
+                try:
+                    from .input_handlers.simulator.scrcpy_control import ScrcpyControl
 
-                log.debug("使用基于PyMiniTouch的通用模拟器输入模块")
-                self.input_handler = SimulatorControl.connection_device
+                    if ScrcpyControl.connection_device is not None:
+                        log.debug("使用 Scrcpy 输入模块")
+                        self.input_handler = ScrcpyControl.connection_device
+                except ImportError:
+                    pass
+
+                if self.input_handler is None:
+                    from .input_handlers.simulator.simulator_control import SimulatorControl
+
+                    log.debug("使用基于PyMiniTouch的通用模拟器输入模块")
+                    self.input_handler = SimulatorControl.connection_device
         else:
             self._init_windows_input()
 
@@ -548,6 +558,7 @@ class Automation(metaclass=SingletonMeta):
 
                 with self._screenshot_lock:
                     result = ScreenShot.take_screenshot(gray)
+                    check_cancelled()
                     self._remember_screenshot(result)
                 if result:
                     with self._screenshot_lock:
@@ -723,6 +734,7 @@ class Automation(metaclass=SingletonMeta):
                 )
                 return matches
         except Exception as e:
+            check_cancelled()
             log.error(f"寻找图片出错:{e}")
             return []
 
@@ -959,6 +971,7 @@ class Automation(metaclass=SingletonMeta):
             self._match_cache_put(cache_key, result)
             return result
         except Exception as e:
+            check_cancelled()
             error_message = str(e)
             if "cv::flann" in error_message:
                 pass
@@ -1194,6 +1207,7 @@ class Automation(metaclass=SingletonMeta):
             if cache_allowed and self._match_cache_state_key() == match_state:
                 self._match_cache_put(cache_key, None)
         except Exception as e:
+            check_cancelled()
             log.error(f"寻找图片失败:{e}")
         return None
 
