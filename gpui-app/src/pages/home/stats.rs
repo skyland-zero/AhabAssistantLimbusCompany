@@ -1078,10 +1078,10 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                             if infinite { "∞".to_string() } else { targets.mirror.to_string() },
                             if is_running { " · 进行中" } else { "" }
                         );
-                        if let Some(floor) = snapshot.mirror_floor.as_ref() {
-                            if floor.floor > 0 {
-                                label.push_str(&format!(" · 第{}层", floor.floor));
-                            }
+                        if let Some(floor) = snapshot.mirror_floor.as_ref()
+                            && floor.floor > 0
+                        {
+                            label.push_str(&format!(" · 第{}层", floor.floor));
                         }
                         label
                     })

@@ -9,6 +9,7 @@ task execution are implemented.
 from __future__ import annotations
 
 import copy
+import math
 import os
 import re
 import threading
@@ -121,12 +122,12 @@ TEAM_MIRROR_INT_LIMITS = {
     "second_system_select": (0, len(SYSTEM_NAMES) - 1),
     "second_system_setting": (0, 1),
     "defense_for_solo_turns": (1, 5),
-    "skill_replacement_select": (0, 255),
-    "skill_replacement_mode": (0, 1),
+    "skill_replacement_select": (0, 3),
+    "skill_replacement_mode": (0, 2),
     "fixed_team_use_select": (0, 2),
-    "reward_cards_select": (0, 255),
-    "shopping_strategy_select": (0, 255),
-    "opening_items_select": (0, 255),
+    "reward_cards_select": (0, 3),
+    "shopping_strategy_select": (0, 5),
+    "opening_items_select": (0, 5),
     "opening_items_system": (0, len(SYSTEM_NAMES) - 1),
 }
 TEAM_MIRROR_ACTION_FIELDS = (
@@ -667,6 +668,31 @@ class BackendApplication:
             if number > 0:
                 details.append(self._team_detail(number, setting, number in queue))
         return details
+
+    def team_stats_get(self, params: Any) -> dict[str, Any]:
+        values = self._require_mapping(params, "team.stats.get")
+        team_id = self._require_string(values.get("id"), "team.stats.get.id")
+        team_number = self._team_number_from_id(team_id, "team.stats.get.id")
+        with self._lock:
+            setting = (getattr(self.config.config, "teams", {}) or {}).get(str(team_number))
+            if setting is None:
+                raise ValueError("team.stats.get.id 对应的队伍不存在")
+            return self._team_stats_detail(team_id, team_number, setting)
+
+    def team_stats_clear(self, params: Any) -> dict[str, Any]:
+        values = self._require_mapping(params, "team.stats.clear")
+        team_id = self._require_string(values.get("id"), "team.stats.clear.id")
+        team_number = self._team_number_from_id(team_id, "team.stats.clear.id")
+        with self._lock:
+            setting = (getattr(self.config.config, "teams", {}) or {}).get(str(team_number))
+            if setting is None:
+                raise ValueError("team.stats.clear.id 对应的队伍不存在")
+            setting.total_mirror_time_hard = [0.0, 0.0, 0.0]
+            setting.mirror_hard_count = 0
+            setting.total_mirror_time_normal = [0.0, 0.0, 0.0]
+            setting.mirror_normal_count = 0
+            self._persist_config()
+            return self._team_stats_detail(team_id, team_number, setting)
 
     def team_preset_list(self) -> list[dict[str, Any]]:
         """Return the read-only built-in team preset catalog.
@@ -1825,6 +1851,56 @@ class BackendApplication:
         from module.config import TeamSetting
 
         return TeamSetting()
+
+    @staticmethod
+    def _team_number_from_id(team_id: str, name: str) -> int:
+        match = re.fullmatch(r"team-(\d+)", team_id)
+        if match is None or not 1 <= int(match.group(1)) <= 0xFFFFFFFF:
+            raise ValueError(f"{name} 无效")
+        return int(match.group(1))
+
+    @staticmethod
+    def _team_stats_bucket(setting: Any, mode: str) -> dict[str, Any]:
+        time_values = getattr(setting, f"total_mirror_time_{mode}", [])
+        if not isinstance(time_values, list):
+            time_values = []
+        averages: list[float] = []
+        for value in time_values[:3]:
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                averages.append(0.0)
+                continue
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError, OverflowError):
+                averages.append(0.0)
+                continue
+            if math.isfinite(numeric):
+                averages.append(max(0.0, numeric))
+            else:
+                averages.append(0.0)
+        averages.extend([0.0] * (3 - len(averages)))
+        count = getattr(setting, f"mirror_{mode}_count", 0)
+        if not isinstance(count, int) or isinstance(count, bool):
+            count = 0
+        return {
+            "count": min(0xFFFFFFFF, max(0, count)),
+            "averageSeconds": averages[0],
+            "last5AverageSeconds": averages[1],
+            "last10AverageSeconds": averages[2],
+        }
+
+    @classmethod
+    def _team_stats_detail(cls, team_id: str, team_number: int, setting: Any) -> dict[str, Any]:
+        hard = cls._team_stats_bucket(setting, "hard")
+        normal = cls._team_stats_bucket(setting, "normal")
+        return {
+            "schemaVersion": 1,
+            "teamId": team_id,
+            "teamNumber": team_number,
+            "totalCount": min(0xFFFFFFFF, hard["count"] + normal["count"]),
+            "hard": hard,
+            "normal": normal,
+        }
 
     def _write_team_sinners(self, setting: Any, sinners: Any) -> None:
         if not isinstance(sinners, list) or not all(isinstance(item, str) for item in sinners):

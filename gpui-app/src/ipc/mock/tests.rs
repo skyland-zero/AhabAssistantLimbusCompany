@@ -171,6 +171,24 @@ fn config_and_team_calls_round_trip() {
 }
 
 #[test]
+fn team_stats_calls_round_trip_and_clear_only_history() {
+    let client = MockClient::default();
+    let stats = client.call(method::TEAM_STATS_GET, Some(json!({ "id": "team-1" })));
+    assert!(!stats.is_error());
+    assert_eq!(stats.result.as_ref().unwrap()["totalCount"], 6);
+    assert_eq!(
+        stats.result.as_ref().unwrap()["hard"]["averageSeconds"],
+        120.5
+    );
+
+    let cleared = client.call(method::TEAM_STATS_CLEAR, Some(json!({ "id": "team-1" })));
+    assert!(!cleared.is_error());
+    assert_eq!(cleared.result.as_ref().unwrap()["totalCount"], 0);
+    let after = client.call(method::TEAM_STATS_GET, Some(json!({ "id": "team-1" })));
+    assert_eq!(after.result.unwrap()["hard"]["count"], 0);
+}
+
+#[test]
 fn notification_test_accepts_unsaved_spt_without_persisting_it() {
     let client = MockClient::default();
     let response = client.call(

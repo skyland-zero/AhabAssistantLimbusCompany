@@ -2,7 +2,8 @@ Global:
     text_score: 0.5
 
     use_det: true
-    use_cls: true
+    # 暂时关闭方向分类推理；保留 Cls 配置和模型文件，便于验证失败时快速回滚。
+    use_cls: false
     use_rec: true
 
     use_preprocess_img: true
@@ -36,7 +37,7 @@ EngineConfig:
             cudnn_conv_algo_search: "EXHAUSTIVE"
             do_copy_in_default_stream: true
 
-        use_dml: false
+        use_dml: true
         dml_ep_cfg: null
 
         use_cann: false
@@ -72,8 +73,8 @@ EngineConfig:
 Det:
     engine_type: "onnxruntime"
     lang_type: "ch"
-    model_type: "mobile"
-    ocr_version: "PP-OCRv4"
+    model_type: "small"
+    ocr_version: "PP-OCRv6"
 
     task_type: "det"
 
@@ -111,8 +112,8 @@ Cls:
 Rec:
     engine_type: "onnxruntime"
     lang_type: "ch"
-    model_type: "mobile"
-    ocr_version: "PP-OCRv4"
+    model_type: "small"
+    ocr_version: "PP-OCRv6"
 
     task_type: "rec"
 

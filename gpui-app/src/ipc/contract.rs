@@ -154,6 +154,8 @@ pub mod method {
     pub const EXECUTION_PAUSE: &str = "execution.pause";
     pub const EXECUTION_RESUME: &str = "execution.resume";
     pub const TEAM_LIST: &str = "team.list";
+    pub const TEAM_STATS_GET: &str = "team.stats.get";
+    pub const TEAM_STATS_CLEAR: &str = "team.stats.clear";
     pub const TEAM_PRESET_LIST: &str = "team.preset.list";
     pub const TEAM_SAVE: &str = "team.save";
     pub const TEAM_DELETE: &str = "team.delete";

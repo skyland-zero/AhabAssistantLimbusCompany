@@ -65,6 +65,23 @@ async def _exercise_real_sidecar() -> None:
             assert responses_by_id[5]["schemaVersion"] == 2
             assert responses_by_id[9]["schemaVersion"] == 2
 
+            teams = responses_by_id[7]
+            if teams:
+                team_id = teams[0]["id"]
+                await client.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 80,
+                            "method": "team.stats.get",
+                            "params": {"id": team_id},
+                        }
+                    )
+                )
+                team_stats = json.loads(await asyncio.wait_for(client.recv(), timeout=3))
+                assert "error" not in team_stats, team_stats
+                assert team_stats["result"]["teamId"] == team_id
+
             await client.send(
                 json.dumps(
                     {

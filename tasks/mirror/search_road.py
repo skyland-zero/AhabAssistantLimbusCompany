@@ -92,9 +92,28 @@ def _get_node_detector():
         if _node_detector_session is None or model_signature != _node_detector_signature:
             import onnxruntime as ort
 
-            _node_detector_session = ort.InferenceSession(_NODE_MODEL_PATH)
+            # 优先使用 DirectML GPU 加速；不支持或初始化失败时回退到 CPU。
+            providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+            try:
+                _node_detector_session = ort.InferenceSession(
+                    _NODE_MODEL_PATH,
+                    providers=providers,
+                )
+            except Exception as dml_error:
+                log.warning("镜牢寻路节点检测 DirectML 初始化失败，回退 CPU: %s", dml_error)
+                _node_detector_session = ort.InferenceSession(
+                    _NODE_MODEL_PATH,
+                    providers=["CPUExecutionProvider"],
+                )
             _node_detector_input_name = _node_detector_session.get_inputs()[0].name
             _node_detector_signature = model_signature
+
+            # 静默预热 YOLOv8 544x960 卷积核着色器，消除寻路首次点击卡顿。
+            try:
+                dummy = np.zeros((1, 3, 544, 960), dtype=np.float32)
+                _node_detector_session.run(None, {_node_detector_input_name: dummy})
+            except Exception as e:
+                log.warning("镜牢寻路节点检测 DirectML 预热警告: %s", e)
         return _node_detector_session, _node_detector_input_name
 
 

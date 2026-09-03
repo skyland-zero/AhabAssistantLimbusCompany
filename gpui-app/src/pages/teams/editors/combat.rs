@@ -232,28 +232,60 @@ pub(crate) fn combat_editor(
     );
 
     let replacement_mode = if config.skill_replacement {
-        editor_option_grid(vec![control_row(
-            text("替换模式", "Replacement Mode").get(language),
-            team_select(
-                app,
-                cx,
-                TeamSelectConfig {
-                    select: TeamSelect::SkillReplacementMode,
-                    current: config.skill_replacement_mode.to_string(),
-                    options: vec![
-                        ("0".to_owned(), "1 → 2".to_owned()),
-                        ("1".to_owned(), "1 → 3".to_owned()),
-                    ],
-                    id: "combat-skill-replacement-mode".to_owned(),
-                    width: 180.,
-                    on_change: Rc::new(|teams, value| {
-                        if let Ok(value) = value.parse::<u8>() {
-                            teams.set_mirror_u8(MirrorU8::SkillReplacementMode, value);
-                        }
-                    }),
-                },
+        editor_option_grid(vec![
+            control_row(
+                text("替换目标", "Replacement Target").get(language),
+                team_select(
+                    app,
+                    cx,
+                    TeamSelectConfig {
+                        select: TeamSelect::SkillReplacementSelect,
+                        current: config.skill_replacement_select.to_string(),
+                        options: (0..=3)
+                            .map(|value| {
+                                (
+                                    value.to_string(),
+                                    skill_replacement_select_label(value, language).to_owned(),
+                                )
+                            })
+                            .collect(),
+                        id: "combat-skill-replacement-select".to_owned(),
+                        width: 180.,
+                        on_change: Rc::new(|teams, value| {
+                            if let Ok(value) = value.parse::<u8>() {
+                                teams.set_mirror_u8(MirrorU8::SkillReplacementSelect, value);
+                            }
+                        }),
+                    },
+                ),
             ),
-        )])
+            control_row(
+                text("替换模式", "Replacement Mode").get(language),
+                team_select(
+                    app,
+                    cx,
+                    TeamSelectConfig {
+                        select: TeamSelect::SkillReplacementMode,
+                        current: config.skill_replacement_mode.to_string(),
+                        options: (0..=2)
+                            .map(|value| {
+                                (
+                                    value.to_string(),
+                                    skill_replacement_mode_label(value, language).to_owned(),
+                                )
+                            })
+                            .collect(),
+                        id: "combat-skill-replacement-mode".to_owned(),
+                        width: 180.,
+                        on_change: Rc::new(|teams, value| {
+                            if let Ok(value) = value.parse::<u8>() {
+                                teams.set_mirror_u8(MirrorU8::SkillReplacementMode, value);
+                            }
+                        }),
+                    },
+                ),
+            ),
+        ])
     } else {
         div()
     };

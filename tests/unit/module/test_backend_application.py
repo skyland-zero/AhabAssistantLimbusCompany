@@ -620,6 +620,103 @@ def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection
     app.close()
 
 
+def test_team_stats_rpc_reads_and_clears_legacy_team_history() -> None:
+    app = make_application()
+    app.config.config.teams = {
+        "2": TeamSetting(
+            team_number=2,
+            total_mirror_time_hard=[120.5, 118.2, 121.4],
+            mirror_hard_count=3,
+            total_mirror_time_normal=[95.0, 94.8, 96.1],
+            mirror_normal_count=3,
+        )
+    }
+    dispatcher = RpcDispatcher(application=app, version="test")
+
+    summary = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "team.stats.get",
+            "params": {"id": "team-2"},
+        }
+    )
+    assert summary["result"]["teamId"] == "team-2"
+    assert summary["result"]["totalCount"] == 6
+    assert summary["result"]["hard"]["averageSeconds"] == 120.5
+    assert summary["result"]["normal"]["last10AverageSeconds"] == 96.1
+
+    app.team_save(
+        {
+            "id": "team-2",
+            "name": "统计队伍",
+            "purpose": "mirror",
+            "mirrorConfig": {"reward_cards": True, "reward_cards_select": 3},
+        }
+    )
+    assert app.config.config.teams["2"].mirror_hard_count == 3
+    assert app.config.config.teams["2"].total_mirror_time_normal == [95.0, 94.8, 96.1]
+
+    cleared = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "team.stats.clear",
+            "params": {"id": "team-2"},
+        }
+    )
+    assert cleared["result"]["totalCount"] == 0
+    assert app.config.config.teams["2"].total_mirror_time_hard == [0.0, 0.0, 0.0]
+    assert app.config.config.teams["2"].mirror_normal_count == 0
+    assert RpcDispatcher.is_mutating("team.stats.clear")
+    app.close()
+
+
+def test_team_mirror_selectors_use_qt_compatible_ranges() -> None:
+    app = make_application()
+    app.config.config.teams = {"1": TeamSetting(team_number=1)}
+    app.config.values["teams_active_queue"] = [1]
+
+    saved = app.team_save(
+        {
+            "id": "team-1",
+            "name": "Qt 范围",
+            "purpose": "mirror",
+            "mirrorConfig": {
+                "reward_cards_select": 3,
+                "shopping_strategy_select": 5,
+                "opening_items_select": 5,
+                "skill_replacement_select": 3,
+                "skill_replacement_mode": 2,
+            },
+        }
+    )
+    mirror = saved["mirrorConfig"]
+    assert mirror["reward_cards_select"] == 3
+    assert mirror["shopping_strategy_select"] == 5
+    assert mirror["opening_items_select"] == 5
+    assert mirror["skill_replacement_select"] == 3
+    assert mirror["skill_replacement_mode"] == 2
+
+    for field, value in (
+        ("reward_cards_select", 4),
+        ("shopping_strategy_select", 6),
+        ("opening_items_select", 6),
+        ("skill_replacement_select", 4),
+        ("skill_replacement_mode", 3),
+    ):
+        with pytest.raises(ValueError):
+            app.team_save(
+                {
+                    "id": "team-1",
+                    "name": "Qt 范围",
+                    "purpose": "mirror",
+                    "mirrorConfig": {field: value},
+                }
+            )
+    app.close()
+
+
 def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates() -> None:
     app = make_application()
     presets = app.team_preset_list()

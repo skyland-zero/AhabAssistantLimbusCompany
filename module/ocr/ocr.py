@@ -15,19 +15,33 @@ class OCR(metaclass=SingletonMeta):
         self.logger = logger
         self.engine = RapidOCR(
             params={
+                "EngineConfig.onnxruntime.use_dml": True,
                 "Det.engine_type": EngineType.ONNXRUNTIME,
                 "Det.lang_type": LangDet.CH,
-                "Det.model_type": ModelType.MOBILE,
-                "Det.ocr_version": OCRVersion.PPOCRV4,
+                "Det.model_type": ModelType.SMALL,
+                "Det.ocr_version": OCRVersion.PPOCRV6,
+                "Cls.engine_type": EngineType.ONNXRUNTIME,
+                "Cls.model_type": ModelType.MOBILE,
+                "Cls.ocr_version": OCRVersion.PPOCRV4,
                 "Rec.engine_type": EngineType.ONNXRUNTIME,
                 "Rec.lang_type": LangRec.CH,
-                "Rec.model_type": ModelType.MOBILE,
-                "Rec.ocr_version": OCRVersion.PPOCRV4,
+                "Rec.model_type": ModelType.SMALL,
+                "Rec.ocr_version": OCRVersion.PPOCRV6,
             },
             config_path=r"assets\config\default_rapidocr.yaml",
         )
         # CLAHE 配置固定，避免每次 OCR 请求重复创建 OpenCV 对象。
         self._clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
+        # DirectML 首次运行会编译 HLSL Compute Shader；提前用小图预热，避免
+        # 用户第一次执行 OCR 时把一次性编译开销叠加到业务操作上。
+        try:
+            _warmup_img = np.zeros((64, 64, 3), dtype=np.uint8)
+            self.engine(_warmup_img)
+            self.logger.debug("OCR DirectML 引擎初始化及预热完成")
+        except Exception as e:
+            # 没有可用 DirectML 设备时允许 RapidOCR/ONNX Runtime 使用 CPU 回退。
+            self.logger.warning(f"OCR 预热警告（将按需回退）: {e}")
 
     def run(self, image: Image.Image | np.ndarray | str) -> RapidOCROutput:
         """执行OCR识别，支持Image对象、文件路径和np.ndarray对象"""

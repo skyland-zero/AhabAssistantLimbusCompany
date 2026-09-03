@@ -34,6 +34,7 @@ struct MockState {
     tasks: TasksConfig,
     execution: ExecutionStatusPayload,
     stats: ExecutionStatsPayload,
+    team_stats: HashMap<String, TeamStats>,
     teams: Vec<TeamDetail>,
     sinners: Vec<SinnerInfo>,
     packs: ThemePackState,

@@ -51,10 +51,15 @@ pub enum TeamSelect {
     Purpose,
     FixedTeamUse,
     ShopStrategy,
+    RewardCards,
+    ShoppingStrategy,
+    OpeningItemsSystem,
+    OpeningItemsOrder,
     AfterLevelIv,
     SecondSystem,
     SecondSystemFloor,
     DefenseTurns,
+    SkillReplacementSelect,
     SkillReplacementMode,
 }
 
@@ -88,6 +93,11 @@ pub struct TeamEditorState {
     /// A number selected from an empty UI slot. Existing teams keep their
     /// number in the backend-derived `team-N` id and do not use this field.
     pub requested_team_number: Option<u32>,
+    pub stats: TeamStats,
+    pub stats_loading: bool,
+    pub stats_clearing: bool,
+    pub stats_error: Option<String>,
+    pub stats_clear_confirmation: bool,
 }
 
 impl TeamEditorState {
@@ -96,11 +106,18 @@ impl TeamEditorState {
     }
 
     pub fn new_with_slot(team: TeamDetail, requested_team_number: Option<u32>) -> Self {
+        let team_id = team.id.clone();
+        let team_number = team_number_from_id(&team_id).unwrap_or(0);
         Self {
             team,
             tab: TeamEditorTab::Basic,
             json_import_open: false,
             requested_team_number,
+            stats: TeamStats::empty_for(team_id, team_number),
+            stats_loading: false,
+            stats_clearing: false,
+            stats_error: None,
+            stats_clear_confirmation: false,
         }
     }
 
@@ -164,6 +181,9 @@ pub struct TeamsState {
 /// Named bool fields keep the page readable and prevent ad-hoc JSON patches.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MirrorBool {
+    RewardCards,
+    ShoppingStrategy,
+    OpeningItems,
     DoNotHeal,
     DoNotBuy,
     DoNotFuse,
@@ -196,12 +216,17 @@ pub enum MirrorBool {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MirrorU8 {
     ShopStrategy,
+    RewardCardsSelect,
+    ShoppingStrategySelect,
+    OpeningItemsSelect,
+    OpeningItemsSystem,
     AfterLevelIvSelect,
     MaxKeywordRefresh,
     MaxNormalRefresh,
     SecondSystemSelect,
     SecondSystemStartFloor,
     DefenseTurns,
+    SkillReplacementSelect,
     SkillReplacementMode,
     FixedTeamUseSelect,
 }

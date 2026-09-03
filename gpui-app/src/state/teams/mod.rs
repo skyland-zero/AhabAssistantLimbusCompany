@@ -4,6 +4,7 @@
 mod mirror;
 mod persistence;
 mod selection;
+mod stats;
 mod types;
 
 pub use types::*;
@@ -12,7 +13,7 @@ use crate::{
     ipc::RpcGateway,
     model::{
         SinnerInfo, TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPreset, TeamPurpose,
-        team_number_from_id,
+        TeamStats, team_number_from_id,
     },
 };
 
@@ -70,6 +71,45 @@ mod tests {
         state.set_mirror_bool(MirrorBool::DefenseForSolo, true);
         let config = state.editor.as_ref().unwrap().mirror_config();
         assert!(!config.defense_first_round && config.defense_for_solo);
+    }
+
+    #[test]
+    fn qt_strategy_settings_are_editable_and_clamped() {
+        let mut state = TeamsState::default();
+        state.open_new();
+        state.set_mirror_bool(MirrorBool::RewardCards, true);
+        state.set_mirror_bool(MirrorBool::ShoppingStrategy, true);
+        state.set_mirror_bool(MirrorBool::OpeningItems, true);
+        state.set_mirror_u8(MirrorU8::RewardCardsSelect, u8::MAX);
+        state.set_mirror_u8(MirrorU8::ShoppingStrategySelect, u8::MAX);
+        state.set_mirror_u8(MirrorU8::OpeningItemsSelect, u8::MAX);
+        state.set_mirror_u8(MirrorU8::OpeningItemsSystem, u8::MAX);
+        state.set_mirror_u8(MirrorU8::SkillReplacementSelect, u8::MAX);
+        state.set_mirror_u8(MirrorU8::SkillReplacementMode, u8::MAX);
+
+        let config = state.editor.as_ref().unwrap().mirror_config();
+        assert!(config.reward_cards && config.shopping_strategy && config.opening_items);
+        assert_eq!(config.reward_cards_select, 3);
+        assert_eq!(config.shopping_strategy_select, 5);
+        assert_eq!(config.opening_items_select, 5);
+        assert_eq!(config.opening_items_system, 9);
+        assert_eq!(config.skill_replacement_select, 3);
+        assert_eq!(config.skill_replacement_mode, 2);
+    }
+
+    #[test]
+    fn team_stats_load_and_clear_use_the_team_rpc_contract() {
+        let mut state = TeamsState::default();
+        let team = state.teams[0].clone();
+        state.open_edit(&team);
+        state.refresh_team_stats().unwrap();
+        assert_eq!(state.editor.as_ref().unwrap().stats.totalCount, 6);
+
+        assert!(state.request_clear_team_stats());
+        state.clear_team_stats().unwrap();
+        let editor = state.editor.as_ref().unwrap();
+        assert_eq!(editor.stats.totalCount, 0);
+        assert!(!editor.stats_clear_confirmation);
     }
 
     #[test]

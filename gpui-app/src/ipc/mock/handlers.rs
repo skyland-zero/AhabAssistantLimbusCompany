@@ -203,6 +203,41 @@ impl MockState {
                 }
             }
             method::TEAM_LIST => Ok(serde_json::to_value(&self.teams).unwrap()),
+            method::TEAM_STATS_GET => {
+                let values: Value = Self::params(request.params, "team.stats.get requires {id}")?;
+                let team_id = values.get("id").and_then(Value::as_str).ok_or_else(|| {
+                    RpcError::invalid_params("team.stats.get requires a string id")
+                })?;
+                let team = self
+                    .teams
+                    .iter()
+                    .find(|team| team.id == team_id)
+                    .ok_or_else(|| RpcError::invalid_params("team.stats.get team not found"))?;
+                let number = team_number_from_id(&team.id).unwrap_or_default();
+                let stats = self
+                    .team_stats
+                    .entry(team.id.clone())
+                    .or_insert_with(|| TeamStats::empty_for(team.id.clone(), number));
+                Ok(serde_json::to_value(stats).unwrap())
+            }
+            method::TEAM_STATS_CLEAR => {
+                let values: Value = Self::params(request.params, "team.stats.clear requires {id}")?;
+                let team_id = values.get("id").and_then(Value::as_str).ok_or_else(|| {
+                    RpcError::invalid_params("team.stats.clear requires a string id")
+                })?;
+                let team = self
+                    .teams
+                    .iter()
+                    .find(|team| team.id == team_id)
+                    .ok_or_else(|| RpcError::invalid_params("team.stats.clear team not found"))?;
+                let number = team_number_from_id(&team.id).unwrap_or_default();
+                let stats = self
+                    .team_stats
+                    .entry(team.id.clone())
+                    .or_insert_with(|| TeamStats::empty_for(team.id.clone(), number));
+                *stats = TeamStats::empty_for(team.id.clone(), number);
+                Ok(serde_json::to_value(stats).unwrap())
+            }
             method::TEAM_PRESET_LIST => Ok(serde_json::to_value(builtin_team_presets()).unwrap()),
             method::TEAM_SAVE => {
                 let raw: Value = Self::params(request.params, "team.save requires an object")?;
@@ -286,6 +321,7 @@ impl MockState {
                     .and_then(Value::as_str)
                     .ok_or_else(|| RpcError::invalid_params("team.delete requires a string id"))?;
                 self.teams.retain(|team| team.id != team_id);
+                self.team_stats.remove(team_id);
                 Ok(json!(true))
             }
             method::SINNER_LIST => Ok(serde_json::to_value(&self.sinners).unwrap()),
@@ -455,7 +491,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         defense_for_solo: true,
         skill_replacement: false,
         skill_replacement_select: 0,
-        skill_replacement_mode: 1,
+        skill_replacement_mode: 0,
         use_starlight: true,
         opening_bonus: vec![1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
         use_team_code: true,

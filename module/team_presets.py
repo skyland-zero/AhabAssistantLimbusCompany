@@ -55,10 +55,10 @@ _HOS_RYOSHU_SOLO_SETTING: dict[str, Any] = {
     "opening_items_system": 4,
     "skill_replacement": True,
     "skill_replacement_select": 0,
-    # The current backend exposes the 1 -> 3 replacement option; the
-    # route keeps the guide's finer S1/S2/S3 target as metadata while
-    # using this safe compatible mode at runtime.
-    "skill_replacement_mode": 1,
+    # Qt-compatible replacement mode: 0 means 1 -> 3.  The route keeps
+    # the guide's finer S1/S2/S3 target as metadata while using this safe
+    # compatible mode at runtime.
+    "skill_replacement_mode": 0,
     "defense_for_solo": True,
     # This remains the compatibility fallback when live roster OCR is
     # unavailable.  Known counts are handled dynamically at runtime.

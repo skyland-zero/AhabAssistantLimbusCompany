@@ -275,6 +275,7 @@ pub(crate) fn shop_editor(
         .flex()
         .flex_col()
         .gap_4()
+        .child(strategy_editor(app, cx, config, language))
         .child(shop_strategy)
         .child(discard_card)
         .child(restrictions_card)

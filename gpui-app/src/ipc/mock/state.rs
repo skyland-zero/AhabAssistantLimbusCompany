@@ -11,6 +11,27 @@ impl Default for MockState {
                 schemaVersion: 1,
                 ..ExecutionStatsPayload::default()
             },
+            team_stats: HashMap::from([(
+                "team-1".to_owned(),
+                TeamStats {
+                    schemaVersion: 1,
+                    teamId: "team-1".into(),
+                    teamNumber: 1,
+                    totalCount: 6,
+                    hard: TeamStatsBucket {
+                        count: 3,
+                        averageSeconds: 120.5,
+                        last5AverageSeconds: 118.2,
+                        last10AverageSeconds: 121.4,
+                    },
+                    normal: TeamStatsBucket {
+                        count: 3,
+                        averageSeconds: 95.0,
+                        last5AverageSeconds: 94.8,
+                        last10AverageSeconds: 96.1,
+                    },
+                },
+            )]),
             teams: vec![
                 TeamDetail {
                     schemaVersion: 1,

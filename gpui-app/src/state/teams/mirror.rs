@@ -30,6 +30,9 @@ impl TeamsState {
 
     pub fn set_mirror_bool(&mut self, field: MirrorBool, value: bool) {
         self.update_mirror(|config| match field {
+            MirrorBool::RewardCards => config.reward_cards = value,
+            MirrorBool::ShoppingStrategy => config.shopping_strategy = value,
+            MirrorBool::OpeningItems => config.opening_items = value,
             MirrorBool::DoNotHeal => config.do_not_heal = value,
             MirrorBool::DoNotBuy => config.do_not_buy = value,
             MirrorBool::DoNotFuse => config.do_not_fuse = value,
@@ -83,13 +86,18 @@ impl TeamsState {
     pub fn set_mirror_u8(&mut self, field: MirrorU8, value: u8) {
         self.update_mirror(|config| match field {
             MirrorU8::ShopStrategy => config.shop_strategy = value.min(2),
+            MirrorU8::RewardCardsSelect => config.reward_cards_select = value.min(3),
+            MirrorU8::ShoppingStrategySelect => config.shopping_strategy_select = value.min(5),
+            MirrorU8::OpeningItemsSelect => config.opening_items_select = value.min(5),
+            MirrorU8::OpeningItemsSystem => config.opening_items_system = value.min(9),
             MirrorU8::AfterLevelIvSelect => config.after_level_IV_select = value.min(3),
             MirrorU8::MaxKeywordRefresh => config.max_keyword_refresh = value.min(10),
             MirrorU8::MaxNormalRefresh => config.max_normal_refresh = value.min(10),
             MirrorU8::SecondSystemSelect => config.second_system_select = value.min(9),
             MirrorU8::SecondSystemStartFloor => config.second_system_setting = value.min(1),
             MirrorU8::DefenseTurns => config.defense_for_solo_turns = value.clamp(1, 5),
-            MirrorU8::SkillReplacementMode => config.skill_replacement_mode = value.min(1),
+            MirrorU8::SkillReplacementSelect => config.skill_replacement_select = value.min(3),
+            MirrorU8::SkillReplacementMode => config.skill_replacement_mode = value.min(2),
             MirrorU8::FixedTeamUseSelect => config.fixed_team_use_select = value.min(2),
         });
     }

@@ -1716,9 +1716,14 @@ class Shop:
             target = "、".join(
                 f"S{index}×{count}" for index, count in enumerate(self.skill_replacement_target_counts, 1)
             )
+            replacement_mode = {
+                0: "1→3",
+                1: "2→3",
+                2: "1→2",
+            }.get(self.skill_replacement_mode, "1→3")
             log.warning(
                 f"当前技能替换界面仅支持全局模式，攻略目标为{target}；"
-                f"按配置的1→{2 if self.skill_replacement_mode == 0 else 3}兼容执行"
+                f"按配置的{replacement_mode}兼容执行"
             )
         self.replacement = 0
         # 检查是否在超级商店

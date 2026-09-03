@@ -174,7 +174,12 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         TeamEditorTab::Shop => editors::shop_editor(app, cx, &config, language),
         TeamEditorTab::Combat => editors::combat_editor(app, cx, &config, language),
         TeamEditorTab::Starlight => editors::starlight_editor(app, cx, &config, language),
-        TeamEditorTab::Advanced => editors::advanced_editor(app, cx, &config, language),
+        TeamEditorTab::Advanced => div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(editors::advanced_editor(app, cx, &config, language))
+            .child(editors::team_stats_editor(app, cx, language)),
     };
 
     let dialog_body =
@@ -298,7 +303,14 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .p_4()
         .bg(rgba(0x00000080));
     surface = surface.on_click(cx.listener(|view, _, _, cx| {
-        if view.teams.delete_target.is_some() {
+        if view
+            .teams
+            .editor
+            .as_ref()
+            .is_some_and(|editor| editor.stats_clear_confirmation)
+        {
+            view.cancel_clear_team_stats(cx);
+        } else if view.teams.delete_target.is_some() {
             view.teams.cancel_delete();
             cx.notify();
         } else {
@@ -309,7 +321,14 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         if event.keystroke.key.eq_ignore_ascii_case("escape") {
             window.prevent_default();
             cx.stop_propagation();
-            if view.teams.delete_target.is_some() {
+            if view
+                .teams
+                .editor
+                .as_ref()
+                .is_some_and(|editor| editor.stats_clear_confirmation)
+            {
+                view.cancel_clear_team_stats(cx);
+            } else if view.teams.delete_target.is_some() {
                 view.teams.cancel_delete();
             } else {
                 view.close_team_editor(cx);
@@ -334,6 +353,15 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
             .bg(rgba(0x00000080))
             .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
         surface = surface.child(delete_layer.child(delete_confirmation(app, cx, language)));
+    }
+
+    if app
+        .teams
+        .editor
+        .as_ref()
+        .is_some_and(|editor| editor.stats_clear_confirmation)
+    {
+        surface = surface.child(editors::team_stats_clear_overlay(app, cx, language));
     }
 
     div()

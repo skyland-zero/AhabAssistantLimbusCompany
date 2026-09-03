@@ -202,6 +202,87 @@ pub(super) fn second_system_setting_label(value: u8, language: Language) -> &'st
     }
 }
 
+pub(super) fn reward_cards_label(value: u8, language: Language) -> &'static str {
+    match value {
+        0 => text(
+            "星光→饰品→钱→饰品/钱→罪孽",
+            "Starlight → Gifts → Cost → Gifts/Cost → Sins",
+        )
+        .get(language),
+        1 => text(
+            "星光→钱→饰品→饰品/钱→罪孽",
+            "Starlight → Cost → Gifts → Gifts/Cost → Sins",
+        )
+        .get(language),
+        2 => text(
+            "钱→饰品→饰品/钱→罪孽→星光",
+            "Cost → Gifts → Gifts/Cost → Sins → Starlight",
+        )
+        .get(language),
+        3 => text(
+            "饰品→钱→饰品/钱→罪孽→星光",
+            "Gifts → Cost → Gifts/Cost → Sins → Starlight",
+        )
+        .get(language),
+        _ => text(
+            "星光→饰品→钱→饰品/钱→罪孽",
+            "Starlight → Gifts → Cost → Gifts/Cost → Sins",
+        )
+        .get(language),
+    }
+}
+
+pub(super) fn shopping_strategy_label_custom(value: u8, language: Language) -> &'static str {
+    match value {
+        0 => text("仅购买回血饰品", "Buy healing gifts only").get(language),
+        1 => text(
+            "四级优先时：仅购买所有 3-4 级饰品",
+            "With tier-4 priority: buy only all tier 3-4 gifts",
+        )
+        .get(language),
+        2 => text("仅购买体系饰品", "Buy system gifts only").get(language),
+        3 => text("不购买体系饰品", "Do not buy system gifts").get(language),
+        4 => text("不购买回血饰品", "Do not buy healing gifts").get(language),
+        5 => text(
+            "四级优先时：不购买所有 3-4 级饰品",
+            "With tier-4 priority: do not buy all tier 3-4 gifts",
+        )
+        .get(language),
+        _ => text("仅购买回血饰品", "Buy healing gifts only").get(language),
+    }
+}
+
+pub(super) fn opening_items_order_label(value: u8, language: Language) -> &'static str {
+    match value {
+        0 => text("1 → 2 → 3", "1 → 2 → 3").get(language),
+        1 => text("1 → 3 → 2", "1 → 3 → 2").get(language),
+        2 => text("2 → 1 → 3", "2 → 1 → 3").get(language),
+        3 => text("2 → 3 → 1", "2 → 3 → 1").get(language),
+        4 => text("3 → 1 → 2", "3 → 1 → 2").get(language),
+        5 => text("3 → 2 → 1", "3 → 2 → 1").get(language),
+        _ => text("1 → 2 → 3", "1 → 2 → 3").get(language),
+    }
+}
+
+pub(super) fn skill_replacement_select_label(value: u8, language: Language) -> &'static str {
+    match value {
+        0 => text("配队首位", "First sinner in team").get(language),
+        1 => text("配队前 3", "First 3 sinners").get(language),
+        2 => text("配队前 7", "First 7 sinners").get(language),
+        3 => text("所有选中的人", "All selected sinners").get(language),
+        _ => text("配队首位", "First sinner in team").get(language),
+    }
+}
+
+pub(super) fn skill_replacement_mode_label(value: u8, language: Language) -> &'static str {
+    match value {
+        0 => text("1 → 3", "1 → 3").get(language),
+        1 => text("2 → 3", "2 → 3").get(language),
+        2 => text("1 → 2", "1 → 2").get(language),
+        _ => text("1 → 3", "1 → 3").get(language),
+    }
+}
+
 pub(super) fn turns_label(turns: u8, language: Language) -> String {
     match language {
         Language::ZhCn => format!("{turns} 回合"),
@@ -319,6 +400,18 @@ mod tests {
         assert_eq!(shop_strategy_label(2, Language::ZhCn), "激进");
         assert_eq!(after_level_label(1, Language::ZhCn), "继续");
         assert_eq!(fixed_team_use_label(2, Language::ZhCn), "全部通用");
+        assert_eq!(
+            reward_cards_label(3, Language::ZhCn),
+            "饰品→钱→饰品/钱→罪孽→星光"
+        );
+        assert_eq!(
+            shopping_strategy_label_custom(5, Language::ZhCn),
+            "四级优先时：不购买所有 3-4 级饰品"
+        );
+        assert_eq!(opening_items_order_label(5, Language::ZhCn), "3 → 2 → 1");
+        assert_eq!(skill_replacement_mode_label(0, Language::ZhCn), "1 → 3");
+        assert_eq!(skill_replacement_mode_label(1, Language::ZhCn), "2 → 3");
+        assert_eq!(skill_replacement_mode_label(2, Language::ZhCn), "1 → 2");
     }
 
     #[test]

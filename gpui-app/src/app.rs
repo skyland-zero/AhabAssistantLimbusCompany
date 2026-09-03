@@ -22,6 +22,7 @@ mod scheduling;
 mod settings;
 mod stats;
 mod team_editor;
+mod team_editor_stats;
 
 // Keep the existing page-facing imports stable while the palette lives with
 // the reusable controls.

@@ -4,6 +4,7 @@ pub mod other;
 pub mod settings;
 pub mod stats;
 pub mod tasks;
+pub mod team_stats;
 pub mod teams;
 
 pub use other::{
@@ -20,9 +21,10 @@ pub use stats::{
 pub use tasks::{
     AfterCompletionConfig, AfterExitAction, AfterPowerAction, BuyEnkephalinConfig, DailyTaskConfig,
     EnabledTasks, ExecutionState, ExecutionStatusPayload, FixedTaskId, GetRewardConfig,
-    MirrorConfig, MirrorFloorPayload, MirrorProgressPayload, ResonateWithAhabConfig, SetWindowsConfig,
-    TasksConfig,
+    MirrorConfig, MirrorFloorPayload, MirrorProgressPayload, ResonateWithAhabConfig,
+    SetWindowsConfig, TasksConfig,
 };
+pub use team_stats::{TeamStats, TeamStatsBucket};
 pub use teams::{
     DiscardSystems, LocalizedText, MAX_OBSERVE_EGO_GIFTS, SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID,
     SinnerInfo, TEAM_SLOT_COUNT, TeamDetail, TeamMirrorConfig, TeamPreset, TeamPurpose,

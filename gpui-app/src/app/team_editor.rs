@@ -18,6 +18,7 @@ impl AhabApp {
     pub fn open_existing_team(&mut self, team: &TeamDetail, cx: &mut Context<Self>) {
         self.teams.open_edit(team);
         self.create_team_inputs(cx);
+        self.refresh_team_stats(cx);
         cx.notify();
     }
 

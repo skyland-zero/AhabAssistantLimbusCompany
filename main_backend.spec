@@ -9,8 +9,11 @@ PyInstaller's static import walk.
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
-
+from PyInstaller.utils.hooks import (
+    collect_data_files,
+    collect_dynamic_libs,
+    collect_submodules,
+)
 
 root = Path(SPECPATH).resolve()
 hiddenimports = []
@@ -34,13 +37,26 @@ hiddenimports.extend(
     ]
 )
 
-datas = collect_data_files("rapidocr")
+# RapidOCR 包内还带有旧版 PP-OCRv4 Det/Rec 模型。当前业务只使用 PP-OCRv6
+# Det/Rec；Cls 暂时只保留模型文件用于回滚，待验证无误后再移除。
+rapidocr_model_names = {
+    "PP-OCRv6_det_small.onnx",
+    "PP-OCRv6_rec_small.onnx",
+    "ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+}
+datas = [
+    (source, destination)
+    for source, destination in collect_data_files("rapidocr")
+    if Path(source).parent.name != "models"
+    or Path(source).name in rapidocr_model_names
+]
 datas.append((str(root / "assets" / "binary" / "scrcpy-server.jar"), "assets/binary"))
+binaries = collect_dynamic_libs("onnxruntime")
 
 a = Analysis(
     [str(root / "main_backend.py")],
     pathex=[str(root)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=sorted(set(hiddenimports)),
     hookspath=[],
