@@ -3,6 +3,7 @@ from pytest import raises
 from module.mirror_plan_runtime import (
     MirrorPlanProgressError,
     MirrorPlanRuntime,
+    extract_all_mirror_floors,
     extract_mirror_floor,
     select_mirror_floor_count,
 )
@@ -102,6 +103,64 @@ def test_floor_title_ocr_supports_one_to_fifteen() -> None:
     assert extract_mirror_floor("Exploring Floor 10") == 10
     assert extract_mirror_floor("第15层") == 15
     assert extract_mirror_floor("Line 1") is None
+
+
+def test_strict_mode_ignores_loose_fallbacks() -> None:
+    # 全屏文本里的零散数字不能冒充楼层。
+    assert extract_mirror_floor("4/6", strict=True) is None
+    assert extract_mirror_floor("第5批", strict=True) is None
+    assert extract_mirror_floor("Floor 5", strict=True) == 5
+    assert extract_mirror_floor("第5层", strict=True) == 5
+    # 非 strict 保持旧行为。
+    assert extract_mirror_floor("第5批") == 5
+
+
+def test_enumeration_panel_lists_every_floor() -> None:
+    # 恢复入口面板并列 Floor1..Floor4，取首个必得 1 楼；调用方用多值跳过预读。
+    text = "Floor1Floor2Floor3Floor4[NORMAL]4/6ResumeHaltExploration"
+    assert sorted(set(extract_all_mirror_floors(text, strict=True))) == [1, 2, 3, 4]
+    # "Floor"同时命中 floor/oor 两种模式，允许重复，调用方去重使用。
+    assert set(extract_all_mirror_floors("Exploring Floor 2TobePierced", strict=True)) == {2}
+
+
+def test_resume_title_misread_falls_back_to_markers() -> None:
+    # 实际 5 楼（标记 0 个），标题误读成 2 楼：采信标记。
+    runtime = MirrorPlanRuntime((5,), floor_count=5)
+
+    assert runtime.detect_floor(0, absolute_floor=1) == 4
+    assert len(runtime.deviations) == 1
+
+
+def test_observed_title_misread_keeps_markers_without_rollback() -> None:
+    runtime = MirrorPlanRuntime((5,), floor_count=5)
+
+    assert runtime.detect_floor(0, absolute_floor=4) == 4
+    assert runtime.detect_floor(0, absolute_floor=1) == 4
+    assert len(runtime.deviations) == 1
+
+
+def test_consistent_backtrack_is_still_rejected() -> None:
+    runtime = MirrorPlanRuntime((5,), floor_count=5)
+
+    runtime.detect_floor(0, absolute_floor=4)
+    with raises(MirrorPlanProgressError, match="早于已记录楼层"):
+        runtime.detect_floor(3, absolute_floor=1)
+
+
+def test_title_segment_mismatch_is_ignored_while_running() -> None:
+    runtime = MirrorPlanRuntime((5, 15), floor_count=15)
+
+    assert runtime.detect_floor(4, absolute_floor=10) == 10
+    # 标题误读成第 2 层（段 0），标记偏移指向段内第 3 个位置：忽略标题段。
+    assert runtime.detect_floor(2, absolute_floor=1) == 12
+    assert len(runtime.deviations) == 1
+
+
+def test_out_of_range_title_is_rejected() -> None:
+    runtime = MirrorPlanRuntime((5,), floor_count=5)
+
+    with raises(MirrorPlanProgressError, match="超出"):
+        runtime.detect_floor(0, absolute_floor=99)
 
 
 def test_floor_timing_keeps_the_previous_floor_start() -> None:

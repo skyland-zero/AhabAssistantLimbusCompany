@@ -904,14 +904,21 @@ class Automation(metaclass=SingletonMeta):
             ocr_boxes = getattr(ocr_result, "boxes", None)
             ocr_text_list = list(ocr_texts) if ocr_texts is not None else []
             ocr_position_list = []
+            ocr_box_list = []
             crop_offset_x = float(my_crop[0]) if my_crop is not None else 0.0
             crop_offset_y = float(my_crop[1]) if my_crop is not None else 0.0
             for box in ocr_boxes if ocr_boxes is not None else []:
                 x = (box[0][0] + box[2][0]) / 2 + crop_offset_x
                 y = (box[0][1] + box[2][1]) / 2 + crop_offset_y
                 ocr_position_list.append([x, y])
+                xmin = min(p[0] for p in box) + crop_offset_x
+                ymin = min(p[1] for p in box) + crop_offset_y
+                xmax = max(p[0] for p in box) + crop_offset_x
+                ymax = max(p[1] for p in box) + crop_offset_y
+                ocr_box_list.append((xmin, ymin, xmax, ymax))
             ocr_dict = {text: position for text, position in zip(ocr_text_list, ocr_position_list)}
-            cached = (ocr_dict, ocr_text_list)
+            ocr_box_dict = {text: b for text, b in zip(ocr_text_list, ocr_box_list)}
+            cached = (ocr_dict, ocr_text_list, ocr_box_dict)
             ocr_cache[cache_key] = cached
 
             search_region = tuple(int(round(x)) for x in my_crop) if my_crop is not None else (0, 0, 1920, 1080)
@@ -923,7 +930,8 @@ class Automation(metaclass=SingletonMeta):
             if ocr_dict:
                 log.debug(f"识别到文本及其坐标：{ocr_dict}", stacklevel=additional_stack + 3)
 
-        ocr_dict, ocr_text_list = cached
+        ocr_dict, ocr_text_list, *rest = cached
+        self._last_ocr_box_dict = rest[0] if rest else {}
         if only_text:
             return ocr_text_list or False
         return ocr_dict
@@ -998,6 +1006,104 @@ class Automation(metaclass=SingletonMeta):
                 self.clear_img_cache()
             return en_result
 
+        return False
+
+    def _find_box_for_target(self, target, ocr_box_dict=None):
+        """根据目标文本寻找对应的识别边界框 (xmin, ymin, xmax, ymax)。"""
+        box_dict = ocr_box_dict if ocr_box_dict is not None else getattr(self, "_last_ocr_box_dict", {})
+        if not box_dict:
+            return None
+        targets = [target] if isinstance(target, str) else list(target) if isinstance(target, (list, tuple)) else []
+        for t in targets:
+            t_str = str(t)
+            for text, box in box_dict.items():
+                if t_str.lower() in text.lower() or t_str.replace(" ", "").lower() in text.replace(" ", "").lower():
+                    return box
+        return None
+
+    def find_or_bootstrap_text(
+        self,
+        zh_text,
+        en_text,
+        bootstrap_key: str,
+        my_crop=None,
+        threshold: float = 0.8,
+        take_screenshot: bool = False,
+        padding: int = 5,
+        additional_stack: int = 0,
+    ):
+        """带无感自举的文本查找：
+        1. 优先使用已自举的模板匹配 (< 1ms)；
+        2. 未命中时降级调用 OCR；
+        3. OCR 命中后自动切出模板存盘至 assets/images/{theme}/{lang}/bootstrap/。
+        """
+        from module.automation.text_bootstrap import TextBootstrapManager
+
+        if take_screenshot:
+            while self.take_screenshot() is None:
+                continue
+
+        template_rel = TextBootstrapManager.get_template_rel_path(bootstrap_key)
+
+        # 1. 若已有自举模板，优先走模板匹配（< 1ms）
+        if TextBootstrapManager.has_template(bootstrap_key):
+            pos = self.find_element(
+                template_rel,
+                my_crop=my_crop,
+                threshold=threshold,
+                take_screenshot=False,
+                additional_stack=additional_stack + 1,
+            )
+            if pos:
+                return pos
+
+        # 2. 模板未命中或无模板时，降级走 OCR
+        pos = self.find_language_text(
+            zh_text=zh_text,
+            en_text=en_text,
+            my_crop=my_crop,
+            additional_stack=additional_stack + 1,
+        )
+        if not pos:
+            return False
+
+        # 3. OCR 命中，自动从当前帧截取并存盘
+        matched_target = zh_text if path_manager.current_language == "zh_cn" else en_text
+        box = self._find_box_for_target(matched_target)
+        if box:
+            source_frame = self.screenshot
+            if source_frame is not None:
+                if TextBootstrapManager.harvest_from_frame(source_frame, box, bootstrap_key, padding=padding):
+                    self.clear_img_cache()
+
+        return pos
+
+    def click_or_bootstrap_text(
+        self,
+        zh_text,
+        en_text,
+        bootstrap_key: str,
+        my_crop=None,
+        threshold: float = 0.8,
+        take_screenshot: bool = False,
+        times: int = 1,
+        padding: int = 5,
+        additional_stack: int = 0,
+    ) -> bool:
+        """查找并点击文本元素（带无感自举）。"""
+        pos = self.find_or_bootstrap_text(
+            zh_text=zh_text,
+            en_text=en_text,
+            bootstrap_key=bootstrap_key,
+            my_crop=my_crop,
+            threshold=threshold,
+            take_screenshot=take_screenshot,
+            padding=padding,
+            additional_stack=additional_stack + 1,
+        )
+        if pos:
+            self.mouse_click(pos[0], pos[1], times=times)
+            return True
         return False
 
     def find_text_element(

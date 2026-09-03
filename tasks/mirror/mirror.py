@@ -17,6 +17,7 @@ from module.mirror_plan_runtime import (
     MIRROR_SEGMENT_LENGTH,
     MirrorPlanProgressError,
     MirrorPlanRuntime,
+    extract_all_mirror_floors,
     extract_mirror_floor,
     select_mirror_floor_count,
 )
@@ -373,7 +374,13 @@ class Mirror:
         on the map title.  At 30 FPS three frames span ~100 ms and guarantee
         a bright phase is captured; at 15 FPS five frames (~266 ms) are used.
         The merged image is then HSV high-light binarized before OCR.
+
+        All OCR candidates vote: unanimous (or single) readings are trusted,
+        conflicting readings return None so the caller falls back to the
+        settings-popup marker detection instead of seeding a wrong floor.
         """
+
+        votes: list[int] = []
 
         floor_image = ImageUtils.load_image("mirror/road_in_mir/get_floor_bbox.png")
         if floor_image is None:
@@ -440,9 +447,11 @@ class Mirror:
                             continue
                         ocr_text = "".join(getattr(result, "txts", ()) or ())
                         floor = extract_mirror_floor(ocr_text)
+                        log.debug(f"多帧融合楼层标题OCR({name})得到：{ocr_text}，绝对楼层：{floor} (帧数{len(frames)})")
                         if floor is not None:
-                            log.debug(f"多帧融合楼层标题OCR({name})得到：{ocr_text}，绝对楼层：{floor} (帧数{len(frames)})")
-                            return floor
+                            votes.append(floor)
+                    if len(votes) >= 2 and len(set(votes)) == 1:
+                        return votes[0]
                 except Exception as error:
                     log.debug(f"多帧融合处理失败，回退单帧: {error}")
 
@@ -462,11 +471,22 @@ class Mirror:
                     continue
                 ocr_text = "".join(getattr(result, "txts", ()) or ())
                 floor = extract_mirror_floor(ocr_text)
+                log.debug(f"楼层标题OCR[{attempt + 1}]得到：{ocr_text}，绝对楼层：{floor}")
                 if floor is not None:
-                    log.debug(f"楼层标题OCR[{attempt + 1}]得到：{ocr_text}，绝对楼层：{floor}")
-                    return floor
+                    votes.append(floor)
             if attempt < 2:
                 sleep(0.3)
+        if not votes:
+            return None
+        distinct = sorted(set(votes))
+        if len(distinct) == 1:
+            return distinct[0]
+        # 多数派（超半数）仍可采信并记录分歧；否则判无效，走弹窗标记流程。
+        top = max(distinct, key=votes.count)
+        if votes.count(top) * 2 > len(votes):
+            log.warning(f"镜牢标题多次读取存在分歧{votes}，采信多数派第{top}层")
+            return top
+        log.warning(f"镜牢标题多次读取不一致{votes}，跳过静默预读，改用设置弹窗标记判定")
         return None
 
     def _handle_mirror_extension(self) -> bool:
@@ -558,20 +578,34 @@ class Mirror:
                         crop = ImageUtils.crop(np.array(screenshot), (x1, y1, x2, y2))
                         floor = None
                         txt = ""
+                        panel_ambiguous = False
                         if crop is not None and getattr(crop, "size", 0) > 0:
                             try:
                                 res = ocr.run(crop)
                                 txt = "".join(getattr(res, "txts", ()) or ())
-                                floor = extract_mirror_floor(txt)
+                                # 面板常并列 Floor1..Floor4 多个按钮，取首个必得 1 楼。
+                                # 仅当去重后恰好一个楼层号才预读，否则留待进图判定。
+                                candidates = set(extract_all_mirror_floors(txt, strict=True))
+                                if len(candidates) == 1:
+                                    floor = next(iter(candidates))
+                                elif candidates:
+                                    panel_ambiguous = True
+                                    log.warning(
+                                        f"入口面板含多个楼层号{sorted(candidates)}，跳过预读，待进图判定 (文本: {txt})"
+                                    )
                             except Exception as error:
                                 log.debug(f"入口面板裁剪OCR失败: {error}")
-                        if floor is None:
+                        if floor is None and not panel_ambiguous:
                             try:
                                 res2 = ocr.run(np.array(screenshot))
                                 txt2 = "".join(getattr(res2, "txts", ()) or ())
-                                floor2 = extract_mirror_floor(txt2)
-                                if floor2 is not None:
-                                    txt, floor = txt2, floor2
+                                candidates2 = set(extract_all_mirror_floors(txt2, strict=True))
+                                if len(candidates2) == 1:
+                                    txt, floor = txt2, next(iter(candidates2))
+                                elif candidates2:
+                                    log.warning(
+                                        f"入口全屏含多个楼层号{sorted(candidates2)}，跳过预读，待进图判定"
+                                    )
                             except Exception as error:
                                 log.debug(f"入口面板全屏OCR失败: {error}")
                         if floor is not None:
@@ -739,10 +773,15 @@ class Mirror:
             # 选择楼层主题包的情况
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
                 sleep(2)
+                # 楼层未知（恢复后尚未进图判定）时传 None：选包函数对此有显式
+                # 契约（无路线加成、无 F5 特殊处理、纯用户权重），比传错楼层更诚实。
+                theme_floor = self.floor + 1 if self.plan_runtime.progress_observed else None
+                if theme_floor is None:
+                    log.info("主题包选择时楼层未知，使用用户权重兜底（无路线加成）")
                 _, elapsed = self._time_call(
                     select_theme_pack,
                     self.hard_switch,
-                    self.floor + 1,
+                    theme_floor,
                     self.team_order,
                     self.use_custom_theme_pack_weight,
                     route=self.mirror_route,
@@ -910,7 +949,10 @@ class Mirror:
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
                 self.ego_gift_total_time += elapsed
                 continue
-            if main_loop_count < 30 and auto.find_language_text("拒绝饰品", "refuse", my_crop=_ego_card_crop):
+            if main_loop_count < 30 and (
+                auto.find_element("mirror/road_in_mir/refuse_gift_assets.png", my_crop=_ego_card_crop)
+                or auto.find_language_text("拒绝饰品", "refuse", my_crop=_ego_card_crop)
+            ):
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
                 self.ego_gift_total_time += elapsed
                 continue
@@ -1641,6 +1683,12 @@ class Mirror:
 
         # 观测饰品选择完毕
         for _ in range(5):
+            # 优先使用模板匹配（< 0.5ms），未命中时降级走 OCR 兜底
+            if auto.click_element("mirror/road_in_mir/acquire_ego_gift_select_assets.png", take_screenshot=True):
+                sleep(1)
+                if auto.click_element("mirror/shop/leave_shop_confirm_assets.png", take_screenshot=True):
+                    break
+                continue
             bbox = ImageUtils.get_bbox(
                 ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/select_gift_bbox.png")
             )
@@ -1654,6 +1702,13 @@ class Mirror:
             auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png", take_screenshot=True)
 
         for _ in range(3):
+            # 优先使用模板匹配（< 0.5ms），未命中时降级走 OCR 兜底
+            if auto.click_element("mirror/road_in_mir/refuse_gift_assets.png", take_screenshot=True):
+                sleep(1)
+                if auto.click_element("mirror/shop/leave_shop_confirm_assets.png", take_screenshot=True):
+                    self.observe_ego_gift_done = True
+                    return
+                continue
             bbox = ImageUtils.get_bbox(
                 ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/reject_gift_bbox.png")
             )
@@ -1698,7 +1753,7 @@ class Mirror:
                 auto.model = "aggressive"
                 log.debug("识别模式切换到激进模式")
             if loop_count < 5:
-                if auto.find_language_text("平均", "current"):
+                if auto.find_or_bootstrap_text("平均", "current", bootstrap_key="enter_mirror_current_avg"):
                     auto.click_element("mirror/road_to_mir/enter_mirror_confirm.png")
             if loop_count < 0:
                 log.error("无法进入镜牢,尝试回到初始界面")
@@ -1842,7 +1897,7 @@ class Mirror:
                 break
 
             if event_chance == 0:
-                if key_word_position := auto.find_language_text("判定", "check"):
+                if key_word_position := auto.find_or_bootstrap_text("判定", "check", bootstrap_key="event_check_keyword"):
                     auto.mouse_action_with_pos(key_word_position, offset=False)
                     event_chance += 5
             if 5 <= event_chance < 10:
@@ -2321,7 +2376,9 @@ class Mirror:
             int(820 * scale),
         )
         if to_window_position := auto.find_element("mirror/road_in_mir/to_window_assets.png", take_screenshot=True):
-            not_passed_floors = (
+            # 底层“未找到/异常”都返回 []，旧的 or 链会把裁剪区正确的 0 个
+            # 洗成全屏误检数。裁剪区定位在弹窗进度行上，采信它；全屏仅诊断。
+            cropped_floors = (
                 auto.find_element(
                     "mirror/road_in_mir/not_passed_floor.png",
                     find_type="image_with_multiple_targets",
@@ -2329,14 +2386,25 @@ class Mirror:
                     take_screenshot=True,
                     min_dist=80 * scale,
                 )
-                or auto.find_element(
+                or []
+            )
+            full_floors = (
+                auto.find_element(
                     "mirror/road_in_mir/not_passed_floor.png",
                     find_type="image_with_multiple_targets",
                     min_dist=80 * scale,
                 )
                 or []
             )
-            not_passed_floor_count = len(not_passed_floors)
+            if len(cropped_floors) != len(full_floors):
+                log.warning(
+                    f"镜牢未通过标记数不一致（裁剪区{len(cropped_floors)}个/全屏{len(full_floors)}个），"
+                    f"采信裁剪区"
+                )
+                self.plan_runtime.record_deviation(
+                    f"未通过标记裁剪区{len(cropped_floors)}与全屏{len(full_floors)}不一致，已采信裁剪区"
+                )
+            not_passed_floor_count = len(cropped_floors)
             try:
                 self.floor = self.plan_runtime.detect_floor(
                     not_passed_floor_count,

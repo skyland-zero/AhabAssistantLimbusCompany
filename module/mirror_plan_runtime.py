@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from module.logger import log
+
 MIRROR_SEGMENT_LENGTH = 5
 _FLOOR_NUMBER = r"(?:1[0-5]|[1-9])"
 
@@ -60,8 +62,14 @@ def select_mirror_floor_count(
     raise ValueError(f"镜牢路线支持{supported}层，但没有适配当前任务模式的目标层数")
 
 
-def extract_mirror_floor(text: str | None) -> int | None:
-    """Extract an absolute 1-based floor number from the map title OCR."""
+def extract_mirror_floor(text: str | None, *, strict: bool = False) -> int | None:
+    """Extract an absolute 1-based floor number from the map title OCR.
+
+    With ``strict=True`` the two loose fallbacks (bare ``第X`` without
+    ``层`` and ``floor`` with arbitrary separators) are disabled.  Use it
+    for full-screen OCR where unrelated numbers are everywhere; keep the
+    default for positioned bbox crops.
+    """
 
     normalized = "".join(str(text or "").casefold().split())
     if not normalized:
@@ -78,6 +86,9 @@ def extract_mirror_floor(text: str | None) -> int | None:
         if match:
             return int(match.group(1))
 
+    if strict:
+        return None
+
     # OCR occasionally drops the last Chinese character or inserts unrelated
     # punctuation.  Keep a narrow fallback anchored to the floor marker.
     chinese_match = re.search(rf"第({_FLOOR_NUMBER})", normalized)
@@ -85,6 +96,36 @@ def extract_mirror_floor(text: str | None) -> int | None:
         return int(chinese_match.group(1))
     english_match = re.search(rf"(?:floor|oor)\D*({_FLOOR_NUMBER})(?!\d)", normalized)
     return int(english_match.group(1)) if english_match else None
+
+
+def extract_all_mirror_floors(text: str | None, *, strict: bool = False) -> list[int]:
+    """Return every floor number mentioned in OCR text, in match order.
+
+    Used to detect enumeration panels (e.g. Floor1..Floor4 buttons listed
+    together) where taking the first match would always yield floor 1.
+    May contain duplicates when overlapping patterns hit the same digits;
+    callers that only need the distinct set should wrap with ``set()``.
+    """
+
+    normalized = "".join(str(text or "").casefold().split())
+    if not normalized:
+        return []
+    found: list[int] = []
+    for pattern in (
+        rf"第({_FLOOR_NUMBER})层",
+        rf"floor({_FLOOR_NUMBER})(?!\d)",
+        rf"oor({_FLOOR_NUMBER})(?!\d)",
+        rf"({_FLOOR_NUMBER})f(?!\d)",
+    ):
+        for match in re.finditer(pattern, normalized):
+            found.append(int(match.group(1)))
+    if found or strict:
+        return found
+    chinese_match = re.search(rf"第({_FLOOR_NUMBER})", normalized)
+    if chinese_match:
+        return [int(chinese_match.group(1))]
+    english_match = re.search(rf"(?:floor|oor)\D*({_FLOOR_NUMBER})(?!\d)", normalized)
+    return [int(english_match.group(1))] if english_match else []
 
 
 class MirrorPlanProgressError(RuntimeError):
@@ -184,7 +225,56 @@ class MirrorPlanRuntime:
             raise MirrorPlanProgressError(f"镜牢当前五层段剩余标记{remaining}个无效")
 
         if absolute_floor is not None:
-            self.seed_floor(absolute_floor)
+            try:
+                abs_idx = int(absolute_floor)
+            except (TypeError, ValueError) as error:
+                raise MirrorPlanProgressError("恢复镜牢时读取到的楼层无效") from error
+            if abs_idx < 0 or abs_idx >= self.floor_count:
+                raise MirrorPlanProgressError(f"恢复镜牢楼层{abs_idx + 1}超出{self.floor_count}层路线范围")
+            seg = abs_idx // MIRROR_SEGMENT_LENGTH
+            off_abs = abs_idx % MIRROR_SEGMENT_LENGTH
+            off_mark = max(0, MIRROR_SEGMENT_LENGTH - 1 - remaining)
+            if off_abs != off_mark:
+                # 标题 OCR 与五层段标记不一致（标题闪烁/字形误读，如 5→2）。
+                # 标记是结构信号，采信其段内偏移；段归属恢复时取标题，
+                # 运行中则标题段必须与状态机一致，否则整单忽略标题。
+                if self.progress_observed:
+                    exp_seg = self.segment_start_floor // MIRROR_SEGMENT_LENGTH
+                    if seg != exp_seg:
+                        log.warning(
+                            f"镜牢标题楼层第{abs_idx + 1}层与当前段起始第{self.segment_start_floor + 1}层不一致，"
+                            f"忽略标题读数，沿用标记位置"
+                        )
+                        self.record_deviation(f"标题第{abs_idx + 1}层与标记偏移{off_mark}不一致，已忽略标题")
+                        seg = exp_seg
+                    else:
+                        log.warning(
+                            f"镜牢标题第{abs_idx + 1}层与段内标记偏移{off_mark}不一致，"
+                            f"采信标记（第{seg * MIRROR_SEGMENT_LENGTH + off_mark + 1}层）"
+                        )
+                        self.record_deviation(f"标题第{abs_idx + 1}层与标记偏移{off_mark}不一致，已采信标记")
+                else:
+                    log.warning(
+                        f"恢复时标题第{abs_idx + 1}层与段内标记偏移{off_mark}不一致，"
+                        f"采信标记（第{seg * MIRROR_SEGMENT_LENGTH + off_mark + 1}层）"
+                    )
+                    self.record_deviation(f"标题第{abs_idx + 1}层与标记偏移{off_mark}不一致，已采信标记")
+                if (
+                    self.last_not_passed_floor_count is not None
+                    and remaining > self.last_not_passed_floor_count
+                ):
+                    raise MirrorPlanProgressError("镜牢五层段标记发生重置，但尚未确认进入下一段")
+                current_floor = seg * MIRROR_SEGMENT_LENGTH + off_mark
+                if current_floor >= self.floor_count:
+                    raise MirrorPlanProgressError(f"镜牢当前楼层{current_floor + 1}超出{self.floor_count}层路线范围")
+                if self.progress_observed and current_floor < self.current_floor:
+                    raise MirrorPlanProgressError(
+                        f"镜牢进度从第{self.current_floor + 1}层回退到第{current_floor + 1}层"
+                    )
+                self.segment_start_floor = seg * MIRROR_SEGMENT_LENGTH
+                self.current_floor = current_floor
+            else:
+                self.seed_floor(abs_idx)
             current_floor = self.current_floor
         else:
             if (

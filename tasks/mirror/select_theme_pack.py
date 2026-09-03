@@ -99,7 +99,8 @@ def select_theme_pack(
         route_matched = boost_route_weights(theme_pack_list_zh)
         route_matched = boost_route_weights(theme_pack_list_en) or route_matched
         if not route_matched:
-            log.debug(f"当前楼层未匹配到路线主题包名称，使用现有权重兜底：第{floor}层")
+            floor_label = f"第{floor}层" if floor is not None else "未知楼层"
+            log.debug(f"当前楼层未匹配到路线主题包名称，使用现有权重兜底：{floor_label}")
     # 游戏更新后新增的主题包尚未收录时的兜底权重，取自「未知 / unknown」配置项
     unknown_weight = int(theme_pack_list_zh.get("未知", theme_pack_list_en.get("unknown", -5)))
     refresh_times = 3
