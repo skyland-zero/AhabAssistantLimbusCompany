@@ -104,6 +104,30 @@ def select_battle_team(num):
         my_position[1] += position[1]
         auto.mouse_click(my_position[0], my_position[1])
         sleep(0.5)
+
+        team_name_zh = "编队#" + str(num)
+        team_name_en = [f"TEAMS #{num}", f"TEAMS#{num}", f"TFAMS#{num}"]
+        # 极窄高能效 ROI：仅裁剪左侧队伍列表名称所在区域，面积缩减 72%，避免顶部标题及底部半截残缺队伍干扰
+        team_crop_bbox = (
+            max(0, position[0] - 120 * scale),
+            position[1] + 30 * scale,
+            position[0] + 130 * scale,
+            position[1] + 580 * scale,
+        )
+        safe_top = position[1] + 30 * scale
+        safe_bottom = position[1] + 580 * scale
+
+        # 【快速路径 Fast-Path】：先检查当前视野是否已经能识别到目标队伍，避免无脑先下拉 5 次
+        while auto.take_screenshot() is None:
+            continue
+        if team_position := auto.find_language_text(team_name_zh, team_name_en, my_crop=team_crop_bbox):
+            if safe_top <= team_position[1] <= safe_bottom:
+                auto.mouse_action_with_pos(team_position, offset=False)
+                log.info(f"当前视野直接找到队伍 # {num}，跳过列表复位")
+                sleep(1)
+                return True
+
+        # 【慢速兜底路径 Slow-Path】：当前视野未找到，执行 5 次下拉复位回顶部
         reset_distance = _team_list_reset_swipe_distance(my_position[1], cfg.set_win_size, scale)
         for _ in range(5):
             auto.mouse_swipe_for_scroll(my_position[0], my_position[1], dy=reset_distance, duration=0.3)
@@ -125,13 +149,10 @@ def select_battle_team(num):
             sleep(1)
             return True
         else:
-            team_name_zh = "编队#" + str(num)
-            team_name_en = [f"TEAMS #{num}", f"TEAMS#{num}", f"TFAMS#{num}"]
-            position_bbox = (0, 0, position[0] + 130 * scale, position[1] + 600 * scale)
             for i in range(10):
                 while auto.take_screenshot() is None:
                     continue
-                if team_position := auto.find_language_text(team_name_zh, team_name_en, my_crop=position_bbox):
+                if team_position := auto.find_language_text(team_name_zh, team_name_en, my_crop=team_crop_bbox):
                     auto.mouse_action_with_pos(team_position, offset=False)
                     find = True
                     break
