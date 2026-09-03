@@ -153,9 +153,10 @@ def select_battle_team(num):
                 while auto.take_screenshot() is None:
                     continue
                 if team_position := auto.find_language_text(team_name_zh, team_name_en, my_crop=team_crop_bbox):
-                    auto.mouse_action_with_pos(team_position, offset=False)
-                    find = True
-                    break
+                    if safe_top <= team_position[1] <= safe_bottom:
+                        auto.mouse_action_with_pos(team_position, offset=False)
+                        find = True
+                        break
                 auto.mouse_swipe_for_scroll(
                     first_position[0],
                     first_position[1] + 375 * scale,

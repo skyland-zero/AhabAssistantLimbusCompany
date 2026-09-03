@@ -458,6 +458,7 @@ class Mirror:
                 break
             if auto.click_element("mirror/road_to_mir/resume_assets.png"):
                 self.resumed_from_existing_game = True
+                sleep(1)
                 break
             parallel_mode = self._read_parallel_mode()
             if self.plan_runtime.floor_count == 15 and not self.parallel_mode_confirmed:
@@ -496,6 +497,7 @@ class Mirror:
 
             if self.plan_runtime.floor_count != 15:
                 if auto.click_element("mirror/road_to_mir/enter_mirror_assets.png", threshold=0.78):
+                    sleep(1)
                     break
 
             if self.plan_runtime.floor_count != 15:

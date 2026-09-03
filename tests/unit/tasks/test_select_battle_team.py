@@ -92,3 +92,29 @@ def test_fast_path_out_of_safe_bounds_falls_back(monkeypatch):
     assert result is True
     # 确认回退到了 5 次下拉复位
     assert len(fake_auto.swipes) >= 5
+
+
+def test_slow_path_ignores_out_of_safe_bounds_coordinates(monkeypatch):
+    """当慢速复位识别到的坐标处于非安全区域（如点击会点到左上角返回键）时，慢速路径不点击，继续翻页重试。"""
+    # 第一次返回顶部外的异常坐标 [98, 71]，第二次翻页后返回合法坐标 [187, 600]
+    results = [[98, 71], [187, 600]]
+
+    class MultiFindFakeAuto(FakeAuto):
+        def find_language_text(self, zh_text, en_text, my_crop=None):
+            self.call_count += 1
+            if self.call_count == 1:
+                return self.initial_find_result
+            if results:
+                return results.pop(0)
+            return None
+
+    fake_auto = MultiFindFakeAuto(initial_find_result=False)
+    monkeypatch.setattr(team_formation_module, "auto", fake_auto)
+    monkeypatch.setattr(team_formation_module, "sleep", lambda _s: None)
+
+    result = team_formation_module.select_battle_team(4)
+
+    assert result is True
+    # 绝不能执行对 [98, 71] 的误点击，只点击安全区域内的 [187, 600]
+    assert fake_auto.actions_with_pos == [([187, 600], False)]
+

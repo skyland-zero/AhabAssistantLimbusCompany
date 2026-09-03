@@ -849,9 +849,11 @@ class Automation(metaclass=SingletonMeta):
             ocr_boxes = getattr(ocr_result, "boxes", None)
             ocr_text_list = list(ocr_texts) if ocr_texts is not None else []
             ocr_position_list = []
+            crop_offset_x = float(my_crop[0]) if my_crop is not None else 0.0
+            crop_offset_y = float(my_crop[1]) if my_crop is not None else 0.0
             for box in ocr_boxes if ocr_boxes is not None else []:
-                x = (box[0][0] + box[2][0]) / 2
-                y = (box[0][1] + box[2][1]) / 2
+                x = (box[0][0] + box[2][0]) / 2 + crop_offset_x
+                y = (box[0][1] + box[2][1]) / 2 + crop_offset_y
                 ocr_position_list.append([x, y])
             ocr_dict = {text: position for text, position in zip(ocr_text_list, ocr_position_list)}
             cached = (ocr_dict, ocr_text_list)
