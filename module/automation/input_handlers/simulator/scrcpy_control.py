@@ -24,7 +24,7 @@ from .native_scrcpy_decoder import NativeScrcpyDecoder, NativeVideoFrame
 # Scrcpy protocol constants (v4.1)
 SCRCPY_VERSION = "4.1"
 SCRCPY_VIDEO_CODEC = "h264"
-SCRCPY_MAX_FPS = 15
+SCRCPY_MAX_FPS = 30
 SCRCPY_VIDEO_BIT_RATE = 8_000_000
 SCRCPY_VIDEO_SESSION_META_FLAG = 1 << 31
 # Scrcpy stores two packet flags in the most significant bits of the PTS

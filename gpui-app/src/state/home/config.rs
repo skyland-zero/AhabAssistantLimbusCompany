@@ -258,7 +258,7 @@ impl HomeState {
 
     pub fn set_screenshot_interval(&mut self, value: f32) {
         self.update_tasks(|tasks| {
-            if [0.2, 0.5, 1.0]
+            if [0.1, 0.2, 0.5, 1.0]
                 .iter()
                 .any(|candidate| (*candidate - value).abs() < f32::EPSILON)
             {

@@ -16,6 +16,9 @@ from utils.utils import check_game_running
 
 _last_title_screen_tap_time = 0.0
 _last_simulator_alive_check_time = 0.0
+# P0止血：重弹窗重检查限频状态（8次未命中后1/3帧+0.8s节流）
+_last_heavy_retry_ts = 0.0
+_heavy_retry_miss_streak = 0
 
 
 def _active_session():
@@ -224,6 +227,7 @@ def retry(*, screenshot_ready: bool = False):
     调用方可以在刚完成截图且期间没有输入操作时传入
     ``screenshot_ready=True``，复用首帧以避免重复截图。
     """
+    global _last_heavy_retry_ts, _heavy_retry_miss_streak
     start_time = time.time()
     selected_session = _active_session()
     is_windows = selected_session.target.kind == "pc" if selected_session is not None else not cfg.config.simulator
@@ -252,24 +256,42 @@ def retry(*, screenshot_ready: bool = False):
         if auto.find_element("base/connecting_assets.png"):
             reuse_frame = False
             continue
-        dialog_crop = _retry_dialog_crop()
-        if position := auto.find_element("base/retry_countdown.png", my_crop=dialog_crop):
-            sleep(5)
-            auto.mouse_click(position[0], position[1], times=3)
-            reuse_frame = False
-            continue
-        if auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop):
-            auto.mouse_to_blank()
-            reuse_frame = False
-            continue
-        if (
-            auto.find_element("base/retry_countdown.png", my_crop=dialog_crop)
-            or auto.find_element("base/retry.png", my_crop=dialog_crop)
-            or auto.find_element("base/try_again.png", my_crop=dialog_crop)
-        ):
-            auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop)
-            reuse_frame = False
-            continue
+        # P0止血：重弹窗为稀有事件，连续未命中时限频，避免每帧230ms空转
+        heavy_due = True
+        if _heavy_retry_miss_streak >= 8:
+            # 8次未命中后，仅3帧一次且距上次重检查>=0.8s才查，正常态每帧必查保证不漏弹窗
+            if time.monotonic() - _last_heavy_retry_ts < 0.8:
+                heavy_due = False
+            elif _heavy_retry_miss_streak % 3 != 0:
+                heavy_due = False
+        if heavy_due:
+            dialog_crop = _retry_dialog_crop()
+            if position := auto.find_element("base/retry_countdown.png", my_crop=dialog_crop):
+                sleep(5)
+                auto.mouse_click(position[0], position[1], times=3)
+                reuse_frame = False
+                _heavy_retry_miss_streak = 0
+                _last_heavy_retry_ts = time.monotonic()
+                continue
+            if auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop):
+                auto.mouse_to_blank()
+                reuse_frame = False
+                _heavy_retry_miss_streak = 0
+                _last_heavy_retry_ts = time.monotonic()
+                continue
+            # 原三重OR冗余：仅保留try_again -> click retry，避免重复查countdown/retry
+            if auto.find_element("base/try_again.png", my_crop=dialog_crop):
+                auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop)
+                reuse_frame = False
+                _heavy_retry_miss_streak = 0
+                _last_heavy_retry_ts = time.monotonic()
+                continue
+            # 未命中：计入miss并刷新时间戳，下次节流以此刻为准
+            _heavy_retry_miss_streak += 1
+            _last_heavy_retry_ts = time.monotonic()
+        else:
+            # 节流跳过帧也计miss
+            _heavy_retry_miss_streak += 1
         if auto.find_element("base/clear_all_caches_assets.png", model="clam"):
             if auto.click_element("base/update_confirm_assets.png"):
                 reuse_frame = False

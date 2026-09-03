@@ -345,18 +345,19 @@ class Mirror:
         return None
 
     def _read_absolute_floor(self) -> int | None:
-        """Read the absolute 1-based floor title when entering/resuming a map."""
+        """Read the absolute 1-based floor title when entering/resuming a map.
+
+        Uses temporal max-pooling to eliminate the breathing/Glitch flicker
+        on the map title.  At 30 FPS three frames span ~100 ms and guarantee
+        a bright phase is captured; at 15 FPS five frames (~266 ms) are used.
+        The merged image is then HSV high-light binarized before OCR.
+        """
 
         floor_image = ImageUtils.load_image("mirror/road_in_mir/get_floor_bbox.png")
         if floor_image is None:
             log.warning("无法加载镜牢楼层标题识别区域")
             return None
         floor_bbox = ImageUtils.get_bbox(floor_image)
-        # The tight non-zero bounding box makes RapidOCR split the title into
-        # fragments and frequently drop the trailing floor number.  Keep a
-        # small amount of surrounding UI background so the detector can see
-        # the complete title line (the same title asset works reliably with
-        # this padding at 1080p and 1440p).
         padding = max(12, int(round((floor_bbox[3] - floor_bbox[1]) * 0.5)))
         padded_floor_bbox = (
             floor_bbox[0] - padding,
@@ -364,6 +365,66 @@ class Mirror:
             floor_bbox[2] + padding,
             floor_bbox[3] + padding,
         )
+
+        # --- Temporal max-pooling via Scrcpy snapshot(after_seq) ---
+        frames: list[np.ndarray] = []
+        controller = None
+        try:
+            from module.automation.screenshot import ScreenShot
+
+            session = ScreenShot._active_session()
+            if session is not None and hasattr(session, "controller"):
+                controller = getattr(session, "controller", None)
+            if controller is None:
+                from module.automation.input_handlers.simulator.scrcpy_control import ScrcpyControl
+
+                controller = getattr(ScrcpyControl, "connection_device", None)
+        except Exception:
+            controller = None
+
+        if controller is not None and hasattr(controller, "snapshot"):
+            last_seq = None
+            # 30 FPS: 3 frames ~100 ms; 15 FPS: 5 frames ~266 ms to cover one bright phase
+            try:
+                fps = int(cfg.get_value("scrcpy_max_fps", 30) or 30)
+            except Exception:
+                fps = 30
+            frame_count = 3 if fps >= 24 else 5
+            for _ in range(frame_count):
+                try:
+                    frame_obj = controller.snapshot(mode="rgb", after_seq=last_seq, timeout=0.6)
+                    if frame_obj is None or getattr(frame_obj, "image", None) is None:
+                        break
+                    last_seq = getattr(frame_obj, "seq", last_seq)
+                    img = np.array(frame_obj.image)
+                    crop = ImageUtils.crop(img, padded_floor_bbox)
+                    if crop is not None and getattr(crop, "size", 0) > 0:
+                        frames.append(crop)
+                except Exception as error:
+                    log.debug(f"Scrcpy 连续抓帧失败: {error}")
+                    break
+            if len(frames) >= 2:
+                try:
+                    merged = np.maximum.reduce(frames)
+                    # HSV high-light binarization: keep only near-white text (V>215, S<40)
+                    hsv = cv2.cvtColor(merged, cv2.COLOR_BGR2HSV)
+                    mask = cv2.inRange(hsv, np.array([0, 0, 215]), np.array([180, 40, 255]))
+                    for candidate, name in ((mask, "mask"), (merged, "merged"), (cv2.bitwise_not(merged), "inv")):
+                        try:
+                            result = ocr.run(candidate)
+                        except Exception as error:
+                            check_cancelled()
+                            log.debug(f"融合楼层标题OCR({name})失败：{error}")
+                            continue
+                        ocr_text = "".join(getattr(result, "txts", ()) or ())
+                        floor = extract_mirror_floor(ocr_text)
+                        if floor is not None:
+                            log.debug(f"多帧融合楼层标题OCR({name})得到：{ocr_text}，绝对楼层：{floor} (帧数{len(frames)})")
+                            return floor
+                except Exception as error:
+                    log.debug(f"多帧融合处理失败，回退单帧: {error}")
+
+        # --- Fallback: original single-frame loop ---
         for attempt in range(3):
             screenshot = auto.take_screenshot(gray=False)
             if screenshot is None:
@@ -456,8 +517,49 @@ class Mirror:
             if auto.find_element("mirror/road_in_mir/legend_assets.png"):
                 self.resumed_from_existing_game = True
                 break
-            if auto.click_element("mirror/road_to_mir/resume_assets.png"):
+            if resume_pos := auto.find_element("mirror/road_to_mir/resume_assets.png", take_screenshot=True):
                 self.resumed_from_existing_game = True
+                # Scenario A: try to read floor from the static resume panel before entering
+                try:
+                    scale = cfg.set_win_size / 1440
+                    screenshot = auto.take_screenshot(gray=False)
+                    if screenshot is not None:
+                        x, y = resume_pos[0], resume_pos[1]
+                        h, w = np.array(screenshot).shape[:2]
+                        # Panel title is left/above the resume button; use a generous crop
+                        x1 = max(0, int(x - 650 * scale))
+                        y1 = max(0, int(y - 320 * scale))
+                        x2 = min(w, int(x + 220 * scale))
+                        y2 = min(h, int(y + 120 * scale))
+                        crop = ImageUtils.crop(np.array(screenshot), (x1, y1, x2, y2))
+                        floor = None
+                        txt = ""
+                        if crop is not None and getattr(crop, "size", 0) > 0:
+                            try:
+                                res = ocr.run(crop)
+                                txt = "".join(getattr(res, "txts", ()) or ())
+                                floor = extract_mirror_floor(txt)
+                            except Exception as error:
+                                log.debug(f"入口面板裁剪OCR失败: {error}")
+                        if floor is None:
+                            try:
+                                res2 = ocr.run(np.array(screenshot))
+                                txt2 = "".join(getattr(res2, "txts", ()) or ())
+                                floor2 = extract_mirror_floor(txt2)
+                                if floor2 is not None:
+                                    txt, floor = txt2, floor2
+                            except Exception as error:
+                                log.debug(f"入口面板全屏OCR失败: {error}")
+                        if floor is not None:
+                            log.info(f"断点恢复入口面板读取楼层成功: 第{floor}层 (文本: {txt})")
+                            try:
+                                self.plan_runtime.seed_floor(floor - 1)
+                                self.floor = floor - 1
+                            except Exception as error:
+                                log.debug(f"seed_floor 失败: {error}")
+                except Exception as error:
+                    log.debug(f"场景A入口面板处理异常: {error}")
+                auto.mouse_click(resume_pos[0], resume_pos[1])
                 sleep(1)
                 break
             parallel_mode = self._read_parallel_mode()
@@ -736,12 +838,17 @@ class Mirror:
                 self.first_battle = True
                 continue
 
+            # P0止血：win_rate 63ms+gear 35ms全屏高频，限右上/右下固定ROI
+            _bt_h = int(cfg.set_win_size or 1080)
+            _bt_w = int(_bt_h * 16 / 9)
+            _winrate_crop = (int(_bt_w * 0.68), int(_bt_h * 0.06), int(_bt_w * 0.99), int(_bt_h * 0.36))
+            _gear_r_crop = (int(_bt_w * 0.52), int(_bt_h * 0.62), int(_bt_w * 0.82), int(_bt_h * 0.98))
             # 在战斗中
             if (
                 auto.find_element("battle/more_information_assets.png")
                 or auto.find_element("battle/in_mirror_assets.png")
                 or auto.find_element("battle/turn_assets.png")
-                or (auto.find_element("battle/win_rate_card.png") and auto.find_element("battle/gear_right.png"))
+                or (auto.find_element("battle/win_rate_card.png", my_crop=_winrate_crop) and auto.find_element("battle/gear_right.png", my_crop=_gear_r_crop))
             ):
                 self._fight()
                 continue
@@ -758,23 +865,27 @@ class Mirror:
                 self.enter_mir_with_star()
                 continue
 
-            # 如果遇到选择ego饰品的情况
-            if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png"):
+            # P0止血：全屏88ms 4%命中，限中部卡牌区 0.12W-0.88W / 0.12H-0.82H
+            _ego_h = int(cfg.set_win_size or 1080)
+            _ego_w = int(_ego_h * 16 / 9)
+            _ego_card_crop = (int(_ego_w * 0.12), int(_ego_h * 0.12), int(_ego_w * 0.88), int(_ego_h * 0.82))
+            if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png", my_crop=_ego_card_crop):
                 _, elapsed = self._time_call(self.acquire_ego_gift)
                 self.ego_gift_total_time += elapsed
                 continue
             if (
                 main_loop_count < 50
-                and auto.find_element("mirror/road_in_mir/acquire_ego_gift_box_assets.png", model="clam")
+                and auto.find_element("mirror/road_in_mir/acquire_ego_gift_box_assets.png", model="clam", my_crop=_ego_card_crop)
                 and auto.find_element(
                     "mirror/road_in_mir/acquire_ego_gift_refuse_assets.png",
                     model="clam",
+                    my_crop=_ego_card_crop,
                 )
             ):
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
                 self.ego_gift_total_time += elapsed
                 continue
-            if main_loop_count < 30 and auto.find_language_text("拒绝饰品", "refuse"):
+            if main_loop_count < 30 and auto.find_language_text("拒绝饰品", "refuse", my_crop=_ego_card_crop):
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
                 self.ego_gift_total_time += elapsed
                 continue
@@ -2147,10 +2258,22 @@ class Mirror:
         self.shop.in_shop(self.floor)
 
     def get_which_floor(self):
-        absolute_floor = None
-        if self.resumed_from_existing_game and not self.plan_runtime.progress_observed:
-            absolute_floor = self._read_absolute_floor()
-            if absolute_floor is None:
+        # Scenario B/C: silent max-pool read first (no click), avoids flicker without popup
+        absolute_floor = self._read_absolute_floor()
+        if absolute_floor is not None:
+            try:
+                self.plan_runtime.seed_floor(absolute_floor - 1)
+                self.floor = absolute_floor - 1
+                log.info(f"静默多帧融合读取楼层成功: 第{absolute_floor}层，跳过设置弹窗")
+                self.get_floor_num = False
+                self.mirror_map.refresh_floor(self.floor)
+                return
+            except MirrorPlanProgressError as error:
+                log.debug(f"静默楼层 {absolute_floor} 与进度冲突，回退弹窗: {error}")
+            except Exception as error:
+                log.debug(f"静默楼层处理异常，回退弹窗: {error}")
+        else:
+            if self.resumed_from_existing_game and not self.plan_runtime.progress_observed:
                 if self.plan_runtime.floor_count is not None and self.plan_runtime.floor_count > MIRROR_SEGMENT_LENGTH:
                     message = "无法从恢复的15层镜牢地图读取绝对楼层，不能安全套用饰品路线"
                     self.plan_runtime.record_deviation(message)

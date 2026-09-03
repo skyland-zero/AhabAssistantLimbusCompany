@@ -52,7 +52,7 @@ after_completion_power_action: "none" # 脚本结束后的最终动作（单选�
 # 脚本运行速度设置
 screenshot_interval: 0.85 # 截图间隔时间
 # Scrcpy 视频流设置（仅通用 ADB / Scrcpy 设备生效）
-scrcpy_max_fps: 15 # 视频最大帧率，默认保持现有策略
+scrcpy_max_fps: 30 # 视频最大帧率，默认保持现有策略
 scrcpy_video_bit_rate: 8000000 # 视频码率（bps），默认 8 Mbps
 scrcpy_use_luma_gray: True # 业务灰度识别直接读取 Y 平面，识别异常时可关闭
 scrcpy_gesture_settle: 0.05 # 触控手势结束后的稳定等待时间（秒）

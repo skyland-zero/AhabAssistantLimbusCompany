@@ -77,8 +77,12 @@ pub fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
             current: format!("{:.1}", config.screenshot_interval),
             options: vec![
                 (
+                    "0.1".to_owned(),
+                    format!("0.1s ({})", text("极速", "Fast").get(language)),
+                ),
+                (
                     "0.2".to_owned(),
-                    format!("0.2s ({})", text("极速", "Fast").get(language)),
+                    "0.2s".to_owned(),
                 ),
                 (
                     "0.5".to_owned(),

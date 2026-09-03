@@ -277,10 +277,29 @@ class BattleRosterObserver:
 
         scale = float(getattr(cfg, "set_win_size", 1440)) / 1440
         width, height = cls._screenshot_size()
-        left = max(0.0, min(float(gear_left[0]), float(gear_right[0])) - 600 * scale)
-        top = max(0.0, float(gear_left[1]) - 500 * scale)
-        right = min(float(width), max(float(gear_left[0]), float(gear_right[0])) + 600 * scale)
-        bottom = min(float(height), max(float(gear_left[1]), float(gear_right[1])) + 250 * scale)
+        # P0止血：收窄600/500/600/250 -> 350/350/350/180，避免1865x576全屏OCR(8s)
+        left = max(0.0, min(float(gear_left[0]), float(gear_right[0])) - 350 * scale)
+        top = max(0.0, float(gear_left[1]) - 350 * scale)
+        right = min(float(width), max(float(gear_left[0]), float(gear_right[0])) + 350 * scale)
+        bottom = min(float(height), max(float(gear_left[1]), float(gear_right[1])) + 180 * scale)
+        # 硬上限：宽度不超过0.55W，高度不超过0.38H，超出则以双锚点中心为基准居中裁剪
+        max_w = width * 0.55
+        max_h = height * 0.38
+        cur_w = right - left
+        cur_h = bottom - top
+        if cur_w > max_w:
+            cx = (float(gear_left[0]) + float(gear_right[0])) / 2.0
+            left = max(0.0, cx - max_w / 2.0)
+            right = min(float(width), left + max_w)
+            # 修正left溢出后重新对齐
+            if right - left < max_w:
+                left = max(0.0, right - max_w)
+        if cur_h > max_h:
+            cy = (float(gear_left[1]) + float(gear_right[1])) / 2.0
+            top = max(0.0, cy - max_h / 2.0)
+            bottom = min(float(height), top + max_h)
+            if bottom - top < max_h:
+                top = max(0.0, bottom - max_h)
         return left, top, right, bottom
 
     @staticmethod
