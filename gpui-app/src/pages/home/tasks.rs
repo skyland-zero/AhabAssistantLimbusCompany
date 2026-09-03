@@ -362,6 +362,24 @@ pub(super) fn mirror_card(
         });
         option_items.push(control_row(label, toggle));
     }
+    let floor_suffix = app.home.mirror_floor.as_ref().and_then(|floor| {
+        if floor.floor == 0 {
+            return None;
+        }
+        Some(if floor.floorTotal > 0 {
+            match language {
+                crate::model::Language::ZhCn => {
+                    format!(" · 第{}层/共{}层", floor.floor, floor.floorTotal)
+                }
+                _ => format!(" · Floor {}/{}", floor.floor, floor.floorTotal),
+            }
+        } else {
+            match language {
+                crate::model::Language::ZhCn => format!(" · 第{}层", floor.floor),
+                _ => format!(" · Floor {}", floor.floor),
+            }
+        })
+    });
     let progress = app.home.mirror_progress.as_ref().map(|progress| {
         div()
             .flex()
@@ -371,8 +389,8 @@ pub(super) fn mirror_card(
             .py_1()
             .rounded_md()
             .bg(rgba((ACCENT << 8) | 0x22))
-            .child(div().text_size(px(11.0)).text_color(rgb(ACCENT)).child(
-                if progress.isInfinite {
+            .child(div().text_size(px(11.0)).text_color(rgb(ACCENT)).child({
+                let base = if progress.isInfinite {
                     format!(
                         "{} {} / ∞",
                         text("镜牢进度", "Mirror Progress").get(language),
@@ -385,8 +403,12 @@ pub(super) fn mirror_card(
                         progress.current,
                         progress.total
                     )
-                },
-            ))
+                };
+                match &floor_suffix {
+                    Some(suffix) => format!("{base}{suffix}"),
+                    None => base,
+                }
+            }))
             .child(badge(
                 if progress.isHard {
                     if config.hard_mirror_target_floors == 15 {

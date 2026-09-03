@@ -42,6 +42,7 @@ from tasks.mirror.in_shop import Shop
 from tasks.mirror.reward_card import get_reward_card
 from tasks.mirror.search_road import (
     MirrorMap,
+    ensure_fresh_map_frame,
     search_road_default_distance,
     search_road_farthest_distance,
     search_road_simple_keyboard,
@@ -186,6 +187,7 @@ class Mirror:
         self.last_completion_stats: dict[str, object] | None = None
 
         self.floor = 0
+        self._last_pub_floor: tuple[int, int] | None = None
         self.get_floor_num = True
         # Keep the legacy attribute as a compatibility view for integrations;
         # the route runtime owns its size and completion rule.
@@ -200,6 +202,26 @@ class Mirror:
         self.resumed_from_existing_game = False
         self.parallel_mode_enable_attempts = 0
         self.parallel_mode_confirmed = False
+
+    def _publish_floor(self, force: bool = False) -> None:
+        """Push the current 1-based floor to the GPUI console.
+
+        Never raises: floor reporting must not break automation. Only
+        emits when the (floor, total) pair actually changes unless
+        ``force`` is set (new run / new round).
+        """
+        try:
+            floor_1b = int(self.floor) + 1
+            total = int(self.plan_runtime.floor_count or 0)
+            if floor_1b < 1 or total < 1:
+                return
+            pair = (floor_1b, total)
+            if not force and self._last_pub_floor == pair:
+                return
+            self._last_pub_floor = pair
+            mediator.mirror_floor_signal.emit(floor_1b, total)
+        except Exception:
+            log.debug("发布镜牢楼层失败", exc_info=True)
 
     def _time_call(self, fn, *args, **kwargs):
         """调用 fn 并返回 (result, elapsed_time)，用于显式计时替代装饰器返回值。"""
@@ -488,6 +510,8 @@ class Mirror:
             self.plan_runtime.record_deviation(str(error))
             log.error(str(error))
             raise cannotOperateGameError(str(error)) from error
+        self.floor = next_floor
+        self._publish_floor()
         self.get_floor_num = True
         log.info(f"困难镜牢已确认继续，下一段从实际第{next_floor + 1}层开始")
         return True
@@ -555,6 +579,7 @@ class Mirror:
                             try:
                                 self.plan_runtime.seed_floor(floor - 1)
                                 self.floor = floor - 1
+                                self._publish_floor()
                             except Exception as error:
                                 log.debug(f"seed_floor 失败: {error}")
                 except Exception as error:
@@ -1697,6 +1722,8 @@ class Mirror:
                 return True
             log.debug("简单键盘寻路失败，回退到常规寻路")
 
+        # 寻路入口门卫：流卡住时先等新帧，避免后续 bus 匹配全打在 stale 旧帧上。
+        ensure_fresh_map_frame(timeout=2.0, settle=0.4, reason="寻路入口")
         try:
             if next_node := self.mirror_map.get_next_step():
                 if next_node is True:
@@ -2268,6 +2295,7 @@ class Mirror:
                 log.info(f"静默多帧融合读取楼层成功: 第{absolute_floor}层，跳过设置弹窗")
                 self.get_floor_num = False
                 self.mirror_map.refresh_floor(self.floor)
+                self._publish_floor()
                 return
             except MirrorPlanProgressError as error:
                 log.debug(f"静默楼层 {absolute_floor} 与进度冲突，回退弹窗: {error}")
@@ -2329,3 +2357,4 @@ class Mirror:
             self.get_floor_num = False
             auto.mouse_action_with_pos((to_window_position[0] - 200 * cfg.set_win_size / 1440, to_window_position[1]))
             self.mirror_map.refresh_floor(self.floor)
+            self._publish_floor()

@@ -185,6 +185,7 @@ pub mod event {
     pub const PREVIEW_STATUS: &str = "preview.status";
     pub const EXECUTION_STATUS: &str = "execution.status";
     pub const EXECUTION_MIRROR_PROGRESS: &str = "execution.mirrorProgress";
+    pub const EXECUTION_MIRROR_FLOOR: &str = "execution.mirrorFloor";
     pub const EXECUTION_STATS: &str = "execution.stats";
     pub const TOOL_STATUS: &str = "tool.status";
     pub const DEVICE_STATUS: &str = "device.status";

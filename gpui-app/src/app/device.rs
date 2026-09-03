@@ -67,6 +67,13 @@ impl AhabApp {
                         invalidation.root = true;
                         home_events.push(event_value);
                     }
+                    event::EXECUTION_MIRROR_FLOOR => {
+                        // Same cadence as mirror progress (only on floor
+                        // change); root refresh keeps task card + run card
+                        // in sync.
+                        invalidation.root = true;
+                        home_events.push(event_value);
+                    }
                     event::EXECUTION_STATS => {
                         invalidation.stats = true;
                         home_events.push(event_value);

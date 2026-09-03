@@ -293,6 +293,21 @@ pub struct MirrorProgressPayload {
     pub isInfinite: bool,
 }
 
+/// Current in-run floor reported by the automation (1-based).
+/// `floorTotal` is the route length (5/15), independent from the run-count
+/// `total` in [`MirrorProgressPayload`]. All fields defaulted so payloads
+/// from older backends (or mock events) still deserialize.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[allow(non_snake_case)]
+pub struct MirrorFloorPayload {
+    #[serde(default)]
+    pub floor: u32,
+    #[serde(default)]
+    pub floorTotal: u32,
+    #[serde(default)]
+    pub runId: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

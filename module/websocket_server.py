@@ -26,6 +26,7 @@ _COALESCIBLE_EVENTS = {
     "preview.status",
     "execution.status",
     "execution.mirrorProgress",
+    "execution.mirrorFloor",
     "execution.stats",
     "tool.status",
     "device.status",

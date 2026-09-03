@@ -216,6 +216,61 @@ class Automation(metaclass=SingletonMeta):
                     log.debug("输入后未在 1 秒内获取到新 Scrcpy 帧，继续使用最新可用画面")
         return result
 
+    def current_frame_age(self) -> float | None:
+        """返回业务截图帧自解码起经过的秒数，用于判断视频流是否卡住。
+
+        仅 Scrcpy 帧携带 ``scrcpy_decoded_at``；MuMu / GDI / 后台截图
+        本身就是实时采集的，返回 None 表示无需做新鲜度检查。
+        """
+        info = getattr(getattr(self, "screenshot", None), "info", None)
+        if not isinstance(info, dict):
+            return None
+        decoded_at = info.get("scrcpy_decoded_at")
+        if not isinstance(decoded_at, (int, float)) or isinstance(decoded_at, bool):
+            return None
+        return max(0.0, time.monotonic() - float(decoded_at))
+
+    def wait_for_fresh_frame(self, *, timeout: float = 2.0, settle: float = 0.0) -> bool:
+        """等待解码器发布一帧比当前业务截图更新的 Scrcpy 帧。
+
+        用于过渡动画 / 关键帧重同步期间，避免拿 stale 旧帧反复做模板匹配。
+        非 Scrcpy 链路（MuMu / GDI / 后台截图）本身实时，仅执行 settle
+        等待并返回 True。超时或流异常时返回 False，调用方应走原有兜底流程。
+        """
+        before_seq = self._screenshot_frame_seq(getattr(self, "screenshot", None))
+        if before_seq is None:
+            previous = getattr(self, "_source_frame_seq", None)
+            if isinstance(previous, int) and not isinstance(previous, bool):
+                before_seq = previous
+        input_handler = getattr(self, "input_handler", None)
+        wait_for_next_frame = getattr(input_handler, "wait_for_next_frame", None)
+        if not callable(wait_for_next_frame):
+            wait_for_next_frame = getattr(input_handler, "wait_next_frame", None)
+        if before_seq is None or not callable(wait_for_next_frame):
+            if settle > 0:
+                interruptible_sleep(settle)
+            return True
+        check_cancelled()
+        started_at = time.monotonic()
+        try:
+            try:
+                updated = wait_for_next_frame(before_seq, timeout=timeout, started_at=started_at)
+            except TypeError:
+                # 兼容仅暴露两参形态的轻量测试 / Dummy 控制器。
+                updated = wait_for_next_frame(before_seq, timeout)
+        except Exception as error:
+            # SUSPENDED 重同步期 snapshot 可能抛流超时异常，按超时处理。
+            log.debug("等待 Scrcpy 新帧异常（视为超时）: %s", error)
+            return False
+        elapsed_ms = (time.monotonic() - started_at) * 1000
+        if not updated:
+            log.debug("未在 %.1fs 内等到新 Scrcpy 帧（seq=%s），沿用当前画面", timeout, before_seq)
+            return False
+        log.debug("等到新 Scrcpy 帧（seq>%s），耗时 %.0fms", before_seq, elapsed_ms)
+        if settle > 0:
+            interruptible_sleep(settle)
+        return True
+
     def _run_business_interaction(self, method_name: str, *args, **kwargs):
         """在交互门放行且取得输入锁后执行一次业务输入。
 

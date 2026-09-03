@@ -32,6 +32,27 @@ def _mybus_crop() -> tuple[int, int, int, int]:
     )
 
 
+# Scrcpy 正常推流（15fps）下帧年龄应 < 0.2s；超过该阈值说明流卡住或正在等关键帧，
+# 此时直接做模板匹配只会反复命中同一旧帧（实测 frozen 分数如 0.531/0.532）。
+STALE_FRAME_AGE_SECONDS = 1.0
+
+
+def ensure_fresh_map_frame(*, timeout: float = 2.0, settle: float = 0.4, reason: str = "") -> bool:
+    """镜牢寻路前门卫：确认手里是新鲜帧，否则等新帧并短暂静置。
+
+    正常推流下该检查接近零开销（一次减法 + 一次序号比较）；仅在流卡住时
+    消耗等待预算。返回 False 表示未能等到新帧，调用方应继续原有兜底流程。
+    """
+    if not getattr(cfg, "mirror_fresh_frame_wait", True):
+        return True
+    age = auto.current_frame_age()
+    if age is None or age <= STALE_FRAME_AGE_SECONDS:
+        return True
+    label = f"（{reason}）" if reason else ""
+    log.debug("镜牢寻路%s：当前帧年龄 %.1fs 超过阈值，等待新帧", label, age)
+    return auto.wait_for_fresh_frame(timeout=timeout, settle=settle)
+
+
 _NODE_MODEL_PATH = "./assets/model/best.onnx"
 _node_detector_lock = threading.Lock()
 _node_detector_session = None
@@ -120,6 +141,7 @@ class MirrorMap:
             auto.mouse_click(next_position[0], next_position[1])
             if _click_enter_after_selection(1.25):
                 return True
+        ensure_fresh_map_frame(timeout=1.5, settle=0.3, reason="bus 回退点击")
         if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop()):
             if _click_enter_after_selection(1.25):
                 return True
@@ -139,6 +161,8 @@ class MirrorMap:
         elif direction == "U":
             position = 2
         for _ in range(3):
+            # 先确认手里是新帧：stale 旧帧上匹配多少次都是同一个低分，直接重找是浪费。
+            ensure_fresh_map_frame(timeout=1.5, settle=0.3, reason="bus 定位")
             if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop()):
                 return [
                     bus_position[0] + three_roads[position][0],
@@ -229,10 +253,15 @@ def search_road_default_distance():
         return False
     # 判断中、下两个节点是否有权重3的节点，有的话直接选择进入
     node_weight = {}
-    if bus_position := (
-        auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop())
-        or auto.find_element("mirror/mybus_default_distance.png")
-    ):
+    bus_position = auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop())
+    if bus_position is None:
+        # ROI 未命中时先确认不是 stale 旧帧，拿到新帧后再试，
+        # 避免把同一旧帧全屏扫一遍（实测约 60~130ms 纯浪费）。
+        ensure_fresh_map_frame(timeout=2.0, settle=0.3, reason="默认距离寻路")
+        bus_position = auto.find_element(
+            "mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop()
+        ) or auto.find_element("mirror/mybus_default_distance.png")
+    if bus_position:
         for road in three_roads[:2]:
             node_x = bus_position[0] + road[0]
             node_y = bus_position[1] + road[1]

@@ -20,7 +20,8 @@ pub use stats::{
 pub use tasks::{
     AfterCompletionConfig, AfterExitAction, AfterPowerAction, BuyEnkephalinConfig, DailyTaskConfig,
     EnabledTasks, ExecutionState, ExecutionStatusPayload, FixedTaskId, GetRewardConfig,
-    MirrorConfig, MirrorProgressPayload, ResonateWithAhabConfig, SetWindowsConfig, TasksConfig,
+    MirrorConfig, MirrorFloorPayload, MirrorProgressPayload, ResonateWithAhabConfig, SetWindowsConfig,
+    TasksConfig,
 };
 pub use teams::{
     DiscardSystems, LocalizedText, MAX_OBSERVE_EGO_GIFTS, SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID,

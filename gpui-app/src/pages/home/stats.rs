@@ -10,7 +10,8 @@ use crate::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::model::{
-    CurrentRunStats, DailyStatEntry, MirrorCompletionStats, MirrorTeamStats, StatCounts,
+    CurrentRunStats, DailyStatEntry, MirrorCompletionStats, MirrorFloorPayload, MirrorTeamStats,
+    StatCounts,
 };
 
 const STATS_CARD_HEIGHT: f32 = 185.0;
@@ -22,6 +23,7 @@ pub(super) struct StatsSnapshot {
     pub(super) stats: ExecutionStatsPayload,
     pub(super) tasks: TasksConfig,
     pub(super) execution: ExecutionStatusPayload,
+    pub(super) mirror_floor: Option<MirrorFloorPayload>,
 }
 
 impl Default for StatsSnapshot {
@@ -32,6 +34,7 @@ impl Default for StatsSnapshot {
             stats: ExecutionStatsPayload::default(),
             tasks: TasksConfig::default(),
             execution: ExecutionStatusPayload::default(),
+            mirror_floor: None,
         }
     }
 }
@@ -44,6 +47,7 @@ impl StatsSnapshot {
             stats: app.home.stats.clone(),
             tasks: app.home.tasks.clone(),
             execution: app.home.execution.clone(),
+            mirror_floor: app.home.mirror_floor.clone(),
         }
     }
 }
@@ -992,12 +996,23 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 .text_color(rgb(TEXT_MUTED));
             row = row.child(format!("已运行 {} · 开始 {}", elapsed_str, started_hm.unwrap_or_else(|| "--:--".into())));
             if current_task_is_mirror(current_task) {
-                let floor_label = if infinite {
+                let base_label = if infinite {
                     "∞".to_string()
                 } else if targets.mirror > 0 {
                     format!("{}层", targets.mirror)
                 } else {
                     "5层".to_string()
+                };
+                // Append the live in-run floor (1-based). `base_label` is the
+                // configured run count; the suffix is the current floor.
+                let floor_label = match snapshot.mirror_floor.as_ref() {
+                    Some(floor) if floor.floor > 0 => match language {
+                        crate::model::Language::ZhCn => {
+                            format!("{} · 第{}层", base_label, floor.floor)
+                        }
+                        _ => format!("{} · F{}", base_label, floor.floor),
+                    },
+                    _ => base_label,
                 };
                 row = row.child(
                     div()
@@ -1056,12 +1071,20 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                     .justify_between()
                     .text_size(px(9.5))
                     .text_color(rgb(TEXT_MUTED))
-                    .child(format!(
-                        "镜牢进度 {}/{}{}",
-                        display_completed,
-                        if infinite { "∞".to_string() } else { targets.mirror.to_string() },
-                        if is_running { " · 进行中" } else { "" }
-                    ))
+                    .child({
+                        let mut label = format!(
+                            "镜牢进度 {}/{}{}",
+                            display_completed,
+                            if infinite { "∞".to_string() } else { targets.mirror.to_string() },
+                            if is_running { " · 进行中" } else { "" }
+                        );
+                        if let Some(floor) = snapshot.mirror_floor.as_ref() {
+                            if floor.floor > 0 {
+                                label.push_str(&format!(" · 第{}层", floor.floor));
+                            }
+                        }
+                        label
+                    })
                     .child(div().text_color(rgb(TEXT)).child(format_duration(
                         live_elapsed_secs(current, snapshot.stats.updatedAt, state)
                     ))),

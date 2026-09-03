@@ -137,6 +137,18 @@ impl MockState {
                                 isInfinite: self.tasks.mirror.infinite_dungeons,
                             },
                         );
+                        self.emit(
+                            event::EXECUTION_MIRROR_FLOOR,
+                            &MirrorFloorPayload {
+                                floor: 1,
+                                floorTotal: if self.tasks.mirror.hard_mirror {
+                                    self.tasks.mirror.hard_mirror_target_floors
+                                } else {
+                                    5
+                                },
+                                runId: Some("mock-run".into()),
+                            },
+                        );
                     }
                     Ok(json!({
                         "accepted": true,

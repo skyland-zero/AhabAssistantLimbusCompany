@@ -108,6 +108,7 @@ class EventBus:
 
     # ---- 镜牢进度条 ----
     mirror_signal = Event("mirror_signal")  # (当前次数, 总次数)
+    mirror_floor_signal = Event("mirror_floor_signal")  # (当前楼层1-based, 总楼层数)
     mirror_bar_kill_signal = Event("mirror_bar_kill_signal")
 
     # ---- 运行统计 ----

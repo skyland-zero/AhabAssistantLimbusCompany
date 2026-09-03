@@ -1542,6 +1542,7 @@ class BackendApplication:
 
             bindings = (
                 (mediator.mirror_signal, self._on_mirror_signal),
+                (mediator.mirror_floor_signal, self._on_mirror_floor),
                 (mediator.task_started, self._on_task_started),
                 (mediator.task_completed, self._on_task_completed),
                 (mediator.warning, self._on_core_warning),
@@ -1557,6 +1558,21 @@ class BackendApplication:
             # sidecar from serving read-only RPC when an optional module is
             # unavailable in a packaged environment.
             log.debug("核心事件桥接不可用", exc_info=True)
+
+    def _on_mirror_floor(self, floor: Any, total: Any) -> None:
+        try:
+            floor_value = max(0, int(floor))
+            total_value = max(0, int(total))
+        except (TypeError, ValueError):
+            return
+        self.emit(
+            "execution.mirrorFloor",
+            {
+                "floor": floor_value,
+                "floorTotal": total_value,
+                "runId": self._execution_run_id,
+            },
+        )
 
     def _on_mirror_signal(self, current: Any, total: Any) -> None:
         self.emit(

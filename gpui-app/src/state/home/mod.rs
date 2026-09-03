@@ -15,7 +15,8 @@ use crate::{
     model::{
         AfterExitAction, AfterPowerAction, ConnectionStatus, DailyStatsPayload, DeviceInfo,
         DeviceStatusPayload, ExecutionState, ExecutionStatsPayload, ExecutionStatusPayload,
-        FixedTaskId, LogEntryPayload, LogLevel, MirrorProgressPayload, PreviewStatus,
+        FixedTaskId, LogEntryPayload, LogLevel, MirrorFloorPayload, MirrorProgressPayload,
+        PreviewStatus,
         PreviewStatusPayload, ScreenshotFrame, TasksConfig,
     },
 };
@@ -88,6 +89,7 @@ pub struct HomeState {
     pub task_options_tabs: HashMap<FixedTaskId, TaskOptionsTab>,
     pub open_select: Option<HomeSelect>,
     pub mirror_progress: Option<MirrorProgressPayload>,
+    pub mirror_floor: Option<MirrorFloorPayload>,
     pub latest_screenshot: Option<ScreenshotFrame>,
     pub screenshot_revision: u64,
     pub preview_status: PreviewStatus,
@@ -157,6 +159,7 @@ impl HomeState {
             task_options_tabs: HashMap::new(),
             open_select: None,
             mirror_progress: None,
+            mirror_floor: None,
             latest_screenshot: None,
             screenshot_revision: 0,
             preview_status: PreviewStatus::Stopped,

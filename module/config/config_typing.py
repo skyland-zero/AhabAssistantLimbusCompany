@@ -559,6 +559,9 @@ class ConfigModel(BaseModel):
     mirror_keyboard_simple_pathfinding: bool
     """简单键盘寻路模式：始终按↑选择第一个节点，完全避免鼠标拖动"""
 
+    mirror_fresh_frame_wait: bool
+    """镜牢寻路前等待新鲜视频帧（抗 Scrcpy 关键帧重同步期的 stale 旧帧误匹配）"""
+
     enable_template_blur: bool
     """是否启用模板高斯模糊（抗Scrcpy/H264压缩噪点，关闭可省CPU）"""
 

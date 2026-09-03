@@ -209,6 +209,7 @@ impl HomeState {
                         self.execution = status;
                         if self.execution.state == ExecutionState::Idle {
                             self.mirror_progress = None;
+                            self.mirror_floor = None;
                             self.stopping_since = None;
                             self.state_before_stopping = None;
                         }
@@ -217,6 +218,20 @@ impl HomeState {
                 crate::ipc::contract::event::EXECUTION_MIRROR_PROGRESS => {
                     if let Ok(progress) = serde_json::from_value(payload) {
                         self.mirror_progress = Some(progress);
+                    }
+                }
+                crate::ipc::contract::event::EXECUTION_MIRROR_FLOOR => {
+                    if let Ok(progress) = serde_json::from_value(payload) {
+                        let progress: MirrorFloorPayload = progress;
+                        // Drop stale floors from a previous run; missing runId
+                        // (old backend / mock) is always accepted.
+                        let stale = match (&progress.runId, &self.stats.currentRun.runId) {
+                            (Some(got), Some(current)) => got != current,
+                            _ => false,
+                        };
+                        if !stale && progress.floor > 0 {
+                            self.mirror_floor = Some(progress);
+                        }
                     }
                 }
                 crate::ipc::contract::event::EXECUTION_STATS => {
