@@ -27,6 +27,10 @@ class GiftRouteTarget:
     asset: str | None = None
     required: bool = False
 
+    def __post_init__(self) -> None:
+        if self.asset is None:
+            object.__setattr__(self, "asset", f"mirror/ego_gifts/{self.gift_id}.png")
+
     def applies_to(self, floor: int) -> bool:
         logical_floor = max(1, floor)
         return self.start_floor <= logical_floor <= self.end_floor

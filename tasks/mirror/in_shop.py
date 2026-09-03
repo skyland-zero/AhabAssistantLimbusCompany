@@ -1770,9 +1770,8 @@ class Shop:
                 if auto.take_screenshot() is None:
                     continue
 
-                auto.mouse_click_blank(times=3)
-                auto.click_element("mirror/shop/return_assets.png")
-                sleep(1)
+                if auto.click_element("mirror/shop/return_assets.png"):
+                    sleep(0.5)
 
                 if self.skill_replacement and skill is False:
                     self.replacement_skill()

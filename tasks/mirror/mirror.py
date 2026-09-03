@@ -728,24 +728,21 @@ class Mirror:
                 continue
 
             # 在战斗中
-            if auto.find_element("battle/more_information_assets.png") or auto.find_element(
-                "battle/in_mirror_assets.png"
+            if (
+                auto.find_element("battle/more_information_assets.png")
+                or auto.find_element("battle/in_mirror_assets.png")
+                or auto.find_element("battle/turn_assets.png")
+                or (auto.find_element("battle/win_rate_card.png") and auto.find_element("battle/gear_right.png"))
             ):
                 self._fight()
                 continue
-            elif battle.identify_keyword_turn and self.LOOP_COUNT - main_loop_count < 5:
-                if auto.find_element("battle/turn_assets.png") or auto.find_element("battle/in_mirror_assets.png"):
-                    self._fight()
-                    continue
-            else:
+            elif main_loop_count < 10:
+                # 连续未能识别界面（濒临超时卡死）时的 OCR 终极兜底，保证极端情况防卡死
                 turn_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/turn_assets.png"))
                 turn_ocr_result = auto.find_text_element("turn", turn_bbox)
                 if turn_ocr_result is not False:
                     self._fight()
                     continue
-            if auto.find_element("battle/win_rate_card.png") and auto.find_element("battle/gear_right.png"):
-                self._fight()
-                continue
 
             # 镜牢星光
             if auto.find_element("mirror/road_to_mir/dreaming_star/coins_assets.png", threshold=0.9):
@@ -1831,10 +1828,19 @@ class Mirror:
                             button[1] + 350 * my_scale,
                         )
                         if not cfg.not_skip_whitegossypium:
-                            ocr_result = auto.find_language_text("白棉花", ["white", "gossypium"], bbox)
-                            if isinstance(ocr_result, list):
-                                if len(ocr_result) >= 2:
-                                    continue
+                            is_white_gossypium = bool(
+                                auto.find_element(
+                                    "mirror/ego_gifts/white_gossypium.png",
+                                    my_crop=bbox,
+                                    threshold=0.75,
+                                )
+                            )
+                            if not is_white_gossypium:
+                                ocr_result = auto.find_language_text("白棉花", ["white", "gossypium"], bbox)
+                                if isinstance(ocr_result, list) and len(ocr_result) >= 2:
+                                    is_white_gossypium = True
+                            if is_white_gossypium:
+                                continue
                         is_owned = bool(auto.find_language_text("已持有", "Owned", bbox))
                         priority = route_priority(bbox)
                         gift_candidates.append(
@@ -1866,23 +1872,32 @@ class Mirror:
                             button[1] + 350 * my_scale,
                         )
                         if not cfg.not_skip_whitegossypium:
-                            ocr_result = auto.find_language_text("白棉花", ["white", "gossypium"], bbox)
-                            if isinstance(ocr_result, list):
-                                if len(ocr_result) >= 2:
-                                    time.sleep(1)
-                                    auto.click_element(
-                                        "mirror/road_in_mir/refuse_gift_assets.png",
-                                        take_screenshot=True,
-                                    )
-                                    sleep(1)
-                                    auto.click_element(
-                                        "mirror/road_in_mir/refuse_gift_confirm_assets.png",
-                                        take_screenshot=True,
-                                    )
-                                    time.sleep(2)
-                                    if retry() is False:
-                                        return False
-                                    return
+                            is_white_gossypium = bool(
+                                auto.find_element(
+                                    "mirror/ego_gifts/white_gossypium.png",
+                                    my_crop=bbox,
+                                    threshold=0.75,
+                                )
+                            )
+                            if not is_white_gossypium:
+                                ocr_result = auto.find_language_text("白棉花", ["white", "gossypium"], bbox)
+                                if isinstance(ocr_result, list) and len(ocr_result) >= 2:
+                                    is_white_gossypium = True
+                            if is_white_gossypium:
+                                time.sleep(1)
+                                auto.click_element(
+                                    "mirror/road_in_mir/refuse_gift_assets.png",
+                                    take_screenshot=True,
+                                )
+                                sleep(1)
+                                auto.click_element(
+                                    "mirror/road_in_mir/refuse_gift_confirm_assets.png",
+                                    take_screenshot=True,
+                                )
+                                time.sleep(2)
+                                if retry() is False:
+                                    return False
+                                return
                         auto.mouse_click(button[0], button[1])
                         time.sleep(1)
                         auto.click_element(
