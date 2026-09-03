@@ -50,6 +50,13 @@ a = Analysis(
     noarchive=False,
 )
 
+# 过滤掉 OpenCV 的冗余视频编解码动态库（~30MB）。
+# 项目视频流由 assets/binary/scrcpy-ffmpeg/ 原生运行时解码，不使用 cv2.VideoCapture。
+a.binaries = [
+    binary for binary in a.binaries
+    if not Path(binary[0]).name.lower().startswith("opencv_videoio_ffmpeg")
+]
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
