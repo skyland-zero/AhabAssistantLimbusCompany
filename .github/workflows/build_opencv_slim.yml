@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install scikit-build cmake ninja "numpy<2.0"
+          python -m pip install scikit-build cmake ninja "numpy>=2.0.0"
 
       - name: Patch setup.py for slim build on Windows
         shell: bash
