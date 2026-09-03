@@ -1,0 +1,114 @@
+name: Build Slim OpenCV Wheel
+
+on:
+  workflow_dispatch:
+    inputs:
+      opencv_version:
+        description: 'OpenCV-Python version tag (e.g. 86 for 4.11.0.86)'
+        required: true
+        default: '86'
+      create_release:
+        description: 'Publish wheel directly to GitHub Releases'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Slim Wheel (Windows x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout opencv-python repository
+        uses: actions/checkout@v4
+        with:
+          repository: opencv/opencv-python
+          ref: ${{ inputs.opencv_version }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Python build dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install scikit-build cmake ninja "numpy<2.0"
+
+      - name: Build Slim Wheel
+        shell: bash
+        env:
+          ENABLE_HEADLESS: "1"
+          ENABLE_CONTRIB: "0"
+          CMAKE_ARGS: >-
+            -GNinja
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_opencv_dnn=OFF
+            -DBUILD_opencv_video=OFF
+            -DBUILD_opencv_videoio=OFF
+            -DBUILD_opencv_gapi=OFF
+            -DBUILD_opencv_ml=OFF
+            -DBUILD_opencv_objdetect=OFF
+            -DBUILD_opencv_photo=OFF
+            -DBUILD_opencv_stitching=OFF
+            -DBUILD_opencv_ts=OFF
+            -DBUILD_PROTOBUF=OFF
+            -DWITH_PROTOBUF=OFF
+            -DWITH_IPP=OFF
+            -DWITH_OPENCL=OFF
+            -DWITH_CUDA=OFF
+            -DWITH_FFMPEG=OFF
+            -DWITH_1394=OFF
+            -DWITH_GSTREAMER=OFF
+            -DWITH_MSMF=OFF
+            -DWITH_DSHOW=OFF
+            -DWITH_WIN32UI=OFF
+            -DWITH_QT=OFF
+            -DWITH_GTK=OFF
+            -DBUILD_TESTS=OFF
+            -DBUILD_PERF_TESTS=OFF
+            -DBUILD_EXAMPLES=OFF
+            -DBUILD_opencv_apps=OFF
+            -DENABLE_PRECOMPILED_HEADERS=OFF
+        run: |
+          mkdir -p dist
+          python setup.py bdist_wheel --py-limited-api=cp37 --dist-dir=dist
+
+      - name: Inspect generated wheel
+        shell: bash
+        run: |
+          ls -lh dist/
+          whl_file=$(ls dist/*.whl | head -n 1)
+          echo "Wheel file: $whl_file"
+          echo "Size in bytes: $(stat -c %s "$whl_file")"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-python-headless-slim-win64
+          path: dist/*.whl
+          if-no-files-found: error
+
+      - name: Release Wheel (Optional)
+        if: ${{ inputs.create_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: opencv-slim-4.11.0.86
+          name: Slim OpenCV Headless Wheel 4.11.0.86 (Win64)
+          body: |
+            Custom stripped build of `opencv-python-headless` for AhabAssistantLimbusCompany.
+            - **Platform**: Windows x64 (ABI3 compatible with Python 3.7+).
+            - **Removed**: dnn, videoio, video, gapi, ml, photo, stitching, objdetect, protobuf, ipp, opencl, ffmpeg.
+            - **Kept**: core, imgproc, imgcodecs, features2d, flann, calib3d.
+          files: dist/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
