@@ -156,6 +156,7 @@ class Mirror:
         self.observe_ego_gift_selected = normalize_observe_ego_gifts(
             team_setting.observe_ego_gift_selected
         )  # 用户选择的观测EGO饰品列表
+        self.observe_ego_gift_done = False
 
         self.defense_first_round = team_setting.defense_first_round  # 是否第一回合全员防御
         self.defense_for_solo = team_setting.defense_for_solo  # 是否小指良单通连续防御
@@ -816,10 +817,12 @@ class Mirror:
                 self.select_init_ego_gift()
                 continue
 
-            if auto.find_element(
-                "mirror/road_to_mir/observe_ego_gift/observe_bleed_assets.png", model="clam"
-            ) or auto.find_element("mirror/road_to_mir/observe_ego_gift/observe_burn_assets.png", model="clam"):
+            if not self.observe_ego_gift_done and (
+                auto.find_element("mirror/road_to_mir/observe_ego_gift/observe_bleed_assets.png", model="clam")
+                or auto.find_element("mirror/road_to_mir/observe_ego_gift/observe_burn_assets.png", model="clam")
+            ):
                 self.select_observe_ego_gift()
+                self.observe_ego_gift_done = True
                 continue
 
             # 5层结束后，普通流程关闭续层，困难15层流程自动确认续层。
@@ -1362,7 +1365,10 @@ class Mirror:
         观测EGO饰品选择
         """
 
+        has_scrolled = False
+
         def _select_gift(level_p, gift_row, gift_col):
+            nonlocal has_scrolled
             first_gift = (level_p[0], level_p[1] + 80 * my_scale)
             select_gift_point = (
                 first_gift[0] + (gift_col - 1) * 165 * my_scale,
@@ -1386,9 +1392,11 @@ class Mirror:
                         drag_time=1.5,
                     )
                     sleep(1)
+                    has_scrolled = True
                 auto.mouse_click(select_gift_point[0], select_gift_point[1] - height)
 
         def _scroll_gift_list(delta_y):
+            nonlocal has_scrolled
             auto.mouse_drag(
                 gift_box[-2] - 100 * my_scale,
                 gift_box[-1] - 100 * my_scale,
@@ -1396,8 +1404,10 @@ class Mirror:
                 drag_time=1.5,
             )
             sleep(1)
+            has_scrolled = True
 
         def _select_gift_by_asset(target):
+            nonlocal has_scrolled
             if not target.asset or not ImageUtils.existing_image_paths(target.asset):
                 return False
             for attempt in range(5):
@@ -1411,6 +1421,7 @@ class Mirror:
             # the same state as the normal selector.
             for _ in range(4):
                 _scroll_gift_list(300 * my_scale)
+            has_scrolled = False
             return False
 
         log.debug("开始选择观测EGO饰品")
@@ -1430,6 +1441,8 @@ class Mirror:
 
         gift_box = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/gift_box_bbox.png"))
 
+        current_system_index = None
+
         # 选择观测饰品
         for gift_id in self.observe_ego_gift_selected:
             target = resolve_observe_ego_gift(gift_id)
@@ -1446,12 +1459,23 @@ class Mirror:
                 system_index = 10
             else:
                 system_index = [k for k, v in observe_system.items() if v == file_system][0]
-            # 选择体系，先点一下其他体系，再点回来，重置页面
-            if system_index > 0:
-                auto.mouse_click(benchmark_point[0] + 110 * (system_index - 1) * my_scale, benchmark_point[1])
+
+            # 状态机：选择体系或按需重置
+            if current_system_index is None or current_system_index != system_index:
+                # 首次进入或跨体系切换：直接点击目标分类（游戏自动从新分类列表顶部加载）
+                auto.mouse_click(benchmark_point[0] + 110 * system_index * my_scale, benchmark_point[1])
+                sleep(0.3)
+                current_system_index = system_index
+                has_scrolled = False
+            elif has_scrolled:
+                # 连续在同一个体系下选择下一个饰品，且此前页面曾向下滚动过：
+                # 借切一次其他体系重置回顶部
+                reset_temp_index = 0 if system_index != 0 else 1
+                auto.mouse_click(benchmark_point[0] + 110 * reset_temp_index * my_scale, benchmark_point[1])
                 sleep(0.2)
-            auto.mouse_click(benchmark_point[0] + 110 * system_index * my_scale, benchmark_point[1])
-            sleep(0.2)
+                auto.mouse_click(benchmark_point[0] + 110 * system_index * my_scale, benchmark_point[1])
+                sleep(0.3)
+                has_scrolled = False
 
             if _select_gift_by_asset(target):
                 continue
@@ -1497,7 +1521,9 @@ class Mirror:
                 auto.mouse_click((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
                 sleep(1)
                 if auto.click_element("mirror/shop/leave_shop_confirm_assets.png", take_screenshot=True):
+                    self.observe_ego_gift_done = True
                     return
+        self.observe_ego_gift_done = True
 
     def select_mirror_team(self):
         self.team_code_loaded = False
