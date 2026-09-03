@@ -231,7 +231,14 @@ class BattleRosterObserver:
 
             if max_count < 1:
                 return None
-            texts = auto.get_text_from_screenshot()
+            width, height = self._screenshot_size()
+            team_header_crop = (
+                max(0, int(width * 0.35)),
+                max(0, int(height * 0.10)),
+                min(width, int(width * 0.65)),
+                min(height, int(height * 0.28)),
+            )
+            texts = auto.get_text_from_screenshot(my_crop=team_header_crop)
         except Exception as error:
             log.debug(f"伪单通队伍页人数识别失败: {error}")
             return None
@@ -295,8 +302,11 @@ class BattleRosterObserver:
         if self.selected_count < 2:
             return PseudoSoloObservation.UNKNOWN
 
-        gear_left = auto.find_element("battle/gear_left.png", threshold=DEAD_MARKER_THRESHOLD)
-        gear_right = auto.find_element("battle/gear_right.png", threshold=DEAD_MARKER_THRESHOLD)
+        width, height = self._screenshot_size()
+        gear_left_crop = (int(width * 0.15), int(height * 0.62), int(width * 0.42), int(height * 0.98))
+        gear_right_crop = (int(width * 0.52), int(height * 0.62), int(width * 0.82), int(height * 0.98))
+        gear_left = auto.find_element("battle/gear_left.png", threshold=DEAD_MARKER_THRESHOLD, my_crop=gear_left_crop)
+        gear_right = auto.find_element("battle/gear_right.png", threshold=DEAD_MARKER_THRESHOLD, my_crop=gear_right_crop)
         if not gear_left or not gear_right:
             return PseudoSoloObservation.UNKNOWN
 

@@ -30,6 +30,7 @@ from module.my_error.my_error import (
 )
 from module.observe_ego_gift import normalize_observe_ego_gifts, resolve_observe_ego_gift
 from module.ocr import ocr
+from module.vision_profiler import vision_profiler
 from tasks import all_systems, observe_system, start_gift
 from tasks.base.back_init_menu import back_init_menu
 from tasks.base.make_enkephalin_module import make_enkephalin_module
@@ -48,7 +49,6 @@ from tasks.mirror.search_road import (
 from tasks.mirror.select_theme_pack import select_theme_pack
 from tasks.teams.team_formation import check_team, load_team_code_in_game, select_battle_team, team_formation
 from utils.image_utils import ImageUtils
-from module.vision_profiler import vision_profiler
 
 MIRROR_SINNER_IDS = (
     "yi_sang",
@@ -644,7 +644,10 @@ class Mirror:
                 continue
 
             # 遇到选择增益事件（少见）
-            if auto.click_element("mirror/road_in_mir/event_effect_button.png", threshold=0.75):
+            win_h = int(cfg.set_win_size or 1080)
+            win_w = int(win_h * 16 / 9)
+            event_effect_crop = (int(win_w * 0.20), int(win_h * 0.25), int(win_w * 0.85), int(win_h * 0.85))
+            if auto.click_element("mirror/road_in_mir/event_effect_button.png", threshold=0.75, my_crop=event_effect_crop):
                 auto.click_element("mirror/road_in_mir/select_event_effect_confirm.png")
                 continue
 
@@ -1747,8 +1750,12 @@ class Mirror:
                     back_init_menu()
                     return
 
+            win_h = int(cfg.set_win_size or 1080)
+            win_w = int(win_h * 16 / 9)
+            event_choice_crop = (int(win_w * 0.50), int(win_h * 0.20), int(win_w * 0.90), int(win_h * 0.70))
+
             # 针对不同事件进行处理，优先选???与直接获取的，再选需要判定的，再选后续事件的，最后第一个事项
-            if auto.click_element("event/unknown_event.png"):
+            if auto.click_element("event/unknown_event.png", my_crop=event_choice_crop):
                 event_chance -= 1
                 continue
             if positions_list := auto.find_element(
@@ -1760,10 +1767,10 @@ class Mirror:
                 auto.mouse_click(positions_list[0][0], positions_list[0][1])
                 event_chance -= 1
                 continue
-            if auto.click_element("event/advantage_check.png"):
+            if auto.click_element("event/advantage_check.png", my_crop=event_choice_crop):
                 event_chance -= 1
                 continue
-            if auto.click_element("event/gain_a_ego_depending_on_result.png"):
+            if auto.click_element("event/gain_a_ego_depending_on_result.png", my_crop=event_choice_crop):
                 event_chance -= 1
                 continue
 
@@ -1845,9 +1852,18 @@ class Mirror:
             if auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png"):
                 break
             try:
+                win_h = int(cfg.set_win_size or 1080)
+                win_w = int(win_h * 16 / 9)
+                card_search_crop = (
+                    int(win_w * 0.10),
+                    int(win_h * 0.20),
+                    int(win_w * 0.90),
+                    int(win_h * 0.80),
+                )
                 acquire_card = auto.find_element(
                     "mirror/road_in_mir/acquire_ego_gift_card.png",
                     find_type="image_with_multiple_targets",
+                    my_crop=card_search_crop,
                 )
                 my_list = []
                 if len(acquire_card) == 2:
@@ -1949,8 +1965,20 @@ class Mirror:
                             button[1] + 350 * my_scale,
                         )
                         if not cfg.not_skip_whitegossypium:
-                            ocr_result = auto.find_language_text("白棉花", ["white", "gossypium"], bbox)
-                            if ocr_result:
+                            is_white_gossypium = bool(
+                                auto.find_element(
+                                    "mirror/ego_gifts/white_gossypium.png",
+                                    my_crop=bbox,
+                                    threshold=0.75,
+                                )
+                            )
+                            if not is_white_gossypium:
+                                ocr_result = auto.find_language_text("白棉花", ["white", "gossypium"], bbox)
+                                if isinstance(ocr_result, list) and len(ocr_result) >= 2:
+                                    is_white_gossypium = True
+                                elif isinstance(ocr_result, bool) and ocr_result:
+                                    is_white_gossypium = True
+                            if is_white_gossypium:
                                 continue
                         is_owned = bool(auto.find_language_text("已持有", "Owned", bbox))
                         priority = route_priority(bbox)
@@ -2135,10 +2163,10 @@ class Mirror:
 
         scale = cfg.set_win_size / 1440
         floor_progress_crop = (
-            900 * scale,
-            650 * scale,
-            1700 * scale,
-            720 * scale,
+            int(800 * scale),
+            int(500 * scale),
+            int(1800 * scale),
+            int(820 * scale),
         )
         if to_window_position := auto.find_element("mirror/road_in_mir/to_window_assets.png", take_screenshot=True):
             not_passed_floors = (
@@ -2147,6 +2175,11 @@ class Mirror:
                     find_type="image_with_multiple_targets",
                     my_crop=floor_progress_crop,
                     take_screenshot=True,
+                    min_dist=80 * scale,
+                )
+                or auto.find_element(
+                    "mirror/road_in_mir/not_passed_floor.png",
+                    find_type="image_with_multiple_targets",
                     min_dist=80 * scale,
                 )
                 or []

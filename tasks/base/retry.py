@@ -1,7 +1,13 @@
 import os
 import platform
 import time
-from core.execution_control import check_cancelled, interruptible_sleep, interruptible_sleep as sleep
+from typing import Callable
+
+import psutil
+import win32process
+
+from core.execution_control import check_cancelled, interruptible_sleep
+from core.execution_control import interruptible_sleep as sleep
 from module.automation import auto
 from module.config import cfg
 from module.game_and_screen import screen
@@ -199,6 +205,18 @@ def wait_for_ui_state(
         interruptible_sleep(min(max(float(interval), 0.01), remaining))
 
 
+def _retry_dialog_crop() -> tuple[int, int, int, int]:
+    """获取居中重试弹窗的稍微放宽裁剪区域，避免全屏模板匹配。"""
+    height = int(cfg.set_win_size or 1080)
+    width = int(height * 16 / 9)
+    return (
+        int(width * 0.18),
+        int(height * 0.15),
+        int(width * 0.82),
+        int(height * 0.85),
+    )
+
+
 def retry(*, screenshot_ready: bool = False):
     """重试连接。
 
@@ -234,21 +252,22 @@ def retry(*, screenshot_ready: bool = False):
         if auto.find_element("base/connecting_assets.png"):
             reuse_frame = False
             continue
-        if position := auto.find_element("base/retry_countdown.png"):
+        dialog_crop = _retry_dialog_crop()
+        if position := auto.find_element("base/retry_countdown.png", my_crop=dialog_crop):
             sleep(5)
             auto.mouse_click(position[0], position[1], times=3)
             reuse_frame = False
             continue
-        if auto.click_element("base/retry.png", threshold=0.9):
+        if auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop):
             auto.mouse_to_blank()
             reuse_frame = False
             continue
         if (
-            auto.find_element("base/retry_countdown.png")
-            or auto.find_element("base/retry.png")
-            or auto.find_element("base/try_again.png")
+            auto.find_element("base/retry_countdown.png", my_crop=dialog_crop)
+            or auto.find_element("base/retry.png", my_crop=dialog_crop)
+            or auto.find_element("base/try_again.png", my_crop=dialog_crop)
         ):
-            auto.click_element("base/retry.png", threshold=0.9)
+            auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop)
             reuse_frame = False
             continue
         if auto.find_element("base/clear_all_caches_assets.png", model="clam"):

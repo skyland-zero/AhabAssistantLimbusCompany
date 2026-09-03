@@ -51,7 +51,19 @@ def build_native_decoder() -> None:
     if not NATIVE_DECODER_BINARY.is_file():
         raise FileNotFoundError(f"native decoder build output is missing: {NATIVE_DECODER_BINARY}")
     SCRCPY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(NATIVE_DECODER_BINARY, SCRCPY_RUNTIME_DIR / "scrcpy_decoder.dll")
+    target_dll = SCRCPY_RUNTIME_DIR / "scrcpy_decoder.dll"
+    try:
+        shutil.copy2(NATIVE_DECODER_BINARY, target_dll)
+    except PermissionError:
+        # 当本地有正在运行的实例占用动态库时，采用 Windows NTFS 重命名替换策略
+        backup = SCRCPY_RUNTIME_DIR / "scrcpy_decoder.dll.old"
+        try:
+            if backup.is_file():
+                backup.unlink(missing_ok=True)
+            target_dll.rename(backup)
+            shutil.copy2(NATIVE_DECODER_BINARY, target_dll)
+        except Exception as error:
+            sys.stdout.write(f"Warning: could not overwrite {target_dll.name} ({error}); using existing runtime\n")
     run(
         [
             sys.executable,
@@ -62,10 +74,10 @@ def build_native_decoder() -> None:
     )
 
 
-def copy_tree(source: Path, destination: Path) -> None:
+def copy_tree(source: Path, destination: Path, ignore=None) -> None:
     if not source.is_dir():
         raise FileNotFoundError(f"required release directory is missing: {source}")
-    shutil.copytree(source, destination, dirs_exist_ok=True)
+    shutil.copytree(source, destination, dirs_exist_ok=True, ignore=ignore)
 
 
 def stage_release(version: str) -> None:
@@ -83,7 +95,11 @@ def stage_release(version: str) -> None:
     shutil.copy2(updater_binary, RELEASE / "AALC Updater.exe")
     shutil.copy2(ROOT / "README.md", RELEASE / "README.md")
     shutil.copy2(ROOT / "LICENSE", RELEASE / "LICENSE")
-    copy_tree(ROOT / "assets", RELEASE / "assets")
+    copy_tree(
+        ROOT / "assets",
+        RELEASE / "assets",
+        ignore=shutil.ignore_patterns("wheels", "*.whl"),
+    )
     copy_tree(ROOT / "gpui-app" / "resources", RELEASE / "resources")
 
     version_file = RELEASE / "assets" / "config" / "version.txt"
@@ -124,7 +140,12 @@ def stage_release(version: str) -> None:
 
 def archive_release(version: str) -> Path:
     archive_base = DIST / f"AALC_{version}"
-    seven_zip = shutil.which("7z") or shutil.which("7zz")
+    bundled_7z = ROOT / "assets" / "binary" / "7za.exe"
+    seven_zip = (
+        shutil.which("7z")
+        or shutil.which("7zz")
+        or (str(bundled_7z) if bundled_7z.is_file() else None)
+    )
     if seven_zip:
         run([seven_zip, "a", "-mx=7", f"{archive_base}.7z", "AALC/*"], cwd=DIST)
         return archive_base.with_suffix(".7z")

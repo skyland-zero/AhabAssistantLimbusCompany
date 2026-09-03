@@ -19,6 +19,19 @@ from utils.image_utils import ImageUtils
 ROAD_COLUMN_GAP = 520
 ROAD_ROW_GAP = 437
 
+
+def _mybus_crop() -> tuple[int, int, int, int]:
+    """获取巴士图标的裁剪区域，必须从 x=0 开始，因为地图对齐时巴士会被拖拽到屏幕最左侧 (x ≈ 60)。"""
+    height = int(getattr(cfg, "set_win_size", 1080) or 1080)
+    width = int(height * 16 / 9)
+    return (
+        0,
+        int(height * 0.10),
+        int(width * 0.70),
+        int(height * 0.90),
+    )
+
+
 _NODE_MODEL_PATH = "./assets/model/best.onnx"
 _node_detector_lock = threading.Lock()
 _node_detector_session = None
@@ -107,7 +120,7 @@ class MirrorMap:
             auto.mouse_click(next_position[0], next_position[1])
             if _click_enter_after_selection(1.25):
                 return True
-        if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True):
+        if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop()):
             if _click_enter_after_selection(1.25):
                 return True
         return False
@@ -126,7 +139,7 @@ class MirrorMap:
         elif direction == "U":
             position = 2
         for _ in range(3):
-            if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True):
+            if bus_position := auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop()):
                 return [
                     bus_position[0] + three_roads[position][0],
                     bus_position[1] + three_roads[position][1],
@@ -216,7 +229,10 @@ def search_road_default_distance():
         return False
     # 判断中、下两个节点是否有权重3的节点，有的话直接选择进入
     node_weight = {}
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
+    if bus_position := (
+        auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop())
+        or auto.find_element("mirror/mybus_default_distance.png")
+    ):
         for road in three_roads[:2]:
             node_x = bus_position[0] + road[0]
             node_y = bus_position[1] + road[1]
@@ -231,7 +247,7 @@ def search_road_default_distance():
                 if _click_enter_after_selection(0.75):
                     return True
     # 如果中、下两个节点没有权重3的节点，查看所有节点的权重，选择权重最大的节点进入
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop()):
         from tasks.base.retry import check_times
 
         while True:
@@ -249,12 +265,15 @@ def search_road_default_distance():
             sleep(1)
             auto.mouse_to_blank()
 
-            bus_position = auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True)
+            bus_position = (
+                auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop())
+                or auto.find_element("mirror/mybus_default_distance.png")
+            )
             if bus_position is None:
                 break
 
     node_list = []
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop()):
         for road in three_roads[:2]:
             node_x = bus_position[0] + road[0]
             node_y = bus_position[1] + road[1]
@@ -309,11 +328,11 @@ def search_road_from_road_map(hard_mode=False):
     scale = cfg.set_win_size / 1440
     bus = None
 
-    if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True):
+    if auto.click_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop()):
         if _click_enter_after_selection(0.75):
             return True, True
 
-    if bus_position := auto.find_element("mirror/mybus_default_distance.png"):
+    if bus_position := auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop()):
         from tasks.base.retry import check_times
 
         change_times = 5
@@ -334,7 +353,10 @@ def search_road_from_road_map(hard_mode=False):
             sleep(0.5)
             auto.mouse_to_blank()
 
-            bus_position = auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True)
+            bus_position = (
+                auto.find_element("mirror/mybus_default_distance.png", take_screenshot=True, my_crop=_mybus_crop())
+                or auto.find_element("mirror/mybus_default_distance.png")
+            )
             if bus_position is None:
                 break
             change_times -= 1
@@ -342,7 +364,11 @@ def search_road_from_road_map(hard_mode=False):
                 bus = bus_position
                 break
 
-    bus_pos = auto.find_element("mirror/mybus_default_distance.png") or bus
+    bus_pos = (
+        auto.find_element("mirror/mybus_default_distance.png", my_crop=_mybus_crop())
+        or auto.find_element("mirror/mybus_default_distance.png")
+        or bus
+    )
     if bus_pos is None:
         log.warning("未找到 Bus，无法识别镜牢地图")
         return [], []

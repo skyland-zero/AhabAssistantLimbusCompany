@@ -7,7 +7,7 @@ from typing import Callable, Optional
 import cv2
 import numpy as np
 
-from core.execution_control import check_cancelled, interruptible_sleep, interruptible_sleep as sleep
+from core.execution_control import interruptible_sleep as sleep
 from module.automation import auto
 from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -24,6 +24,21 @@ DEFENSE_FOR_SOLO_TURN_LIMIT = 5
 # MuMu's scaled battle UI can render the left skill anchor below the general
 # image-match threshold even when the battle command row is fully visible.
 DEFENSE_GEAR_THRESHOLD = 0.75
+
+
+def _battle_ui_crops() -> dict[str, tuple[int, int, int, int]]:
+    """计算战斗界面的稍微放宽裁剪区域，避免全屏模板匹配的高额CPU消耗。"""
+    height = int(getattr(cfg, "set_win_size", 1080) or 1080)
+    width = int(height * 16 / 9)
+    return {
+        "win_rate": (int(width * 0.58), int(height * 0.65), int(width * 0.82), height),
+        "gear_right": (int(width * 0.52), int(height * 0.62), int(width * 0.82), int(height * 0.98)),
+        "gear_left": (int(width * 0.15), int(height * 0.62), int(width * 0.42), int(height * 0.98)),
+        "in_mirror": (int(width * 0.72), int(height * 0.04), int(width * 0.92), int(height * 0.28)),
+        "dead": (int(width * 0.08), int(height * 0.50), int(width * 0.92), int(height * 0.95)),
+        "dead_all": (int(width * 0.20), int(height * 0.18), int(width * 0.80), int(height * 0.82)),
+        "acquire_gift_card": (int(width * 0.10), int(height * 0.20), int(width * 0.90), int(height * 0.80)),
+    }
 
 
 @dataclass
@@ -128,8 +143,9 @@ class Battle:
         )
         use_first_round_defense = first_turn and defense_first_round and not defense_for_solo_used_this_turn
         limited_defense_succeeded = False
+        crops = _battle_ui_crops()
         if (use_limited_defense or use_first_round_defense) and auto.find_element(
-            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD
+            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_left"]
         ):
             if use_limited_defense:
                 msg = f"小指良单通连续防御（剩余{defense_for_solo_state.remaining_turns}回合），开始战斗"
@@ -155,11 +171,11 @@ class Battle:
                 sleep(0.5)
                 auto.key_press("enter")
         elif self.defense_all_time:
-            if auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD):
+            if auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_left"]):
                 msg = "使用全员防御模式开始战斗"
                 self._defense_this_round()
         elif (avoid_skill_3 or prioritize_skill_3) and auto.find_element(
-            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD
+            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_left"]
         ):
             use_prioritize_skill_3 = prioritize_skill_3 and not avoid_skill_3
             mode_name = "优先" if use_prioritize_skill_3 else "避免"
@@ -181,10 +197,10 @@ class Battle:
             msg = "使用P+Enter开始战斗"
             if self.mouse_click_rate:
                 my_scale = cfg.set_win_size / 1440
-                if pos := auto.find_element("battle/win_rate_card.png", threshold=0.75):
+                if pos := auto.find_element("battle/win_rate_card.png", threshold=0.75, my_crop=crops["win_rate"]):
                     pos = [pos[0] + 50 * my_scale, pos[1] - 50 * my_scale]
                     auto.mouse_click(pos[0], pos[1])
-                    auto.click_element("battle/gear_right.png")
+                    auto.click_element("battle/gear_right.png", my_crop=crops["gear_right"])
             else:
                 sleep(1)
                 if not auto.find_element("battle/pause_assets.png", threshold=0.75):
@@ -264,7 +280,8 @@ class Battle:
                 continue
 
             # 判断是否为镜牢战斗
-            if in_mirror is False and auto.find_element("battle/in_mirror_assets.png", model="aggressive"):
+            crops = _battle_ui_crops()
+            if in_mirror is False and auto.find_element("battle/in_mirror_assets.png", model="aggressive", my_crop=crops["in_mirror"]):
                 in_mirror = True
 
             if view_status := auto.find_element("battle/view_status_assets.png", model="clam"):
@@ -281,8 +298,8 @@ class Battle:
                 continue
 
             # 战斗失败重启
-            if auto.find_element("battle/dead_all.png"):
-                dead_select = auto.find_element("battle/dead_all.png", find_type="image_with_multiple_targets")
+            if auto.find_element("battle/dead_all.png", my_crop=crops["dead_all"]):
+                dead_select = auto.find_element("battle/dead_all.png", find_type="image_with_multiple_targets", my_crop=crops["dead_all"])
                 if len(dead_select) == 3:
                     dead_select = sorted(dead_select, key=lambda y: y[1])
                     auto.mouse_click(dead_select[1][0], dead_select[1][1])
@@ -307,7 +324,7 @@ class Battle:
                 continue
 
             if in_mirror and not cfg.fight_to_last_man:
-                if dead_position := auto.find_element("battle/dead.png"):
+                if dead_position := auto.find_element("battle/dead.png", my_crop=crops["dead"]):
                     my_scale = cfg.set_win_size / 1440
                     dead_bbox = (
                         dead_position[0] - 100 * my_scale,
@@ -395,7 +412,7 @@ class Battle:
                     "turn" in ocr_result
                     or auto.click_element("battle/turn_assets.png")
                     or auto.find_element("battle/win_rate_assets.png")
-                    or auto.find_element("battle/win_rate_card.png", threshold=0.75)
+                    or auto.find_element("battle/win_rate_card.png", threshold=0.75, my_crop=crops["win_rate"])
                 ):
                     perform_battle_operation()
                     chance = self.INIT_CHANCE
@@ -413,7 +430,7 @@ class Battle:
                         self.mouse_click_rate = True
                     continue
             if self.mouse_click_rate:
-                if auto.find_element("battle/win_rate_card.png", threshold=0.75):
+                if auto.find_element("battle/win_rate_card.png", threshold=0.75, my_crop=crops["win_rate"]):
                     perform_battle_operation()
                     chance = self.INIT_CHANCE
                     waiting = self._update_wait_time(waiting, False, total_count)
@@ -514,7 +531,7 @@ class Battle:
                 if infinite_battle:
                     continue
                 break
-            if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png"):
+            if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png", my_crop=crops["acquire_gift_card"]):
                 if infinite_battle:
                     continue
                 break
@@ -678,10 +695,11 @@ class Battle:
         try:
             scale = cfg.set_win_size / 1440
 
-            gear_left = auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD)
+            crops = _battle_ui_crops()
+            gear_left = auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_left"])
 
             gear_1 = [gear_left[0] + 100 * scale, gear_left[1] - 35 * scale]
-            gear_right = auto.find_element("battle/gear_right.png", threshold=DEFENSE_GEAR_THRESHOLD)
+            gear_right = auto.find_element("battle/gear_right.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_right"])
             gear_2 = [gear_right[0] - 100 * scale, gear_right[1]]
 
             bbox = (gear_1[0], gear_1[1] - 15 * scale, gear_2[0], gear_1[1])

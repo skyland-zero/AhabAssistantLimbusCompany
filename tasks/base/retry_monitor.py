@@ -86,13 +86,19 @@ class RetryMonitor:
         image = self._to_gray_array(screenshot)
         best_center = None
         best_score = 0.9
+        h, w = image.shape[:2]
+        crop_x1 = int(w * 0.18)
+        crop_y1 = int(h * 0.15)
+        crop_x2 = int(w * 0.82)
+        crop_y2 = int(h * 0.85)
+        cropped_image = image[crop_y1:crop_y2, crop_x1:crop_x2]
         for template in self._templates:
-            match = ImageUtils.match_template(image, template, None, model="clam")
+            match = ImageUtils.match_template(cropped_image, template, None, model="clam")
             if match is None:
                 continue
             center, score = match
             if score >= best_score:
-                best_center = center
+                best_center = (center[0] + crop_x1, center[1] + crop_y1)
                 best_score = score
         return best_center
 

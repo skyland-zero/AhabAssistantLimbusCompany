@@ -54,6 +54,9 @@ required-version = ">=0.12.8"
 # RapidOCR only needs the cv2 module; use the headless distribution for this backend.
 override-dependencies = ["opencv-python; python_version < '0'"]
 
+[tool.uv.sources]
+opencv-python-headless = { path = "assets/binary/wheels/opencv_python_headless-4.11.0.86-cp37-abi3-win_amd64.whl" }
+
 [tool.ruff.lint]
 # 启用规则集 (E: pycodestyle, F: Pyflakes, I: isort)
 # T201: 禁止使用print进行调试
