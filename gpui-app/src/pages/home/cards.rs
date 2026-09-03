@@ -261,7 +261,7 @@ pub(super) fn task_title(task: FixedTaskId, language: Language) -> &'static str 
         FixedTaskId::DailyTask => text("日常任务", "Daily Tasks").get(language),
         FixedTaskId::GetReward => text("领取奖励", "Claim Rewards").get(language),
         FixedTaskId::BuyEnkephalin => text("狂气换体", "Refill Enkephalin").get(language),
-        FixedTaskId::Mirror => text("坐牢设置 (镜牢)", "Mirror Dungeon").get(language),
+        FixedTaskId::Mirror => text("自动镜牢", "Mirror Dungeon").get(language),
         FixedTaskId::ResonateWithAhab => text("亚哈共鸣", "Ahab Resonance").get(language),
     }
 }

@@ -442,16 +442,14 @@ pub(super) fn mirror_card(
         busy,
         TaskCardSpec {
             task: FixedTaskId::Mirror,
-            title: text("坐牢设置 (镜牢)", "Mirror Dungeon")
-                .get(language)
-                .to_owned(),
+            title: task_title(FixedTaskId::Mirror, language).to_owned(),
             icon: "CMP",
             enabled,
             expanded,
             executing,
             preview_tags: vec![
                 preview_tag(
-                    text("坐牢", "Runs").get(language),
+                    text("轮次", "Runs").get(language),
                     if config.infinite_dungeons {
                         "∞".to_owned()
                     } else {
