@@ -203,6 +203,14 @@ class Mirror:
         self.resumed_from_existing_game = False
         self.parallel_mode_enable_attempts = 0
         self.parallel_mode_confirmed = False
+        self.is_entering_node = False
+        self.entering_node_time = 0.0
+
+    def _clear_entering_node_state(self) -> None:
+        """清除进入节点过渡状态锁。"""
+        if self.is_entering_node:
+            self.is_entering_node = False
+            self.entering_node_time = 0.0
 
     def _publish_floor(self, force: bool = False) -> None:
         """Push the current 1-based floor to the GPUI console.
@@ -745,6 +753,7 @@ class Mirror:
 
             # 镜牢结束领取奖励
             if auto.find_element("mirror/claim_reward/battle_statistics_assets.png"):
+                self._clear_entering_node_state()
                 if auto.click_element("mirror/claim_reward/claim_rewards_assets.png") is False:
                     claim_rewards_bbox = ImageUtils.get_bbox(
                         ImageUtils.load_image("mirror/claim_reward/claim_rewards_assets.png")
@@ -772,6 +781,7 @@ class Mirror:
 
             # 选择楼层主题包的情况
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
+                self._clear_entering_node_state()
                 sleep(2)
                 # 楼层未知（恢复后尚未进图判定）时传 None：选包函数对此有显式
                 # 契约（无路线加成、无 F5 特殊处理、纯用户权重），比传错楼层更诚实。
@@ -819,18 +829,29 @@ class Mirror:
 
             # 在镜牢中寻路
             if auto.find_element("mirror/road_in_mir/legend_assets.png"):
+                if self.is_entering_node:
+                    if time.time() - self.entering_node_time < 30:
+                        continue
+                    else:
+                        log.warning("进入节点状态等待超过 30s，重置寻路状态锁")
+                        self._clear_entering_node_state()
+
                 auto.mouse_to_blank()
                 while auto.take_screenshot() is None:
                     continue
                 if auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png"):
+                    self._clear_entering_node_state()
                     continue
                 if auto.find_element("teams/identify_assets.png"):
+                    self._clear_entering_node_state()
                     continue
                 if auto.find_element("mirror/shop/shop_coins_assets.png", model="normal"):
+                    self._clear_entering_node_state()
                     continue
                 if auto.find_element("mirror/claim_reward/claim_rewards_assets.png") and auto.find_element(
                     "mirror/claim_reward/complete_mirror_100%_assets.png"
                 ):
+                    self._clear_entering_node_state()
                     break
                 retry(screenshot_ready=True)
                 if self.get_floor_num:
@@ -842,16 +863,22 @@ class Mirror:
                 while auto.take_screenshot() is None:
                     continue
                 if auto.find_element("mirror/road_in_mir/legend_assets.png"):
-                    _, elapsed = self._time_call(self.search_road)
+                    res, elapsed = self._time_call(self.search_road)
                     self.find_road_total_time += elapsed
+                    if res:
+                        self.is_entering_node = True
+                        self.entering_node_time = time.time()
                 continue
 
             # 进入节点
             if auto.click_element("mirror/road_in_mir/enter_assets.png"):
+                self.is_entering_node = True
+                self.entering_node_time = time.time()
                 continue
 
             # 选择镜牢队伍
             if auto.find_element("mirror/road_to_mir/select_team_stars_assets.png"):
+                self._clear_entering_node_state()
                 self.select_mirror_team()
                 continue
 
@@ -862,6 +889,7 @@ class Mirror:
 
             # 战斗配队的情况
             if auto.find_element("teams/identify_assets.png"):
+                self._clear_entering_node_state()
                 if self.defense_for_solo_state is not None:
                     self.defense_for_solo_state.observe_team_page(self.floor)
                     self.shop.set_pseudo_solo_active(self.defense_for_solo_state.live_count == 1)
@@ -914,6 +942,7 @@ class Mirror:
                 or auto.find_element("battle/turn_assets.png")
                 or (auto.find_element("battle/win_rate_card.png", my_crop=_winrate_crop) and auto.find_element("battle/gear_right.png", my_crop=_gear_r_crop))
             ):
+                self._clear_entering_node_state()
                 self._fight()
                 continue
             elif main_loop_count < 10:
@@ -934,6 +963,7 @@ class Mirror:
             _ego_w = int(_ego_h * 16 / 9)
             _ego_card_crop = (int(_ego_w * 0.12), int(_ego_h * 0.12), int(_ego_w * 0.88), int(_ego_h * 0.82))
             if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png", my_crop=_ego_card_crop):
+                self._clear_entering_node_state()
                 _, elapsed = self._time_call(self.acquire_ego_gift)
                 self.ego_gift_total_time += elapsed
                 continue
@@ -946,6 +976,7 @@ class Mirror:
                     my_crop=_ego_card_crop,
                 )
             ):
+                self._clear_entering_node_state()
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
                 self.ego_gift_total_time += elapsed
                 continue
@@ -953,27 +984,32 @@ class Mirror:
                 auto.find_element("mirror/road_in_mir/refuse_gift_assets.png", my_crop=_ego_card_crop)
                 or auto.find_language_text("拒绝饰品", "refuse", my_crop=_ego_card_crop)
             ):
+                self._clear_entering_node_state()
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
                 self.ego_gift_total_time += elapsed
                 continue
 
             # 如果遇到获取ego饰品的情况
             if auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png"):
+                self._clear_entering_node_state()
                 continue
 
             # 遇到事件
             if auto.click_element("event/skip_assets.png", times=6):
+                self._clear_entering_node_state()
                 self.event_handling()
                 continue
 
             # 商店事件
             if auto.find_element("mirror/shop/shop_coins_assets.png"):
+                self._clear_entering_node_state()
                 _, elapsed = self._time_call(self.in_shop)
                 self.shop_total_time += elapsed
                 continue
 
             # 选择奖励卡
             if auto.find_element("mirror/road_in_mir/select_encounter_reward_card_assets.png"):
+                self._clear_entering_node_state()
                 if self.reward_cards:
                     _, elapsed = self._time_call(get_reward_card, self.reward_cards_select)
                 else:
@@ -1823,6 +1859,7 @@ class Mirror:
             return True
         start_time = time.time()
         log.info("寻路出错, 尝试重进镜牢")
+        self._clear_entering_node_state()
         while True:
             from tasks.base.retry import check_times
 

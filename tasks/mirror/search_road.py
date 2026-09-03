@@ -64,10 +64,18 @@ def _click_enter_after_selection(timeout: float) -> bool:
     """Wait for the node confirmation control, keeping the old timeout bound."""
 
     enter_target = "mirror/road_in_mir/enter_assets.png"
+    clicked = False
     if wait_for_ui_state(lambda: bool(auto.find_element(enter_target)), timeout):
-        return bool(auto.click_element(enter_target))
-    # Keep the original fresh-frame fallback for slow or unusual transitions.
-    return bool(auto.click_element(enter_target, take_screenshot=True))
+        clicked = bool(auto.click_element(enter_target))
+    else:
+        # Keep the original fresh-frame fallback for slow or unusual transitions.
+        clicked = bool(auto.click_element(enter_target, take_screenshot=True))
+
+    if clicked:
+        # UI 握手：确认进入按钮已从画面中消失，表明点击已被游戏引擎接收
+        wait_for_ui_state(lambda: not auto.find_element(enter_target), timeout=1.0)
+        return True
+    return False
 
 
 def _get_node_detector():
@@ -208,7 +216,9 @@ def _keyboard_enter_succeeded() -> bool:
 
     成功条件：点击到"进入"按钮。
     """
-    if auto.click_element("mirror/road_in_mir/enter_assets.png", take_screenshot=True):
+    enter_target = "mirror/road_in_mir/enter_assets.png"
+    if auto.click_element(enter_target, take_screenshot=True):
+        wait_for_ui_state(lambda: not auto.find_element(enter_target), timeout=1.0)
         return True
     return False
 
