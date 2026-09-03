@@ -559,6 +559,12 @@ class ConfigModel(BaseModel):
     mirror_keyboard_simple_pathfinding: bool
     """简单键盘寻路模式：始终按↑选择第一个节点，完全避免鼠标拖动"""
 
+    mirror_prefer_hatred_and_despair: bool
+    """F3/F4 主题包优先选择 Hatred and Despair"""
+
+    mirror_minimize_non_boss_combat: bool
+    """寻路优先最少非 Boss 战斗数；关闭时沿用原权重策略"""
+
     mirror_fresh_frame_wait: bool
     """镜牢寻路前等待新鲜视频帧（抗 Scrcpy 关键帧重同步期的 stale 旧帧误匹配）"""
 

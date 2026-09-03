@@ -360,6 +360,33 @@ class Mirror:
             bbox[3],
         )
 
+    def _theme_pack_selection_floor(self) -> int | None:
+        """Return the 1-based floor represented by the theme-pack page.
+
+        The theme-pack page normally appears after the previous floor's map
+        has been identified, but before the next floor's map is identified.
+        ``self.floor`` is 0-based, so that transition needs ``+2``. Resume
+        and parallel-superposition flows may already have advanced the floor
+        state before the page appears; in that case ``get_floor_num`` remains
+        true and ``+1`` is the correct value.
+        """
+
+        if not self.plan_runtime.progress_observed:
+            # A fresh run always starts at F1. A resumed run without a
+            # reliable floor read must keep the safe fallback instead of
+            # applying a possibly incorrect route overlay.
+            return None if self.resumed_from_existing_game else 1
+
+        if self.get_floor_num:
+            theme_floor = self.floor + 1
+        else:
+            theme_floor = self.floor + 2
+
+        floor_count = self.plan_runtime.floor_count
+        if floor_count is not None and theme_floor > floor_count:
+            return None
+        return theme_floor if theme_floor >= 1 else None
+
     def _read_parallel_mode(self, *, take_screenshot: bool = False) -> bool | None:
         """Read the parallel-superposition switch from its small OCR region."""
 
@@ -783,11 +810,11 @@ class Mirror:
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
                 self._clear_entering_node_state()
                 sleep(2)
-                # 楼层未知（恢复后尚未进图判定）时传 None：选包函数对此有显式
-                # 契约（无路线加成、无 F5 特殊处理、纯用户权重），比传错楼层更诚实。
-                theme_floor = self.floor + 1 if self.plan_runtime.progress_observed else None
+                theme_floor = self._theme_pack_selection_floor()
                 if theme_floor is None:
                     log.info("主题包选择时楼层未知，使用用户权重兜底（无路线加成）")
+                else:
+                    log.info(f"主题包选择目标楼层：第{theme_floor}层")
                 _, elapsed = self._time_call(
                     select_theme_pack,
                     self.hard_switch,
@@ -800,16 +827,17 @@ class Mirror:
                 if self.re_formation_each_floor:
                     self.first_battle = True
                 try:
-                    floor_num = self.floor
+                    # 主题包页面对应的楼层可能比最后一次地图识别前进一层。
+                    floor_num = theme_floor - 1 if theme_floor is not None else self.floor
                     now = time.time()
                     previous_floor_start = self.plan_runtime.record_floor_start(floor_num, now)
                     if floor_num != 0:
                         if previous_floor_start is not None:
                             floor_time = now - previous_floor_start
-                            msg = f"启动后第{self.floor + 1}层卡包"
+                            msg = f"启动后第{floor_num + 1}层卡包"
                         else:
                             floor_time = now - self.floor_times[0]
-                            msg = f"启动后第{self.floor + 1}层卡包，该楼层时间不完整"
+                            msg = f"启动后第{floor_num + 1}层卡包，该楼层时间不完整"
                         to_log_with_time(msg, floor_time)
                         log.debug(vision_profiler.get_summary_text())
                 except MirrorPlanProgressError as error:

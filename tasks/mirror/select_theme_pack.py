@@ -1,5 +1,4 @@
 from core.execution_control import interruptible_sleep as sleep
-
 from module.automation import TextMatchResult, auto
 from module.config import cfg, theme_list
 from module.decorator.decorator import begin_and_finish_time_log
@@ -8,6 +7,13 @@ from module.mirror_routes import MirrorRouteDefinition
 from tasks.base.back_init_menu import back_init_menu
 from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
+
+_HATRED_AND_DESPAIR_ALIASES = (
+    "Hatred",
+    "绝望",
+    "Hatred and Despair",
+    "憎恶与绝望",
+)
 
 
 def _normalize_theme_name(value: object) -> str:
@@ -39,6 +45,22 @@ def _theme_alias_matches(theme_name: object, alias: str) -> bool:
     return True
 
 
+def _theme_pack_aliases_for_floor(
+    floor: int | None,
+    route: MirrorRouteDefinition | None,
+    *,
+    prefer_hatred_and_despair: bool,
+) -> tuple[str, ...]:
+    """Build route-priority aliases without changing user weight files."""
+
+    route_aliases = route.theme_pack_names_for_floor(floor) if route is not None and floor is not None else ()
+    if prefer_hatred_and_despair and floor is not None and int(floor) in (3, 4):
+        # The English catalog uses ``Hatred`` and the Chinese catalog uses
+        # ``绝望`` for the same Hatred and Despair theme pack.
+        route_aliases = _HATRED_AND_DESPAIR_ALIASES + tuple(route_aliases)
+    return tuple(route_aliases)
+
+
 @begin_and_finish_time_log(task_name="选择镜牢主题包")
 # 选择镜牢主题包
 def select_theme_pack(
@@ -47,6 +69,7 @@ def select_theme_pack(
     team_num=None,
     use_custom_theme_pack_weight=False,
     route: MirrorRouteDefinition | None = None,
+    prefer_hatred_and_despair: bool | None = None,
 ):
     loop_count = 30
     auto.model = "clam"
@@ -69,10 +92,17 @@ def select_theme_pack(
             hard_switch, "en", team_num, use_custom_theme_pack_weight
         )
 
+    if prefer_hatred_and_despair is None:
+        prefer_hatred_and_despair = bool(getattr(cfg, "mirror_prefer_hatred_and_despair", False))
+
     # Route priorities are a temporary overlay on the existing theme-pack
     # weights.  The user's global/team weight files remain untouched, and an
     # absent or unmatched route simply keeps the old behavior.
-    route_aliases = route.theme_pack_names_for_floor(floor) if route is not None and floor is not None else ()
+    route_aliases = _theme_pack_aliases_for_floor(
+        floor,
+        route,
+        prefer_hatred_and_despair=prefer_hatred_and_despair,
+    )
     if route_aliases:
 
         def boost_route_weights(weights):
@@ -101,6 +131,8 @@ def select_theme_pack(
         if not route_matched:
             floor_label = f"第{floor}层" if floor is not None else "未知楼层"
             log.debug(f"当前楼层未匹配到路线主题包名称，使用现有权重兜底：{floor_label}")
+        elif prefer_hatred_and_despair and floor is not None and int(floor) in (3, 4):
+            log.debug(f"已启用配置：第{floor}层优先 Hatred and Despair")
     # 游戏更新后新增的主题包尚未收录时的兜底权重，取自「未知 / unknown」配置项
     unknown_weight = int(theme_pack_list_zh.get("未知", theme_pack_list_en.get("unknown", -5)))
     refresh_times = 3

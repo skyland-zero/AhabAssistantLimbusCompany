@@ -507,12 +507,36 @@ def search_road_from_road_map(hard_mode=False):
     )
     route_graph.init_road(connections)
 
-    min_weight, path = route_graph.find_min_weight_route()
+    minimize_non_boss_combat = bool(getattr(cfg, "mirror_minimize_non_boss_combat", False))
+    min_weight, path = route_graph.find_min_weight_route(
+        minimize_non_boss_combat=minimize_non_boss_combat,
+    )
+
+    candidate_routes = route_graph.get_candidate_routes(
+        limit=5,
+        minimize_non_boss_combat=minimize_non_boss_combat,
+    )
+    if candidate_routes:
+        strategy_label = "最少非Boss战斗" if minimize_non_boss_combat else "原权重"
+        candidate_summary = []
+        for index, candidate in enumerate(candidate_routes, start=1):
+            statistics = route_graph.get_path_statistics(candidate)
+            classes = "→".join(node.node_class or "未知" for node in candidate)
+            candidate_summary.append(
+                f"#{index} 战斗数={statistics['non_boss_combat']}"
+                f"/事件数={statistics['event']} 权重={statistics['weight']} 路径={classes}"
+            )
+        log.debug(f"候选路径统计（按{strategy_label}排序，展示前{len(candidate_summary)}条）：" + "；".join(candidate_summary))
 
     if path:
         # 生成方向列表
         directions, road_class_list = route_graph.get_path_directions(path)
         log.debug(f"最小权重: {min_weight}")
+        statistics = route_graph.get_path_statistics(path)
+        log.debug(
+            f"选定路径统计：非Boss战斗数={statistics['non_boss_combat']}，"
+            f"事件数={statistics['event']}，节点权重={statistics['weight']}"
+        )
         log.debug(f"路径方向: {directions}")
         log.debug(f"行走路径: {road_class_list}")
         return directions, road_class_list
@@ -749,6 +773,14 @@ all_node_weight = {
 }
 
 DEFAULT_WEIGHT = 999  # 默认不可达权重
+NON_BOSS_COMBAT_NODE_CLASSES = frozenset(
+    {
+        "battle",
+        "focused_encounter",
+        "risky_encounter",
+        "abnormality_focused_encounter",
+    }
+)
 
 
 class Row(Enum):
@@ -864,11 +896,93 @@ class RouteGraph:
                     return column_key, column_number, pos
         return None, None, None
 
-    def find_min_weight_route(self) -> tuple[float, list[Node]]:
+    def _route_targets(self) -> list[Node]:
+        """Return boss nodes, or the legacy short-route fallback targets."""
+
+        end_nodes = [
+            node
+            for column in self.columns.values()
+            for node in column.values()
+            if node.node_class == "boss_battle"
+        ]
+        if end_nodes:
+            return end_nodes
+
+        target_column_number = min(self.column_count, 3)
+        target_column = self.columns.get(f"column{target_column_number}")
+        return list(target_column.values()) if target_column else []
+
+    @staticmethod
+    def get_path_statistics(path: list[Node]) -> dict[str, int | float]:
+        """Return combat/event counts used by route selection and logging."""
+
+        classes = [node.node_class for node in path]
+        return {
+            "non_boss_combat": sum(node_class in NON_BOSS_COMBAT_NODE_CLASSES for node_class in classes),
+            "event": sum(node_class == "event" for node_class in classes),
+            "boss_combat": sum(node_class == "boss_battle" for node_class in classes),
+            "weight": sum(node.weight for node in path),
+        }
+
+    def get_candidate_routes(
+        self,
+        limit: int | None = 5,
+        *,
+        minimize_non_boss_combat: bool = False,
+    ) -> list[list[Node]]:
+        """Enumerate reachable routes for diagnostics and combat-first routing.
+
+        Mirror maps have only three rows and a small number of columns, so a
+        route enumeration is cheap. It also lets the log show the
+        combat/event trade-off between the routes that were actually visible.
+        """
+
+        target_nodes = set(self._route_targets())
+        if not target_nodes:
+            return []
+
+        start_node = self.columns["column1"][self.bus_row]
+        routes: list[list[Node]] = []
+
+        def visit(node: Node, path: list[Node]) -> None:
+            if node in target_nodes:
+                routes.append(path)
+                return
+            for next_node in node.next_nodes:
+                if next_node in path:
+                    continue
+                visit(next_node, path + [next_node])
+
+        visit(start_node, [start_node])
+        routes.sort(
+            key=lambda route: (
+                (
+                    self.get_path_statistics(route)["non_boss_combat"],
+                    self.get_path_statistics(route)["weight"],
+                )
+                if minimize_non_boss_combat
+                else (self.get_path_statistics(route)["weight"],)
+            )
+        )
+        if limit is None:
+            return routes
+        return routes[: max(0, int(limit))]
+
+    def find_min_weight_route(self, minimize_non_boss_combat: bool = False) -> tuple[float, list[Node]]:
         """
         使用Dijkstra算法计算从入口到出口的最小权重路径
         返回：(最小总权重, 路径节点列表)
         """
+        if minimize_non_boss_combat:
+            candidate_routes = self.get_candidate_routes(
+                limit=1,
+                minimize_non_boss_combat=True,
+            )
+            if not candidate_routes:
+                return float("inf"), []
+            path = candidate_routes[0]
+            return float(self.get_path_statistics(path)["weight"]), path
+
         # 确定起点节点（column1 的初始公交位置）
         start_node = self.columns["column1"][self.bus_row]
 

@@ -354,6 +354,22 @@ pub(super) fn mirror_card(
             "mirror-simple-keyboard",
             MirrorOption::SimplePathfinding,
         ),
+        (
+            text(
+                "F3/F4 优先 Hatred and Despair",
+                "Prefer Hatred and Despair on F3/F4",
+            )
+            .get(language),
+            config.mirror_prefer_hatred_and_despair,
+            "mirror-hatred-and-despair",
+            MirrorOption::PreferHatredAndDespair,
+        ),
+        (
+            text("寻路优先最少非 Boss 战斗", "Minimize non-Boss combat").get(language),
+            config.mirror_minimize_non_boss_combat,
+            "mirror-minimize-non-boss-combat",
+            MirrorOption::MinimizeNonBossCombat,
+        ),
     ];
     let mut option_items = Vec::new();
     for (label, value, id, field) in options {

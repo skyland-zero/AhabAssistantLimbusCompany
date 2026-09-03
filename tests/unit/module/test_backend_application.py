@@ -76,6 +76,8 @@ class FakeConfig:
             "fight_to_last_man": False,
             "mirror_keyboard_navigation": False,
             "mirror_keyboard_simple_pathfinding": False,
+            "mirror_prefer_hatred_and_despair": False,
+            "mirror_minimize_non_boss_combat": False,
             "after_completion_actions": [],
             "after_completion_power_action": "none",
             "keep_after_completion": False,
@@ -943,12 +945,18 @@ def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> 
             "params": {
                 "enabledTasks": {"mirror": True},
                 "daily_task": {"set_EXP_count": 4},
+                "mirror": {
+                    "mirror_prefer_hatred_and_despair": True,
+                    "mirror_minimize_non_boss_combat": True,
+                },
             },
         }
     )
     assert response["result"] is True
     assert app.config.values["mirror"] is True
     assert app.config.values["set_EXP_count"] == 4
+    assert app.config.values["mirror_prefer_hatred_and_despair"] is True
+    assert app.config.values["mirror_minimize_non_boss_combat"] is True
     assert app.config.values["future_field"] == {"kept": True}
 
     invalid = dispatcher.dispatch(

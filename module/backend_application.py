@@ -394,6 +394,8 @@ class BackendApplication:
                     "fight_to_last_man": False,
                     "mirror_keyboard_navigation": False,
                     "mirror_keyboard_simple_pathfinding": False,
+                    "mirror_prefer_hatred_and_despair": False,
+                    "mirror_minimize_non_boss_combat": False,
                 }.items()
             },
             "resonate_with_Ahab": {"enabled": self._json_bool(raw.get("resonate_with_Ahab"), False)},
@@ -457,6 +459,8 @@ class BackendApplication:
             "fight_to_last_man",
             "mirror_keyboard_navigation",
             "mirror_keyboard_simple_pathfinding",
+            "mirror_prefer_hatred_and_despair",
+            "mirror_minimize_non_boss_combat",
             "after_completion_actions",
             "after_completion_power_action",
             "keep_after_completion",
@@ -527,6 +531,8 @@ class BackendApplication:
                 "fight_to_last_man",
                 "mirror_keyboard_navigation",
                 "mirror_keyboard_simple_pathfinding",
+                "mirror_prefer_hatred_and_despair",
+                "mirror_minimize_non_boss_combat",
             ),
         }
         for section, fields in sections.items():

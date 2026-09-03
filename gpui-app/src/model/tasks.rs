@@ -185,6 +185,10 @@ pub struct MirrorConfig {
     pub fight_to_last_man: bool,
     pub mirror_keyboard_navigation: bool,
     pub mirror_keyboard_simple_pathfinding: bool,
+    #[serde(default)]
+    pub mirror_prefer_hatred_and_despair: bool,
+    #[serde(default)]
+    pub mirror_minimize_non_boss_combat: bool,
 }
 
 impl Default for MirrorConfig {
@@ -205,6 +209,8 @@ impl Default for MirrorConfig {
             fight_to_last_man: false,
             mirror_keyboard_navigation: false,
             mirror_keyboard_simple_pathfinding: false,
+            mirror_prefer_hatred_and_despair: false,
+            mirror_minimize_non_boss_combat: false,
         }
     }
 }

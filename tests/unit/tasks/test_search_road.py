@@ -76,3 +76,54 @@ def test_ensure_fresh_map_frame_propagates_wait_failure(monkeypatch) -> None:
 
     assert search_road.ensure_fresh_map_frame() is False
     fake_auto.wait_for_fresh_frame.assert_called_once()
+
+
+def _build_route_graph_for_strategy_test() -> search_road.RouteGraph:
+    graph = search_road.RouteGraph([], search_road.Row.MID, (0, 0), hard_mode=True)
+    graph._add_new_column()
+    graph._set_node(2, search_road.Row.TOP, "event", 1)
+    graph._set_node(2, search_road.Row.MID, "shop", 8)
+    graph._add_new_column()
+    graph._set_node(3, search_road.Row.TOP, "battle", 4)
+    graph._set_node(3, search_road.Row.MID, "event", 8)
+    graph._add_new_column()
+    graph._set_node(4, search_road.Row.TOP, "boss_battle", 1)
+    graph._set_node(4, search_road.Row.MID, "boss_battle", 1)
+    graph.columns["column1"][search_road.Row.MID].add_next_node(
+        graph.columns["column2"][search_road.Row.TOP]
+    )
+    graph.columns["column1"][search_road.Row.MID].add_next_node(
+        graph.columns["column2"][search_road.Row.MID]
+    )
+    graph.columns["column2"][search_road.Row.TOP].add_next_node(
+        graph.columns["column3"][search_road.Row.TOP]
+    )
+    graph.columns["column2"][search_road.Row.MID].add_next_node(
+        graph.columns["column3"][search_road.Row.MID]
+    )
+    graph.columns["column3"][search_road.Row.TOP].add_next_node(
+        graph.columns["column4"][search_road.Row.TOP]
+    )
+    graph.columns["column3"][search_road.Row.MID].add_next_node(
+        graph.columns["column4"][search_road.Row.MID]
+    )
+    return graph
+
+
+def test_route_strategy_keeps_legacy_weight_selection_by_default() -> None:
+    graph = _build_route_graph_for_strategy_test()
+
+    _, path = graph.find_min_weight_route()
+
+    assert [node.node_class for node in path] == ["bus", "event", "battle", "boss_battle"]
+
+
+def test_route_strategy_can_prioritize_fewer_non_boss_combats() -> None:
+    graph = _build_route_graph_for_strategy_test()
+
+    _, path = graph.find_min_weight_route(minimize_non_boss_combat=True)
+    statistics = graph.get_path_statistics(path)
+
+    assert [node.node_class for node in path] == ["bus", "shop", "event", "boss_battle"]
+    assert statistics["non_boss_combat"] == 0
+    assert statistics["event"] == 1

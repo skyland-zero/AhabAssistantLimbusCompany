@@ -89,6 +89,14 @@ impl HomeState {
                 tasks.mirror.mirror_keyboard_simple_pathfinding =
                     !tasks.mirror.mirror_keyboard_simple_pathfinding
             }
+            MirrorOption::PreferHatredAndDespair => {
+                tasks.mirror.mirror_prefer_hatred_and_despair =
+                    !tasks.mirror.mirror_prefer_hatred_and_despair
+            }
+            MirrorOption::MinimizeNonBossCombat => {
+                tasks.mirror.mirror_minimize_non_boss_combat =
+                    !tasks.mirror.mirror_minimize_non_boss_combat
+            }
         });
     }
 

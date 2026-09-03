@@ -147,6 +147,8 @@ teams_be_select: [False] # 被选中的队伍
 teams_order: [0] # 队伍的顺序
 mirror_keyboard_navigation: False # 使用键盘进行镜牢寻路
 mirror_keyboard_simple_pathfinding: False # 简单键盘寻路（始终按↑，避免鼠标拖动）
+mirror_prefer_hatred_and_despair: False # F3/F4 优先选择 Hatred and Despair 主题包
+mirror_minimize_non_boss_combat: False # 寻路优先最少非 Boss 战斗数（关闭时沿用原权重策略）
 mirror_fresh_frame_wait: True # 镜牢寻路前等待新鲜视频帧（抗Scrcpy重同步期旧帧误匹配）
 enable_template_blur: False # 是否启用模板高斯模糊（抗Scrcpy/H264压缩噪点，关闭可省CPU）
 

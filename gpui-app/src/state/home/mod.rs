@@ -37,6 +37,8 @@ pub enum MirrorOption {
     FightToLast,
     KeyboardNavigation,
     SimplePathfinding,
+    PreferHatredAndDespair,
+    MinimizeNonBossCombat,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
