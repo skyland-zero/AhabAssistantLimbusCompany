@@ -3,16 +3,17 @@ import os
 import threading
 import time
 from enum import Enum
-from core.execution_control import interruptible_sleep as sleep
 
 import cv2
 import numpy as np
 
+from core.execution_control import interruptible_sleep as sleep
 from module.automation import auto
 from module.config import cfg
 from module.logger import log
 from module.my_error.my_error import InputAttributeError
 from tasks.base.retry import retry, wait_for_ui_state
+from utils.image_utils import ImageUtils
 
 # 道路网格参数基于 2560×1440 游戏截图标定。
 ROAD_COLUMN_GAP = 520
@@ -478,12 +479,7 @@ def identify_nodes(bus_x, screenshot=None):
     pad_y = (model_input_height - resized_height) // 2
     model_input = np.full((model_input_height, model_input_width, 3), 114, np.uint8)
     model_input[pad_y : pad_y + resized_height, pad_x : pad_x + resized_width] = resized
-    blob = cv2.dnn.blobFromImage(
-        model_input,
-        scalefactor=1 / 255,
-        size=(model_input_width, model_input_height),
-        swapRB=False,
-    )
+    blob = ImageUtils.image_to_blob(model_input)
 
     outputs = np.asarray(session.run(None, {input_name: blob})[0])
     outputs = outputs[0] if outputs.ndim == 3 else outputs
@@ -514,24 +510,20 @@ def identify_nodes(bus_x, screenshot=None):
             candidate_outputs[:, 3],
         )
     )
-    boxes = boxes_array.tolist()
-    scores = candidate_scores.astype(float).tolist()
 
-    result_boxes = cv2.dnn.NMSBoxes(
-        boxes,
-        scores,
+    result_boxes = ImageUtils.non_max_suppression(
+        boxes_array,
+        candidate_scores,
         confidence_threshold,
         0.4,
-        0.5,
     )
     if len(result_boxes) == 0:
         return None
 
     node_list = []
     # 将 NMS 保留框还原到截图坐标，并过滤 Bus 所在列、左侧及纵向越界的节点。
-    for result_index in result_boxes:
-        index = int(np.asarray(result_index).reshape(-1)[0])
-        x, y, box_width, box_height = (float(value) for value in boxes[index])
+    for index in result_boxes:
+        x, y, box_width, box_height = (float(value) for value in boxes_array[index])
         center = (
             int((x + box_width / 2 - pad_x) / image_scale),
             int((y + box_height / 2 - pad_y) / image_scale),

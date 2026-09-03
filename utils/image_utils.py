@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 import cv2
@@ -376,3 +378,85 @@ class ImageUtils:
             return True, len(good_matches)
         else:
             return False, len(good_matches)
+
+    @staticmethod
+    def image_to_blob(image: np.ndarray, scalefactor: float = 1.0 / 255.0) -> np.ndarray:
+        """将 HWC uint8 图像转换为 ONNX 常见的 NCHW float32 连续张量并归一化。
+
+        :param image: 输入图像 (H, W, C)
+        :param scalefactor: 缩放归一化因子，默认 1/255.0
+        :return: (1, C, H, W) 形状的 float32 C 连续内存数组
+        """
+        if image.ndim != 3:
+            raise ValueError(f"输入图像必须为 3 维 (H, W, C)，当前为: {image.shape}")
+        blob = np.empty((1, image.shape[2], image.shape[0], image.shape[1]), dtype=np.float32)
+        np.multiply(image.transpose(2, 0, 1), np.float32(scalefactor), out=blob[0], dtype=np.float32)
+        return blob
+
+    @staticmethod
+    def non_max_suppression(
+        boxes: list[list[float]] | np.ndarray,
+        scores: list[float] | np.ndarray,
+        score_threshold: float = 0.0,
+        nms_threshold: float = 0.4,
+    ) -> list[int]:
+        """纯 NumPy 实现的高性能非极大值抑制 (NMS)，行为对齐 cv2.dnn.NMSBoxes。
+
+        :param boxes: 候选框集合，格式为 [x, y, w, h] (左上角坐标与宽高)。
+        :param scores: 对应的置信度分数集合。
+        :param score_threshold: 置信度阈值，低于此阈值的框被过滤。
+        :param nms_threshold: 重叠抑制阈值 (IoU)。
+        :return: 保留框在原始输入序列中的索引列表 (按照置信度降序排序)。
+        """
+        if len(boxes) == 0:
+            return []
+
+        boxes_arr = np.asarray(boxes, dtype=np.float32)
+        scores_arr = np.asarray(scores, dtype=np.float32)
+
+        if boxes_arr.ndim != 2 or boxes_arr.shape[1] != 4:
+            raise ValueError(f"boxes 形状异常，期望 (N, 4)，实际为: {boxes_arr.shape}")
+        if scores_arr.ndim != 1 or len(scores_arr) != len(boxes_arr):
+            raise ValueError("scores 长度必须与 boxes 数量一致")
+
+        valid = scores_arr >= score_threshold
+        if not np.any(valid):
+            return []
+
+        indices = np.where(valid)[0]
+        b = boxes_arr[valid]
+        s = scores_arr[valid]
+
+        x1 = b[:, 0]
+        y1 = b[:, 1]
+        x2 = x1 + b[:, 2]
+        y2 = y1 + b[:, 3]
+        areas = np.maximum(0.0, b[:, 2]) * np.maximum(0.0, b[:, 3])
+
+        order = s.argsort()[::-1]
+        keep: list[int] = []
+
+        while order.size > 0:
+            i = order[0]
+            keep.append(int(indices[i]))
+            if order.size == 1:
+                break
+
+            other = order[1:]
+            xx1 = np.maximum(x1[i], x1[other])
+            yy1 = np.maximum(y1[i], y1[other])
+            xx2 = np.minimum(x2[i], x2[other])
+            yy2 = np.minimum(y2[i], y2[other])
+
+            w = np.maximum(0.0, xx2 - xx1)
+            h = np.maximum(0.0, yy2 - yy1)
+            inter = w * h
+
+            union = areas[i] + areas[other] - inter
+            iou = np.divide(inter, union, out=np.zeros_like(inter), where=union > 0)
+
+            remaining = np.where(iou <= nms_threshold)[0]
+            order = other[remaining]
+
+        return keep
+
