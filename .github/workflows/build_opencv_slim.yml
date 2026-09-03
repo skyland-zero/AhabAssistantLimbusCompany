@@ -44,11 +44,20 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install scikit-build cmake ninja "numpy<2.0"
 
-      - name: Patch setup.py to allow Ninja on Windows
+      - name: Patch setup.py for slim build on Windows
         shell: bash
         run: |
-          # 修复 opencv-python setup.py 中硬编码 -DCMAKE_GENERATOR_PLATFORM=x64 导致 Ninja 冲突报错的问题
-          python -c "p = 'setup.py'; s = open(p, encoding='utf-8').read().replace('[\"-DCMAKE_GENERATOR_PLATFORM=x64\"]', '[]'); open(p, 'w', encoding='utf-8').write(s)"
+          python -c "
+          import re
+          p = 'setup.py'
+          s = open(p, encoding='utf-8').read()
+          # 1. 移除 Ninja 冲突的平台参数
+          s = s.replace('[\"-DCMAKE_GENERATOR_PLATFORM=x64\"]', '[]')
+          # 2. 移除强制打包 opencv_videoio_ffmpeg 动态库的检查（因为我们已彻底剥离 ffmpeg 和 videoio）
+          s, n = re.subn(r'\[r\"bin/opencv_videoio_ffmpeg.*?else \[\]', '[]', s, flags=re.DOTALL)
+          assert n == 1, 'ffmpeg pattern replacement failed'
+          open(p, 'w', encoding='utf-8').write(s)
+          "
           git diff setup.py || true
 
       - name: Build Slim Wheel
