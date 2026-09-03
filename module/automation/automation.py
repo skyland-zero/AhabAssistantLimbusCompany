@@ -19,6 +19,7 @@ from utils.singletonmeta import SingletonMeta
 from ..config import cfg
 from ..logger import log
 from ..ocr import ocr
+from module.vision_profiler import vision_profiler
 from .input_handlers.input import AbstractInput
 from .screenshot import ScreenShot
 
@@ -833,6 +834,7 @@ class Automation(metaclass=SingletonMeta):
         cached = ocr_cache.get(cache_key)
         if cached is None:
             source_image = self.screenshot if screenshot_image is None else screenshot_image
+            t_ocr_start = time.perf_counter()
             if my_crop is not None:
                 if hasattr(source_image, "crop"):
                     cropped_image = source_image.crop(my_crop)
@@ -841,6 +843,7 @@ class Automation(metaclass=SingletonMeta):
                 ocr_result = ocr.run(cropped_image)
             else:
                 ocr_result = ocr.run(source_image)
+            ocr_cost_ms = (time.perf_counter() - t_ocr_start) * 1000.0
 
             ocr_texts = getattr(ocr_result, "txts", None)
             ocr_boxes = getattr(ocr_result, "boxes", None)
@@ -854,6 +857,12 @@ class Automation(metaclass=SingletonMeta):
             cached = (ocr_dict, ocr_text_list)
             ocr_cache[cache_key] = cached
 
+            search_region = tuple(int(round(x)) for x in my_crop) if my_crop is not None else (0, 0, 1920, 1080)
+            vision_profiler.record_ocr(search_region, ocr_cost_ms)
+            log.debug(
+                f"[VISION-OCR] region={search_region} | cost={ocr_cost_ms:.1f}ms | count={len(ocr_text_list)} | texts={ocr_text_list[:3]}",
+                stacklevel=additional_stack + 3,
+            )
             if ocr_dict:
                 log.debug(f"识别到文本及其坐标：{ocr_dict}", stacklevel=additional_stack + 3)
 
@@ -1246,25 +1255,82 @@ class Automation(metaclass=SingletonMeta):
                 if cache_hit:
                     return cached_result
 
-            screenshot = self._get_screenshot_array(screenshot_image, gray=True)
+            screenshot_full = self._get_screenshot_array(screenshot_image, gray=True)
+            if hasattr(screenshot_full, "shape"):
+                screen_h, screen_w = screenshot_full.shape[:2]
+            elif hasattr(screenshot_full, "size"):
+                screen_w, screen_h = screenshot_full.size
+            else:
+                screen_w, screen_h = 1920, 1080
+
             if my_crop:
-                screenshot = ImageUtils.crop(screenshot, my_crop)
+                crop_x1 = max(0, int(round(my_crop[0])))
+                crop_y1 = max(0, int(round(my_crop[1])))
+                crop_x2 = min(screen_w, int(round(my_crop[2])))
+                crop_y2 = min(screen_h, int(round(my_crop[3])))
+                search_region = (crop_x1, crop_y1, crop_x2, crop_y2)
+                screenshot = ImageUtils.crop(screenshot_full, my_crop)
+                is_fullscreen = False
+            else:
+                crop_x1, crop_y1 = 0, 0
+                screenshot = screenshot_full
+                search_region = (0, 0, screen_w, screen_h)
+                is_fullscreen = True
 
             results = []
             for loaded_path in existing_paths:
                 template, bbox = self._load_template_for_path(target, loaded_path, cacheable)
                 if template is None:
                     continue
-                center, matchVal = ImageUtils.match_template(screenshot, template, bbox, model)
-                matched = self._is_valid_match(matchVal, threshold)
-                if 0.70 < matchVal < 0.90 and int(matchVal * 1000 + 1e-9) % 10 >= 5:
-                    match_fmt = ".3f"
+                if hasattr(template, "shape"):
+                    th, tw = template.shape[:2]
+                elif hasattr(template, "size"):
+                    tw, th = template.size
                 else:
-                    match_fmt = ".2f"
+                    tw, th = 0, 0
+                actual_region = search_region
+                actual_fullscreen = is_fullscreen
+                if not my_crop and bbox is not None and model != "aggressive":
+                    offset = 100 if model == "normal" else 30
+                    actual_region = (
+                        max(0, int(round(bbox[0])) - offset),
+                        max(0, int(round(bbox[1])) - offset),
+                        min(screen_w, int(round(bbox[2])) + offset),
+                        min(screen_h, int(round(bbox[3])) + offset),
+                    )
+                    actual_fullscreen = False
+
+                t_match_start = time.perf_counter()
+                center, matchVal = ImageUtils.match_template(screenshot, template, bbox, model)
+                match_cost_ms = (time.perf_counter() - t_match_start) * 1000.0
+
+                if my_crop and center is not None:
+                    center = (center[0] + crop_x1, center[1] + crop_y1)
+
+                matched = self._is_valid_match(matchVal, threshold)
+
+                rw = actual_region[2] - actual_region[0]
+                rh = actual_region[3] - actual_region[1]
+                target_clean = target.replace("./assets/images/", "").replace("\\", "/")
+                hit_str = f"({center[0]},{center[1]})" if (matched and center) else "None"
                 log.debug(
-                    f"目标图片：{target.replace('./assets/images/', '')}, 路径: {loaded_path}, 相似度：{matchVal:{match_fmt}}, 目标位置：{center}",
+                    f"[VISION-MATCH] target={target_clean} | model={model} | region={actual_region}[{rw}x{rh}] | cost={match_cost_ms:.1f}ms | score={matchVal:.3f} | hit={hit_str}",
                     stacklevel=additional_stack + 3,
                 )
+
+                vision_profiler.record_match(
+                    target=target,
+                    model=model,
+                    region=actual_region,
+                    duration_ms=match_cost_ms,
+                    matched=matched,
+                    score=matchVal,
+                    hit_point=center if (matched and center) else None,
+                    is_fullscreen=actual_fullscreen,
+                    template_size=(tw, th),
+                    screen_size=(screen_w, screen_h),
+                )
+
                 results.append(
                     {
                         "path": loaded_path,

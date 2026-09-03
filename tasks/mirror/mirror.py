@@ -48,6 +48,7 @@ from tasks.mirror.search_road import (
 from tasks.mirror.select_theme_pack import select_theme_pack
 from tasks.teams.team_formation import check_team, load_team_code_in_game, select_battle_team, team_formation
 from utils.image_utils import ImageUtils
+from module.vision_profiler import vision_profiler
 
 MIRROR_SINNER_IDS = (
     "yi_sang",
@@ -551,6 +552,7 @@ class Mirror:
     def run(self):
         # 计时开始
         start_time = time.time()
+        vision_profiler.reset()
 
         if auto.click_element("home/drive_assets.png") or auto.find_element("home/window_assets.png"):
             sleep(0.5)
@@ -630,6 +632,7 @@ class Mirror:
                             floor_time = now - self.floor_times[0]
                             msg = f"启动后第{self.floor}层卡包，该楼层时间不完整"
                         to_log_with_time(msg, floor_time)
+                        log.debug(vision_profiler.get_summary_text())
                 except MirrorPlanProgressError as error:
                     self.plan_runtime.record_deviation(str(error))
                     log.info(f"楼层时间记录跳过：{error}")
@@ -1188,6 +1191,7 @@ class Mirror:
         # 输出镜牢总时间
         msg = f"此次镜牢使用{self.system}体系队伍"
         to_log_with_time(msg, elapsed_time)
+        vision_profiler.log_summary()
 
         return True
 
