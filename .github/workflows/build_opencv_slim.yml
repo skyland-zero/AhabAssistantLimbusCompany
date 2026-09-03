@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Build Slim Wheel (Windows x64)
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Checkout opencv-python repository
         uses: actions/checkout@v4
@@ -44,13 +44,20 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install scikit-build cmake ninja "numpy<2.0"
 
+      - name: Patch setup.py to allow Ninja on Windows
+        shell: bash
+        run: |
+          # 修复 opencv-python setup.py 中硬编码 -DCMAKE_GENERATOR_PLATFORM=x64 导致 Ninja 冲突报错的问题
+          python -c "p = 'setup.py'; s = open(p, encoding='utf-8').read().replace('[\"-DCMAKE_GENERATOR_PLATFORM=x64\"]', '[]'); open(p, 'w', encoding='utf-8').write(s)"
+          git diff setup.py || true
+
       - name: Build Slim Wheel
         shell: bash
         env:
           ENABLE_HEADLESS: "1"
           ENABLE_CONTRIB: "0"
+          CMAKE_BUILD_PARALLEL_LEVEL: "4"
           CMAKE_ARGS: >-
-            -GNinja
             -DCMAKE_BUILD_TYPE=Release
             -DBUILD_opencv_dnn=OFF
             -DBUILD_opencv_video=OFF
