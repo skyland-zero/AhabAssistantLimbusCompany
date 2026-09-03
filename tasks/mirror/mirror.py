@@ -717,7 +717,7 @@ class Mirror:
                 _, elapsed = self._time_call(
                     select_theme_pack,
                     self.hard_switch,
-                    self.floor,
+                    self.floor + 1,
                     self.team_order,
                     self.use_custom_theme_pack_weight,
                     route=self.mirror_route,
@@ -732,10 +732,10 @@ class Mirror:
                     if floor_num != 0:
                         if previous_floor_start is not None:
                             floor_time = now - previous_floor_start
-                            msg = f"启动后第{self.floor}层卡包"
+                            msg = f"启动后第{self.floor + 1}层卡包"
                         else:
                             floor_time = now - self.floor_times[0]
-                            msg = f"启动后第{self.floor}层卡包，该楼层时间不完整"
+                            msg = f"启动后第{self.floor + 1}层卡包，该楼层时间不完整"
                         to_log_with_time(msg, floor_time)
                         log.debug(vision_profiler.get_summary_text())
                 except MirrorPlanProgressError as error:
@@ -1271,7 +1271,7 @@ class Mirror:
         last_floor_start = self.plan_runtime.last_floor_start(self.floor)
         if last_floor_start is not None:
             last_floor_time = time.time() - last_floor_start
-            msg = f"启动后第{self.floor}层卡包"
+            msg = f"启动后第{self.floor + 1}层卡包"
             to_log_with_time(msg, last_floor_time)
         else:
             log.info("楼层异常，可能是OCR识别错误，本轮镜牢层间的时间记录无效")
@@ -1942,7 +1942,7 @@ class Mirror:
         auto.mouse_to_blank()
 
         def route_priority(bbox):
-            return self.shop.route_gift_priority_for_crop(bbox, self.floor)
+            return self.shop.route_gift_priority_for_crop(bbox, self.floor + 1)
 
         route_fallback_priority = 10**6
         if type == 2:
@@ -2255,7 +2255,8 @@ class Mirror:
 
     @begin_and_finish_time_log(task_name="镜牢商店")
     def in_shop(self):
-        self.shop.in_shop(self.floor)
+        # Shop expects 1-indexed floor for display/ignore indexing; internal self.floor is 0-indexed
+        self.shop.in_shop(self.floor + 1)
 
     def get_which_floor(self):
         # Scenario B/C: silent max-pool read first (no click), avoids flicker without popup
