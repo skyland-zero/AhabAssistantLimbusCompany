@@ -103,11 +103,41 @@ if result_boxes_new != old_flat:
 
 ---
 
-## 6. 最终成果总结
+## 6. 阶段三：专属轻量 Wheel 编译与实机接入结果
 
-1. **打包体积直接缩减**：
-   `AALC Backend.exe` 单文件从 **141 MB** 降至 **129 MB**（运行时解压目录省掉 **30 MB**）。
+通过 `.github/workflows/build_opencv_slim.yml` 成功在云端构建出专属的 `opencv-python-headless-slim-win64` Wheel，并在本地环境实装测试通过。
+
+### 6.1 体积缩减三级跳对比
+
+| 指标 | 初始状态 (OpenCV 5.0 Headless) | 阶段一 (排除视频 DLL) | 阶段三 (接入专属裁剪 Wheel) | 累计优化幅度 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Wheel 安装包体积** | ~44 MB | ~44 MB | **9.5 MB** | 📉 **-78.4%** |
+| **`cv2.pyd` 核心扩展库** | 82 MB | 82 MB | **24 MB** | 📉 **-70.7%** |
+| **`opencv_videoio_ffmpeg`** | 30 MB | 30 MB (打包排除) | **0 MB (完全未编译)** | 📉 **-100%** |
+| **site-packages/cv2 目录**| 113 MB | 113 MB | **~25 MB** | 📉 **-77.9% (-88MB)** |
+| **最终打包 `AALC Backend.exe`** | **141 MB** | **129 MB** | **108 MB** | 📉 **净缩减 33 MB (-23.4%)** |
+
+### 6.2 关键兼容性修复记录
+1. **Windows + Ninja 平台参数冲突**：
+   * 官方 `setup.py` 硬编码注入 `-DCMAKE_GENERATOR_PLATFORM=x64`，与 Ninja 生成器冲突报错；CI 中通过自动化 Patch 剔除该平台参数。
+2. **打包自检找不到 FFmpeg DLL**：
+   * 官方 `setup.py` 在打包最后一步硬编码要求检查 `opencv_videoio_ffmpeg*.dll`，CI 中使用正则将该依赖检查替换为 `[]`。
+3. **NumPy 2.x C-API ABI 适配**：
+   * 初始构建使用了 `numpy<2.0`，导致生成的 Wheel 无法在 Python 3.14 / NumPy 2.x 运行时加载；升级为 `numpy>=2.0.0` 编译后实现原生双向兼容。
+
+### 6.3 验证结果
+* **模块检查**：`dnn`、`VideoCapture` 等已彻底禁用；`matchTemplate`、`cvtColor`、`resize`、`GaussianBlur`、`ORB`、`FLANN`、`findHomography`、`connectedComponents` 完好保留。
+* **RapidOCR 验证**：文字检测与识别推理正常。
+* **自动化测试**：全量 **183 个单元测试全部通过**。
+* **可执行文件**：`AALC Backend.exe --help` 启动正常。
+
+---
+
+## 7. 最终成果总结
+
+1. **打包体积断崖式下降**：
+   `AALC Backend.exe` 单文件从 **141 MB** 降至 **108 MB**，解压运行时目录直接节省约 **88 MB**。
 2. **OpenCV DNN 彻底解耦**：
-   代码中不再存在对 `cv2.dnn` 的任何依赖，为后续切换 15MB 级别的定制编译版 OpenCV 或彻底裁剪打下坚实基础。
-3. **性能零损耗且更平稳**：
-   单次推理前后处理耗时缩短约 1.8ms，内存分配更少。
+   代码中不再存在对 `cv2.dnn` 的任何依赖，由纯 NumPy 向量化替代，前/后处理综合耗时缩短约 1.8ms。
+3. **独立可重复的构建流水线**：
+   拥有专属的 `.github/workflows/build_opencv_slim.yml`，后续如需升级 OpenCV 版本只需一键触发 Action 即可自动打包交付。
