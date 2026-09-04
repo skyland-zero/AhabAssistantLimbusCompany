@@ -37,7 +37,7 @@ async def _exercise_real_sidecar() -> None:
             await client.send(json.dumps({"type": "hello", "token": token}))
             hello = json.loads(await asyncio.wait_for(client.recv(), timeout=3))
             assert hello["ok"] is True
-            assert hello["schemaVersion"] == 2
+            assert hello["schemaVersion"] == 3
 
             methods = [
                 "app.ping",
@@ -62,8 +62,8 @@ async def _exercise_real_sidecar() -> None:
             assert responses_by_id[1] == "pong"
             assert responses_by_id[3]["schemaVersion"] == 1
             assert responses_by_id[4]["schemaVersion"] == 1
-            assert responses_by_id[5]["schemaVersion"] == 2
-            assert responses_by_id[9]["schemaVersion"] == 2
+            assert responses_by_id[5]["schemaVersion"] == 3
+            assert responses_by_id[9]["schemaVersion"] == 3
 
             teams = responses_by_id[7]
             if teams:

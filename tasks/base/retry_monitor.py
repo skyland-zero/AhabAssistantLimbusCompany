@@ -14,6 +14,8 @@ class RetryMonitor:
 
     RETRY_TEMPLATE = "base/retry.png"
     TEMPLATE_PATHS = ("default/en", "default/zh_cn")
+    _LIFECYCLE_LOCK_TIMEOUT = 2.0
+    _LIFECYCLE_LOCK_POLL = 0.1
 
     def __init__(
         self,
@@ -31,10 +33,31 @@ class RetryMonitor:
         self._last_click_time = 0.0
         self._handling_retry = False
         self._clear_frames = 0
+        self._lifecycle_request = 0
+
+    def _acquire_lifecycle_lock(self) -> bool:
+        """Acquire lifecycle state without an unbounded lock wait."""
+
+        deadline = time.monotonic() + self._LIFECYCLE_LOCK_TIMEOUT
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if self._lifecycle_lock.acquire(timeout=min(self._LIFECYCLE_LOCK_POLL, remaining)):
+                return True
 
     def start(self) -> None:
         """加载模板并启动监控线程；重复调用不会创建多个线程。"""
-        with self._lifecycle_lock:
+        self._lifecycle_request += 1
+        request = self._lifecycle_request
+        if not self._acquire_lifecycle_lock():
+            log.warning("重试监控生命周期锁等待超时，跳过启动")
+            return
+        try:
+            # A concurrent stop supersedes a start that was still waiting for
+            # templates or the lifecycle lock; do not resurrect the worker.
+            if request != self._lifecycle_request:
+                return
             if self._thread is not None and self._thread.is_alive():
                 return
             self._templates = self._load_templates()
@@ -52,13 +75,25 @@ class RetryMonitor:
             )
             self._thread.start()
             log.debug("通用服务器重试监控线程已启动")
+        finally:
+            self._lifecycle_lock.release()
 
     def stop(self) -> None:
         """停止监控并确保业务点击门恢复。"""
-        with self._lifecycle_lock:
+        # Set the event before contending for bookkeeping lock so the worker
+        # wakes immediately even if template loading still owns the lock.
+        self._lifecycle_request += 1
+        self._stop_event.set()
+        acquired = self._acquire_lifecycle_lock()
+        if not acquired:
+            log.warning("重试监控生命周期锁等待超时，继续执行有界停止")
             thread = self._thread
-            self._thread = None
-            self._stop_event.set()
+        else:
+            try:
+                thread = self._thread
+                self._thread = None
+            finally:
+                self._lifecycle_lock.release()
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=2)
         self._handling_retry = False

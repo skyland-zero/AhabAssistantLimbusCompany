@@ -10,7 +10,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from functools import partial
-from time import sleep
 
 import cv2
 import numpy as np
@@ -23,6 +22,7 @@ from utils.utils import run_as_user
 
 from .. import AbstractInput
 from . import insert_swipe
+from .runner_policy import RunnerDevicePolicyError, RunnerPolicy
 
 usual_key_code = {
     "q": 16,
@@ -215,6 +215,10 @@ class CaptureNemuIpc(CaptureStd):
 class MumuControl(AbstractInput):
     connection_device = None
 
+    _MUMU_MANAGER_TIMEOUT = 10.0
+    _MUMU_SHUTDOWN_TIMEOUT = 15.0
+    _MUMU_MAX_INSTANCE = 1536
+
     # 截图在途超过该时长视为卡死（正常截图远小于此值），届时弃用旧调用链并换新重试
     _SCREENSHOT_STUCK_DEADLINE = 10.0
 
@@ -232,7 +236,9 @@ class MumuControl(AbstractInput):
                 if MumuControl.connection_device is controller:
                     MumuControl.connection_device = None
 
-    def __init__(self, instance_number=0, display_id=0, *, auto_start=True):
+    def __init__(self, instance_number=0, display_id=0, *, auto_start=True, runner_policy=None):
+        super().__init__()
+        self._runner_policy = runner_policy or RunnerPolicy.from_env()
         self.install_path = None
         self.nemu_folder = None
         self.mumu_version = None
@@ -261,9 +267,6 @@ class MumuControl(AbstractInput):
         self.game_package_name = "com.ProjectMoon.LimbusCompany"
         self.package_list = False
 
-        self.is_pause = False
-        self.restore_time = None
-
         self.start_game_times = 0
 
         self.mumu_control_api_backend()
@@ -274,13 +277,92 @@ class MumuControl(AbstractInput):
         if self._auto_start:
             self.start()
 
+    def _policy(self) -> RunnerPolicy:
+        """Return the controller policy, including for lightweight test doubles."""
+
+        policy = getattr(self, "_runner_policy", None)
+        if isinstance(policy, RunnerPolicy):
+            return policy
+        policy = RunnerPolicy.from_env()
+        self._runner_policy = policy
+        return policy
+
+    def _raise_if_cancelled(self, action: str) -> None:
+        if self.cancellation_requested():
+            raise userStopError(f"{action} 已取消")
+
+    def _validated_instance_number(self) -> int:
+        value = getattr(self, "multi_instance_number", None)
+        if isinstance(value, bool) or value is None:
+            raise ValueError("MuMu instance number must be an integer")
+        if isinstance(value, int):
+            instance = value
+        elif isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+            instance = int(value)
+        else:
+            raise ValueError("MuMu instance number must contain only decimal digits")
+        if not 0 <= instance <= self._MUMU_MAX_INSTANCE:
+            raise ValueError(f"MuMu instance number must be between 0 and {self._MUMU_MAX_INSTANCE}")
+        return instance
+
+    def _validated_exe_path(self) -> str:
+        value = getattr(self, "exe_path", None)
+        if not isinstance(value, (str, os.PathLike)):
+            raise ValueError("MuMu manager executable path is missing")
+        path = os.fspath(value)
+        if not path or "\x00" in path or any(character in path for character in "\r\n\t\"';&|<>`$"):
+            raise ValueError("MuMu manager executable path contains unsupported characters")
+        if self._policy().is_runner and not os.path.isabs(path):
+            raise RunnerDevicePolicyError(
+                "Runner requires an absolute MuMu manager executable path",
+                action="mumu_manager_path",
+            )
+        return path
+
+    def _manager_command(self, *arguments: object) -> list[str]:
+        self._raise_if_cancelled("MuMu manager command")
+        self._validated_instance_number()
+        command = [self._validated_exe_path()]
+        command.extend(str(argument) for argument in arguments)
+        return command
+
+    def _instance_argument(self) -> str:
+        return str(self._validated_instance_number())
+
+    def _run_manager_command(
+        self,
+        *arguments: object,
+        timeout: float | None = None,
+        check: bool = False,
+        capture_output: bool = True,
+    ):
+        command = self._manager_command(*arguments)
+        no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+        return subprocess.run(
+            command,
+            shell=False,
+            timeout=timeout or self._MUMU_MANAGER_TIMEOUT,
+            universal_newlines=True,
+            capture_output=capture_output,
+            check=check,
+            encoding="utf-8" if capture_output else None,
+            creationflags=no_window_flag,
+        )
+
     def adb_connect(self, _depth=0):
         _ADB_MAX_DEPTH = 3
+        self._raise_if_cancelled("ADB 连接")
         if _depth >= _ADB_MAX_DEPTH:
             log.error(f"ADB 连接重试次数已耗尽 ({_ADB_MAX_DEPTH}轮), 放弃连接，请检查模拟器 ADB 是否正常开启")
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner ADB connection retries were exhausted; emulator launch/restart is forbidden",
+                    action="adb_connect",
+                )
             return
         for attempt in range(3):
             try:
+                self._raise_if_cancelled("ADB 连接")
                 port = self.get_mumu_adb_port()
                 self.port = port
                 log.debug(f"尝试 ADB 连接 (轮次{_depth + 1}/{_ADB_MAX_DEPTH}, 尝试{attempt + 1}/3): {port}")
@@ -291,9 +373,16 @@ class MumuControl(AbstractInput):
                     return
                 elif "bad port" in msg:
                     log.error(f"ADB 连接失败，端口号{port}不正确，可能是拼写错误或不规范")
+            except RunnerDevicePolicyError:
+                raise
             except Exception as e:
                 log.debug(f"ADB 连接尝试异常 (轮次{_depth + 1}, 尝试{attempt + 1}): {type(e).__name__}: {e}")
                 continue
+        if self._policy().forbid_emulator_launch:
+            raise RunnerDevicePolicyError(
+                "Runner could not connect to MuMu ADB; emulator close/start recovery is forbidden",
+                action="adb_connect",
+            )
         log.warning(f"ADB 连接全部3次尝试失败 (轮次{_depth + 1}/{_ADB_MAX_DEPTH})，关闭模拟器并重试启动")
         self.close_simulator()
         self.start()
@@ -337,6 +426,8 @@ class MumuControl(AbstractInput):
                 self._ensure_adb_device().app_start(self.game_package_name)
                 self.start_game_times = 0
                 return
+            except RunnerDevicePolicyError:
+                raise
             except Exception as error:
                 last_error = error
                 # adbutils device objects remain non-None after the remote
@@ -344,14 +435,19 @@ class MumuControl(AbstractInput):
                 # next attempt.
                 self.device = None
                 log.error(f"启动游戏失败，失败原因为{error}")
+                if self._policy().forbid_emulator_launch:
+                    raise RunnerDevicePolicyError(
+                        f"Runner could not start the game because the device connection failed: {error}",
+                        action="start_game",
+                    ) from error
                 log.error("启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动")
                 if self.package_list is False:
                     self.package_list = True
                     command = [
-                        self.exe_path,
+                        self._validated_exe_path(),
                         "control",
                         "-v",
-                        str(self.multi_instance_number),
+                        self._instance_argument(),
                         "app",
                         "info",
                         "-i",
@@ -362,6 +458,8 @@ class MumuControl(AbstractInput):
                     try:
                         result = subprocess.run(
                             command,
+                            shell=False,
+                            timeout=self._MUMU_MANAGER_TIMEOUT,
                             universal_newlines=True,
                             capture_output=True,
                             check=True,
@@ -376,7 +474,8 @@ class MumuControl(AbstractInput):
                     self.close_simulator()
                     self.start()
                 if attempt < 2:
-                    sleep(5)
+                    if not self.interruptible_sleep(5):
+                        raise userStopError("启动游戏等待已取消")
 
         raise RuntimeError(f"无法启动 Limbus Company：{last_error}") from last_error
 
@@ -449,26 +548,34 @@ class MumuControl(AbstractInput):
     def get_mumu_adb_port(self, multi_instance_number=None, _depth=0):
         _MAX_DEPTH = 3
         try:
-            if multi_instance_number is None and self.multi_instance_number is None:
+            if multi_instance_number is not None:
+                self.multi_instance_number = multi_instance_number
+            if getattr(self, "multi_instance_number", None) is None:
                 self.multi_instance_number = 0
-            if int(self.multi_instance_number) <= 1536:
-                cmd = f"{self.exe_path} adb -v {self.multi_instance_number}"
-                no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
-                proc = subprocess.run(
-                    cmd,
-                    universal_newlines=True,
-                    capture_output=True,
-                    encoding="utf-8",
-                    creationflags=no_window_flag,
-                )
+            self._raise_if_cancelled("MuMu ADB 端口查询")
+            proc = self._run_manager_command(
+                "adb",
+                "-v",
+                self._instance_argument(),
+                timeout=self._MUMU_MANAGER_TIMEOUT,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(f"MuMu manager adb command failed with exit code {proc.returncode}")
+            if proc.stdout:
                 adb_info = json.loads(proc.stdout)
                 try:
                     return f"{adb_info['adb_host']}:{adb_info['adb_port']}"
                 except Exception:
                     return f"127.0.0.1:{int(self.multi_instance_number) * 32 + 16384}"
+            raise ValueError("MuMu manager returned empty ADB endpoint")
         except userStopError:
             raise
         except Exception as e:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not resolve the MuMu ADB endpoint; emulator restart recovery is forbidden",
+                    action="get_mumu_adb_port",
+                ) from e
             if _depth >= _MAX_DEPTH:
                 log.warning(f"get_mumu_adb_port 重试耗尽 ({_MAX_DEPTH}轮)，使用默认端口计算")
                 return f"127.0.0.1:{int(self.multi_instance_number) * 32 + 16384}"
@@ -491,7 +598,18 @@ class MumuControl(AbstractInput):
         goes through the existing restart path, while the normal already-running
         case attaches directly through NemuIpc.
         """
-        return self.is_running() and not self.get_app_keptlive()
+        self._raise_if_cancelled("MuMu attach")
+        try:
+            return self.is_running() and not self.get_app_keptlive()
+        except (RunnerDevicePolicyError, userStopError):
+            raise
+        except Exception as error:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not verify an existing MuMu instance; automatic recovery is disabled",
+                    action="attach_existing",
+                ) from error
+            raise
 
     def attach_existing(self) -> None:
         """Load NemuIpc and attach to an already-running MuMu instance."""
@@ -511,6 +629,8 @@ class MumuControl(AbstractInput):
                 # A missing player, an IPC incompatibility, or a failed IPC
                 # handshake is not repaired by recursively launching again.
                 raise
+            except RunnerDevicePolicyError:
+                raise
             except Exception as error:
                 last_error = error
                 if attempt == 0:
@@ -523,11 +643,13 @@ class MumuControl(AbstractInput):
         raise RuntimeError(f"无法启动 MuMu 实例 {self.multi_instance_number}：{last_error}") from last_error
 
     def _start_once(self):
+        self._raise_if_cancelled("MuMu 启动")
         if self.can_attach_without_launch():
             log.debug("MuMu 实例已在运行，跳过 control launch 和启动等待，直接连接 NemuIpc")
             self.attach_existing()
             return
 
+        self._policy().assert_emulator_launch_allowed("start")
         log.debug(f"开始启动MUMU模拟器实例编号{self.multi_instance_number}")
         keptlive = self.get_app_keptlive()
         if keptlive:
@@ -540,20 +662,36 @@ class MumuControl(AbstractInput):
             log.debug("未启用应用后台保活功能,可正常运行")
         # 使用mumumanager控制模拟器开启与关闭
         command = [
-            self.exe_path,
+            self._validated_exe_path(),
             "control",
             "-v",
-            str(self.multi_instance_number),
+            self._instance_argument(),
             "launch",
         ]
-        run_as_user(command)
+        if self._policy().is_runner:
+            # Runner mode must never reach the legacy elevation helper: it
+            # creates temporary shell scripts and invokes shell=True for the
+            # sidecar's compatibility path.  Even when an operator explicitly
+            # enables emulator launch, keep this process-local launch argv
+            # based and bounded.
+            no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+            subprocess.run(
+                command,
+                shell=False,
+                timeout=self._MUMU_MANAGER_TIMEOUT,
+                check=True,
+                creationflags=no_window_flag,
+            )
+        else:
+            run_as_user(command)
         # 等待模拟器启动完成
         try:
             start_timeout = max(1, int(cfg.get_value("start_emulator_timeout", 120)))
         except (TypeError, ValueError):
             start_timeout = 120
         for _ in range(start_timeout):
-            time.sleep(1)
+            if not self.interruptible_sleep(1):
+                raise userStopError("MuMu 启动等待已取消")
             if self.get_launch_status() == "start_finished":
                 log.debug("start: 模拟器启动状态确认为 start_finished")
                 break
@@ -563,33 +701,79 @@ class MumuControl(AbstractInput):
         log.debug(f"MUMU模拟器编号{self.multi_instance_number}启动完成")
         self.connect()
 
-    def close_simulator(self):
+    def _close_simulator_unchecked(self):
         command = [
-            self.exe_path,
+            self._validated_exe_path(),
             "control",
             "-v",
-            str(self.multi_instance_number),
+            self._instance_argument(),
             "shutdown",
         ]
-        run_as_user(command)
+        self._raise_if_cancelled("MuMu 关闭")
+        if self._policy().is_runner:
+            # ``run_as_user`` is a legacy elevation helper that may build a
+            # shell command.  Runner completion-only exit stays argv based so
+            # a path supplied by the host can never become shell syntax.
+            no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+            subprocess.run(
+                command,
+                shell=False,
+                timeout=self._MUMU_SHUTDOWN_TIMEOUT,
+                check=True,
+                creationflags=no_window_flag,
+            )
+        else:
+            run_as_user(command)
+
+    def close_simulator(self):
+        """Shutdown MuMu when the active policy explicitly permits it."""
+
+        self._policy().assert_emulator_launch_allowed("close_simulator")
+        self._close_simulator_unchecked()
+
+    def exit_emulator(self, *, task_succeeded: bool = False, lease_active: bool = False) -> None:
+        """Explicit completion-only emulator exit entry point.
+
+        This is intentionally separate from ``close_simulator`` and all
+        automatic recovery paths.  Runner callers must prove both successful
+        completion and that the device lease is still held.
+        """
+
+        self._policy().assert_explicit_exit_allowed(
+            task_succeeded=task_succeeded,
+            lease_active=lease_active,
+        )
+        self._close_simulator_unchecked()
 
     def stop(self):
+        self._policy().assert_recovery_allowed("stop")
         try:
-            command = [
-                self.exe_path,
+            self._run_manager_command(
                 "control",
                 "-v",
-                str(self.multi_instance_number),
+                self._instance_argument(),
                 "shutdown",
-            ]
-            no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
-            subprocess.run(command, creationflags=no_window_flag)
+                timeout=self._MUMU_SHUTDOWN_TIMEOUT,
+                check=True,
+                capture_output=False,
+            )
             log.debug(f"MUMU模拟器编号{self.multi_instance_number}关闭完成")
         except userStopError:
             raise
-        except Exception:
+        except Exception as error:
             self.mumu_control_api_backend()
-            self.stop()
+            try:
+                self._run_manager_command(
+                    "control",
+                    "-v",
+                    self._instance_argument(),
+                    "shutdown",
+                    timeout=self._MUMU_SHUTDOWN_TIMEOUT,
+                    check=True,
+                    capture_output=False,
+                )
+            except Exception as retry_error:
+                raise RuntimeError(f"MuMu 实例关闭失败：{retry_error}") from error
 
     def get_path(self):
         # 获取MuMuManager.exe所在的目录
@@ -603,6 +787,11 @@ class MumuControl(AbstractInput):
             else:
                 return self.install_path
         except Exception:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not resolve the MuMu device path; automatic recovery is disabled",
+                    action="get_device_path",
+                )
             self.mumu_control_api_backend()
             self.get_device_path()
 
@@ -625,6 +814,11 @@ class MumuControl(AbstractInput):
             else:
                 return os.path.join(self.install_path, "sdk", "external_renderer_ipc.dll")
         except Exception:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not resolve the MuMu IPC client path; automatic recovery is disabled",
+                    action="get_nemu_client_path",
+                )
             self.mumu_control_api_backend()
             self.get_nemu_client_path(version)
 
@@ -632,20 +826,12 @@ class MumuControl(AbstractInput):
         # 获取安卓版本
         try:
             log.debug("开始获取安卓版本")
-            if self.exe_path is None:
-                log.warning("get_android_version: exe_path 为 None, 将触发异常 fallback")
-                raise ValueError("exe_path is None")
-            command = f""" "{self.exe_path}" info -v {self.multi_instance_number}"""
-            no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
-            proc = subprocess.run(
-                command,
-                shell=True,
-                text=True,  # 代替 universal_newlines=True，更现代化
-                encoding="utf-8",  # 强制指定用 utf-8 编码读取输出，解决 gbk 报错
-                errors="ignore",  # 极其重要：万一有杂音字符，忽略掉而不崩溃
-                capture_output=True,
-                check=True,  # 新增：如果命令返回非零状态码则抛出异常
-                creationflags=no_window_flag,
+            proc = self._run_manager_command(
+                "info",
+                "-v",
+                self._instance_argument(),
+                timeout=self._MUMU_MANAGER_TIMEOUT,
+                check=True,
             )
 
             # 检查输出是否为空
@@ -665,12 +851,21 @@ class MumuControl(AbstractInput):
 
         except subprocess.CalledProcessError as cmd_err:
             log.debug(f"命令执行失败！返回码: {cmd_err.returncode}, 错误输出: {cmd_err.stderr}")
-            # 可选：根据业务需求返回默认值或重新抛出
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not query MuMu Android version; automatic recovery is disabled",
+                    action="get_android_version",
+                ) from cmd_err
             return False
         except userStopError:
             raise
         except Exception as e:
             log.error(f"获取安卓版本失败：{e}", exc_info=True)  # 记录完整堆栈
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not query the MuMu Android version; automatic recovery is disabled",
+                    action="get_android_version",
+                ) from e
             self.mumu_control_api_backend()
             return self.get_android_version()
 
@@ -678,18 +873,14 @@ class MumuControl(AbstractInput):
         # 获取应用保活状态
         try:
             log.debug("开始获取应用保活状态")
-            if self.exe_path is None:
-                log.warning("get_app_keptlive: exe_path 为 None, 将触发异常 fallback")
-                raise ValueError("exe_path is None")
-            command = f""" "{self.exe_path}" setting -v {self.multi_instance_number} -k app_keptlive"""
-            no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
-            proc = subprocess.run(
-                command,
-                shell=True,
-                universal_newlines=True,
-                capture_output=True,
-                check=True,  # 新增：如果命令返回非零状态码则抛出异常
-                creationflags=no_window_flag,
+            proc = self._run_manager_command(
+                "setting",
+                "-v",
+                self._instance_argument(),
+                "-k",
+                "app_keptlive",
+                timeout=self._MUMU_MANAGER_TIMEOUT,
+                check=True,
             )
 
             # 检查输出是否为空
@@ -709,57 +900,96 @@ class MumuControl(AbstractInput):
 
         except subprocess.CalledProcessError as cmd_err:
             log.debug(f"命令执行失败！返回码: {cmd_err.returncode}, 错误输出: {cmd_err.stderr}")
-            # 可选：根据业务需求返回默认值或重新抛出
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not query MuMu keep-alive state; automatic recovery is disabled",
+                    action="get_app_keptlive",
+                ) from cmd_err
             return False
         except userStopError:
             raise
         except Exception as e:
             log.error(f"获取应用保活状态失败：{e}", exc_info=True)  # 记录完整堆栈
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not query MuMu keep-alive state; automatic recovery is disabled",
+                    action="get_app_keptlive",
+                ) from e
             self.mumu_control_api_backend()
             return self.get_app_keptlive()
 
     def disable_app_keptlive(self):
         # 关闭后台保活
         try:
-            command = f""" "{self.exe_path}" setting -v {self.multi_instance_number} -k app_keptlive -val false"""
-            # 新增：使用shell=True执行命令
+            command = [
+                self._validated_exe_path(),
+                "setting",
+                "-v",
+                self._instance_argument(),
+                "-k",
+                "app_keptlive",
+                "-val",
+                "false",
+            ]
+            # Use argv with shell=False; the executable path is validated above.
             no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
             subprocess.run(
                 command,
-                shell=True,
+                shell=False,
+                timeout=self._MUMU_MANAGER_TIMEOUT,
                 universal_newlines=True,
                 capture_output=True,
+                check=True,
                 creationflags=no_window_flag,
             )
         except Exception:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not disable MuMu keep-alive; automatic recovery is disabled",
+                    action="disable_app_keptlive",
+                )
             self.mumu_control_api_backend()
             self.disable_app_keptlive()
 
     def enable_app_keptlive(self):
         # 开启保活
         try:
-            command = f""" "{self.exe_path}" setting -v {self.multi_instance_number} -k app_keptlive -val true"""
+            command = [
+                self._validated_exe_path(),
+                "setting",
+                "-v",
+                self._instance_argument(),
+                "-k",
+                "app_keptlive",
+                "-val",
+                "true",
+            ]
             no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
             subprocess.run(
                 command,
+                shell=False,
+                timeout=self._MUMU_MANAGER_TIMEOUT,
                 universal_newlines=True,
                 capture_output=True,
+                check=True,
                 creationflags=no_window_flag,
             )
         except Exception:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    "Runner could not enable MuMu keep-alive; automatic recovery is disabled",
+                    action="enable_app_keptlive",
+                )
             self.mumu_control_api_backend()
             self.enable_app_keptlive()
 
     def get_launch_status(self):
         # 获取启动状态
-        cmd = [self.exe_path, "info", "-v", str(self.multi_instance_number)]
-        no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
-        proc = subprocess.run(
-            cmd,
-            universal_newlines=True,
-            capture_output=True,
-            encoding="utf-8",
-            creationflags=no_window_flag,
+        proc = self._run_manager_command(
+            "info",
+            "-v",
+            self._instance_argument(),
+            timeout=self._MUMU_MANAGER_TIMEOUT,
         )
         try:
             info = json.loads(proc.stdout)
@@ -1087,9 +1317,18 @@ class MumuControl(AbstractInput):
             raise NemuIpcError("nemu_input_event_key_up failed")
 
     def key_press(self, key):
-        self.key_down(usual_key_code[key])
-        time.sleep(0.015)
-        self.key_up(usual_key_code[key])
+        key_code = usual_key_code[key]
+        if not self.checkpoint():
+            return
+        pressed = False
+        try:
+            self.key_down(key_code)
+            pressed = True
+            if not self.interruptible_sleep(0.015):
+                return
+        finally:
+            if pressed:
+                self._best_effort_release(self.key_up, key_code)
 
     def input_text(self, text: str):
         """将提供的 `text` 直接发送到 MuMu 原生输入接口。"""
@@ -1119,50 +1358,50 @@ class MumuControl(AbstractInput):
     def click(self, x, y):
         msg = f"点击位置:({x},{y})"
         log.debug(msg, stacklevel=2)
-        self.down(x, y)
-        time.sleep(0.015)
-        self.up()
-        time.sleep(0.035)
+        if not self.checkpoint():
+            return
+        pressed = True
+        try:
+            self.down(x, y)
+            if not self.interruptible_sleep(0.015):
+                return
+        finally:
+            if pressed:
+                self._best_effort_release(self.up)
+        self.interruptible_sleep(0.035)
 
     def swipe(self, x1, y1, x2, y2, duration, min_distance=10):
+        if not self.checkpoint():
+            return
         points = insert_swipe(p0=(x1, y1), p3=(x2, y2), min_distance=min_distance)
 
-        for point in points:
-            self.down(*point)
-            time.sleep(duration / min_distance)
+        pressed = True
+        try:
+            self.down(*points[0])
+            for point in points[1:]:
+                self.down(*point)
+                if not self.interruptible_sleep(duration / min_distance):
+                    return
 
-        time.sleep(0.2)
-        self.up()
-        time.sleep(0.050)
+            if not self.interruptible_sleep(0.2):
+                return
+        finally:
+            if pressed:
+                self._best_effort_release(self.up)
+        self.interruptible_sleep(0.050)
 
     def long_click(self, x, y, duration):
-        self.down(x, y)
-        time.sleep(duration)
-        self.up()
-        time.sleep(0.050)
-
-    def set_pause(self) -> None:
-        """
-        设置暂停状态
-        """
-        self.is_pause = not self.is_pause  # 设置暂停状态
-        if self.is_pause:
-            msg = "操作将在下一次点击时暂停"
-        else:
-            msg = "继续操作"
-        log.info(msg)
-
-    def wait_pause(self) -> None:
-        """
-        当处于暂停状态时堵塞的进行等待
-        """
-        pause_identity = False
-        while self.is_pause:
-            if pause_identity is not False:
-                log.info("AALC 已暂停")
-                pause_identity = True
-            time.sleep(1)
-            self.restore_time = time.time()
+        if not self.checkpoint():
+            return
+        pressed = True
+        try:
+            self.down(x, y)
+            if not self.interruptible_sleep(duration):
+                return
+        finally:
+            if pressed:
+                self._best_effort_release(self.up)
+        self.interruptible_sleep(0.050)
 
     def mouse_click(self, x, y, times=1, move_back=False) -> bool:
         """在指定坐标上执行点击操作
@@ -1176,9 +1415,12 @@ class MumuControl(AbstractInput):
             bool (True) : 总是返回True表示操作执行完毕
         """
         for _ in range(times):
+            if not self.checkpoint():
+                return False
             self.click(x, y)
 
-        self.wait_pause()
+        if not self.checkpoint():
+            return False
 
         return True
 
@@ -1206,36 +1448,50 @@ class MumuControl(AbstractInput):
             dy (int): y方向拖动距离
             move_back (bool): 是否在拖动后将鼠标移动回原位置
         """
-        self.down(x, y)
-        x2 = x + dx
-        y2 = y + dy
-        points = insert_swipe(p0=(x, y), p3=(x2, y2))
+        if not self.checkpoint():
+            return
+        pressed = True
+        try:
+            self.down(x, y)
+            x2 = x + dx
+            y2 = y + dy
+            points = insert_swipe(p0=(x, y), p3=(x2, y2))
 
-        for point in points:
-            self.down(*point)
-            time.sleep(0.020)
+            for point in points[1:]:
+                self.down(*point)
+                if not self.interruptible_sleep(0.020):
+                    return
 
-        if drag_time * 0.3 > 0.5:
-            time.sleep(drag_time * 0.3)
-        else:
-            time.sleep(0.5)
-
-        self.up()
+            if drag_time * 0.3 > 0.5:
+                if not self.interruptible_sleep(drag_time * 0.3):
+                    return
+            else:
+                if not self.interruptible_sleep(0.5):
+                    return
+        finally:
+            if pressed:
+                self._best_effort_release(self.up)
 
     def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
         """Swipe a scrollable view through MuMu's native touch injection."""
+        if not self.checkpoint():
+            return
         points = insert_swipe(p0=(x, y), p3=(x + dx, y + dy), speed=8, min_distance=1)
-        self.down(x, y)
+        pressed = True
         try:
+            self.down(x, y)
             for point in points:
                 self.down(*point)
-                time.sleep(0.020)
+                if not self.interruptible_sleep(0.020):
+                    return
 
             # Keep the release stationary long enough to stop list momentum, but
             # well below mouse_drag's old 500 ms hold that could reorder a team.
-            time.sleep(0.200)
+            if not self.interruptible_sleep(0.200):
+                return
         finally:
-            self.up()
+            if pressed:
+                self._best_effort_release(self.up)
 
     def mouse_scroll(self, direction: int = -3) -> bool:
         """占位"""
@@ -1265,20 +1521,28 @@ class MumuControl(AbstractInput):
             position (list): 目标位置列表
             drag_time (float): 拖动时间
         """
-        self.down(position[0][0], position[0][1])
-        p = (position[0][0], position[0][1])
-        for pos in position[1:]:
-            points = insert_swipe(p0=(p[0], p[1]), p3=(pos[0], pos[1]), min_distance=min_distance)
+        if not position or not self.checkpoint():
+            return
+        pressed = True
+        try:
+            self.down(position[0][0], position[0][1])
+            p = (position[0][0], position[0][1])
+            for pos in position[1:]:
+                points = insert_swipe(p0=(p[0], p[1]), p3=(pos[0], pos[1]), min_distance=min_distance)
 
-            for point in points:
-                self.down(*point)
-                time.sleep(drag_time / min_distance)
+                for point in points[1:]:
+                    self.down(*point)
+                    if not self.interruptible_sleep(drag_time / min_distance):
+                        return
 
-            p = pos
+                p = pos
 
-        time.sleep(0.5)
-        self.up()
-        time.sleep(0.050)
+            if not self.interruptible_sleep(0.5):
+                return
+        finally:
+            if pressed:
+                self._best_effort_release(self.up)
+        self.interruptible_sleep(0.050)
 
     def check_game_alive(self) -> bool:
         """检查游戏是否存活
@@ -1296,8 +1560,15 @@ class MumuControl(AbstractInput):
                 current_package = self._ensure_adb_device().app_current().package
                 log.debug(f"当前应用包名: {current_package}")
                 return current_package
+            except RunnerDevicePolicyError:
+                raise
             except Exception as error:
                 log.error(f"获取当前应用包名错误: {error}")
+                if self._policy().forbid_emulator_launch:
+                    raise RunnerDevicePolicyError(
+                        f"Runner lost the MuMu ADB connection while reading the current app: {error}",
+                        action="get_current_package",
+                    ) from error
                 self.device = None
                 if attempt < 2:
                     try:

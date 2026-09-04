@@ -1,4 +1,7 @@
-from time import sleep, time
+from __future__ import annotations
+
+import threading
+import time
 
 from module.logger import log
 
@@ -9,32 +12,220 @@ class AbstractInput:
     Tips: 有特殊需求写在对应方法描述中
     """
 
-    def __init__(self) -> None:
-        self.is_pause: bool = False
+    def __init__(self, cancel_event: threading.Event | None = None) -> None:
+        # A Condition gives pause/resume/stop a wake-up path.  The old
+        # implementation polled ``time.sleep(1)`` and could leave a stopped
+        # task blocked for a full second (or longer when several waits were
+        # stacked).
+        self._pause_condition = threading.Condition(threading.RLock())
+        self._is_pause = False
+        self._cancel_event = cancel_event if cancel_event is not None else threading.Event()
         self.restore_time: float | None = None
 
-    def set_pause(self) -> None:
-        """
-        设置暂停状态
-        """
-        self.is_pause = not self.is_pause  # 设置暂停状态
-        if self.is_pause:
-            msg = "操作将在下一次点击时暂停"
-        else:
-            msg = "继续操作"
-        log.info(msg)
+    def _ensure_control_state(self) -> None:
+        """Lazily initialize control fields for legacy ``__new__`` callers.
 
-    def wait_pause(self) -> None:
+        A few integrations construct an input adapter with ``object.__new__``
+        in order to test platform-specific methods without opening a device.
+        Keeping this guard makes the new cancellation contract compatible with
+        those adapters while normal construction still initializes eagerly.
         """
-        当处于暂停状态时堵塞的进行等待
+
+        if not hasattr(self, "_pause_condition"):
+            self._pause_condition = threading.Condition(threading.RLock())
+        if not hasattr(self, "_is_pause"):
+            self._is_pause = False
+        if not hasattr(self, "_cancel_event"):
+            self._cancel_event = threading.Event()
+        if not hasattr(self, "restore_time"):
+            self.restore_time = None
+
+    @property
+    def is_pause(self) -> bool:
+        """Compatibility view of the current pause state."""
+
+        self._ensure_control_state()
+        with self._pause_condition:
+            return self._is_pause
+
+    @is_pause.setter
+    def is_pause(self, paused: bool) -> None:
+        self.set_paused(paused)
+
+    @property
+    def paused(self) -> bool:
+        """Explicit spelling used by newer execution-control callers."""
+
+        return self.is_pause
+
+    @property
+    def cancel_event(self) -> threading.Event:
+        """Event set when this adapter is requested to stop."""
+
+        self._ensure_control_state()
+        return self._cancel_event
+
+    @cancel_event.setter
+    def cancel_event(self, event: threading.Event) -> None:
+        if not isinstance(event, threading.Event):
+            raise TypeError("cancel_event must be a threading.Event")
+        self._ensure_control_state()
+        with self._pause_condition:
+            self._cancel_event = event
+            self._pause_condition.notify_all()
+
+    @property
+    def stop_event(self) -> threading.Event:
+        """Alias for :attr:`cancel_event` used by some runner adapters."""
+
+        return self.cancel_event
+
+    def _external_cancelled(self) -> bool:
+        """Observe the task-wide cancellation bridge when one is bound."""
+
+        try:
+            from core.execution_control import current_cancel_event
+
+            event = current_cancel_event()
+        except Exception:
+            event = None
+        return event is not None and event is not self.cancel_event and event.is_set()
+
+    def cancellation_requested(self) -> bool:
+        """Return whether either local or task-wide cancellation was requested."""
+
+        return self.cancel_event.is_set() or self._external_cancelled()
+
+    def set_paused(self, paused: bool) -> None:
+        """Set an explicit pause target and wake waiters.
+
+        ``set_pause`` remains available as a compatibility toggle, but all
+        new control paths should use this idempotent method so duplicate
+        pause/resume requests cannot accidentally invert one another.
         """
-        pause_identity = False
-        while self.is_pause:
-            if pause_identity is not False:
-                log.info("AALC 已暂停")
-                pause_identity = True
-            sleep(1)
-            self.restore_time = time()
+
+        if not isinstance(paused, bool):
+            raise TypeError("paused must be a bool")
+        self._ensure_control_state()
+        with self._pause_condition:
+            changed = self._is_pause != paused
+            self._is_pause = paused
+            self._pause_condition.notify_all()
+        if changed:
+            if paused:
+                log.info("操作将在下一次点击时暂停")
+            else:
+                log.info("继续操作")
+
+    def set_pause(self) -> None:
+        """Toggle pause for legacy hotkeys.
+
+        New code should call :meth:`set_paused` with an explicit target.
+        """
+
+        self.set_paused(not self.is_pause)
+
+    def request_stop(self) -> None:
+        """Request cooperative stop and wake both pause and sleep waiters."""
+
+        self._ensure_control_state()
+        self.cancel_event.set()
+        # ``set_paused(False)`` performs the condition notification required
+        # to release a thread currently blocked in ``wait_pause``.
+        self.set_paused(False)
+
+    def clear_stop(self) -> None:
+        """Clear local cancellation before reusing an adapter for a new run."""
+
+        self._ensure_control_state()
+        self.cancel_event.clear()
+        with self._pause_condition:
+            self._pause_condition.notify_all()
+
+    def reset_control(self) -> None:
+        """Reset both cancellation and pause state for a fresh run."""
+
+        self.clear_stop()
+        self.set_paused(False)
+
+    def wait_if_paused(self, timeout: float | None = None) -> bool:
+        """Wait until resumed or cancelled, returning ``False`` on cancel.
+
+        ``timeout`` is optional and primarily useful to callers that need a
+        bounded checkpoint.  The internal polling interval is short enough to
+        observe a task-wide cancellation event even when that event cannot
+        directly notify this adapter's Condition.
+        """
+
+        self._ensure_control_state()
+        deadline = None if timeout is None else time.monotonic() + max(0.0, float(timeout))
+        announced = False
+        while True:
+            if self.cancellation_requested():
+                return False
+            with self._pause_condition:
+                if not self._is_pause:
+                    self.restore_time = time.time()
+                    return not self.cancellation_requested()
+                if not announced:
+                    log.info("AALC 已暂停")
+                    announced = True
+                if deadline is None:
+                    wait_for = 0.1
+                else:
+                    wait_for = min(0.1, max(0.0, deadline - time.monotonic()))
+                    if wait_for <= 0:
+                        return False
+                self._pause_condition.wait(wait_for)
+            self.restore_time = time.time()
+
+    def wait_pause(self) -> bool:
+        """Compatibility alias for :meth:`wait_if_paused`."""
+
+        return self.wait_if_paused()
+
+    def interruptible_sleep(self, seconds: float, *, poll_interval: float = 0.1) -> bool:
+        """Sleep while remaining responsive to pause and cancellation.
+
+        Returns ``True`` when the requested duration elapsed and ``False`` if
+        cancellation interrupted the wait.  Pause state is honored so a
+        gesture's settle delay cannot run ahead of a user pause request.
+        """
+
+        self._ensure_control_state()
+        deadline = time.monotonic() + max(0.0, float(seconds))
+        interval = max(0.01, float(poll_interval))
+        while True:
+            if self.cancellation_requested():
+                return False
+            if not self.wait_if_paused():
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            with self._pause_condition:
+                # The Condition is used even while running so request_stop
+                # wakes this sleep immediately instead of waiting for a
+                # polling timer.
+                self._pause_condition.wait(min(interval, remaining))
+
+    def checkpoint(self) -> bool:
+        """Return whether the adapter is still allowed to continue."""
+
+        if self.cancellation_requested():
+            return False
+        return self.wait_if_paused()
+
+    @staticmethod
+    def _best_effort(callback, *args, **kwargs) -> None:
+        """Run native cleanup without masking the original input error."""
+
+        try:
+            callback(*args, **kwargs)
+        except Exception as error:  # pragma: no cover - native input boundary
+            log.warning("输入释放失败（将由 CleanupLedger 继续补偿）：%s", error)
+
+    _best_effort_release = _best_effort
 
     def mouse_click(self, x, y, times=1, move_back=False) -> bool:
         """在指定坐标上执行点击操作

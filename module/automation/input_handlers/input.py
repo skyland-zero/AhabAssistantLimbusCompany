@@ -179,51 +179,58 @@ class Input(WinAbstractInput, metaclass=SingletonMeta):
         return True
 
     def mouse_drag_down(self, x, y, reverse=1, move_back=True) -> None:
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-
-        scale = cfg.set_win_size / 1080
-        x, y = self.pos_offset(x, y)
-        pyautogui.moveTo(x, y)
-        pyautogui.mouseDown()
-        pyautogui.dragTo(x, y + int(300 * scale * reverse), duration=0.4)
-        pyautogui.mouseUp()
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        try:
+            scale = cfg.set_win_size / 1080
+            x, y = self.pos_offset(x, y)
+            pyautogui.moveTo(x, y)
+            pyautogui.mouseDown()
+            pressed = True
+            pyautogui.dragTo(x, y + int(300 * scale * reverse), duration=0.4)
+        finally:
+            if pressed:
+                self._best_effort_release(pyautogui.mouseUp)
+            if move_back and current_mouse_position:
+                self._best_effort(pyautogui.moveTo, *current_mouse_position)
 
     def mouse_drag(self, x, y, drag_time=0.1, dx=0, dy=0, move_back=True) -> None:
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-        x, y = self.pos_offset(x, y)
-        pyautogui.moveTo(x, y)
-        pyautogui.mouseDown()
-        pyautogui.moveTo(x + dx, y + dy, duration=drag_time)
-        if drag_time * 0.3 > 0.5:
-            sleep(drag_time * 0.3)
-        else:
-            sleep(0.5)
-        pyautogui.mouseUp()
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        try:
+            x, y = self.pos_offset(x, y)
+            pyautogui.moveTo(x, y)
+            pyautogui.mouseDown()
+            pressed = True
+            pyautogui.moveTo(x + dx, y + dy, duration=drag_time)
+            if drag_time * 0.3 > 0.5:
+                sleep(drag_time * 0.3)
+            else:
+                sleep(0.5)
+        finally:
+            if pressed:
+                self._best_effort_release(pyautogui.mouseUp)
+            if move_back and current_mouse_position:
+                self._best_effort(pyautogui.moveTo, *current_mouse_position)
 
     def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-
-        raw_plan, settle_duration = build_windows_scroll_swipe_plan(x, y, dx, dy, duration)
-        plan = [(self.pos_offset(*point), move_duration) for point, move_duration in raw_plan]
-        pyautogui.moveTo(*plan[0][0])
-        pyautogui.mouseDown()
-        for point, move_duration in plan[1:]:
-            pyautogui.moveTo(*point, duration=move_duration)
-        if settle_duration:
-            sleep(settle_duration)
-        pyautogui.mouseUp()
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        try:
+            raw_plan, settle_duration = build_windows_scroll_swipe_plan(x, y, dx, dy, duration)
+            plan = [(self.pos_offset(*point), move_duration) for point, move_duration in raw_plan]
+            pyautogui.moveTo(*plan[0][0])
+            pyautogui.mouseDown()
+            pressed = True
+            for point, move_duration in plan[1:]:
+                pyautogui.moveTo(*point, duration=move_duration)
+            if settle_duration:
+                sleep(settle_duration)
+        finally:
+            if pressed:
+                self._best_effort_release(pyautogui.mouseUp)
+            if move_back and current_mouse_position:
+                self._best_effort(pyautogui.moveTo, *current_mouse_position)
 
     def mouse_scroll(self, direction: int = -3) -> bool:
         if direction <= 0:
@@ -274,19 +281,21 @@ class Input(WinAbstractInput, metaclass=SingletonMeta):
         self.wait_pause()
 
     def mouse_drag_link(self, position: list, drag_time=0.1, move_back=False) -> None:
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-
-        x, y = self.pos_offset(position[0][0], position[0][1])
-        pyautogui.moveTo(x, y)
-        pyautogui.mouseDown()
-        for pos in position:
-            x, y = self.pos_offset(pos[0], pos[1])
-            pyautogui.moveTo(x, y, duration=drag_time)
-        pyautogui.mouseUp()
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        try:
+            x, y = self.pos_offset(position[0][0], position[0][1])
+            pyautogui.moveTo(x, y)
+            pyautogui.mouseDown()
+            pressed = True
+            for pos in position:
+                x, y = self.pos_offset(pos[0], pos[1])
+                pyautogui.moveTo(x, y, duration=drag_time)
+        finally:
+            if pressed:
+                self._best_effort_release(pyautogui.mouseUp)
+            if move_back and current_mouse_position:
+                self._best_effort(pyautogui.moveTo, *current_mouse_position)
 
     def key_press(self, key):
         return pyautogui.press(key)
@@ -350,21 +359,24 @@ class BackgroundInput(WinAbstractInput, metaclass=SingletonMeta):
         Returns:
             bool (True) : 总是返回True表示操作执行完毕
         """
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
+        current_mouse_position = self.get_mouse_position() if move_back else None
 
         msg = f"点击位置:({x},{y})"
         log.debug(msg, stacklevel=2)
-        for i in range(times):
-            self.set_mouse_pos(x, y)
-            self.set_active()
-            self.mouse_down(x, y)
-            sleep(0.03)
-            self.mouse_up(x, y)
-            # 多次点击执行很快所以暂停放到循环外
+        for _ in range(times):
+            pressed = False
+            try:
+                self.set_mouse_pos(x, y)
+                self.set_active()
+                self.mouse_down(x, y)
+                pressed = True
+                sleep(0.03)
+            finally:
+                if pressed:
+                    self._best_effort_release(self.mouse_up, x, y)
 
         if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+            self._best_effort(self._mouse_move_to, *current_mouse_position)
 
         self.wait_pause()
 
@@ -379,19 +391,22 @@ class BackgroundInput(WinAbstractInput, metaclass=SingletonMeta):
             reverse (int): 拖动方向，1表示向下，-1表示向上
             move_back (bool): 是否在拖动后将鼠标移动回原位置
         """
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-
-        scale = cfg.set_win_size / 1080
-        self.set_active()
-        self.set_mouse_pos(x, y)
-        self.mouse_down(x, y)
-        end_y = y + int(300 * scale * reverse)
-        self.set_mouse_pos(x, end_y, duration=0.4)
-        self.mouse_up(x, end_y)
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        end_y = y
+        try:
+            scale = cfg.set_win_size / 1080
+            self.set_active()
+            self.set_mouse_pos(x, y)
+            self.mouse_down(x, y)
+            pressed = True
+            end_y = y + int(300 * scale * reverse)
+            self.set_mouse_pos(x, end_y, duration=0.4)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, x, end_y)
+            if move_back and current_mouse_position:
+                self._best_effort(self._mouse_move_to, *current_mouse_position)
 
     def mouse_drag(self, x, y, drag_time=0.1, dx=0, dy=0, move_back=True) -> None:
         """鼠标从指定位置拖动到另一个位置
@@ -403,37 +418,44 @@ class BackgroundInput(WinAbstractInput, metaclass=SingletonMeta):
             dy (int): y方向拖动距离
             move_back (bool): 是否在拖动后将鼠标移动回原位置
         """
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-        self.set_mouse_pos(x, y)
-        self.set_active()
-        self.mouse_down(x, y)
-        self.set_mouse_pos(x + dx, y + dy, duration=drag_time)
-        if drag_time * 0.3 > 0.5:
-            sleep(drag_time * 0.3)
-        else:
-            sleep(0.5)
-        self.mouse_up(x + dx, y + dy)
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        try:
+            self.set_mouse_pos(x, y)
+            self.set_active()
+            self.mouse_down(x, y)
+            pressed = True
+            self.set_mouse_pos(x + dx, y + dy, duration=drag_time)
+            if drag_time * 0.3 > 0.5:
+                sleep(drag_time * 0.3)
+            else:
+                sleep(0.5)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, x + dx, y + dy)
+            if move_back and current_mouse_position:
+                self._best_effort(self._mouse_move_to, *current_mouse_position)
 
     def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-
-        plan, settle_duration = build_windows_scroll_swipe_plan(x, y, dx, dy, duration)
-        self.set_mouse_pos(*plan[0][0])
-        self.set_active()
-        self.mouse_down(*plan[0][0])
-        for point, move_duration in plan[1:]:
-            self.set_mouse_pos(*point, duration=move_duration)
-        if settle_duration:
-            sleep(settle_duration)
-        self.mouse_up(*plan[-1][0])
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        end_point = (x, y)
+        try:
+            plan, settle_duration = build_windows_scroll_swipe_plan(x, y, dx, dy, duration)
+            end_point = plan[-1][0]
+            self.set_mouse_pos(*plan[0][0])
+            self.set_active()
+            self.mouse_down(*plan[0][0])
+            pressed = True
+            for point, move_duration in plan[1:]:
+                self.set_mouse_pos(*point, duration=move_duration)
+            if settle_duration:
+                sleep(settle_duration)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, *end_point)
+            if move_back and current_mouse_position:
+                self._best_effort(self._mouse_move_to, *current_mouse_position)
 
     def mouse_scroll(self, direction: int = -3) -> bool:
         """
@@ -456,22 +478,26 @@ class BackgroundInput(WinAbstractInput, metaclass=SingletonMeta):
         Returns:
             bool (True) : 总是返回True表示操作执行完毕
         """
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
+        current_mouse_position = self.get_mouse_position() if move_back else None
 
         msg = "点击（1，1）空白位置"
         log.debug(msg, stacklevel=2)
         x = coordinate[0] + random.randint(0, 10)
         y = coordinate[1] + random.randint(0, 10)
-        for i in range(times):
-            self.set_mouse_pos(x, y)
-            self.set_active()
-            self.mouse_down(x, y)
-            sleep(0.03)
-            self.mouse_up(x, y)
+        for _ in range(times):
+            pressed = False
+            try:
+                self.set_mouse_pos(x, y)
+                self.set_active()
+                self.mouse_down(x, y)
+                pressed = True
+                sleep(0.03)
+            finally:
+                if pressed:
+                    self._best_effort_release(self.mouse_up, x, y)
 
         if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+            self._best_effort(self._mouse_move_to, *current_mouse_position)
 
         self.wait_pause()
         return True
@@ -484,18 +510,22 @@ class BackgroundInput(WinAbstractInput, metaclass=SingletonMeta):
             position (list): 目标位置列表
             drag_time (float): 拖动时间
         """
-        if move_back:
-            current_mouse_position = self.get_mouse_position()
-
-        self.set_mouse_pos(position[0][0], position[0][1])
-        self.set_active()
-        self.mouse_down(position[0][0], position[0][1])
-        for pos in position:
-            self.set_mouse_pos(pos[0], pos[1], duration=drag_time)
-        self.mouse_up(position[-1][0], position[-1][1])
-
-        if move_back and current_mouse_position:
-            self.mouse_move(current_mouse_position)
+        current_mouse_position = self.get_mouse_position() if move_back else None
+        pressed = False
+        end_point = position[0]
+        try:
+            self.set_mouse_pos(position[0][0], position[0][1])
+            self.set_active()
+            self.mouse_down(position[0][0], position[0][1])
+            pressed = True
+            for pos in position:
+                end_point = pos
+                self.set_mouse_pos(pos[0], pos[1], duration=drag_time)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, end_point[0], end_point[1])
+            if move_back and current_mouse_position:
+                self._best_effort(self._mouse_move_to, *current_mouse_position)
 
     def set_active(self):
         """将游戏窗口设置为输入焦点以让 Unity 接受输入事件"""
@@ -597,8 +627,13 @@ class BackgroundInput(WinAbstractInput, metaclass=SingletonMeta):
             key (str): 按键名称
         """
         self.set_active()
-        self.key_down(key)
-        self.key_up(key)
+        pressed = False
+        try:
+            self.key_down(key)
+            pressed = True
+        finally:
+            if pressed:
+                self._best_effort_release(self.key_up, key)
 
     def input_text(self, text: str):
         """将 `text` 通过 WM_CHAR 消息逐字符输入目标窗口（后台模式）。
@@ -688,48 +723,68 @@ class WindowMoveInput(WinAbstractInput, metaclass=SingletonMeta):
 
     def mouse_drag(self, x, y, drag_time=0.1, dx=0, dy=0, move_back=True) -> None:
         pos = self._set_window_pos(x, y)
-        self.set_active()
-        self.mouse_down(x, y)
-        self._window_move_to(x + dx, y + dy, duration=drag_time)
-        if drag_time * 0.3 > 0.5:
-            sleep(drag_time * 0.3)
-        else:
-            sleep(0.5)
-        self.mouse_up(x + dx, y + dy)
-        screen.handle.set_window_pos(*pos)
+        pressed = False
+        try:
+            self.set_active()
+            self.mouse_down(x, y)
+            pressed = True
+            self._window_move_to(x + dx, y + dy, duration=drag_time)
+            if drag_time * 0.3 > 0.5:
+                sleep(drag_time * 0.3)
+            else:
+                sleep(0.5)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, x + dx, y + dy)
+            self._best_effort(screen.handle.set_window_pos, *pos)
 
     def mouse_swipe_for_scroll(self, x, y, duration=0.3, dx=0, dy=0, move_back=True) -> None:
         plan, settle_duration = build_windows_scroll_swipe_plan(x, y, dx, dy, duration)
         pos = self._set_window_pos(*plan[0][0])
-        self.set_active()
-        self.mouse_down(*plan[0][0])
-        for point, move_duration in plan[1:]:
-            self._window_move_to(*point, duration=move_duration)
-        if settle_duration:
-            sleep(settle_duration)
-        self.mouse_up(*plan[-1][0])
-        screen.handle.set_window_pos(*pos)
+        pressed = False
+        try:
+            self.set_active()
+            self.mouse_down(*plan[0][0])
+            pressed = True
+            for point, move_duration in plan[1:]:
+                self._window_move_to(*point, duration=move_duration)
+            if settle_duration:
+                sleep(settle_duration)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, *plan[-1][0])
+            self._best_effort(screen.handle.set_window_pos, *pos)
 
     def mouse_drag_down(self, x, y, reverse=1, move_back=True) -> None:
         scale = cfg.set_win_size / 1080
         self.set_active()
         pos = self._set_window_pos(x, y)
-        self.mouse_down(x, y)
         end_y = y + int(500 * scale * reverse)
-        self._window_move_to(x, end_y, duration=0.6)
-        self.mouse_up(x, end_y)
-
-        screen.handle.set_window_pos(*pos)
+        pressed = False
+        try:
+            self.mouse_down(x, y)
+            pressed = True
+            self._window_move_to(x, end_y, duration=0.6)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, x, end_y)
+            self._best_effort(screen.handle.set_window_pos, *pos)
 
     def mouse_drag_link(self, position: list, drag_time=0.1, move_back=False) -> None:
         raw_pos = self._set_window_pos(position[0][0], position[0][1])
-        self.set_active()
-        self.mouse_down(position[0][0], position[0][1])
-        for pos in position:
-            self._window_move_to(pos[0], pos[1], duration=drag_time)
-
-        self.mouse_up(position[-1][0], position[-1][1])
-        screen.handle.set_window_pos(*raw_pos)
+        pressed = False
+        end_point = position[0]
+        try:
+            self.set_active()
+            self.mouse_down(position[0][0], position[0][1])
+            pressed = True
+            for pos in position:
+                end_point = pos
+                self._window_move_to(pos[0], pos[1], duration=drag_time)
+        finally:
+            if pressed:
+                self._best_effort_release(self.mouse_up, end_point[0], end_point[1])
+            self._best_effort(screen.handle.set_window_pos, *raw_pos)
 
     def mouse_click_blank(self, coordinate=(1, 1), times=1, move_back=False) -> bool:
         msg = "点击（1，1）空白位置"
@@ -868,8 +923,13 @@ class WindowMoveInput(WinAbstractInput, metaclass=SingletonMeta):
             key (str): 按键名称
         """
         self.set_active()
-        self.key_down(key)
-        self.key_up(key)
+        pressed = False
+        try:
+            self.key_down(key)
+            pressed = True
+        finally:
+            if pressed:
+                self._best_effort_release(self.key_up, key)
 
     def input_text(self, text: str):
         """将 `text` 通过 WM_CHAR 消息逐字符输入窗口。

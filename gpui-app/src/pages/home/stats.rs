@@ -917,15 +917,19 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
     };
     let current_task = current.currentTaskId.or(snapshot.execution.currentTaskId);
     let state_text = match state {
+        ExecutionState::Starting => text("启动中", "Starting").get(language),
         ExecutionState::Running => text("运行中", "Running").get(language),
         ExecutionState::Paused => text("已暂停", "Paused").get(language),
         ExecutionState::Stopping => text("停止中", "Stopping").get(language),
+        ExecutionState::Restoring => text("恢复设备中", "Restoring device").get(language),
         ExecutionState::Idle => text("待机", "Idle").get(language),
     };
     let state_tone = match state {
         ExecutionState::Running => BadgeTone::Success,
         ExecutionState::Paused => BadgeTone::Warning,
-        ExecutionState::Stopping => BadgeTone::Warning,
+        ExecutionState::Starting | ExecutionState::Stopping | ExecutionState::Restoring => {
+            BadgeTone::Warning
+        }
         ExecutionState::Idle => BadgeTone::Neutral,
     };
     let task_text = current_task
@@ -994,7 +998,11 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 .gap_2()
                 .text_size(px(10.0))
                 .text_color(rgb(TEXT_MUTED));
-            row = row.child(format!("已运行 {} · 开始 {}", elapsed_str, started_hm.unwrap_or_else(|| "--:--".into())));
+            row = row.child(format!(
+                "已运行 {} · 开始 {}",
+                elapsed_str,
+                started_hm.unwrap_or_else(|| "--:--".into())
+            ));
             if current_task_is_mirror(current_task) {
                 let base_label = if infinite {
                     "∞".to_string()
@@ -1032,68 +1040,77 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
         }
     };
 
-    let mirror_block: gpui::AnyElement = if current_task_is_mirror(current_task) && current.runId.is_some() {
-        let is_running = state == ExecutionState::Running;
-        let display_completed = if is_running {
-            if infinite {
-                completed.mirror + 1
-            } else if targets.mirror > 0 {
-                (completed.mirror + 1).min(targets.mirror)
+    let mirror_block: gpui::AnyElement =
+        if current_task_is_mirror(current_task) && current.runId.is_some() {
+            let is_running = state == ExecutionState::Running;
+            let display_completed = if is_running {
+                if infinite {
+                    completed.mirror + 1
+                } else if targets.mirror > 0 {
+                    (completed.mirror + 1).min(targets.mirror)
+                } else {
+                    completed.mirror + 1
+                }
             } else {
-                completed.mirror + 1
-            }
+                completed.mirror
+            };
+            div()
+                .flex_none()
+                .flex()
+                .flex_col()
+                .gap(px(4.0))
+                .child(
+                    div()
+                        .h(px(3.0))
+                        .w_full()
+                        .rounded_full()
+                        .bg(rgba((TEXT_MUTED << 8) | 0x24))
+                        .child(
+                            div()
+                                .h_full()
+                                .w(relative(mirror_progress_ratio(
+                                    display_completed,
+                                    targets.mirror,
+                                    infinite,
+                                )))
+                                .rounded_full()
+                                .bg(rgb(ACCENT)),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .text_size(px(9.5))
+                        .text_color(rgb(TEXT_MUTED))
+                        .child({
+                            let mut label = format!(
+                                "镜牢进度 {}/{}{}",
+                                display_completed,
+                                if infinite {
+                                    "∞".to_string()
+                                } else {
+                                    targets.mirror.to_string()
+                                },
+                                if is_running { " · 进行中" } else { "" }
+                            );
+                            if let Some(floor) = snapshot.mirror_floor.as_ref()
+                                && floor.floor > 0
+                            {
+                                label.push_str(&format!(" · 第{}层", floor.floor));
+                            }
+                            label
+                        })
+                        .child(div().text_color(rgb(TEXT)).child(format_duration(
+                            live_elapsed_secs(current, snapshot.stats.updatedAt, state),
+                        ))),
+                )
+                .into_any_element()
         } else {
-            completed.mirror
+            // 不在镜牢：用 flex 占位把 metrics 压底，不显 “镜牢未运行” 文案
+            div().flex_1().min_h(px(8.0)).into_any_element()
         };
-        div()
-            .flex_none()
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .h(px(3.0))
-                    .w_full()
-                    .rounded_full()
-                    .bg(rgba((TEXT_MUTED << 8) | 0x24))
-                    .child(
-                        div()
-                            .h_full()
-                            .w(relative(mirror_progress_ratio(display_completed, targets.mirror, infinite)))
-                            .rounded_full()
-                            .bg(rgb(ACCENT)),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .text_size(px(9.5))
-                    .text_color(rgb(TEXT_MUTED))
-                    .child({
-                        let mut label = format!(
-                            "镜牢进度 {}/{}{}",
-                            display_completed,
-                            if infinite { "∞".to_string() } else { targets.mirror.to_string() },
-                            if is_running { " · 进行中" } else { "" }
-                        );
-                        if let Some(floor) = snapshot.mirror_floor.as_ref()
-                            && floor.floor > 0
-                        {
-                            label.push_str(&format!(" · 第{}层", floor.floor));
-                        }
-                        label
-                    })
-                    .child(div().text_color(rgb(TEXT)).child(format_duration(
-                        live_elapsed_secs(current, snapshot.stats.updatedAt, state)
-                    ))),
-            )
-            .into_any_element()
-    } else {
-        // 不在镜牢：用 flex 占位把 metrics 压底，不显 “镜牢未运行” 文案
-        div().flex_1().min_h(px(8.0)).into_any_element()
-    };
 
     let metrics = div()
         .flex_none()
@@ -1143,7 +1160,11 @@ fn current_task_is_mirror(task: Option<FixedTaskId>) -> bool {
 
 fn mirror_progress_ratio(completed: u32, target: u32, infinite: bool) -> f32 {
     if infinite || target == 0 {
-        if completed == 0 { 0.0 } else { (completed as f32 * 0.15).clamp(0.0, 1.0) }
+        if completed == 0 {
+            0.0
+        } else {
+            (completed as f32 * 0.15).clamp(0.0, 1.0)
+        }
     } else {
         (completed as f32 / target as f32).clamp(0.0, 1.0)
     }
@@ -1185,17 +1206,14 @@ fn period_summary_section(
     let today = &snapshot.stats.today;
     let week = &snapshot.stats.week;
 
-    let mut details = button(
-        text("明细", "Details").get(language),
-        ButtonVariant::Ghost,
-    )
-    .id("stats-daily-open")
-    .h(px(20.0))
-    .px(px(6.0))
-    .py_0()
-    .gap_1()
-    .text_size(px(10.0))
-    .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
+    let mut details = button(text("明细", "Details").get(language), ButtonVariant::Ghost)
+        .id("stats-daily-open")
+        .h(px(20.0))
+        .px(px(6.0))
+        .py_0()
+        .gap_1()
+        .text_size(px(10.0))
+        .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -1219,12 +1237,9 @@ fn period_summary_section(
                 .items_center()
                 .gap_1p5()
                 .child(action_icon(ICON_HISTORY, 13., ACCENT))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(rgb(TEXT_MUTED))
-                        .child(text("周期统计 (今日/本周)", "Period Stats (Today/Week)").get(language)),
-                ),
+                .child(div().text_size(px(11.0)).text_color(rgb(TEXT_MUTED)).child(
+                    text("周期统计 (今日/本周)", "Period Stats (Today/Week)").get(language),
+                )),
         )
         .child(details);
 
@@ -1302,17 +1317,14 @@ fn recent_mirror_section(
     language: Language,
     root: &WeakEntity<AhabApp>,
 ) -> Div {
-    let mut details = button(
-        text("明细", "Details").get(language),
-        ButtonVariant::Ghost,
-    )
-    .id("stats-mirror-open")
-    .h(px(20.0))
-    .px(px(6.0))
-    .py_0()
-    .gap_1()
-    .text_size(px(10.0))
-    .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
+    let mut details = button(text("明细", "Details").get(language), ButtonVariant::Ghost)
+        .id("stats-mirror-open")
+        .h(px(20.0))
+        .px(px(6.0))
+        .py_0()
+        .gap_1()
+        .text_size(px(10.0))
+        .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -1481,12 +1493,7 @@ fn recent_mirror_metric(label: &'static str, seconds: f64) -> Div {
         .py(px(2.0))
         .bg(rgba((SURFACE_HOVER << 8) | 0x35))
         .text_size(px(9.5))
-        .child(
-            div()
-                .text_color(rgb(TEXT_MUTED))
-                .truncate()
-                .child(label),
-        )
+        .child(div().text_color(rgb(TEXT_MUTED)).truncate().child(label))
         .child(
             div()
                 .text_color(rgb(TEXT))

@@ -30,6 +30,9 @@ use model_types::*;
 
 struct MockState {
     next_team_id: u64,
+    next_run_id: u64,
+    last_start_client_request_id: Option<String>,
+    last_start_response: Option<Value>,
     sequence: super::contract::RequestSequence,
     tasks: TasksConfig,
     execution: ExecutionStatusPayload,

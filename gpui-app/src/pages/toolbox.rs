@@ -193,7 +193,12 @@ fn tool_card(
             }
         }));
 
-        div().w_full().flex().gap_2().child(set_btn).child(reset_btn)
+        div()
+            .w_full()
+            .flex()
+            .gap_2()
+            .child(set_btn)
+            .child(reset_btn)
     } else {
         let mut action = if is_screenshot {
             action_button(

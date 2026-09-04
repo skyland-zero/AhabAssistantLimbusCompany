@@ -7,6 +7,7 @@ from enum import Enum
 import cv2
 import numpy as np
 
+from core.execution_control import check_cancelled
 from core.execution_control import interruptible_sleep as sleep
 from module.automation import auto
 from module.config import cfg
@@ -88,7 +89,13 @@ def _get_node_detector():
     except OSError:
         model_signature = None
 
-    with _node_detector_lock:
+    # ONNX session creation can take seconds. Poll the lock in short slices so
+    # a stop request can wake a task that is waiting behind another initializer.
+    while True:
+        check_cancelled()
+        if _node_detector_lock.acquire(timeout=0.1):
+            break
+    try:
         if _node_detector_session is None or model_signature != _node_detector_signature:
             import onnxruntime as ort
 
@@ -115,6 +122,8 @@ def _get_node_detector():
             except Exception as e:
                 log.warning("镜牢寻路节点检测 DirectML 预热警告: %s", e)
         return _node_detector_session, _node_detector_input_name
+    finally:
+        _node_detector_lock.release()
 
 
 class MirrorMap:

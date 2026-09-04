@@ -220,6 +220,11 @@ pub struct AhabApp {
     pub(crate) backend_operation: BackendOperation,
     pub(crate) backend_attempt_id: u64,
     pub(crate) backend_epoch: u64,
+    /// Once the sidecar has durably requested an application exit, no
+    /// transport recovery or preview work may start another sidecar. The
+    /// flag is intentionally owned by the root app rather than HomeState:
+    /// `app.exitRequested` is a process-lifecycle event, not execution state.
+    pub(crate) exit_requested: bool,
     pub(crate) stop_timeout_generation: u64,
     pub(crate) stats_tick_generation: u64,
     pub(crate) theme_persist_timer_generation: Option<u64>,

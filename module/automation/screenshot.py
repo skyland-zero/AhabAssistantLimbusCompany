@@ -27,6 +27,7 @@ class ScreenShot:
         Returns:
             PIL.Image: 截图图像
         """
+        runner_mode = ScreenShot._runner_mode()
         active_session = ScreenShot._active_session()
         if active_session is not None:
             target_kind = getattr(getattr(active_session, "target", None), "kind", None)
@@ -35,16 +36,22 @@ class ScreenShot:
                     return ScreenShot.mumu_screenshot(gray, controller=active_session.controller)
                 except Exception as e:
                     log.debug(f"MUMU截图报错 {type(e).__name__}: {e}")
+                    if runner_mode:
+                        raise ConnectionError(f"Runner MuMu 截图失败：{e}") from e
                     return None
             if target_kind == "adb":
                 try:
                     return ScreenShot.adb_screenshot(gray, controller=active_session.controller)
                 except Exception as e:
                     log.debug(f"adb截图报错 {type(e).__name__}: {e}")
+                    if runner_mode:
+                        raise ConnectionError(f"Runner ADB 截图失败：{e}") from e
                     return None
             if target_kind != "pc":
                 log.error("当前设备会话类型不支持截图：%s", target_kind)
                 return None
+        elif runner_mode:
+            raise ConnectionError("Runner 没有已安装的私有设备运行时，拒绝回退到旧模拟器连接")
         elif cfg.simulator:
             if cfg.simulator_type == 0:
                 try:
@@ -354,6 +361,8 @@ class ScreenShot:
                     raise ConnectionError("当前选中设备不是 MuMu 模拟器")
                 controller = active_session.controller
             else:
+                if ScreenShot._runner_mode():
+                    raise ConnectionError("Runner 没有私有 MuMu session，拒绝使用类级旧连接")
                 from module.automation.input_handlers.simulator.mumu_control import MumuControl
 
                 controller = MumuControl.connection_device
@@ -386,6 +395,8 @@ class ScreenShot:
                     raise ConnectionError("当前选中设备不是通用 ADB / Scrcpy 设备")
                 controller = active_session.controller
             else:
+                if ScreenShot._runner_mode():
+                    raise ConnectionError("Runner 没有私有 ADB session，拒绝使用类级旧连接")
                 try:
                     from module.automation.input_handlers.simulator.scrcpy_control import (
                         ScrcpyControl,
@@ -427,10 +438,24 @@ class ScreenShot:
 
     @staticmethod
     def _active_session():
-        """Return the process-wide selected session, if the sidecar has one."""
+        """Return the private Runner session or sidecar-selected session."""
         try:
-            from module.device_manager import get_device_manager
+            from module.device_manager import get_device_manager, get_runner_session
 
+            runner_session = get_runner_session()
+            if runner_session is not None:
+                return runner_session
+            if ScreenShot._runner_mode():
+                return None
             return get_device_manager().active_session
         except ImportError:
             return None
+
+    @staticmethod
+    def _runner_mode() -> bool:
+        try:
+            from module.automation.input_handlers.simulator.runner_policy import RunnerPolicy
+
+            return RunnerPolicy.from_env().runner_mode
+        except ImportError:
+            return False

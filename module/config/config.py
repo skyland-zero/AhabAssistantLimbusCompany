@@ -63,12 +63,26 @@ class Config(metaclass=SingletonMeta):
         self._writer_thread.start()
 
         # 加载版本信息
+        # Config can be constructed by the runner with a temporary path.  Do
+        # not let a changed working directory turn that path back into a
+        # process-relative file; all paths used by the singleton are absolute.
+        version_path = Path(version_path).expanduser().resolve()
+        example_path = Path(example_path).expanduser().resolve()
+        config_path = Path(config_path).expanduser().resolve()
+        backup_path = Path(backup_path).expanduser()
+        if not backup_path.is_absolute():
+            # A runner config must not accidentally write backups into the
+            # parent process' current directory.  Keep the existing app
+            # layout (``config_backup`` beside ``config.yaml``) while making
+            # temporary/alternate config paths self-contained.
+            backup_path = config_path.parent / backup_path
+
         self.version = self._load_version(version_path)
         # 用户配置文件路径
-        self.config_path = Path(config_path)
+        self.config_path = config_path
         # example.yaml：既是带注释的模板，也是默认值的唯一来源
-        self.example_path = Path(example_path)
-        self.backup_path = Path(backup_path)
+        self.example_path = example_path
+        self.backup_path = backup_path.resolve()
 
         # 默认值全部来自 example.yaml（单一来源）；ConfigModel 只负责类型与校验，不再硬编码默认值
         self._defaults: dict = self._load_default_config()
@@ -185,7 +199,7 @@ class Config(metaclass=SingletonMeta):
                 teams[f"{i}"] = settings
             loaded_config["teams"] = teams
         if saved_version < 1779444115:
-            current_config_path = Path("config.yaml")
+            current_config_path = self.config_path
             suffixes = [".yaml.bak", ".yaml.backup", ".yaml.old"]
             for suffix in suffixes:
                 file = current_config_path.with_suffix(suffix)

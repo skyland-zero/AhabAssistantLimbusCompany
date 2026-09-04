@@ -31,17 +31,54 @@ impl MockState {
         self.emit(event::EXECUTION_STATS, &stats);
     }
 
+    fn advance_execution_revision(&mut self) {
+        self.execution.stateRevision = self.execution.stateRevision.saturating_add(1);
+    }
+
+    fn execution_result(&self, accepted: bool, reason: Option<&str>) -> Value {
+        let mut result = serde_json::to_value(&self.execution).unwrap_or_else(|_| json!({}));
+        if let Some(object) = result.as_object_mut() {
+            object.insert("accepted".into(), json!(accepted));
+            if let Some(reason) = reason {
+                object.insert("reason".into(), json!(reason));
+            }
+        }
+        result
+    }
+
+    fn requested_run_id(params: Option<&Value>) -> Option<&str> {
+        params
+            .and_then(Value::as_object)
+            .and_then(|params| params.get("runId"))
+            .and_then(Value::as_str)
+    }
+
+    fn validate_run_id(&self, params: Option<&Value>) -> Result<(), RpcError> {
+        let Some(requested) = Self::requested_run_id(params) else {
+            return Ok(());
+        };
+        if self.execution.runId.as_deref() == Some(requested) {
+            Ok(())
+        } else {
+            Err(RpcError::with_data(
+                -32013,
+                "STALE_RUN",
+                json!({"code": "STALE_RUN", "runId": requested}),
+            ))
+        }
+    }
+
     pub(super) fn handle(&mut self, request: RpcRequest) -> RpcResponse {
         let id = request.id;
         let result: Result<Value, RpcError> = (|| match request.method.as_str() {
             method::APP_PING => Ok(json!("pong")),
             method::APP_VERSION => Ok(json!({
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "ui": env!("CARGO_PKG_VERSION"),
                 "backend": "mock-1.0.0"
             })),
             method::APP_CHECK_UPDATE => Ok(json!({
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "status": "up_to_date",
                 "updateAvailable": false,
                 "latest": env!("CARGO_PKG_VERSION")
@@ -62,19 +99,35 @@ impl MockState {
             }
             method::EXECUTION_GET_STATE => Ok(serde_json::to_value(&self.execution).unwrap()),
             method::EXECUTION_START => {
-                if self.execution.state != ExecutionState::Idle {
-                    Err(RpcError::new(-32010, "execution is not idle"))
+                let client_request_id = request
+                    .params
+                    .as_ref()
+                    .and_then(|value| value.get("clientRequestId"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                if client_request_id.is_some()
+                    && client_request_id == self.last_start_client_request_id
+                    && self.last_start_response.is_some()
+                {
+                    Ok(self.last_start_response.clone().unwrap())
+                } else if self.execution.state != ExecutionState::Idle {
+                    Err(RpcError::with_data(
+                        -32010,
+                        "EXECUTION_BUSY",
+                        json!({"code": "EXECUTION_BUSY"}),
+                    ))
                 } else if !has_executable_task(&self.tasks) {
                     // A direct IPC caller must observe the same no-op behavior as
                     // HomeState: window settings and Ahab resonance are not
                     // executable tasks on their own.
-                    Ok(json!({
-                        "accepted": false,
-                        "runId": null,
-                        "state": "idle",
-                        "reason": "没有选择可执行任务"
-                    }))
+                    let result = self.execution_result(false, Some("没有选择可执行任务"));
+                    self.last_start_client_request_id = client_request_id;
+                    self.last_start_response = Some(result.clone());
+                    Ok(result)
                 } else {
+                    self.next_run_id = self.next_run_id.saturating_add(1);
+                    let run_id = format!("mock-run-{}", self.next_run_id);
+                    let next_revision = self.execution.stateRevision.saturating_add(1);
                     let task = request
                         .params
                         .and_then(|value| value.get("taskId").cloned())
@@ -83,13 +136,17 @@ impl MockState {
                     self.execution = ExecutionStatusPayload {
                         state: ExecutionState::Running,
                         currentTaskId: task,
+                        stateRevision: next_revision,
+                        runId: Some(run_id.clone()),
+                        deviceLease: DeviceLeaseState::Runner,
+                        ..ExecutionStatusPayload::default()
                     };
                     let infinite =
                         self.tasks.enabledTasks.mirror && self.tasks.mirror.infinite_dungeons;
                     self.stats = ExecutionStatsPayload {
                         schemaVersion: 1,
                         currentRun: CurrentRunStats {
-                            runId: Some("mock-run".into()),
+                            runId: Some(run_id.clone()),
                             state: ExecutionState::Running,
                             currentTaskId: self.execution.currentTaskId,
                             startedAt: Some(0),
@@ -135,6 +192,7 @@ impl MockState {
                                 },
                                 isHard: self.tasks.mirror.hard_mirror,
                                 isInfinite: self.tasks.mirror.infinite_dungeons,
+                                runId: Some(run_id.clone()),
                             },
                         );
                         self.emit(
@@ -146,60 +204,74 @@ impl MockState {
                                 } else {
                                     5
                                 },
-                                runId: Some("mock-run".into()),
+                                runId: Some(run_id.clone()),
                             },
                         );
                     }
-                    Ok(json!({
+                    let result = json!({
                         "accepted": true,
-                        "runId": "mock-run",
-                        "state": "running"
-                    }))
+                        "runId": run_id,
+                        "state": "running",
+                        "stateRevision": self.execution.stateRevision
+                    });
+                    self.last_start_client_request_id = client_request_id;
+                    self.last_start_response = Some(result.clone());
+                    Ok(result)
                 }
             }
             method::EXECUTION_STOP => {
-                self.execution = ExecutionStatusPayload::default();
-                self.stats.currentRun.state = ExecutionState::Idle;
-                self.stats.currentRun.currentTaskId = None;
-                self.emit_stats();
-                let status = self.execution.clone();
-                self.emit(event::EXECUTION_STATUS, &status);
-                Ok(json!({
-                    "accepted": true,
-                    "runId": null,
-                    "state": "idle"
-                }))
+                self.validate_run_id(request.params.as_ref())?;
+                if self.execution.state == ExecutionState::Idle {
+                    let accepted = Self::requested_run_id(request.params.as_ref()).is_some()
+                        && self.execution.runId.is_some();
+                    Ok(self.execution_result(accepted, None))
+                } else {
+                    let next_revision = self.execution.stateRevision.saturating_add(1);
+                    let run_id = self.execution.runId.clone();
+                    self.execution = ExecutionStatusPayload::default();
+                    // Preserve the monotonic revision and the last run identity
+                    // when publishing the final idle snapshot.
+                    self.execution.stateRevision = next_revision;
+                    self.execution.runId = run_id;
+                    self.execution.outcome = Some(ExecutionOutcome::Stopped);
+                    self.execution.requestedBy = Some(ExecutionRequestedBy::User);
+                    self.execution.deviceRestore = DeviceRestoreState::Restored;
+                    self.stats.currentRun.state = ExecutionState::Idle;
+                    self.stats.currentRun.currentTaskId = None;
+                    self.emit_stats();
+                    let status = self.execution.clone();
+                    self.emit(event::EXECUTION_STATUS, &status);
+                    self.last_start_client_request_id = None;
+                    self.last_start_response = None;
+                    Ok(self.execution_result(true, None))
+                }
             }
             method::EXECUTION_PAUSE => {
+                self.validate_run_id(request.params.as_ref())?;
                 if self.execution.state != ExecutionState::Running {
                     Err(RpcError::new(-32011, "execution is not running"))
                 } else {
+                    self.advance_execution_revision();
                     self.execution.state = ExecutionState::Paused;
                     self.stats.currentRun.state = ExecutionState::Paused;
                     self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
-                    Ok(json!({
-                        "accepted": true,
-                        "runId": "mock-run",
-                        "state": "paused"
-                    }))
+                    Ok(self.execution_result(true, None))
                 }
             }
             method::EXECUTION_RESUME => {
+                self.validate_run_id(request.params.as_ref())?;
                 if self.execution.state != ExecutionState::Paused {
                     Err(RpcError::new(-32012, "execution is not paused"))
                 } else {
+                    self.advance_execution_revision();
                     self.execution.state = ExecutionState::Running;
                     self.stats.currentRun.state = ExecutionState::Running;
                     self.emit_stats();
                     let status = self.execution.clone();
                     self.emit(event::EXECUTION_STATUS, &status);
-                    Ok(json!({
-                        "accepted": true,
-                        "runId": "mock-run",
-                        "state": "running"
-                    }))
+                    Ok(self.execution_result(true, None))
                 }
             }
             method::TEAM_LIST => Ok(serde_json::to_value(&self.teams).unwrap()),

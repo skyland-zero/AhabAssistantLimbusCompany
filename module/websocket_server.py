@@ -13,14 +13,22 @@ from typing import Any
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
-from module.backend_application import SCHEMA_VERSION, BackendApplication
+from module.backend_application import BackendApplication
 from module.device_manager import DeviceManager
 from module.logger import log
-from module.rpc_dispatcher import RpcDispatcher
+from module.rpc_dispatcher import SCHEMA_VERSION, RpcDispatcher
 
 MAX_INFLIGHT_REQUESTS = 64
 MAX_OUTBOUND_EVENTS = 512
 READ_WORKERS = 4
+_EXECUTION_CONTROL_METHODS = frozenset(
+    {
+        "execution.start",
+        "execution.pause",
+        "execution.resume",
+        "execution.stop",
+    }
+)
 _COALESCIBLE_EVENTS = {
     "screenshot.frame",
     "preview.status",
@@ -32,7 +40,14 @@ _COALESCIBLE_EVENTS = {
     "device.status",
     "resource.sync.progress",
 }
-_DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"log.entry"}
+_DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"log.entry", "execution.log"}
+# RunnerEventAdapter keeps the historical sidecar event names internally, but
+# the GPUI contract uses the canonical top-level event for log entries.  Apply
+# this compatibility alias only at the transport boundary so existing Python
+# listeners/tests continue to observe the adapter's names.
+_WIRE_EVENT_ALIASES = {
+    "execution.log": "log.entry",
+}
 
 
 class _BroadcastLogHandler(logging.Handler):
@@ -84,6 +99,7 @@ class WebSocketServer:
         self._outbound: deque[tuple[str, dict[str, Any], int | None]] = deque()
         self._outbound_ready: asyncio.Event | None = None
         self._sender_task: asyncio.Task[None] | None = None
+        self._execution_executor: ThreadPoolExecutor | None = None
         self._mutation_executor: ThreadPoolExecutor | None = None
         self._read_executor: ThreadPoolExecutor | None = None
         self._log_handler = _BroadcastLogHandler(self)
@@ -93,6 +109,10 @@ class WebSocketServer:
         if self._server is not None:
             return self.port or 0
         self._loop = asyncio.get_running_loop()
+        self._execution_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="AALCRpcExecution",
+        )
         self._mutation_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="AALCRpcMutation")
         self._read_executor = ThreadPoolExecutor(max_workers=READ_WORKERS, thread_name_prefix="AALCRpcRead")
         self._outbound_ready = asyncio.Event()
@@ -149,8 +169,11 @@ class WebSocketServer:
             self._sender_task = None
         self._outbound.clear()
 
+        execution_executor, self._execution_executor = self._execution_executor, None
         mutation_executor, self._mutation_executor = self._mutation_executor, None
         read_executor, self._read_executor = self._read_executor, None
+        if execution_executor is not None:
+            await asyncio.to_thread(execution_executor.shutdown, wait=True, cancel_futures=True)
         if mutation_executor is not None:
             await asyncio.to_thread(mutation_executor.shutdown, wait=True, cancel_futures=True)
         if read_executor is not None:
@@ -250,9 +273,19 @@ class WebSocketServer:
         return True
 
     async def _handle_request(self, connection: ServerConnection, request: dict[str, Any]) -> None:
-        executor = (
-            self._mutation_executor if self.dispatcher.is_mutating(request.get("method")) else self._read_executor
-        )
+        method = request.get("method")
+        if not isinstance(method, str):
+            await self._send(connection, self._error(request.get("id"), -32600, "无效的 JSON-RPC 请求"))
+            return
+        if method in _EXECUTION_CONTROL_METHODS:
+            # Execution controls have their own serial lane.  In particular,
+            # stop must not wait behind a long-running ordinary mutation such
+            # as resource sync, tool startup, or config persistence.
+            executor = self._execution_executor
+        elif self.dispatcher.is_mutating(method):
+            executor = self._mutation_executor
+        else:
+            executor = self._read_executor
         if executor is None:
             await self._send(connection, self._error(request.get("id"), -32000, "后端服务尚未启动"))
             return
@@ -286,16 +319,17 @@ class WebSocketServer:
             ready.clear()
 
     async def _broadcast_event(self, event: str, payload: dict[str, Any], sequence: int | None) -> None:
+        wire_event = _WIRE_EVENT_ALIASES.get(event, event)
         message: str | bytes
-        if event == "screenshot.frame" and isinstance(payload.get("jpeg"), bytes):
+        if wire_event == "screenshot.frame" and isinstance(payload.get("jpeg"), bytes):
             jpeg = payload.pop("jpeg")
-            header: dict[str, Any] = {"event": event, "payload": payload}
+            header: dict[str, Any] = {"event": wire_event, "payload": payload}
             if sequence is not None:
                 header["seq"] = sequence
             metadata = json.dumps(header, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             message = struct.pack(">I", len(metadata)) + metadata + jpeg
         else:
-            envelope: dict[str, Any] = {"event": event, "payload": payload}
+            envelope: dict[str, Any] = {"event": wire_event, "payload": payload}
             if sequence is not None:
                 envelope["seq"] = sequence
             message = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
@@ -321,13 +355,25 @@ class WebSocketServer:
 
     @staticmethod
     def _error(request_id: Any, code: int, message: str) -> dict[str, Any]:
+        code_name = {
+            -32600: "INVALID_REQUEST",
+            -32601: "METHOD_NOT_FOUND",
+            -32602: "INVALID_PARAMS",
+            -32700: "PARSE_ERROR",
+            -32000: "INTERNAL_ERROR",
+            -32030: "QUEUE_FULL",
+        }.get(code, str(code))
         return {
             "jsonrpc": "2.0",
             "id": request_id,
             "error": {
                 "code": code,
                 "message": message,
-                "data": {"retryable": code in {-32000, -32001, -32030}, "userMessage": message},
+                "data": {
+                    "code": code_name,
+                    "retryable": code in {-32000, -32001, -32030},
+                    "userMessage": message,
+                },
             },
         }
 

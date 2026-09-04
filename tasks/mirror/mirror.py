@@ -433,18 +433,26 @@ class Mirror:
         # --- Temporal max-pooling via Scrcpy snapshot(after_seq) ---
         frames: list[np.ndarray] = []
         controller = None
+        runner_mode = False
         try:
             from module.automation.screenshot import ScreenShot
 
+            runner_mode = ScreenShot._runner_mode()
             session = ScreenShot._active_session()
             if session is not None and hasattr(session, "controller"):
                 controller = getattr(session, "controller", None)
-            if controller is None:
+            if controller is None and not runner_mode:
                 from module.automation.input_handlers.simulator.scrcpy_control import ScrcpyControl
 
                 controller = getattr(ScrcpyControl, "connection_device", None)
         except Exception:
             controller = None
+
+        if runner_mode and controller is None:
+            # A Runner must use the private session installed for this run;
+            # consulting ScrcpyControl.connection_device here could bind an
+            # unrelated/stale process-wide controller after a lease failure.
+            raise ConnectionError("Runner 没有私有 ADB session，拒绝使用旧 Scrcpy 连接")
 
         if controller is not None and hasattr(controller, "snapshot"):
             last_seq = None
@@ -1832,7 +1840,7 @@ class Mirror:
                 loop_count -= 1
                 continue
 
-        time.sleep(3)
+        sleep(3)
 
     @begin_and_finish_time_log(task_name="镜牢寻路")
     def search_road(self):
@@ -1929,7 +1937,7 @@ class Mirror:
             if auto.click_element("mirror/road_in_mir/setting_assets.png"):
                 continue
             auto.key_press("esc")
-            time.sleep(1)
+            sleep(1)
             if retry() is False:
                 return False
         # TODO耗时
@@ -2099,7 +2107,7 @@ class Mirror:
             auto.mouse_click(pos[0], pos[1] - 500 * my_scale)
             sleep(cfg.mouse_action_interval)
             auto.click_element("mirror/road_in_mir/acquire_ego_gift_select_assets.png", model="normal")
-            time.sleep(2)
+            sleep(2)
             if retry() is False:
                 return False
             return
@@ -2165,7 +2173,7 @@ class Mirror:
                             "mirror/road_in_mir/acquire_ego_gift_select_assets.png",
                             model="normal",
                         )
-                        time.sleep(2)
+                        sleep(2)
                         if retry() is False:
                             return False
                         return
@@ -2190,7 +2198,7 @@ class Mirror:
                                 if isinstance(ocr_result, list) and len(ocr_result) >= 2:
                                     is_white_gossypium = True
                             if is_white_gossypium:
-                                time.sleep(1)
+                                sleep(1)
                                 auto.click_element(
                                     "mirror/road_in_mir/refuse_gift_assets.png",
                                     take_screenshot=True,
@@ -2200,17 +2208,17 @@ class Mirror:
                                     "mirror/road_in_mir/refuse_gift_confirm_assets.png",
                                     take_screenshot=True,
                                 )
-                                time.sleep(2)
+                                sleep(2)
                                 if retry() is False:
                                     return False
                                 return
                         auto.mouse_click(button[0], button[1])
-                        time.sleep(1)
+                        sleep(1)
                         auto.click_element(
                             "mirror/road_in_mir/acquire_ego_gift_select_assets.png",
                             model="normal",
                         )
-                        time.sleep(2)
+                        sleep(2)
                         if retry() is False:
                             return False
                         return
@@ -2290,7 +2298,7 @@ class Mirror:
                         "mirror/road_in_mir/acquire_ego_gift_select_assets.png",
                         model="normal",
                     )
-                    time.sleep(2)
+                    sleep(2)
                     if retry() is False:
                         return False
                     return
@@ -2302,7 +2310,7 @@ class Mirror:
                         "mirror/road_in_mir/acquire_ego_gift_select_assets.png",
                         model="normal",
                     )
-                    time.sleep(2)
+                    sleep(2)
                     if retry() is False:
                         return False
                     return
@@ -2314,7 +2322,7 @@ class Mirror:
                         "mirror/road_in_mir/acquire_ego_gift_select_assets.png",
                         model="normal",
                     )
-                    time.sleep(2)
+                    sleep(2)
                     if retry() is False:
                         return False
                     return

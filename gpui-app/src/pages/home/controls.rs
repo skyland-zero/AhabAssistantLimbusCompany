@@ -7,6 +7,10 @@ pub(super) fn task_header(
     language: crate::model::Language,
 ) -> Div {
     let (label, tone) = match state {
+        ExecutionState::Starting => (
+            text("正在启动", "Starting").get(language).to_owned(),
+            BadgeTone::Warning,
+        ),
         ExecutionState::Running => (
             current_task
                 .map(|task| {
@@ -25,6 +29,12 @@ pub(super) fn task_header(
         ),
         ExecutionState::Stopping => (
             text("正在停止", "Stopping").get(language).to_owned(),
+            BadgeTone::Warning,
+        ),
+        ExecutionState::Restoring => (
+            text("正在恢复设备", "Restoring device")
+                .get(language)
+                .to_owned(),
             BadgeTone::Warning,
         ),
         ExecutionState::Idle => (

@@ -20,9 +20,10 @@ pub use stats::{
 };
 pub use tasks::{
     AfterCompletionConfig, AfterExitAction, AfterPowerAction, BuyEnkephalinConfig, DailyTaskConfig,
-    EnabledTasks, ExecutionState, ExecutionStatusPayload, FixedTaskId, GetRewardConfig,
-    MirrorConfig, MirrorFloorPayload, MirrorProgressPayload, ResonateWithAhabConfig,
-    SetWindowsConfig, TasksConfig,
+    DeviceLease, DeviceLeaseState, DeviceRestore, DeviceRestoreState, EnabledTasks, ExecutionError,
+    ExecutionErrorPayload, ExecutionOutcome, ExecutionRequestedBy, ExecutionState,
+    ExecutionStatusPayload, FixedTaskId, GetRewardConfig, MirrorConfig, MirrorFloorPayload,
+    MirrorProgressPayload, RequestedBy, ResonateWithAhabConfig, SetWindowsConfig, TasksConfig,
 };
 pub use team_stats::{TeamStats, TeamStatsBucket};
 pub use teams::{

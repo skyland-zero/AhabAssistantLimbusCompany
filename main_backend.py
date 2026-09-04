@@ -29,7 +29,7 @@ async def _run(args: argparse.Namespace) -> None:
     from module.logger.my_log import Logger
 
     Logger(headless=True)
-    from module.backend_application import BackendApplication
+    from module.backend_application import BackendApplication, recover_pending_cleanups
     from module.device_manager import get_device_manager
     from module.rpc_dispatcher import RpcDispatcher
     from module.websocket_server import WebSocketServer
@@ -50,6 +50,16 @@ async def _run(args: argparse.Namespace) -> None:
             pass
 
     manager = get_device_manager()
+    # Startup recovery is a barrier: no WebSocket listener (and therefore no
+    # new execution.start request) exists until every durable journal has been
+    # inspected.  The recovery executor never performs unscoped process kills;
+    # local PID cleanup requires an explicitly injected identity-safe handler.
+    recovery_results = recover_pending_cleanups()
+    for result in recovery_results:
+        if result.get("pending") or result.get("status") == "failed":
+            log.warning("CleanupLedger 启动恢复仍待处理：%s", result)
+        else:
+            log.info("CleanupLedger 启动恢复完成：%s", result.get("runId", "unknown"))
     application = BackendApplication(
         manager,
         version=_version(),

@@ -3,7 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
+import module.device_manager as device_manager_module
 import tasks.base.retry as retry_module
+from module.device_manager import DeviceError
 
 
 def test_wait_for_ui_state_reuses_a_clean_current_frame(monkeypatch) -> None:
@@ -68,3 +72,11 @@ def test_retry_only_reuses_a_frame_when_explicitly_requested(monkeypatch) -> Non
 
     retry_module.retry()
     current_auto.take_screenshot.assert_called_once_with()
+
+
+def test_runner_retry_rejects_legacy_global_controller_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(retry_module, "_runner_mode_enabled", lambda: True)
+    monkeypatch.setattr(device_manager_module, "get_device_manager", lambda: SimpleNamespace(active_session=None))
+
+    with pytest.raises(DeviceError, match="私有设备 session"):
+        retry_module._active_session()

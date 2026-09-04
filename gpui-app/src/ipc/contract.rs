@@ -5,7 +5,12 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub type RequestId = u64;
-pub const RPC_SCHEMA_VERSION: u32 = 2;
+/// Version of the external GPUI ↔ sidecar JSON-RPC contract.
+///
+/// Runner IPC has its own, independent protocol version.  Keep this value in
+/// the transport contract so the WebSocket handshake and the deterministic
+/// mock advertise the same schema.
+pub const RPC_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RpcRequest {
@@ -194,11 +199,17 @@ pub mod event {
     pub const LOG_ENTRY: &str = "log.entry";
     pub const RESOURCE_SYNC_PROGRESS: &str = "resource.sync.progress";
     pub const APP_NOTICE: &str = "app.notice";
+    pub const APP_EXIT_REQUESTED: &str = "app.exitRequested";
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{
+        ExecutionStatsPayload, ExecutionStatusPayload, LogEntryPayload, PreviewStatusPayload,
+        ScreenshotFrame,
+    };
+
     #[test]
     fn request_and_event_use_canonical_json() {
         let request = RpcRequest::without_params(7, method::APP_PING);
@@ -214,5 +225,96 @@ mod tests {
         let sequence = RequestSequence::default();
         assert_eq!(sequence.next(), 1);
         assert_eq!(sequence.next(), 2);
+    }
+
+    #[test]
+    fn python_schema_three_fixtures_decode_at_the_rust_boundary() {
+        let status = serde_json::from_str::<ExecutionStatusPayload>(
+            r#"{
+                "schemaVersion":3,
+                "state":"restoring",
+                "stateRevision":27,
+                "currentTaskId":"mirror",
+                "runId":"run-fixture",
+                "runnerPid":1234,
+                "deviceLease":"restoring",
+                "outcome":"completed",
+                "forced":false,
+                "requestedBy":null,
+                "error":null,
+                "deviceRestore":"pending"
+            }"#,
+        )
+        .expect("Python execution.status fixture should decode");
+        assert_eq!(status.schemaVersion, 3);
+        assert_eq!(status.stateRevision, 27);
+        assert_eq!(status.runId.as_deref(), Some("run-fixture"));
+
+        let stats = serde_json::from_str::<ExecutionStatsPayload>(
+            r#"{
+                "schemaVersion":3,
+                "currentRun":{
+                    "runId":"run-fixture",
+                    "state":"running",
+                    "currentTaskId":"mirror",
+                    "startedAt":1725000000000,
+                    "targets":{"exp":0,"thread":0,"mirror":1},
+                    "completed":{"exp":0,"thread":0,"mirror":0},
+                    "isMirrorInfinite":false,
+                    "updatedAt":1725000000000
+                },
+                "lastMirror":null,
+                "mirrorHistory":[],
+                "today":{"exp":0,"thread":0,"mirror":0},
+                "week":{"exp":0,"thread":0,"mirror":0},
+                "updatedAt":1725000000000
+            }"#,
+        )
+        .expect("Python execution.stats fixture should decode");
+        assert_eq!(stats.currentRun.runId.as_deref(), Some("run-fixture"));
+
+        let preview = serde_json::from_str::<PreviewStatusPayload>(
+            r#"{"deviceId":"pc:limbus","runId":"run-fixture","generation":9,"status":"running"}"#,
+        )
+        .expect("Python preview.status fixture should decode");
+        assert_eq!(preview.deviceId.as_deref(), Some("pc:limbus"));
+        assert_eq!(preview.generation, Some(9));
+
+        let frame = serde_json::from_str::<ScreenshotFrame>(
+            r#"{"instanceId":"pc:limbus","jpeg":[255,216,255,217],"width":2,"height":1,"deviceId":"pc:limbus","runId":"run-fixture","generation":9}"#,
+        )
+        .expect("Python screenshot.frame fixture should decode");
+        assert_eq!(frame.deviceId.as_deref(), Some("pc:limbus"));
+        assert_eq!(frame.runId.as_deref(), Some("run-fixture"));
+        assert_eq!(frame.generation, Some(9));
+
+        let log = serde_json::from_str::<LogEntryPayload>(
+            r#"{"ts":1725000000000,"level":"warn","message":"runner warning","runId":"run-fixture"}"#,
+        )
+        .expect("Python log.entry fixture should decode");
+        assert_eq!(log.runId.as_deref(), Some("run-fixture"));
+    }
+
+    #[test]
+    fn python_structured_error_fixture_preserves_data_code() {
+        let response = serde_json::from_str::<RpcResponse>(
+            r#"{
+                "jsonrpc":"2.0",
+                "id":8,
+                "error":{
+                    "code":-32013,
+                    "message":"STALE_RUN",
+                    "data":{"code":"STALE_RUN","retryable":false,"userMessage":"STALE_RUN","runId":"old-run"}
+                }
+            }"#,
+        )
+        .expect("Python structured error fixture should decode");
+        let data = response
+            .error
+            .expect("error should be present")
+            .data
+            .expect("error data");
+        assert_eq!(data.get("code").and_then(Value::as_str), Some("STALE_RUN"));
+        assert_eq!(data.get("retryable"), Some(&Value::Bool(false)));
     }
 }

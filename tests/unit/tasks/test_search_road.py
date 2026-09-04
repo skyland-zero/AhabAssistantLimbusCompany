@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
+import pytest
 from PIL import Image
 
 import tasks.mirror.search_road as search_road
@@ -76,6 +77,26 @@ def test_ensure_fresh_map_frame_propagates_wait_failure(monkeypatch) -> None:
 
     assert search_road.ensure_fresh_map_frame() is False
     fake_auto.wait_for_fresh_frame.assert_called_once()
+
+
+def test_node_detector_lock_wait_is_cancelable(monkeypatch) -> None:
+    search_road._node_detector_lock.acquire()
+    checks = 0
+
+    def cancel_after_one_check() -> None:
+        nonlocal checks
+        checks += 1
+        if checks >= 2:
+            raise RuntimeError("cancelled")
+
+    monkeypatch.setattr(search_road, "check_cancelled", cancel_after_one_check)
+    try:
+        with pytest.raises(RuntimeError, match="cancelled"):
+            search_road._get_node_detector()
+    finally:
+        search_road._node_detector_lock.release()
+
+    assert checks >= 2
 
 
 def _build_route_graph_for_strategy_test() -> search_road.RouteGraph:

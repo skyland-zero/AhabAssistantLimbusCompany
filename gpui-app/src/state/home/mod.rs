@@ -14,12 +14,21 @@ use crate::{
     ipc::{EventEnvelope, MockClient, RpcGateway},
     model::{
         AfterExitAction, AfterPowerAction, ConnectionStatus, DailyStatsPayload, DeviceInfo,
-        DeviceStatusPayload, ExecutionState, ExecutionStatsPayload, ExecutionStatusPayload,
-        FixedTaskId, LogEntryPayload, LogLevel, MirrorFloorPayload, MirrorProgressPayload,
-        PreviewStatus,
-        PreviewStatusPayload, ScreenshotFrame, TasksConfig,
+        DeviceLeaseState, DeviceStatusPayload, ExecutionState, ExecutionStatsPayload,
+        ExecutionStatusPayload, FixedTaskId, LogEntryPayload, LogLevel, MirrorFloorPayload,
+        MirrorProgressPayload, PreviewStatus, PreviewStatusPayload, ScreenshotFrame, TasksConfig,
     },
 };
+
+/// Identity of the preview session currently allowed to update the home
+/// screen.  Runner and sidecar preview streams share the transport, so the
+/// identity must be tracked independently from the execution snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PreviewEventIdentity {
+    pub(crate) device_id: String,
+    pub(crate) run_id: Option<String>,
+    pub(crate) generation: u64,
+}
 
 /// State owned by the Home page. Keeping the RPC client and page configuration
 /// here leaves render code responsible only for describing the current state.
@@ -101,6 +110,21 @@ pub struct HomeState {
     pub last_event_sequence: u64,
     pub(crate) stopping_since: Option<Instant>,
     pub(crate) state_before_stopping: Option<ExecutionState>,
+    /// The latest accepted preview stream identity.  `None` means no preview
+    /// event has established a baseline since the last execution boundary.
+    pub(crate) preview_identity: Option<PreviewEventIdentity>,
+    /// High-water marks retained across disconnect/reconnect transitions for
+    /// each device/run pair.  They prevent a delayed old generation from
+    /// becoming valid merely because the active session was cleared.
+    pub(crate) preview_generation_floor: HashMap<(String, Option<String>), u64>,
+    /// Most recently completed Runner run accepted by the preview gate.
+    pub(crate) preview_recent_run_id: Option<String>,
+    /// Per-run sequence watermarks for runner-derived events.  The external
+    /// event sequence is allowed to restart at one for each new run.
+    pub(crate) execution_event_sequences: HashMap<String, u64>,
+    /// Monotonic client request nonce used to make execution.start retries
+    /// identifiable to a schema-3 sidecar.
+    pub(crate) next_client_request_id: u64,
 }
 
 impl Default for HomeState {
@@ -171,11 +195,17 @@ impl HomeState {
             last_event_sequence: 0,
             stopping_since: None,
             state_before_stopping: None,
+            preview_identity: None,
+            preview_generation_floor: HashMap::new(),
+            preview_recent_run_id: None,
+            execution_event_sequences: HashMap::new(),
+            next_client_request_id: 0,
         }
     }
 
     pub fn is_busy(&self) -> bool {
         !matches!(self.execution.state, ExecutionState::Idle)
+            || self.execution.deviceLease != DeviceLeaseState::None
     }
 }
 

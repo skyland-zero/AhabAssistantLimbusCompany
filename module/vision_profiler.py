@@ -261,7 +261,7 @@ class VisionProfiler(metaclass=SingletonMeta):
                     lines.append(f"     - 历史命中样本: {roi['sample_count']} 次, 中心位于 {roi['cluster_center']}")
                     lines.append(f"     - 建议固定裁剪: my_crop={crop} [{size[0]}x{size[1]}]")
                     lines.append(f"     - 归一化比例: ({ratio[0]}*W, {ratio[1]}*H, {ratio[2]}*W, {ratio[3]}*H)")
-                    lines.append(f"     - 预期收益: 单次耗时由 ~42ms 降至 ~0.8ms (提速 50 倍)")
+                    lines.append("     - 预期收益: 单次耗时由 ~42ms 降至 ~0.8ms (提速 50 倍)")
 
             if suggested_count == 0:
                 lines.append("  (暂无足够命中样本，运行 1~2 轮镜牢后将自动生成)")

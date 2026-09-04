@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import sys
+import time
+from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
+from PIL import Image
 
 from module.automation.input_handlers import AbstractInput
 from module.backend_application import BackendApplication
 from module.config import TeamSetting
 from module.config.config import Config
 from module.device_manager import DeviceInfo, DeviceManager, DeviceSession, DeviceTarget
-from module.rpc_dispatcher import RpcDispatcher
+from module.rpc_dispatcher import RpcDispatcher, RpcDispatchError
 
 
 class FakeConfigModel:
@@ -148,6 +151,44 @@ class FakeDeviceManager:
         return None
 
 
+class FakeLeaseDeviceManager(FakeDeviceManager):
+    def __init__(self) -> None:
+        super().__init__()
+        self._lease_state = "none"
+        self._lease: dict[str, Any] | None = None
+        self.suspend_calls: list[str] = []
+        self.resume_calls: list[tuple[str, int | None]] = []
+
+    @property
+    def lease_state(self) -> str:
+        return self._lease_state
+
+    @property
+    def execution_generation(self) -> int:
+        return 7
+
+    @property
+    def execution_lease(self) -> dict[str, Any] | None:
+        return None if self._lease is None else dict(self._lease)
+
+    def suspend_for_execution(self, run_id: str, deadline=None) -> dict[str, Any]:
+        self.suspend_calls.append(run_id)
+        self._lease_state = "runner"
+        self._lease = {
+            "runId": run_id,
+            "generation": 7,
+            "state": "runner",
+            "target": {"id": "pc:limbus", "name": "Limbus Company", "kind": "pc"},
+        }
+        return dict(self._lease)
+
+    def resume_after_execution(self, run_id: str, generation=None, deadline=None) -> dict[str, Any]:
+        self.resume_calls.append((run_id, generation))
+        self._lease_state = "none"
+        self._lease = None
+        return {"status": "connected", "runId": run_id, "generation": generation}
+
+
 class FakePreviewCapture:
     def __init__(self) -> None:
         self.started: list[str] = []
@@ -159,6 +200,10 @@ class FakePreviewCapture:
         return True
 
     def stop(self) -> bool:
+        self.stop_count += 1
+        return True
+
+    def stop_and_wait(self, deadline=None) -> bool:
         self.stop_count += 1
         return True
 
@@ -214,15 +259,202 @@ class FakeNotificationService:
         self.closed = True
 
 
-def make_application(preview_capture=None, stats_path=None, notifications=None) -> BackendApplication:
+class FakeRunnerResult:
+    def __init__(self, accepted: bool, snapshot: dict[str, Any], error: dict[str, Any] | None = None) -> None:
+        self.accepted = accepted
+        self.snapshot = snapshot
+        self.error = error
+
+
+class FakeRunnerSupervisor:
+    def __init__(self) -> None:
+        self._snapshot = {
+            "schemaVersion": 3,
+            "state": "idle",
+            "stateRevision": 0,
+            "currentTaskId": None,
+            "runId": None,
+            "runnerPid": None,
+            "deviceLease": "none",
+            "outcome": None,
+            "forced": False,
+            "requestedBy": None,
+            "error": None,
+            "deviceRestore": "not_needed",
+        }
+        self.starts: list[dict[str, Any]] = []
+        self.stop_requests: list[tuple[str, str]] = []
+
+    def get_state(self) -> dict[str, Any]:
+        return dict(self._snapshot)
+
+    @property
+    def snapshot(self) -> dict[str, Any]:
+        return self.get_state()
+
+    def _set(self, **changes: Any) -> dict[str, Any]:
+        self._snapshot.update(changes)
+        self._snapshot["stateRevision"] += 1
+        return self.get_state()
+
+    def try_start(self, spec, *, client_request_id=None, run_id=None):
+        self.starts.append(dict(spec))
+        value = self._set(
+            state="starting",
+            currentTaskId=spec["taskId"],
+            runId=run_id or spec["runId"],
+            deviceLease="acquiring",
+            outcome=None,
+            error=None,
+            deviceRestore="not_needed",
+        )
+        return FakeRunnerResult(True, value)
+
+    def request_pause(self, run_id):
+        return FakeRunnerResult(True, self._set(state="paused", runId=run_id, deviceLease="runner"))
+
+    def request_resume(self, run_id):
+        return FakeRunnerResult(True, self._set(state="running", runId=run_id, deviceLease="runner"))
+
+    def request_stop(self, run_id, *, requested_by="user"):
+        self.stop_requests.append((run_id, requested_by))
+        return FakeRunnerResult(
+            True,
+            self._set(
+                state="idle",
+                currentTaskId=None,
+                runId=run_id,
+                deviceLease="none",
+                outcome="stopped",
+                forced=False,
+                requestedBy=requested_by,
+                deviceRestore="restored",
+            ),
+        )
+
+    def close(self, timeout=5.0):
+        return None
+
+
+class FakeConfigRepository:
+    def __init__(self) -> None:
+        self.create_calls: list[str] = []
+        self.delta_calls: list[dict[str, Any]] = []
+        self.cleanup_calls: list[str] = []
+        self.conflict = False
+
+    def create_run_config(self, run_id: str) -> dict[str, Any]:
+        self.create_calls.append(run_id)
+        return {
+            "runId": run_id,
+            "configPath": str((Path.cwd() / "runner" / run_id / "config.yaml").resolve()),
+            "configRevision": 4,
+            "baseRevision": 4,
+            "baseConfigHash": "a" * 64,
+            "snapshot": {"hard_mirror": False},
+            "baseline": {"hard_mirror": False},
+        }
+
+    def apply_delta(self, delta: dict[str, Any]) -> dict[str, Any]:
+        self.delta_calls.append(dict(delta))
+        if self.conflict:
+            return {"status": "conflict", "conflicts": ["hard_mirror"], "warnings": []}
+        return {"status": "applied", "conflicts": [], "warnings": []}
+
+    def cleanup_run_config(self, run_id: str) -> bool:
+        self.cleanup_calls.append(run_id)
+        return True
+
+
+class FailingConfigRepository(FakeConfigRepository):
+    def __init__(self, message: str = "config creation failed") -> None:
+        super().__init__()
+        self.message = message
+
+    def create_run_config(self, run_id: str) -> dict[str, Any]:
+        self.create_calls.append(run_id)
+        raise RuntimeError(self.message)
+
+
+class UnsafeConfigRepository(FakeConfigRepository):
+    def __init__(self, snapshot: dict[str, Any]) -> None:
+        super().__init__()
+        self.snapshot = snapshot
+
+    def create_run_config(self, run_id: str) -> dict[str, Any]:
+        self.create_calls.append(run_id)
+        return {
+            "runId": run_id,
+            "configPath": str((Path.cwd() / "runner" / run_id / "config.yaml").resolve()),
+            "configRevision": 4,
+            "baseRevision": 4,
+            "baseConfigHash": "a" * 64,
+            "snapshot": self.snapshot,
+        }
+
+
+class FakeAfterCompletionCoordinator:
+    def __init__(self) -> None:
+        self.requests: list[dict[str, Any]] = []
+        self.results: list[dict[str, Any]] = []
+
+    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+        self.requests.append(dict(request))
+        result = {
+            "runId": request["runId"],
+            "outcome": request["outcome"],
+            "forced": request["forced"],
+            "actions": [],
+        }
+        self.results.append(result)
+        return result
+
+
+def make_application(
+    preview_capture=None,
+    stats_path=None,
+    notifications=None,
+    *,
+    device_manager=None,
+    runner_supervisor=None,
+    runner_enabled=None,
+    config_repository=None,
+    repository=None,
+    after_completion_coordinator=None,
+    completion_coordinator=None,
+    after_completion_journal=None,
+    after_completion_handlers=None,
+    after_completion_power_handler=None,
+    allow_runner_repository_failure=False,
+) -> BackendApplication:
+    # Older recovery fixtures predate the explicit Runner repository contract.
+    # Supply their safe fake manifest by default while allowing the dedicated
+    # fail-closed test below to exercise missing ConfigRepository wiring.
+    if (
+        runner_enabled is True
+        and runner_supervisor is not None
+        and config_repository is None
+        and repository is None
+        and not allow_runner_repository_failure
+    ):
+        config_repository = FakeConfigRepository()
     return BackendApplication(
-        FakeDeviceManager(),
+        device_manager or FakeDeviceManager(),
         version="test",
         config=FakeConfig(),
         theme_list=FakeThemeStore(),
         preview_capture=preview_capture,
         stats_path=stats_path,
         notifications=notifications,
+        runner_supervisor=runner_supervisor,
+        runner_enabled=runner_enabled,
+        config_repository=config_repository,
+        repository=repository,
+        after_completion_coordinator=after_completion_coordinator,
+        completion_coordinator=completion_coordinator,
+        after_completion_journal=after_completion_journal,
+        after_completion_handlers=after_completion_handlers,
+        after_completion_power_handler=after_completion_power_handler,
     )
 
 
@@ -335,6 +567,453 @@ def test_dispatcher_validates_preview_control_params() -> None:
     app.close()
 
 
+def test_execution_state_schema3_has_authoritative_defaults() -> None:
+    app = make_application()
+
+    state = app.execution_get_state()
+
+    assert state == {
+        "schemaVersion": 3,
+        "state": "idle",
+        "stateRevision": 0,
+        "currentTaskId": None,
+        "runId": None,
+        "runnerPid": None,
+        "deviceLease": "none",
+        "outcome": None,
+        "forced": False,
+        "requestedBy": None,
+        "error": None,
+        "deviceRestore": "not_needed",
+    }
+    app.close()
+
+
+def test_runner_execution_uses_lease_sequence_and_idempotent_controls(tmp_path) -> None:
+    preview = FakePreviewCapture()
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    repository = FakeConfigRepository()
+    app = make_application(
+        preview,
+        stats_path=tmp_path / "runner.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+    )
+    app.config.values["mirror"] = True
+
+    first = app.execution_start({"taskId": "mirror", "clientRequestId": "request-1"})
+    duplicate = app.execution_start({"taskId": "mirror", "clientRequestId": "request-1"})
+
+    assert first["accepted"] is True
+    assert duplicate["accepted"] is True
+    assert duplicate["runId"] == first["runId"]
+    assert manager.suspend_calls == [first["runId"]]
+    assert supervisor.starts[0]["runId"] == first["runId"]
+    assert supervisor.starts[0]["taskId"] == "mirror"
+    assert preview.stop_count == 1
+
+    supervisor._set(state="running", deviceLease="runner")
+    app.execution_get_state()
+    paused = app.execution_pause({"runId": first["runId"]})
+    assert paused["state"] == "paused"
+    resumed = app.execution_resume({"runId": first["runId"]})
+    assert resumed["state"] == "running"
+    with pytest.raises(RpcDispatchError) as error_info:
+        app.execution_stop({"runId": "stale-run"})
+    assert error_info.value.data["code"] == "STALE_RUN"
+
+    stopped = app.execution_stop({"runId": first["runId"], "requestedBy": "user"})
+    assert stopped["accepted"] is True
+    deadline = time.monotonic() + 1.0
+    while app.execution_get_state()["state"] != "idle" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    state = app.execution_get_state()
+    assert state["runId"] == first["runId"]
+    assert state["outcome"] == "stopped"
+    assert state["deviceRestore"] == "restored"
+    assert manager.resume_calls == [(first["runId"], 7)]
+    assert preview.started[-1] == "pc:limbus"
+    app.close()
+
+
+def test_execution_start_options_reject_unknown_and_reserved_fields_without_runner_override(tmp_path) -> None:
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    repository = FakeConfigRepository()
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / "options.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+    )
+    app.config.values["mirror"] = True
+
+    for options, expected_text in (
+        ({"runId": "attacker"}, "reserved field"),
+        ({"runtimeConfig": {"wxpusher_spt": "DO_NOT_LEAK"}}, "reserved field"),
+        ({"uncontractedOption": True}, "unsupported field"),
+    ):
+        with pytest.raises(RpcDispatchError) as error_info:
+            app.execution_start({"taskId": "mirror", "options": options})
+        assert error_info.value.data["code"] == "INVALID_EXECUTION_OPTIONS"
+        assert expected_text in str(error_info.value)
+        assert "DO_NOT_LEAK" not in str(error_info.value)
+
+    assert supervisor.starts == []
+    assert manager.suspend_calls == []
+    assert app.execution_get_state()["state"] == "idle"
+    app.close()
+
+
+def test_runner_config_repository_initialization_failure_is_fail_closed(tmp_path) -> None:
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    # FakeConfig has no config_path, so automatic ConfigRepository wiring must
+    # fail closed instead of allowing the Runner to use the live config.
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / "repository-init.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        allow_runner_repository_failure=True,
+    )
+    app.config.values["mirror"] = True
+
+    with pytest.raises(RpcDispatchError) as error_info:
+        app.execution_start({"taskId": "mirror"})
+
+    assert error_info.value.data["code"] == "RUNNER_CONFIG_FAILED"
+    assert supervisor.starts == []
+    assert manager.suspend_calls == []
+    assert app.execution_get_state()["state"] == "idle"
+    app.close()
+
+
+def test_runner_config_creation_failure_restores_lease_and_does_not_echo_error(tmp_path) -> None:
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    repository = FailingConfigRepository("SENSITIVE_CONFIG_VALUE")
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / "repository-create.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+    )
+    app.config.values["mirror"] = True
+
+    with pytest.raises(RpcDispatchError) as error_info:
+        app.execution_start({"taskId": "mirror"})
+
+    run_id = repository.create_calls[0]
+    assert error_info.value.data["code"] == "RUNNER_CONFIG_FAILED"
+    assert "SENSITIVE_CONFIG_VALUE" not in str(error_info.value)
+    assert supervisor.starts == []
+    assert manager.resume_calls == [(run_id, 7)]
+    assert repository.cleanup_calls == [run_id]
+    state = app.execution_get_state()
+    assert state["state"] == "idle"
+    assert state["error"]["code"] == "RUNNER_CONFIG_FAILED"
+    assert "SENSITIVE_CONFIG_VALUE" not in repr(state)
+    app.close()
+
+
+def test_runner_rejects_sensitive_snapshot_without_falling_back_to_live_config(tmp_path) -> None:
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    secret = "FULL_SECRET_SNAPSHOT_VALUE"
+    repository = UnsafeConfigRepository({"hard_mirror": False, "nested": {"wxpusher_spt": secret}})
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / "unsafe-snapshot.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+    )
+    app.config.values["mirror"] = True
+
+    with pytest.raises(RpcDispatchError) as error_info:
+        app.execution_start({"taskId": "mirror"})
+
+    run_id = repository.create_calls[0]
+    assert error_info.value.data["code"] == "RUNNER_CONFIG_FAILED"
+    assert secret not in str(error_info.value)
+    assert supervisor.starts == []
+    assert manager.resume_calls == [(run_id, 7)]
+    assert secret not in repr(app.execution_get_state())
+    app.close()
+
+
+def test_runner_finalize_runs_injected_completion_actions_once_after_stats_and_cleanup(tmp_path) -> None:
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    repository = FakeConfigRepository()
+    coordinator = FakeAfterCompletionCoordinator()
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / "completion.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+        after_completion_coordinator=coordinator,
+    )
+    app.config.values["mirror"] = True
+    started = app.execution_start({"taskId": "mirror", "clientRequestId": "completion-run"})
+    run_id = started["runId"]
+    app._execution_after_completion_requests[run_id] = [
+        {
+            "type": "afterCompletion.requested",
+            "runId": run_id,
+            "sidecarActions": ["notification", "toast", "sound", "exit_aalc"],
+            "powerAction": "lock",
+        }
+    ]
+
+    app._finalize_runner_execution(
+        run_id,
+        snapshot={
+            "state": "idle",
+            "runId": run_id,
+            "outcome": "completed",
+            "forced": False,
+            "deviceTarget": {"id": "pc:limbus"},
+        },
+    )
+    # A duplicate finished/finalize callback must not repeat any side effect.
+    app._finalize_runner_execution(
+        run_id,
+        snapshot={"state": "idle", "runId": run_id, "outcome": "completed", "forced": False},
+    )
+
+    assert len(coordinator.requests) == 1
+    request = coordinator.requests[0]
+    assert request["runId"] == run_id
+    assert request["outcome"] == "completed"
+    assert request["forced"] is False
+    assert request["actions"] == ["notification", "toast", "sound", "exit_aalc"]
+    assert request["powerAction"] == "lock"
+    assert repository.cleanup_calls == [run_id]
+    assert app._execution_after_completion_results[run_id]["runId"] == run_id
+    supervisor._set(state="idle", runId=run_id, outcome="completed", forced=False, deviceLease="none")
+    app.close()
+
+
+def test_runner_completion_exit_request_uses_application_event_bus_and_injected_channels(tmp_path) -> None:
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    repository = FakeConfigRepository()
+    calls: list[str] = []
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / "completion-event.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+        after_completion_handlers={
+            "notification": lambda record: calls.append("notification"),
+            "toast": lambda record: calls.append("toast"),
+            "sound": lambda record: calls.append("sound"),
+            "power": lambda action: calls.append(f"power:{action}"),
+        },
+    )
+    app.config.values["mirror"] = True
+    started = app.execution_start({"taskId": "mirror", "clientRequestId": "completion-event"})
+    run_id = started["runId"]
+    events: list[str] = []
+    app.add_event_listener(lambda event, _payload, _sequence: events.append(event))
+    app._execution_after_completion_requests[run_id] = [
+        {
+            "type": "afterCompletion.requested",
+            "runId": run_id,
+            "sidecarActions": ["sound", "exit_aalc", "toast", "notification"],
+            "powerAction": "lock",
+        }
+    ]
+
+    app._finalize_runner_execution(
+        run_id,
+        snapshot={
+            "state": "idle",
+            "runId": run_id,
+            "outcome": "completed",
+            "forced": False,
+            "deviceTarget": {"id": "pc:limbus"},
+        },
+    )
+
+    assert calls == ["notification", "toast", "sound", "power:lock"]
+    assert "app.exitRequested" in events
+    supervisor._set(state="idle", runId=run_id, outcome="completed", forced=False, deviceLease="none")
+    app.close()
+
+
+@pytest.mark.parametrize(
+    ("outcome", "forced"),
+    [("stopped", False), ("failed", False), ("crashed", True), ("completed", True)],
+)
+def test_runner_completion_actions_skip_stop_failure_crash_and_forced(
+    tmp_path, outcome: str, forced: bool
+) -> None:
+    coordinator = FakeAfterCompletionCoordinator()
+    supervisor = FakeRunnerSupervisor()
+    repository = FakeConfigRepository()
+    app = make_application(
+        preview_capture=FakePreviewCapture(),
+        stats_path=tmp_path / f"completion-{outcome}-{forced}.json",
+        device_manager=FakeLeaseDeviceManager(),
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+        after_completion_coordinator=coordinator,
+    )
+    app.config.values["mirror"] = True
+    run_id = app.execution_start({"taskId": "mirror", "clientRequestId": f"skip-{outcome}-{forced}"})["runId"]
+
+    app._finalize_runner_execution(
+        run_id,
+        snapshot={"state": "idle", "runId": run_id, "outcome": outcome, "forced": forced},
+    )
+
+    assert coordinator.requests == []
+    assert app._execution_after_completion_results[run_id]["skipped"] is True
+    supervisor._set(state="idle", runId=run_id, outcome=outcome, forced=forced, deviceLease="none")
+    app.close()
+
+
+def test_runner_repository_delta_and_typed_events_are_deduplicated(tmp_path) -> None:
+    preview = FakePreviewCapture()
+    manager = FakeLeaseDeviceManager()
+    supervisor = FakeRunnerSupervisor()
+    repository = FakeConfigRepository()
+    app = make_application(
+        preview,
+        stats_path=tmp_path / "runner-delta.json",
+        device_manager=manager,
+        runner_supervisor=supervisor,
+        runner_enabled=True,
+        config_repository=repository,
+    )
+    app.config.values["mirror"] = True
+    events: list[tuple[str, dict[str, Any], int]] = []
+    app.add_event_listener(lambda event, payload, sequence: events.append((event, payload, sequence)))
+
+    started = app.execution_start({"taskId": "mirror", "clientRequestId": "delta-run"})
+    run_id = started["runId"]
+    supervisor._set(state="running", deviceLease="runner")
+    app.execution_get_state()
+
+    delta = {
+        "type": "config.delta",
+        "runId": run_id,
+        "seq": 1,
+        "deltaId": "delta-1",
+        "baseRevision": 4,
+        "baseConfigHash": "a" * 64,
+        "changes": {"hard_mirror": True},
+        "operations": [],
+    }
+    app._on_runner_event(delta)
+    app._on_runner_event(delta)
+    app._on_runner_event({**delta, "runId": "old-run", "seq": 2, "deltaId": "old"})
+    assert len(repository.delta_calls) == 1
+    assert [event for event, _payload, _seq in events if event == "execution.configDelta"]
+
+    repository.conflict = True
+    app._on_runner_event({**delta, "seq": 2, "deltaId": "delta-2"})
+    assert any(
+        event == "app.notice" and payload.get("code") == "CONFIG_DELTA_CONFLICT"
+        for event, payload, _seq in events
+    )
+
+    completed = {
+        "type": "task.completed",
+        "runId": run_id,
+        "seq": 3,
+        "taskId": "mirror",
+        "result": {"count": 1},
+    }
+    app._on_runner_event(completed)
+    app._on_runner_event(completed)
+    assert len([event for event, _payload, _seq in events if event == "execution.taskCompleted"]) == 1
+
+    supervisor._set(
+        state="idle",
+        currentTaskId=None,
+        runId=run_id,
+        deviceLease="none",
+        outcome="crashed",
+        forced=True,
+        requestedBy="watchdog",
+        deviceRestore="restored",
+    )
+    app.execution_get_state()
+    deadline = time.monotonic() + 1.0
+    while app.execution_get_state()["state"] != "idle" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert repository.create_calls == [run_id]
+    assert repository.cleanup_calls == [run_id]
+    assert app.execution_get_state()["forced"] is True
+    app.close()
+
+
+def test_execution_start_rejects_active_tool_and_lease_device_operations() -> None:
+    manager = FakeLeaseDeviceManager()
+    app = make_application(device_manager=manager)
+    app.config.values["mirror"] = True
+    app._tools["screenshot"] = {"runId": "tool-1", "running": True}
+
+    with pytest.raises(RpcDispatchError) as start_error:
+        app.execution_start({"clientRequestId": "tool-conflict"})
+    assert start_error.value.data["code"] == "DEVICE_TOOL_ACTIVE"
+
+    app._tools.clear()
+    app._execution_run_id = "run-1"
+    app._execution_device_lease = "runner"
+    manager._lease_state = "runner"
+    with pytest.raises(RpcDispatchError) as screenshot_error:
+        app.tool_screenshot()
+    assert screenshot_error.value.data["code"] == "DEVICE_LEASE_ACTIVE"
+    with pytest.raises(RpcDispatchError) as tool_error:
+        app.tool_start({"id": "screenshot"})
+    assert tool_error.value.data["code"] == "DEVICE_LEASE_ACTIVE"
+    with pytest.raises(RpcDispatchError) as resolution_error:
+        app.tool_resolution_set()
+    assert resolution_error.value.data["code"] == "DEVICE_LEASE_ACTIVE"
+    app.close()
+
+
+def test_tool_screenshot_payload_contains_preview_identity(tmp_path, monkeypatch) -> None:
+    from module.automation import auto
+
+    app = make_application(FakePreviewCapture(), stats_path=tmp_path / "stats.json")
+    app._require_active_runtime = lambda: DeviceSession(
+        DeviceTarget(DeviceInfo("pc:limbus", "Limbus Company"), "pc")
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(auto, "take_screenshot", lambda gray=False: Image.new("RGB", (2, 1), (1, 2, 3)))
+    events = []
+    app.add_event_listener(lambda event, payload, sequence: events.append((event, payload, sequence)))
+
+    app.tool_screenshot()
+
+    frame = next(payload for event, payload, _sequence in events if event == "screenshot.frame")
+    assert frame["deviceId"] == "pc:limbus"
+    assert frame["runId"] is None
+    assert frame["generation"] == 0
+    assert isinstance(frame["jpeg"], bytes)
+    app.close()
+
+
 def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     app = make_application()
     dispatcher = RpcDispatcher(application=app, version="test")
@@ -358,8 +1037,8 @@ def test_dispatcher_routes_real_configuration_and_all_read_models() -> None:
     ]
 
     assert all("error" not in response for response in responses)
-    assert responses[1]["result"]["schemaVersion"] == 2
-    assert responses[2]["result"]["schemaVersion"] == 2
+    assert responses[1]["result"]["schemaVersion"] == 3
+    assert responses[2]["result"]["schemaVersion"] == 3
     assert responses[5]["result"][0]["id"] == "yi_sang"
     assert responses[6]["result"]["packs"][0]["id"] == "alpha"
     app.close()
@@ -612,7 +1291,7 @@ def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection
 
     team = app.team_list()[0]
 
-    assert team["schemaVersion"] == 2
+    assert team["schemaVersion"] == 3
     assert team["sinners"] == ["faust", "yi_sang"]
     assert team["enabled"] is True
     assert team["mirrorConfig"]["shopping_strategy"] is True
@@ -1021,7 +1700,10 @@ def test_window_position_uses_python_screen_names_and_accepts_legacy_values() ->
 
 
 def test_execution_and_tool_entries_reject_missing_active_device() -> None:
-    app = make_application()
+    # Keep this regression focused on the legacy sidecar admission guard;
+    # unrelated runner/preview lifecycle state must not change the error under
+    # test when the complete suite has reloaded the module package.
+    app = make_application(preview_capture=FakePreviewCapture(), runner_enabled=False)
     app.config.values["mirror"] = True
     dispatcher = RpcDispatcher(application=app, version="test")
 

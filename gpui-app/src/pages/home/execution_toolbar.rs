@@ -1,5 +1,13 @@
 use super::*;
 
+fn can_pause_or_resume(state: ExecutionState) -> bool {
+    matches!(state, ExecutionState::Running | ExecutionState::Paused)
+}
+
+fn is_stop_pending(state: ExecutionState) -> bool {
+    matches!(state, ExecutionState::Stopping | ExecutionState::Restoring)
+}
+
 pub(super) fn execution_toolbar(
     app: &mut AhabApp,
     cx: &mut Context<AhabApp>,
@@ -76,10 +84,14 @@ pub(super) fn execution_toolbar(
             text("继续", "Resume").get(language),
             palette.success.rgb_hex(),
         )
-    } else if state == ExecutionState::Stopping {
+    } else if is_stop_pending(state) {
         (
             ICON_LOADER,
-            text("停止中", "Stopping").get(language),
+            if state == ExecutionState::Restoring {
+                text("恢复中", "Restoring").get(language)
+            } else {
+                text("停止中", "Stopping").get(language)
+            },
             palette.warning.rgb_hex(),
         )
     } else {
@@ -97,20 +109,24 @@ pub(super) fn execution_toolbar(
         .text_size(px(12.0))
         .child(action_icon(pause_icon, 14., pause_icon_color))
         .child(pause_label);
-    if busy && state != ExecutionState::Stopping {
+    if busy && can_pause_or_resume(state) {
         pause = pause.on_click(cx.listener(|view, _, _, cx| {
             view.home.pause_or_resume();
             cx.stop_propagation();
             cx.notify();
         }));
-    } else if state == ExecutionState::Stopping {
+    } else if is_stop_pending(state) || state == ExecutionState::Starting {
         pause = pause.opacity(0.65).cursor_not_allowed();
     }
 
-    let (run_icon, run_label, run_variant) = if state == ExecutionState::Stopping {
+    let (run_icon, run_label, run_variant) = if is_stop_pending(state) {
         (
             ICON_LOADER,
-            text("正在停止", "Stopping").get(language),
+            if state == ExecutionState::Restoring {
+                text("正在恢复设备", "Restoring device").get(language)
+            } else {
+                text("正在停止", "Stopping").get(language)
+            },
             ButtonVariant::Destructive,
         )
     } else if busy {
@@ -118,7 +134,7 @@ pub(super) fn execution_toolbar(
     } else {
         (ICON_PLAY, "Link Start!", ButtonVariant::Default)
     };
-    let run_icon_element: gpui::AnyElement = if state == ExecutionState::Stopping {
+    let run_icon_element: gpui::AnyElement = if is_stop_pending(state) {
         brand_action_icon(run_icon, 14.)
             .with_animation(
                 "execution-stop-spin",
@@ -163,13 +179,13 @@ pub(super) fn execution_toolbar(
                 .child("F10"),
         );
     }
-    if busy && state != ExecutionState::Stopping {
+    if busy && !is_stop_pending(state) {
         run = run.on_click(cx.listener(|view, _, _, cx| {
             view.stop_execution(cx);
             cx.stop_propagation();
             cx.notify();
         }));
-    } else if state == ExecutionState::Stopping {
+    } else if is_stop_pending(state) {
         run = run.opacity(0.65).cursor_not_allowed();
     } else {
         run = run.on_click(cx.listener(|view, _, _, cx| {
@@ -244,7 +260,7 @@ pub(super) fn execution_toolbar(
     }
 
     let mut command_group = div().min_w_0().flex().items_center().gap_2();
-    if busy && state != ExecutionState::Stopping {
+    if busy && can_pause_or_resume(state) {
         command_group = command_group.child(pause);
     }
     command_group = command_group.child(run);

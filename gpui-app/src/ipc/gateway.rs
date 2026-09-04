@@ -5,6 +5,7 @@ use super::{
     BackendAttach, BackendClient, EventEnvelope, RpcCompletion, RpcError, RpcResponse,
     decode_response,
 };
+use crate::model::ExecutionStatusPayload;
 
 /// Application-facing RPC adapter.
 ///
@@ -88,6 +89,12 @@ impl RpcGateway {
                 format!("{method} returned an invalid payload: {error}"),
             )
         })
+    }
+
+    /// Decode the schema-3 authoritative execution snapshot through the same
+    /// gateway boundary used by page hydration and reconciliation.
+    pub fn execution_state(&mut self) -> Result<ExecutionStatusPayload, RpcError> {
+        self.request(super::contract::method::EXECUTION_GET_STATE, None)
     }
 
     pub fn take_events(&mut self) -> Vec<EventEnvelope> {

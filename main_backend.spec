@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+# ruff: noqa: E402,F821
 """PyInstaller definition for the headless Python sidecar.
 
 The sidecar intentionally excludes every Qt package. Backend modules use a
@@ -9,49 +10,36 @@ PyInstaller's static import walk.
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import (
-    collect_data_files,
-    collect_dynamic_libs,
-    collect_submodules,
-)
-
 root = Path(SPECPATH).resolve()
-hiddenimports = []
-for package in ("core", "module", "tasks", "utils"):
-    hiddenimports.extend(collect_submodules(package))
 
-hiddenimports.extend(
-    [
-        "module.automation",
-        "module.automation.automation",
-        "module.automation.screenshot",
-        "module.automation.input_handlers.simulator.mumu_control",
-        "module.automation.input_handlers.simulator.scrcpy_control",
-        "module.automation.input_handlers.simulator.simulator_control",
-        "module.resource_sync.service",
-        "module.update.checker",
-        "tasks.base.script_task_scheme",
-        "tasks.battle.battle",
-        "tasks.base.back_init_menu",
-        "tasks.base.make_enkephalin_module",
-    ]
+import sys
+
+sys.path.insert(0, str(root / "scripts"))
+
+from pyinstaller_common import (
+    collect_common_binaries,
+    collect_common_datas,
+    collect_common_hiddenimports,
 )
 
-# RapidOCR 包内还带有旧版 PP-OCRv4 Det/Rec 模型。当前业务只使用 PP-OCRv6
-# Det/Rec；Cls 暂时只保留模型文件用于回滚，待验证无误后再移除。
-rapidocr_model_names = {
-    "PP-OCRv6_det_small.onnx",
-    "PP-OCRv6_rec_small.onnx",
-    "ch_ppocr_mobile_v2.0_cls_mobile.onnx",
-}
-datas = [
-    (source, destination)
-    for source, destination in collect_data_files("rapidocr")
-    if Path(source).parent.name != "models"
-    or Path(source).name in rapidocr_model_names
-]
-datas.append((str(root / "assets" / "binary" / "scrcpy-server.jar"), "assets/binary"))
-binaries = collect_dynamic_libs("onnxruntime")
+hiddenimports = collect_common_hiddenimports()
+datas = collect_common_datas(root)
+# The frozen ``module.__init__`` resolves these defaults relative to the
+# private one-file extraction root.  Keep the sidecar self-contained for
+# startup before it can read the external release ``assets`` directory.
+datas.extend(
+    (
+        str(root / "assets" / "config" / name),
+        "assets/config",
+    )
+    for name in (
+        "version.txt",
+        "config.example.yaml",
+        "theme_pack_list.example.yaml",
+        "default_rapidocr.yaml",
+    )
+)
+binaries = collect_common_binaries()
 
 a = Analysis(
     [str(root / "main_backend.py")],

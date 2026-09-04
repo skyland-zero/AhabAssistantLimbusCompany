@@ -24,12 +24,32 @@ allowed_protected_files = [
     "module/automation/input_handlers/simulator/scrcpy_control.py",
     "module/automation/input_handlers/simulator/simulator_control.py",
     "module/automation/screenshot.py",
+    # Fork-owned Runner policy exports and the native Scrcpy decoder bridge.
+    # These exact adapters are consumed by the sidecar/Runner path while the
+    # upstream simulator implementations remain protected.
+    "module/automation/input_handlers/simulator/__init__.py",
+    "module/automation/input_handlers/simulator/native_scrcpy_decoder.py",
+    "module/automation/input_handlers/simulator/runner_policy.py",
+    # The legacy PyMiniTouch backend was intentionally retired when simulator
+    # control migrated to the current Scrcpy/input-handler path. Keep these
+    # explicit deletions visible during upstream synchronization.
+    "module/automation/input_handlers/simulator/pyminitouch/__init__.py",
+    "module/automation/input_handlers/simulator/pyminitouch/actions.py",
+    "module/automation/input_handlers/simulator/pyminitouch/config.py",
+    "module/automation/input_handlers/simulator/pyminitouch/connection.py",
+    "module/automation/input_handlers/simulator/pyminitouch/utils.py",
+    # Runtime OCR/template bootstrapping is a fork-only optimization for the
+    # sidecar visual path.
+    "module/automation/text_bootstrap.py",
     # Ruff lint/format cleanup in the config exports and Windows game helpers.
     "module/config/__init__.py",
     "module/config/config.py",
     "module/config/config_typing.py",
     # Fork-owned credential redaction used by the GPUI/sidecar settings path.
     "module/config/redaction.py",
+    # Fork-owned transactional snapshots and validated config.delta handling
+    # used to create isolated Runner configurations.
+    "module/config/repository.py",
     "module/config/theme_pack_catalog.py",
     "module/game_and_screen/game.py",
     "module/game_and_screen/hdr.py",
@@ -39,8 +59,12 @@ allowed_protected_files = [
     "tasks/base/back_init_menu.py",
     "tasks/base/make_enkephalin_module.py",
     "tasks/base/retry.py",
+    # Bounded retry-monitor lifecycle and ROI matching used by cancellation.
+    "tasks/base/retry_monitor.py",
     "tasks/base/script_task_scheme.py",
     "tasks/battle/battle.py",
+    # Make daily reward polling interruptible by the Runner cancellation path.
+    "tasks/daily/get_prize.py",
     "tasks/daily/luxcavation.py",
     # Fork-owned mirror compatibility hooks (team-code precedence and the
     # pseudo-solo defense adapter); replay these small changes after taking

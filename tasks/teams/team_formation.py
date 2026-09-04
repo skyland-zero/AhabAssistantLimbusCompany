@@ -1,5 +1,4 @@
-from core.execution_control import check_cancelled, interruptible_sleep, interruptible_sleep as sleep
-
+from core.execution_control import interruptible_sleep as sleep
 from core.team_squad import ordered_sinner_indices
 from module.automation import auto
 from module.config import cfg

@@ -67,6 +67,44 @@ fn execution_start_reports_the_first_enabled_task() {
 }
 
 #[test]
+fn execution_contract_exposes_schema_three_revision_and_lease_fields() {
+    let client = MockClient::default();
+    let initial = client
+        .call(method::EXECUTION_GET_STATE, None)
+        .result
+        .unwrap();
+    assert_eq!(initial["schemaVersion"], 3);
+    assert_eq!(initial["stateRevision"], 0);
+    assert_eq!(initial["deviceLease"], "none");
+
+    let started = client.call(
+        method::EXECUTION_START,
+        Some(json!({"clientRequestId": "request-1"})),
+    );
+    let run_id = started.result.as_ref().unwrap()["runId"].clone();
+    let revision = started.result.as_ref().unwrap()["stateRevision"].clone();
+    assert_eq!(started.result.as_ref().unwrap()["state"], "running");
+    assert_eq!(revision, 1);
+
+    let stale = client.call(method::EXECUTION_STOP, Some(json!({"runId": "old-run"})));
+    assert_eq!(stale.error.as_ref().unwrap().message, "STALE_RUN");
+
+    let repeated = client.call(
+        method::EXECUTION_START,
+        Some(json!({"clientRequestId": "request-1"})),
+    );
+    assert_eq!(repeated.result.as_ref().unwrap()["runId"], run_id);
+
+    let stopped = client.call(method::EXECUTION_STOP, Some(json!({"runId": run_id})));
+    assert_eq!(stopped.result.as_ref().unwrap()["state"], "idle");
+    assert_eq!(stopped.result.as_ref().unwrap()["outcome"], "stopped");
+    assert_eq!(
+        stopped.result.as_ref().unwrap()["deviceRestore"],
+        "restored"
+    );
+}
+
+#[test]
 fn execution_start_stays_idle_when_only_non_executable_settings_are_enabled() {
     for ahab_enabled in [false, true] {
         let client = MockClient::default();

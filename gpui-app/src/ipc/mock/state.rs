@@ -4,6 +4,9 @@ impl Default for MockState {
     fn default() -> Self {
         Self {
             next_team_id: 4,
+            next_run_id: 0,
+            last_start_client_request_id: None,
+            last_start_response: None,
             sequence: crate::ipc::contract::RequestSequence::default(),
             tasks: TasksConfig::default(),
             execution: ExecutionStatusPayload::default(),

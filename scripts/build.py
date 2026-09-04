@@ -8,7 +8,9 @@ import os
 import shutil
 import subprocess
 import sys
+from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
@@ -16,6 +18,9 @@ RELEASE = DIST / "AALC"
 NATIVE_DECODER_MANIFEST = ROOT / "native" / "scrcpy_decoder" / "Cargo.toml"
 NATIVE_DECODER_BINARY = ROOT / "native" / "scrcpy_decoder" / "target" / "release" / "scrcpy_decoder.dll"
 SCRCPY_RUNTIME_DIR = ROOT / "assets" / "binary" / "scrcpy-ffmpeg"
+RUNNER_BUNDLE = DIST / "AALCRunner"
+RUNNER_RELEASE_DIR = RELEASE / "runner"
+RUNNER_ENTRY = "runner/AALCRunner.exe"
 
 
 def run(command: list[str], *, cwd: Path = ROOT) -> None:
@@ -80,19 +85,125 @@ def copy_tree(source: Path, destination: Path, ignore=None) -> None:
     shutil.copytree(source, destination, dirs_exist_ok=True, ignore=ignore)
 
 
+def file_sha256(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+    """Return the SHA-256 digest of one staged file."""
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    digest = sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_bundle_file_entries(bundle_root: Path, *, manifest_prefix: str = "runner") -> list[dict[str, Any]]:
+    """Build deterministic file metadata for a staged onedir bundle.
+
+    Paths in the returned entries are POSIX-style and relative to the release
+    root.  Keeping this function independent from PyInstaller makes release
+    manifest generation straightforward to unit test with a temporary tree.
+    """
+
+    bundle_root = Path(bundle_root)
+    if not bundle_root.is_dir():
+        raise FileNotFoundError(f"runner bundle directory is missing: {bundle_root}")
+
+    prefix = manifest_prefix.strip("/").replace("\\", "/")
+    entries: list[dict[str, Any]] = []
+    files = (item for item in bundle_root.rglob("*") if item.is_file())
+    for path in sorted(files, key=lambda item: item.relative_to(bundle_root).as_posix()):
+        relative = path.relative_to(bundle_root).as_posix()
+        manifest_path = f"{prefix}/{relative}" if prefix else relative
+        entries.append(
+            {
+                "path": manifest_path,
+                "sha256": file_sha256(path),
+                "size": path.stat().st_size,
+            }
+        )
+    return entries
+
+
+def build_release_manifest(
+    version: str,
+    *,
+    release_root: Path = RELEASE,
+    runner_root: Path | None = None,
+) -> dict[str, Any]:
+    """Return the release metadata, including every Runner bundle file."""
+
+    release_root = Path(release_root)
+    runner_root = Path(runner_root) if runner_root is not None else release_root / "runner"
+    entry_path = release_root / RUNNER_ENTRY.replace("/", os.sep)
+    if not entry_path.is_file():
+        raise FileNotFoundError(f"runner entry is missing: {entry_path}")
+
+    return {
+        "version": version,
+        "frontend": "AALC.exe",
+        "backend": "AALC Backend.exe",
+        "updater": "AALC Updater.exe",
+        "runner": {
+            "entry": RUNNER_ENTRY,
+            "files": build_bundle_file_entries(runner_root),
+        },
+    }
+
+
+def write_release_manifest(
+    version: str,
+    *,
+    release_root: Path = RELEASE,
+    runner_root: Path | None = None,
+) -> Path:
+    """Write and return ``release.json`` for a staged release tree."""
+
+    release_root = Path(release_root)
+    manifest_path = release_root / "release.json"
+    manifest_path.write_text(
+        json.dumps(
+            build_release_manifest(version, release_root=release_root, runner_root=runner_root),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def stage_runner_bundle(source: Path | None = None, destination: Path | None = None) -> Path:
+    """Copy the complete PyInstaller onedir Runner tree into the release."""
+
+    source = RUNNER_BUNDLE if source is None else Path(source)
+    destination = RUNNER_RELEASE_DIR if destination is None else Path(destination)
+    if destination.exists():
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        else:
+            destination.unlink()
+    copy_tree(source, destination)
+    entry = destination / "AALCRunner.exe"
+    if not entry.is_file():
+        raise FileNotFoundError(f"staged runner entry is missing: {entry}")
+    return destination
+
+
 def stage_release(version: str) -> None:
     RELEASE.mkdir(parents=True, exist_ok=True)
 
     gpui_binary = ROOT / "gpui-app" / "target" / "release" / "ahab-gpui-app.exe"
     backend_binary = DIST / "AALC Backend.exe"
     updater_binary = DIST / "AALC Updater.exe"
-    for path in (gpui_binary, backend_binary, updater_binary):
+    for path in (gpui_binary, backend_binary, updater_binary, RUNNER_BUNDLE / "AALCRunner.exe"):
         if not path.is_file():
             raise FileNotFoundError(f"required build output is missing: {path}")
 
     shutil.copy2(gpui_binary, RELEASE / "AALC.exe")
     shutil.copy2(backend_binary, RELEASE / "AALC Backend.exe")
     shutil.copy2(updater_binary, RELEASE / "AALC Updater.exe")
+    stage_runner_bundle()
     shutil.copy2(ROOT / "README.md", RELEASE / "README.md")
     shutil.copy2(ROOT / "LICENSE", RELEASE / "LICENSE")
     copy_tree(
@@ -106,20 +217,7 @@ def stage_release(version: str) -> None:
     version_file.parent.mkdir(parents=True, exist_ok=True)
     version_file.write_text(version, encoding="utf-8")
 
-    (RELEASE / "release.json").write_text(
-        json.dumps(
-            {
-                "version": version,
-                "frontend": "AALC.exe",
-                "backend": "AALC Backend.exe",
-                "updater": "AALC Updater.exe",
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    write_release_manifest(version)
 
     # Embed the public verification key set in the shipped client.  Private
     # signing material is never written to the release tree; CI supplies it
@@ -174,6 +272,7 @@ def build(version: str) -> Path:
     build_native_decoder()
     build_python_executable("main_backend.spec")
     build_python_executable("updater.spec")
+    build_python_executable("execution_runner.spec")
     stage_release(version)
     archive = archive_release(version)
     sys.stdout.write(f"Release ready: {archive}\n")

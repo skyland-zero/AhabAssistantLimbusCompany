@@ -217,6 +217,10 @@ def test_active_session_is_authoritative_for_input_and_screenshot(monkeypatch) -
     from module.automation.screenshot import ScreenShot
 
     manager = DeviceManager()
+    # This test is for the sidecar-selected active session.  RunnerTaskHost
+    # tests intentionally set process env for their child lifecycle; isolate
+    # the legacy adapter explicitly when the complete suite is run together.
+    monkeypatch.delenv("AALC_RUNNER_MODE", raising=False)
     selected = RecordingController()
     stale = RecordingController()
     session = DeviceSession(DeviceManager._make_mumu_target(2), selected)

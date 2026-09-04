@@ -1,5 +1,7 @@
+import os
 import platform
 import random
+from collections.abc import Mapping
 from datetime import datetime
 from threading import Event, Lock, Thread
 from time import time
@@ -9,9 +11,9 @@ import win32con
 from playsound3 import playsound
 
 from core.events import mediator
-from core.execution_control import check_cancelled, interruptible_sleep
+from core.execution_control import check_cancelled, interruptible_sleep, wait_for_event
 from core.i18n import noop
-from module.after_completion_types import ACTION_EXIT_EMULATOR
+from module.after_completion_types import ACTION_EXIT_AALC, ACTION_EXIT_EMULATOR, ACTION_EXIT_GAME
 from module.automation import auto
 from module.config import TeamSetting, cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -49,6 +51,137 @@ from tasks.mirror.mirror import Mirror
 from tasks.teams.team_formation import select_battle_team
 from utils.path_manager import path_manager
 from utils.utils import calculate_the_teams, check_hard_mirror_time, get_day_of_week
+
+_RUNNER_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _runner_mode_enabled() -> bool:
+    """Return whether this task is running inside the one-shot Runner.
+
+    ``AALC_RUNNER_MODE`` is the task-facing name.  The bootstrap historically
+    exported ``AALC_EXECUTION_RUNNER``; accepting both keeps old packaged
+    launchers compatible during the migration.
+    """
+
+    value = os.environ.get("AALC_RUNNER_MODE", os.environ.get("AALC_EXECUTION_RUNNER", ""))
+    return str(value).strip().lower() in _RUNNER_TRUE_VALUES
+
+
+def _serialise_after_completion_request(
+    actions: list[str] | tuple[str, ...],
+    power_action: str,
+    *,
+    run_id: str | None = None,
+    outcome: str = "completed",
+    forced: bool = False,
+) -> dict[str, object]:
+    """Build the small JSON-safe handoff consumed by RunnerTaskHost."""
+
+    normalised_actions = [str(getattr(action, "value", action)) for action in actions]
+    runner_actions = [action for action in normalised_actions if action in {ACTION_EXIT_GAME.value, ACTION_EXIT_EMULATOR.value}]
+    sidecar_actions = [action for action in normalised_actions if action == ACTION_EXIT_AALC.value]
+    request: dict[str, object] = {
+        "actions": normalised_actions,
+        "runnerActions": runner_actions,
+        "sidecarActions": sidecar_actions,
+        "powerAction": str(getattr(power_action, "value", power_action)),
+        "runId": run_id,
+        "outcome": outcome,
+        "forced": bool(forced),
+        "requiresDeviceLease": bool(runner_actions),
+        "deviceDisposition": "restore",
+    }
+    return request
+
+
+def _runner_context_has_lease(context: object | None) -> bool:
+    if context is None:
+        return False
+    for name in ("device_lease_valid", "lease_valid", "has_device_lease"):
+        value = getattr(context, name, None)
+        if value is not None:
+            return bool(value() if callable(value) else value)
+    spec = getattr(context, "spec", None)
+    target = getattr(spec, "device_target", None)
+    if target is None and isinstance(spec, Mapping):
+        target = spec.get("deviceTarget", spec.get("device_target"))
+    return bool(getattr(context, "runner_owned_controller", None) is not None and target)
+
+
+def _execute_runner_device_actions(request: dict[str, object], context: object | None) -> None:
+    """Execute only successful-run device actions when a controller is injected.
+
+    The normal bootstrap currently leaves controller creation to a later
+    integration step, so absent a controller this function intentionally keeps
+    the request pending for RunnerHost rather than touching a global device.
+    """
+
+    if not _runner_context_has_lease(context):
+        return
+    controller = getattr(context, "runner_owned_controller", None)
+    if controller is None:
+        return
+    executed: list[str] = []
+    errors: list[str] = []
+    for action in request.get("runnerActions", []):
+        check_cancelled()
+        try:
+            if action == ACTION_EXIT_GAME.value:
+                close_game = getattr(controller, "close_current_app", None)
+                if not callable(close_game):
+                    raise RuntimeError("runner controller lacks close_current_app")
+                close_game()
+                executed.append(action)
+            elif action == ACTION_EXIT_EMULATOR.value:
+                close_emulator = getattr(controller, "close_simulator", None)
+                if not callable(close_emulator):
+                    raise RuntimeError("runner controller lacks close_simulator")
+                close_emulator()
+                executed.append(action)
+        except Exception as error:
+            errors.append(f"{action}: {error}")
+            log.warning("Runner 完成设备动作失败：%s", error)
+    if ACTION_EXIT_EMULATOR.value in executed:
+        request["deviceDisposition"] = "emulator_closed"
+    elif ACTION_EXIT_GAME.value in executed:
+        request["deviceDisposition"] = "game_closed"
+    if errors:
+        request["deviceActionErrors"] = errors
+
+
+def get_after_completion_request(
+    *,
+    run_id: str | None = None,
+    outcome: str = "completed",
+    forced: bool = False,
+    context: object | None = None,
+) -> dict[str, object]:
+    """Return a serialisable completion-action request for RunnerHost.
+
+    This is deliberately side-effect free until an injected Runner controller is
+    present.  In particular it never invokes notifications, power actions, or
+    exit-aalc from the task process.
+    """
+
+    actions, power_action = get_after_completion_config()
+    request = _serialise_after_completion_request(
+        actions,
+        power_action,
+        run_id=run_id,
+        outcome=outcome,
+        forced=forced,
+    )
+    if outcome == "completed" and not forced:
+        _execute_runner_device_actions(request, context)
+    else:
+        request["requestedActions"] = list(request["actions"])
+        request["requestedPowerAction"] = request["powerAction"]
+        request["actions"] = []
+        request["sidecarActions"] = []
+        request["powerAction"] = "none"
+        request["runnerActions"] = []
+        request["requiresDeviceLease"] = False
+    return request
 
 
 @begin_and_finish_time_log(task_name="一次经验本")
@@ -148,6 +281,10 @@ def init_game():
 
     device_manager = get_device_manager()
     selected_session = device_manager.active_session
+    if selected_session is None and _runner_mode_enabled():
+        from module.device_manager import DeviceError
+
+        raise DeviceError("Runner 没有私有设备 session，拒绝按旧配置创建或切换设备")
     if selected_session is not None:
         auto.init_input(session=selected_session)
         if selected_session.target.kind in ("mumu", "adb"):
@@ -245,7 +382,9 @@ def _warn_if_game_monitor_hdr_enabled() -> None:
     acknowledged = Event()
     log.warning("检测到游戏所在显示器已开启 HDR，可能导致图像识别问题")
     mediator.hdr_warning.emit(acknowledged)
-    acknowledged.wait()
+    # Legacy sinks acknowledge immediately; the bounded helper keeps a Runner
+    # stop request able to wake this path if an event sink is unavailable.
+    wait_for_event(acknowledged, 10.0)
 
 
 def Resonate_with_Ahab():
@@ -294,15 +433,19 @@ def _batch_combat(process_fn, times, max_times):
         total = 0
         last = times
     for _ in range(total):
+        check_cancelled()
         process_fn(once)
     if last > 0:
+        check_cancelled()
         process_fn(last)
 
 
 def _single_combat_run(exp_times, thread_times):
     for _ in range(exp_times):
+        check_cancelled()
         onetime_EXP_process()
     for _ in range(thread_times):
+        check_cancelled()
         onetime_thread_process()
 
 
@@ -400,7 +543,16 @@ def Mirror_task():
         to_get_reward()
 
 
-def script_task() -> None | int:
+def script_task(*, runner_mode: bool | None = None, runner_context: object | None = None) -> object:
+    """Run the configured task sequence and optionally return sidecar actions.
+
+    The default keeps the historical in-process completion behavior.  Runner
+    mode returns a JSON-safe request instead of performing process/UI/power
+    side effects in the short-lived child.
+    """
+
+    if runner_mode is None:
+        runner_mode = _runner_mode_enabled()
     start_time = time()
     check_cancelled()
     # 获取（启动）游戏对游戏窗口进行设置
@@ -421,7 +573,7 @@ def script_task() -> None | int:
     log.debug(f"初始化图片路径: {path_manager.pic_path}")
     retry_monitor.start()
 
-    if cfg.resonate_with_Ahab:
+    if cfg.resonate_with_Ahab and not runner_mode:
         Resonate_with_Ahab()
 
     # 如果是战斗中，先处理战斗
@@ -456,8 +608,9 @@ def script_task() -> None | int:
         screen.reset_win(activate=False)
 
     log.info("脚本任务已经完成")
-    noop("WindowsToast", "AALC 运行结束")
-    noop("WindowsToast", "所有任务已完成")
+    if not runner_mode:
+        noop("WindowsToast", "AALC 运行结束")
+        noop("WindowsToast", "所有任务已完成")
     dt_start = datetime.fromtimestamp(start_time)
     dt_end = datetime.fromtimestamp(time())
     duration = dt_end - dt_start
@@ -465,13 +618,26 @@ def script_task() -> None | int:
     minutes, seconds = divmod(secends, 60)
     hours, minutes = divmod(minutes, 60)
     run_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-    send_toast(
-        "AALC 运行结束",
-        ["所有任务已完成", run_time],
-        template=TemplateToast.NormalTemplate,
-    )
-    if cfg.resonate_with_Ahab:
+    if not runner_mode:
+        send_toast(
+            "AALC 运行结束",
+            ["所有任务已完成", run_time],
+            template=TemplateToast.NormalTemplate,
+        )
+    if cfg.resonate_with_Ahab and not runner_mode:
         Resonate_with_Ahab()
+
+    if runner_mode:
+        # Completion actions are serialized for RunnerTaskHost.  Device actions
+        # are only attempted when an explicit leased controller was injected;
+        # exit_aalc and power actions remain sidecar-owned requests.
+        retry_monitor.stop()
+        return get_after_completion_request(
+            run_id=os.environ.get("AALC_RUN_ID"),
+            outcome="completed",
+            forced=False,
+            context=runner_context,
+        )
 
     should_exit_aalc = False
     actions: list[str] = []
@@ -512,15 +678,25 @@ class my_script_task(Thread):
     - terminate() 只发出协作取消请求，绝不强杀解释器线程。
     """
 
-    def __init__(self):
+    def __init__(self, runner_context: object | None = None):
         # 初始化，构造函数
         super().__init__(daemon=True)
         self.mutex = Lock()
         self.cancel_event = Event()
+        self.exception: BaseException | None = None
+        self.runner_context = runner_context
+        self.runner_mode = _runner_mode_enabled() or runner_context is not None
+        self.after_completion_request: dict[str, object] | None = None
+        self.device_disposition = "restore"
 
     def isRunning(self) -> bool:
         """兼容旧 QThread 调用点的别名。"""
         return self.is_alive()
+
+    def get_after_completion_request(self) -> dict[str, object] | None:
+        """Return the serialisable Runner completion handoff, if successful."""
+
+        return None if self.after_completion_request is None else dict(self.after_completion_request)
 
     def run(self):
         self.mutex.acquire()
@@ -531,8 +707,9 @@ class my_script_task(Thread):
         if owns_cancel_binding:
             bind_cancel_event(self.cancel_event)
 
+        result: object = None
         try:
-            self._run()
+            result = self._run()
         except (
             ConnectionError,
             userStopError,
@@ -557,6 +734,7 @@ class my_script_task(Thread):
                 bind_cancel_event(None)
 
         mediator.script_finished.emit()
+        return result
 
     def terminate(self):
         """Request cooperative cancellation without corrupting Python locks."""
@@ -575,9 +753,20 @@ class my_script_task(Thread):
         try:
             if keep_awake_enabled:
                 apply_power_keep_awake(True)
-            ret = script_task()
-            if ret == 0:
+            ret = script_task(runner_mode=self.runner_mode, runner_context=self.runner_context)
+            if self.runner_mode and isinstance(ret, Mapping):
+                self.after_completion_request = dict(ret)
+                self.device_disposition = str(ret.get("deviceDisposition", "restore"))
+                if self.runner_context is not None:
+                    after_completion = getattr(self.runner_context, "after_completion", None)
+                    if callable(after_completion):
+                        after_completion(self.after_completion_request)
+                    set_disposition = getattr(self.runner_context, "set_device_disposition", None)
+                    if callable(set_disposition):
+                        set_disposition(self.device_disposition)
+            elif ret == 0:
                 mediator.kill_signal.emit()
+            return ret
         finally:
             if keep_awake_enabled:
                 # 先切回 AALC 再释放线程级防息屏，避免游戏仍持有前台时继续阻止息屏。

@@ -22,11 +22,24 @@ impl AhabApp {
                 if this
                     .update_in(cx, |view, window, cx| {
                         let invalidation = view.poll_backend_events();
-                        let recovering = view.maybe_recover_backend(cx);
-                        view.reconcile_preview(Some(window), cx);
+                        let recovering = if view.exit_requested {
+                            false
+                        } else {
+                            view.maybe_recover_backend(cx)
+                        };
+                        if !view.exit_requested {
+                            view.reconcile_preview(Some(window), cx);
+                        }
                         view.notify_home_views(invalidation, cx);
                         if invalidation.root || recovering {
                             cx.notify();
+                        }
+                        if view.exit_requested {
+                            // Dispatch through GPUI's application context so
+                            // the normal shutdown path runs. In particular,
+                            // do not treat this deliberate exit as a failed
+                            // sidecar connection that should be restarted.
+                            cx.quit();
                         }
                     })
                     .is_err()
@@ -45,6 +58,7 @@ impl AhabApp {
             let mut home_events = Vec::new();
             let mut toolbox_events = Vec::new();
             let mut resource_events = Vec::new();
+            let mut exit_requests = Vec::new();
             for event_value in events {
                 match event_value.event.as_str() {
                     event::TOOL_STATUS => {
@@ -102,12 +116,31 @@ impl AhabApp {
                         invalidation.logs = true;
                         home_events.push(event_value);
                     }
+                    event::APP_EXIT_REQUESTED => {
+                        exit_requests.push(
+                            event_value
+                                .payload
+                                .get("runId")
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_owned),
+                        );
+                    }
                     _ => {}
                 }
             }
             self.home.apply_events(home_events);
             self.toolbox.apply_events(toolbox_events);
             self.resources.apply_events(resource_events);
+            for run_id in exit_requests {
+                if self.home.accepts_exit_request(run_id.as_deref()) {
+                    // Completion actions are emitted only after the sidecar
+                    // has finalized its run. Remember the request at the root
+                    // so a transient transport disconnect cannot start
+                    // automatic recovery.
+                    self.exit_requested = true;
+                    invalidation.root = true;
+                }
+            }
         }
 
         for completion in self.home.rpc.take_completions() {

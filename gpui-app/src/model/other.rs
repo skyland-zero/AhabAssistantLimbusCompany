@@ -57,6 +57,10 @@ pub struct LogEntryPayload {
     pub ts: i64,
     pub level: LogLevel,
     pub message: String,
+    /// Optional execution association.  Legacy sidecars omit this field and
+    /// remain valid through the serde default.
+    #[serde(default)]
+    pub runId: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -108,7 +112,9 @@ pub struct SystemSettingsConfig {
     #[serde(default)]
     pub wxpusher_spt: String,
 }
-fn default_enable_template_blur() -> bool { false }
+fn default_enable_template_blur() -> bool {
+    false
+}
 impl Default for SystemSettingsConfig {
     fn default() -> Self {
         Self {
@@ -193,10 +199,17 @@ pub enum PreviewStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PreviewStatusPayload {
+    #[serde(default)]
+    pub runId: Option<String>,
     pub deviceId: Option<String>,
     pub status: PreviewStatus,
     #[serde(default)]
     pub error: Option<String>,
+    /// Preview session generation.  It remains optional at the model layer so
+    /// the event consumer can distinguish a legacy/partial handshake and
+    /// reject it without overwriting an existing frame.
+    #[serde(default)]
+    pub generation: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -205,6 +218,14 @@ pub struct ScreenshotFrame {
     pub jpeg: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    #[serde(default)]
+    pub deviceId: Option<String>,
+    #[serde(default)]
+    pub runId: Option<String>,
+    /// Preview session generation; missing metadata is rejected by the home
+    /// event gate instead of being treated as generation zero.
+    #[serde(default)]
+    pub generation: Option<u64>,
 }
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import random
+import re
 import socket
 import struct
 import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +23,7 @@ from module.logger import log
 from .. import AbstractInput
 from . import insert_swipe
 from .native_scrcpy_decoder import NativeScrcpyDecoder, NativeVideoFrame
+from .runner_policy import RunnerDevicePolicyError, RunnerPolicy
 
 # Scrcpy protocol constants (v4.1)
 SCRCPY_VERSION = "4.1"
@@ -193,12 +197,53 @@ class ScrcpyControl(AbstractInput):
 
     connection_device: ScrcpyControl | None = None
 
-    def __init__(self, endpoint: str | None = None) -> None:
+    def __init__(
+        self,
+        endpoint: str | None = None,
+        *,
+        run_id: str | None = None,
+        scid: str | int | None = None,
+        socket_name: str | None = None,
+        forward_port: int | None = None,
+        reserved_forward_port: int | None = None,
+        runner_policy: RunnerPolicy | None = None,
+        remote_cleanup: Callable[[dict[str, object]], object] | None = None,
+    ) -> None:
         super().__init__()
+        self._runner_policy = runner_policy or RunnerPolicy.from_env()
         self.endpoint = endpoint
         self.serial = endpoint
         self.device: AdbDevice | None = None
         self.game_package_name = "com.ProjectMoon.LimbusCompany"
+
+        self._run_id = self._validate_session_identifier(run_id, "run_id") if run_id is not None else None
+        self._scid = self._resolve_scid(scid, self._run_id)
+        self._socket_name = self._resolve_socket_name(socket_name, self._scid)
+        self._remote_socket_name = self._socket_name
+        if self._scid is not None:
+            # scrcpy derives its abstract socket from scid.  An explicitly
+            # supplied but mismatched socket would bind one local forward and
+            # start the server on another, making cleanup capable of touching
+            # the wrong run.  Reject the pair before any ADB side effect.
+            derived_socket = self._scid_socket_name(self._scid)
+            if self._socket_name != derived_socket:
+                raise ValueError("socket_name does not match scid")
+            self._remote_socket_name = derived_socket
+            self._socket_name = derived_socket
+        elif socket_name is not None and self._socket_name != "scrcpy":
+            # There is no scrcpy server argument for an arbitrary socket name;
+            # without scid the server always owns the historical ``scrcpy``
+            # abstract socket.  Refusing custom names avoids a false sense of
+            # run isolation and an uncleanable forward.
+            raise ValueError("custom socket_name requires a matching scid")
+        reserved = reserved_forward_port if reserved_forward_port is not None else forward_port
+        self._reserved_forward_port = self._validate_forward_port(reserved)
+        self._forward_remote: str | None = None
+        self._forward_owned = False
+        self._remote_cleanup = remote_cleanup
+        self._cleanup_lock = threading.RLock()
+        self._cleanup_done = False
+        self._cleanup_result: dict[str, object] | None = None
 
         self._running = False
         self._video_socket: socket.socket | None = None
@@ -259,6 +304,104 @@ class ScrcpyControl(AbstractInput):
 
         self._start()
         ScrcpyControl.connection_device = self
+
+    @staticmethod
+    def _validate_session_identifier(value: object, name: str) -> str:
+        if not isinstance(value, str) or not value or len(value) > 96:
+            raise ValueError(f"{name} must be a non-empty string of at most 96 characters")
+        if re.fullmatch(r"[A-Za-z0-9_.-]+", value) is None:
+            raise ValueError(f"{name} contains unsupported characters")
+        return value
+
+    @classmethod
+    def _resolve_scid(cls, value: str | int | None, run_id: str | None) -> str | None:
+        if value is None and run_id is None:
+            return None
+        if value is None:
+            source = run_id or ""
+            digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:8]
+            return f"0x{digest}"
+        if isinstance(value, int):
+            if value < 0 or value > 0xFFFFFFFF:
+                raise ValueError("scid must fit in an unsigned 32-bit value")
+            return f"0x{value:08x}"
+        text = cls._validate_session_identifier(value, "scid")
+        if re.fullmatch(r"0x[0-9a-fA-F]{1,8}", text):
+            return text.lower()
+        if re.fullmatch(r"[0-9a-fA-F]{1,8}", text):
+            return f"0x{text.lower()}"
+        # A human-readable reservation is accepted at the API boundary but
+        # converted to scrcpy's hexadecimal scid format before adb launch.
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
+        return f"0x{digest}"
+
+    @classmethod
+    def _resolve_socket_name(cls, value: str | None, scid: str | None) -> str:
+        if value is not None:
+            return cls._validate_session_identifier(value, "socket_name")
+        if scid is not None:
+            return cls._scid_socket_name(scid)
+        return "scrcpy"
+
+    @staticmethod
+    def _scid_socket_name(scid: str) -> str:
+        return f"scrcpy_{int(scid, 16):08x}"
+
+    @staticmethod
+    def _validate_forward_port(value: int | None) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 65535:
+            raise ValueError("forward_port must be an integer between 1 and 65535")
+        return value
+
+    def _policy(self) -> RunnerPolicy:
+        """Return the policy, including for object.__new__ test doubles."""
+
+        policy = getattr(self, "_runner_policy", None)
+        if isinstance(policy, RunnerPolicy):
+            return policy
+        policy = RunnerPolicy.from_env()
+        self._runner_policy = policy
+        return policy
+
+    @property
+    def session_identifiers(self) -> dict[str, object | None]:
+        """Return the run-scoped identifiers used by Scrcpy resources."""
+
+        device = getattr(self, "device", None)
+        serial = getattr(device, "serial", None) or getattr(self, "serial", None)
+        return {
+            "runId": getattr(self, "_run_id", None),
+            "scid": getattr(self, "_scid", None),
+            "socketName": getattr(self, "_socket_name", None),
+            "remoteSocketName": getattr(self, "_remote_socket_name", None),
+            "forwardPort": getattr(self, "_forward_port", None),
+            "forwardRemote": getattr(self, "_forward_remote", None),
+            "serial": serial,
+        }
+
+    @property
+    def session_reservation(self) -> dict[str, object | None]:
+        """Alias used by the future ExecutionSpec/CleanupLedger adapter."""
+
+        return self.session_identifiers
+
+    @property
+    def run_id(self) -> str | None:
+        return getattr(self, "_run_id", None)
+
+    @property
+    def scid(self) -> str | None:
+        return getattr(self, "_scid", None)
+
+    @property
+    def socket_name(self) -> str | None:
+        return getattr(self, "_socket_name", None)
+
+    @property
+    def forward_port(self) -> int | None:
+        return getattr(self, "_forward_port", None)
 
     @classmethod
     def clean_connect(cls) -> None:
@@ -409,11 +552,18 @@ class ScrcpyControl(AbstractInput):
         if not self.serial:
             devices = adb.device_list()
             if not devices:
-                raise RuntimeError("未发现任何已连接的 ADB 设备")
+                error = RuntimeError("未发现任何已连接的 ADB 设备")
+                if self._policy().forbid_emulator_launch:
+                    raise RunnerDevicePolicyError(
+                        "Runner could not find an existing ADB device; automatic recovery is disabled",
+                        action="scrcpy_connect",
+                    ) from error
+                raise error
             self.device = devices[0]
-            self.serial = self.device.serial
+            self.serial = self._validate_adb_serial(self.device.serial)
             return self.device
 
+        self.serial = self._validate_adb_serial(self.serial)
         if ":" in self.serial:
             # Network device
             try:
@@ -421,10 +571,105 @@ class ScrcpyControl(AbstractInput):
             except Exception as error:
                 log.debug("ADB 连接网络端点失败（%s）：%s", self.serial, error)
 
-        self.device = adb.device(self.serial)
+        try:
+            self.device = adb.device(self.serial)
+        except Exception as error:
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    f"Runner could not connect to existing ADB device {self.serial}; automatic recovery is disabled",
+                    action="scrcpy_connect",
+                ) from error
+            raise
         return self.device
 
+    def _list_forward_items(self) -> list[object] | None:
+        """Read this device's forwards, or ``None`` when identity is unknown."""
+
+        device = getattr(self, "device", None)
+        if device is None or not hasattr(device, "forward_list"):
+            return None
+        try:
+            return list(device.forward_list())
+        except Exception as error:
+            log.debug("读取 ADB forward 列表失败，清理将保持保守：%s", error)
+            return None
+
+    @staticmethod
+    def _forward_matches(item: object, *, serial: str | None, local: str, remote: str) -> bool:
+        return (
+            getattr(item, "serial", None) == serial
+            and getattr(item, "local", None) == local
+            and getattr(item, "remote", None) == remote
+        )
+
+    def _bind_forward(self, remote: str) -> int:
+        """Create a run-scoped forward without rebinding another session."""
+
+        if self.device is None:
+            raise RuntimeError("Scrcpy ADB device is not connected")
+        self._forward_remote = remote
+        reserved = getattr(self, "_reserved_forward_port", None)
+        serial = getattr(self.device, "serial", None) or getattr(self, "serial", None)
+        if reserved is not None:
+            local = f"tcp:{reserved}"
+            before = self._list_forward_items()
+            if before is not None and any(
+                getattr(item, "local", None) == local
+                for item in before
+                if getattr(item, "serial", None) in {None, serial}
+            ):
+                raise RunnerDevicePolicyError(
+                    f"ADB forward {local} is already occupied; refusing to rebind another session",
+                    action="scrcpy_forward",
+                )
+            try:
+                self.device.forward(local, remote, norebind=True)
+            except Exception as error:
+                raise RuntimeError(f"创建保留的 ADB 端口映射失败：{local} -> {remote}: {error}") from error
+            self._forward_port = reserved
+            self._forward_owned = True
+            return reserved
+
+        before = self._list_forward_items()
+        try:
+            port = int(self.device.forward_port(remote))
+        except Exception as error:
+            raise RuntimeError(f"创建 ADB 端口映射失败：{error}") from error
+        self._forward_port = port
+        local = f"tcp:{port}"
+        # forward_port() reuses an existing exact mapping.  Do not remove one
+        # we did not create when its identity can be proven.  Legacy sidecar
+        # test doubles without forward_list retain the old cleanup behavior.
+        self._forward_owned = not (
+            before is not None
+            and any(self._forward_matches(item, serial=serial, local=local, remote=remote) for item in before)
+        )
+        return port
+
+    def _begin_session(self) -> None:
+        """Reset one-shot cleanup state before a fresh Scrcpy session."""
+
+        with self._cleanup_lock:
+            self._cleanup_done = False
+            self._cleanup_result = None
+            self._forward_owned = False
+            self._forward_remote = None
+
+    def _wait_for_first_frame(self, timeout: float) -> bool:
+        """Wait for the startup frame while allowing a stop request to wake it."""
+
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while True:
+            if self.cancellation_requested():
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return self._first_frame_ready.is_set()
+            if self._first_frame_ready.wait(timeout=min(0.1, remaining)):
+                return True
+
     def _start(self) -> None:
+        self._begin_session()
         log.info("正在初始化 Scrcpy 连接：%s", self.serial or "默认设备")
         self._ensure_device_connected()
         assert self.device is not None
@@ -440,9 +685,9 @@ class ScrcpyControl(AbstractInput):
 
         # 2. 建立本地端口映射
         try:
-            self._forward_port = self.device.forward_port("localabstract:scrcpy")
-        except Exception as error:
-            raise RuntimeError(f"创建 ADB 端口映射失败：{error}") from error
+            self._bind_forward(f"localabstract:{self._remote_socket_name}")
+        except Exception:
+            raise
 
         # 3. 启动设备端 scrcpy-server 守护进程
         adb_bin = "adb"
@@ -453,25 +698,31 @@ class ScrcpyControl(AbstractInput):
         except Exception:
             pass
 
-        shell_cmd = self._build_server_shell_command(remote_jar)
+        server_command = self._build_server_command_args(
+            remote_jar,
+            scid=getattr(self, "_scid", None),
+            socket_name=getattr(self, "_socket_name", None),
+        )
 
         server_args = [
             adb_bin,
             "-s",
-            self.device.serial,
+            self._validate_adb_serial(self.device.serial),
             "shell",
-            shell_cmd,
+            *server_command,
         ]
 
         no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         self._server_proc = subprocess.Popen(
             server_args,
+            shell=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=no_window,
         )
 
-        time.sleep(0.2)
+        if not self.interruptible_sleep(0.2):
+            raise RuntimeError("Scrcpy 连接已取消")
 
         # 4. 连接 Video Socket 与 Control Socket（重试直至 abstract socket 就绪）
         try:
@@ -479,6 +730,8 @@ class ScrcpyControl(AbstractInput):
             last_conn_err: Exception | None = None
             self._recv_buffer.clear()
             for _ in range(25):
+                if self.cancellation_requested():
+                    raise RuntimeError("Scrcpy 连接已取消")
                 try:
                     self._video_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     self._video_socket.settimeout(2.0)
@@ -497,7 +750,8 @@ class ScrcpyControl(AbstractInput):
                         except Exception:
                             pass
                         self._video_socket = None
-                time.sleep(0.1)
+                if not self.interruptible_sleep(0.1):
+                    raise RuntimeError("Scrcpy 连接已取消")
 
             if not connected:
                 raise ConnectionError(f"Scrcpy 握手失败：未收到服务端就绪信号（{last_conn_err}）")
@@ -558,7 +812,7 @@ class ScrcpyControl(AbstractInput):
         self._decode_thread.start()
 
         # 等待首帧接收与解码成功才算连接完成（超时未就绪直接视为连接失败）
-        if not self._first_frame_ready.wait(timeout=5.0):
+        if not self._wait_for_first_frame(timeout=5.0):
             self.stop()
             raise ConnectionError(f"Scrcpy 连接失败：未能在 5 秒内获取到设备首帧画面（{self.serial}）")
 
@@ -570,17 +824,108 @@ class ScrcpyControl(AbstractInput):
         )
 
     @classmethod
-    def _build_server_shell_command(cls, remote_jar: str) -> str:
-        """Build the Scrcpy 4.1 server command with explicit stream settings."""
-        max_fps, video_bit_rate = cls._video_settings()
-        return (
-            f"CLASSPATH={remote_jar} app_process / com.genymobile.scrcpy.Server "
-            f"{SCRCPY_VERSION} log_level=info audio=false control=true tunnel_forward=true "
-            f"video_codec={SCRCPY_VIDEO_CODEC} max_size=0 max_fps={max_fps} "
-            f"video_bit_rate={video_bit_rate} video_codec_options=i-frame-interval:int=1 "
-            f"send_stream_meta=true stay_awake=true cleanup=false "
-            "power_off_on_close=false downsize_on_error=false"
+    def _build_server_shell_command(
+        cls,
+        remote_jar: str,
+        *,
+        scid: str | int | None = None,
+        socket_name: str | None = None,
+    ) -> str:
+        """Build the Scrcpy 4.1 server command with explicit stream settings.
+
+        ``socket_name`` is accepted so the reservation can be carried through
+        the integration boundary. Scrcpy derives its abstract socket from
+        ``scid``; consequently only the validated scid is emitted to the
+        server command. With neither value supplied the historical command
+        remains byte-for-byte compatible. This compatibility method is only
+        for callers that still need a display string; startup uses the argv
+        builder below and never invokes a local shell.
+        """
+
+        return " ".join(
+            cls._build_server_command_args(
+                remote_jar,
+                scid=scid,
+                socket_name=socket_name,
+            )
         )
+
+    @classmethod
+    def _build_server_command_args(
+        cls,
+        remote_jar: str,
+        *,
+        scid: str | int | None = None,
+        socket_name: str | None = None,
+    ) -> list[str]:
+        """Build argv for adb shell without a local or remote shell string.
+
+        adb shell accepts each command token as a separate argument. The
+        compatibility ``_build_server_shell_command`` above remains available
+        to older callers/tests, but production startup passes this token list
+        directly to ``Popen(shell=False)``.
+        """
+
+        cls._validate_remote_jar(remote_jar)
+        if scid is not None:
+            normalized_scid = cls._resolve_scid(scid, None)
+            assert normalized_scid is not None
+            normalized_socket = cls._resolve_socket_name(socket_name, normalized_scid)
+            if normalized_socket != cls._scid_socket_name(normalized_scid):
+                raise ValueError("socket_name does not match scid")
+            scid_arg = f"scid={normalized_scid}"
+        else:
+            if socket_name is not None and cls._resolve_socket_name(socket_name, None) != "scrcpy":
+                raise ValueError("custom socket_name requires a matching scid")
+            scid_arg = None
+        max_fps, video_bit_rate = cls._video_settings()
+        command = [
+            f"CLASSPATH={remote_jar}",
+            "app_process",
+            "/",
+            "com.genymobile.scrcpy.Server",
+            SCRCPY_VERSION,
+            "log_level=info",
+            "audio=false",
+            "control=true",
+            "tunnel_forward=true",
+            f"video_codec={SCRCPY_VIDEO_CODEC}",
+            "max_size=0",
+            f"max_fps={max_fps}",
+            f"video_bit_rate={video_bit_rate}",
+            "video_codec_options=i-frame-interval:int=1",
+            "send_stream_meta=true",
+            "stay_awake=true",
+            "cleanup=false",
+        ]
+        if scid_arg is not None:
+            command.append(f"scid={normalized_scid}")
+        command.extend(("power_off_on_close=false", "downsize_on_error=false"))
+        return command
+
+    @staticmethod
+    def _validate_adb_serial(value: object) -> str:
+        if not isinstance(value, str) or not value or len(value) > 256:
+            raise ValueError("ADB serial must be a non-empty string of at most 256 characters")
+        if re.fullmatch(r"[A-Za-z0-9_.:-]+", value) is None:
+            raise ValueError("ADB serial contains unsupported characters")
+        return value
+
+    @staticmethod
+    def _validate_remote_jar(remote_jar: str) -> str:
+        """Validate the fixed remote path before placing it in argv.
+
+        Production callers use ``/data/local/tmp/scrcpy-server.jar``; the
+        short ``jar`` spelling remains useful for pure command-builder tests.
+        """
+
+        if not isinstance(remote_jar, str) or not remote_jar:
+            raise ValueError("remote_jar must be a non-empty path")
+        if any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-" for character in remote_jar):
+            raise ValueError("remote_jar contains unsupported characters")
+        if any(part in {"", ".", ".."} for part in remote_jar.split("/") if part != ""):
+            raise ValueError("remote_jar contains an invalid path component")
+        return remote_jar
 
     @staticmethod
     def _frame_to_rgb(frame) -> np.ndarray:
@@ -789,6 +1134,14 @@ class ScrcpyControl(AbstractInput):
 
     def _schedule_video_session_restart(self, reason: str) -> None:
         """Restart the complete Scrcpy session after decoder resync fails."""
+        if self._policy().forbid_emulator_launch:
+            # A Runner must not silently recover a lost device/session.  The
+            # owner can use the reservation and CleanupLedger to decide what
+            # to do; this controller only marks the stream unusable.
+            self._stream_error = f"Runner 自动恢复已禁用：{reason}"
+            self._running = False
+            log.error("Runner 模式禁止自动重启 Scrcpy 会话：%s", reason)
+            return
         with self._restart_lock:
             if self._restart_thread is not None and self._restart_thread.is_alive():
                 return
@@ -804,6 +1157,13 @@ class ScrcpyControl(AbstractInput):
 
     def _restart_video_session(self, reason: str, cancel: threading.Event) -> None:
         log.warning("Scrcpy 视频会话重启：%s", reason)
+        if self._policy().forbid_emulator_launch:
+            self._stream_error = f"Runner 自动恢复已禁用：{reason}"
+            self._running = False
+            with self._restart_lock:
+                if self._restart_thread is threading.current_thread():
+                    self._restart_thread = None
+            return
         try:
             self.stop(cancel_restart=False)
             # Serialize the cancellation check with an external stop.  This
@@ -951,7 +1311,8 @@ class ScrcpyControl(AbstractInput):
                         except Exception:
                             self._running = False
                             break
-                        time.sleep(0.01)
+                        if not self.interruptible_sleep(0.01):
+                            break
         finally:
             self._codec = None
             with self._frame_condition:
@@ -1085,13 +1446,21 @@ class ScrcpyControl(AbstractInput):
         """执行指定坐标点击。对齐 MuMu 的 down(0.015)+up(0.035) 时序。"""
         log.debug("Scrcpy 点击位置：(%d, %d)", x, y)
         for _ in range(times):
+            if not self.checkpoint():
+                return False
             self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, int(x), int(y)))
-            time.sleep(0.015)
-            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x), int(y)))
-            time.sleep(0.035)
+            try:
+                if not self.interruptible_sleep(0.015):
+                    return False
+            finally:
+                self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x), int(y)))
+            if not self.interruptible_sleep(0.035):
+                return False
             if times > 1:
-                time.sleep(0.05)
-        self.wait_pause()
+                if not self.interruptible_sleep(0.05):
+                    return False
+        if not self.checkpoint():
+            return False
         return True
 
     def mouse_click_blank(self, coordinate: tuple[int, int] = (1, 1), times: int = 1) -> bool:
@@ -1133,23 +1502,22 @@ class ScrcpyControl(AbstractInput):
             sampled.append(normalized[-1])
         return sampled
 
-    @staticmethod
-    def _sleep_until(deadline: float) -> None:
+    def _sleep_until(self, deadline: float) -> bool:
         remaining = deadline - time.monotonic()
-        if remaining > 0:
-            time.sleep(remaining)
+        return remaining <= 0 or self.interruptible_sleep(remaining)
 
-    def _send_timed_moves(self, points, duration: float) -> None:
+    def _send_timed_moves(self, points, duration: float) -> bool:
         points = self._limit_swipe_points(points, duration)
         if len(points) < 2:
-            return
+            return True
         duration = max(0.0, float(duration))
         started = time.monotonic()
         denominator = len(points) - 1
         for index, (px, py) in enumerate(points[1:], start=1):
-            self._sleep_until(started + duration * index / denominator)
+            if not self._sleep_until(started + duration * index / denominator):
+                return False
             self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, px, py))
-        self._sleep_until(started + duration)
+        return self._sleep_until(started + duration)
 
     def mouse_drag(
         self,
@@ -1162,21 +1530,29 @@ class ScrcpyControl(AbstractInput):
     ) -> None:
         """从 (x, y) 拖拽滑动至 (x+dx, y+dy)。对齐 MuMu 的 insert_swipe 贝塞尔+0.5s抬手。"""
         # 对齐 MuMu：不做 resolution 钳位，允许拖到负坐标/超界由系统裁剪，保持距离一致
+        if not self.checkpoint():
+            return
         x, y, dx, dy = int(x), int(y), int(dx), int(dy)
         x2 = x + dx
         y2 = y + dy
         points = insert_swipe(p0=(x, y), p3=(x2, y2))
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, x, y))
-        time.sleep(0.02)
-        for px, py in points[1:]:
-            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
-            time.sleep(0.02)
-        if drag_time * 0.3 > 0.5:
-            time.sleep(drag_time * 0.3)
-        else:
-            time.sleep(0.5)
-        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
-        self.wait_pause()
+        try:
+            if not self.interruptible_sleep(0.02):
+                return
+            for px, py in points[1:]:
+                self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+                if not self.interruptible_sleep(0.02):
+                    return
+            if drag_time * 0.3 > 0.5:
+                if not self.interruptible_sleep(drag_time * 0.3):
+                    return
+            else:
+                if not self.interruptible_sleep(0.5):
+                    return
+        finally:
+            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
+        self.checkpoint()
 
     def mouse_swipe_for_scroll(
         self,
@@ -1188,22 +1564,29 @@ class ScrcpyControl(AbstractInput):
         move_back: bool = True,
     ) -> None:
         """列表滚动手势。对齐 MuMu 的 speed=8/min_distance=1 +0.2s 停留。"""
+        if not self.checkpoint():
+            return
         x, y, dx, dy = int(x), int(y), int(dx), int(dy)
         x2, y2 = x + dx, y + dy
         points = insert_swipe(p0=(x, y), p3=(x2, y2), speed=8, min_distance=1)
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, x, y))
-        time.sleep(0.02)
         try:
+            if not self.interruptible_sleep(0.02):
+                return
             for px, py in points[1:]:
                 self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
-                time.sleep(0.02)
-            time.sleep(0.20)
+                if not self.interruptible_sleep(0.02):
+                    return
+            if not self.interruptible_sleep(0.20):
+                return
         finally:
             self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
-        self.wait_pause()
+        self.checkpoint()
 
     def mouse_drag_down(self, x: int, y: int, reverse: int = 1, move_back: bool = True) -> None:
         """向下/向上拖动手势。对齐 MuMu.swipe(duration=0.4, min_distance=10)。"""
+        if not self.checkpoint():
+            return
         scale = cfg.set_win_size / 1080
         x, y = int(x), int(y)
         x2 = x
@@ -1211,36 +1594,46 @@ class ScrcpyControl(AbstractInput):
         points = insert_swipe(p0=(x, y), p3=(x2, y2), min_distance=10)
         # MuMu.swipe: for point in points: down(*point); sleep(duration/min_distance) -> 0.04/点 +0.2+0.05
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, x, y))
-        time.sleep(0.4 / 10)
-        for px, py in points[1:]:
-            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
-            time.sleep(0.4 / 10)
-        time.sleep(0.2)
-        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
-        time.sleep(0.05)
-        self.wait_pause()
+        try:
+            if not self.interruptible_sleep(0.4 / 10):
+                return
+            for px, py in points[1:]:
+                self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+                if not self.interruptible_sleep(0.4 / 10):
+                    return
+            if not self.interruptible_sleep(0.2):
+                return
+        finally:
+            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, int(x2), int(y2)))
+        self.interruptible_sleep(0.05)
+        self.checkpoint()
 
     def mouse_drag_link(self, position: list, drag_time: float = 0.1, move_back: bool = False) -> None:
         """按路径多点连续拖拽。对齐 MuMu 的分段 insert_swipe。"""
-        if not position:
+        if not position or not self.checkpoint():
             return
         start_x, start_y = int(position[0][0]), int(position[0][1])
         self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_DOWN, start_x, start_y))
-        time.sleep(0.02)
-        p = (start_x, start_y)
-        min_distance = 10
-        for target in position[1:]:
-            tx, ty = int(target[0]), int(target[1])
-            points = insert_swipe(p0=p, p3=(tx, ty), min_distance=min_distance)
-            for px, py in points[1:]:
-                self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
-                time.sleep(drag_time / min_distance if min_distance else 0.02)
-            p = (tx, ty)
-        time.sleep(0.5)
         last_x, last_y = int(position[-1][0]), int(position[-1][1])
-        self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, last_x, last_y))
-        time.sleep(0.05)
-        self.wait_pause()
+        try:
+            if not self.interruptible_sleep(0.02):
+                return
+            p = (start_x, start_y)
+            min_distance = 10
+            for target in position[1:]:
+                tx, ty = int(target[0]), int(target[1])
+                points = insert_swipe(p0=p, p3=(tx, ty), min_distance=min_distance)
+                for px, py in points[1:]:
+                    self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_MOVE, int(px), int(py)))
+                    if not self.interruptible_sleep(drag_time / min_distance if min_distance else 0.02):
+                        return
+                p = (tx, ty)
+            if not self.interruptible_sleep(0.5):
+                return
+        finally:
+            self._send_control(self._build_touch_msg(AMOTION_EVENT_ACTION_UP, last_x, last_y))
+        self.interruptible_sleep(0.05)
+        self.checkpoint()
 
     def mouse_scroll(self, direction: int = -3) -> bool:
         """鼠标滚轮事件注入。"""
@@ -1266,12 +1659,16 @@ class ScrcpyControl(AbstractInput):
         if keycode is None:
             log.warning("未知按键：%s，忽略按键注入", key)
             return
+        if not self.checkpoint():
+            return
 
         down_msg = struct.pack(">BBiII", SC_CONTROL_MSG_TYPE_INJECT_KEYCODE, AKEY_EVENT_ACTION_DOWN, keycode, 0, 0)
         up_msg = struct.pack(">BBiII", SC_CONTROL_MSG_TYPE_INJECT_KEYCODE, AKEY_EVENT_ACTION_UP, keycode, 0, 0)
         self._send_control(down_msg)
-        time.sleep(0.03)
-        self._send_control(up_msg)
+        try:
+            self.interruptible_sleep(0.03)
+        finally:
+            self._send_control(up_msg)
 
     def input_text(self, text: str) -> None:
         """注入文本。"""
@@ -1315,8 +1712,8 @@ class ScrcpyControl(AbstractInput):
                 return current_package
             except Exception as error:
                 log.debug("获取当前应用包名错误 (%d/3): %s", attempt + 1, error)
-                if attempt < 2:
-                    time.sleep(0.5)
+                if attempt < 2 and not self.interruptible_sleep(0.5):
+                    return ""
         return ""
 
     def check_game_alive(self) -> bool:
@@ -1349,72 +1746,206 @@ class ScrcpyControl(AbstractInput):
         """断开控制器（生命周期接口对齐）。"""
         self.stop()
 
+    @staticmethod
+    def _close_socket(sock: socket.socket | None) -> None:
+        if sock is None:
+            return
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+    def _cleanup_forward(self, result: dict[str, object]) -> None:
+        """Remove only a forward whose serial/local/remote identity matches."""
+
+        device = getattr(self, "device", None)
+        port = getattr(self, "_forward_port", None)
+        remote = getattr(self, "_forward_remote", None)
+        if device is None or port is None:
+            result["forward"] = "absent"
+            return
+        if not getattr(self, "_forward_owned", False):
+            result["forward"] = "not_owned"
+            return
+
+        local = f"tcp:{port}"
+        serial = getattr(device, "serial", None) or getattr(self, "serial", None)
+        items = self._list_forward_items()
+        if items is None:
+            # The Runner must never remove a forward when its identity cannot
+            # be verified.  For legacy sidecar devices without forward_list,
+            # retain the historical best-effort removal.
+            if getattr(self, "_run_id", None) is not None or self._policy().runner_mode:
+                result["forward"] = "skipped_identity_unknown"
+                return
+            try:
+                device.forward_remove(local, raise_non_found=False)
+            except TypeError:
+                device.forward_remove(local)
+            except Exception as error:
+                result["forward"] = f"error:{type(error).__name__}"
+                return
+            result["forward"] = "removed"
+            return
+
+        if remote is None:
+            result["forward"] = "skipped_remote_unknown"
+            return
+        matching = any(self._forward_matches(item, serial=serial, local=local, remote=remote) for item in items)
+        if not matching:
+            result["forward"] = "already_absent_or_mismatched"
+            return
+        try:
+            device.forward_remove(local, raise_non_found=False)
+        except TypeError:
+            device.forward_remove(local)
+        except Exception as error:
+            result["forward"] = f"error:{type(error).__name__}"
+            return
+        result["forward"] = "removed"
+
+    def _cleanup_remote_session(self, reservation: dict[str, object], result: dict[str, object]) -> None:
+        """Invoke only an explicitly injected, run-scoped remote cleanup."""
+
+        callback = getattr(self, "_remote_cleanup", None)
+        if callback is None:
+            if reservation.get("scid") or reservation.get("runId"):
+                result["remote"] = "unbound_cleanup_ledger"
+            else:
+                result["remote"] = "not_requested"
+            return
+        if not reservation.get("scid") and not reservation.get("runId"):
+            result["remote"] = "skipped_unscoped"
+            return
+        try:
+            callback(dict(reservation))
+        except Exception as error:
+            result["remote"] = f"error:{type(error).__name__}"
+            return
+        result["remote"] = "requested"
+
+    def cleanup_session(self, *, reason: str | None = None, remote: bool = True) -> dict[str, object]:
+        """Idempotently release this Scrcpy session's owned resources.
+
+        The method deliberately does not call ``adb kill-server`` and never
+        issues an unscoped device-side process kill.  Remote server cleanup is
+        an explicit injection point for CleanupLedger; without it the result
+        reports ``unbound_cleanup_ledger`` so a caller cannot mistake local
+        cleanup for proof that a ``cleanup=false`` server disappeared.
+        """
+
+        cleanup_lock = getattr(self, "_cleanup_lock", None)
+        if cleanup_lock is None:
+            cleanup_lock = threading.RLock()
+            self._cleanup_lock = cleanup_lock
+        with cleanup_lock:
+            if getattr(self, "_cleanup_done", False):
+                cached = dict(getattr(self, "_cleanup_result", {}) or {})
+                cached["alreadyCleaned"] = True
+                return cached
+
+            result: dict[str, object] = {
+                "alreadyCleaned": False,
+                "reason": reason,
+                "forward": "not_attempted",
+                "serverProcess": "absent",
+                "remote": "not_requested" if not remote else "not_attempted",
+            }
+            self._running = False
+            first_frame_ready = getattr(self, "_first_frame_ready", None)
+            if first_frame_ready is not None:
+                first_frame_ready.clear()
+            stream_eof = getattr(self, "_stream_eof", None)
+            if stream_eof is not None:
+                stream_eof.set()
+
+            # Closing the video socket wakes a blocked decoder recv.  The
+            # current thread (during startup failure/restart) cannot join
+            # itself, so it is left for its normal return path.
+            video_socket = getattr(self, "_video_socket", None)
+            self._close_socket(video_socket)
+            self._video_socket = None
+            decode_thread = getattr(self, "_decode_thread", None)
+            if decode_thread is not None and decode_thread is not threading.current_thread():
+                if decode_thread.is_alive():
+                    decode_thread.join(timeout=1.0)
+                result["decodeThread"] = "stopped" if not decode_thread.is_alive() else "still_running"
+                if not decode_thread.is_alive():
+                    self._decode_thread = None
+            elif decode_thread is not None:
+                result["decodeThread"] = "current_thread"
+            else:
+                result["decodeThread"] = "absent"
+
+            control_socket = getattr(self, "_control_socket", None)
+            self._close_socket(control_socket)
+            self._control_socket = None
+
+            self._cleanup_forward(result)
+            self._forward_port = None
+            self._forward_remote = None
+            self._forward_owned = False
+
+            server_proc = getattr(self, "_server_proc", None)
+            if server_proc is not None:
+                try:
+                    server_proc.terminate()
+                    server_proc.wait(timeout=1.0)
+                except Exception:
+                    pass
+                self._server_proc = None
+                result["serverProcess"] = "terminated"
+
+            frame_condition = getattr(self, "_frame_condition", None)
+            if frame_condition is None:
+                self._frame_lock = threading.Lock()
+                frame_condition = threading.Condition(self._frame_lock)
+                self._frame_condition = frame_condition
+            recv_buffer = getattr(self, "_recv_buffer", None)
+            if recv_buffer is None:
+                recv_buffer = bytearray()
+                self._recv_buffer = recv_buffer
+            with frame_condition:
+                self._latest_frame = None
+                recv_buffer.clear()
+                self._codec = None
+                frame_condition.notify_all()
+            state_lock = getattr(self, "_state_lock", None)
+            if state_lock is None:
+                state_lock = threading.Lock()
+                self._state_lock = state_lock
+            with state_lock:
+                self._decode_state = "SUSPENDED"
+                self._decoder_needs_keyframe = True
+                self._decoder_has_config = False
+                self._resync_started_mono = None
+            self._last_config_packet = None
+            self._last_config_pts = None
+
+            if remote:
+                reservation = self.session_identifiers
+                self._cleanup_remote_session(reservation, result)
+
+            if ScrcpyControl.connection_device is self:
+                ScrcpyControl.connection_device = None
+            self._cleanup_result = dict(result)
+            self._cleanup_done = True
+            log.info("Scrcpy 控制器已完全释放")
+            return dict(result)
+
     def stop(self, *, cancel_restart: bool = True) -> None:
-        """彻底停止 Scrcpy 客户端并完全释放所有线程与 Socket 资源。"""
+        """Compatibility wrapper for the idempotent per-session cleanup."""
         if cancel_restart:
             # Keep cancellation and the restart worker's start transition
             # atomic with respect to one another.  RLock permits _start's
             # failure cleanup to call stop() on the same worker thread.
-            with self._restart_lock:
-                self._restart_cancel.set()
-        self._running = False
-        self._first_frame_ready.clear()
-        self._stream_eof.set()
-
-        # 1. 唤醒并等待解码线程退出
-        if self._video_socket:
-            try:
-                self._video_socket.shutdown(socket.SHUT_RDWR)
-                self._video_socket.close()
-            except Exception:
-                pass
-            self._video_socket = None
-
-        if self._decode_thread and self._decode_thread.is_alive():
-            self._decode_thread.join(timeout=1.0)
-            self._decode_thread = None
-
-        # 2. 关闭控制 Socket
-        if self._control_socket:
-            try:
-                self._control_socket.shutdown(socket.SHUT_RDWR)
-                self._control_socket.close()
-            except Exception:
-                pass
-            self._control_socket = None
-
-        # 3. 移除端口映射
-        if self.device and self._forward_port:
-            try:
-                self.device.forward_remove(f"tcp:{self._forward_port}")
-            except Exception:
-                pass
-            self._forward_port = None
-
-        # 4. 终止设备端 server 进程
-        if self._server_proc:
-            try:
-                self._server_proc.terminate()
-                self._server_proc.wait(timeout=1.0)
-            except Exception:
-                pass
-            self._server_proc = None
-
-        # 5. 清理内存中保存的最新帧及接收/解码状态
-        with self._frame_condition:
-            self._latest_frame = None
-            self._recv_buffer.clear()
-            self._codec = None
-            self._frame_condition.notify_all()
-        with self._state_lock:
-            self._decode_state = "SUSPENDED"
-            self._decoder_needs_keyframe = True
-            self._decoder_has_config = False
-            self._resync_started_mono = None
-        self._last_config_packet = None
-        self._last_config_pts = None
-
-        if ScrcpyControl.connection_device is self:
-            ScrcpyControl.connection_device = None
-
-        log.info("Scrcpy 控制器已完全释放")
+            restart_lock = getattr(self, "_restart_lock", None)
+            restart_cancel = getattr(self, "_restart_cancel", None)
+            if restart_lock is not None and restart_cancel is not None:
+                with restart_lock:
+                    restart_cancel.set()
+        self.cleanup_session(reason="stop")

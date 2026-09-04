@@ -80,10 +80,7 @@ pub fn set_windows_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: b
                     "0.1".to_owned(),
                     format!("0.1s ({})", text("极速", "Fast").get(language)),
                 ),
-                (
-                    "0.2".to_owned(),
-                    "0.2s".to_owned(),
-                ),
+                ("0.2".to_owned(), "0.2s".to_owned()),
                 (
                     "0.5".to_owned(),
                     format!("0.5s ({})", text("默认", "Default").get(language)),

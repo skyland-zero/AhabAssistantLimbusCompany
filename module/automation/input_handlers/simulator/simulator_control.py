@@ -12,6 +12,7 @@ from module.config import cfg
 from module.logger import log
 
 from .. import AbstractInput
+from .runner_policy import RunnerDevicePolicyError, RunnerPolicy
 
 T = TypeVar("T")
 
@@ -81,8 +82,9 @@ class SimulatorControl(AbstractInput):
             log.debug("断开ADB连接失败: %s", e)
         SimulatorControl.connection_device = None
 
-    def __init__(self, endpoint: str | None = None) -> None:
+    def __init__(self, endpoint: str | None = None, *, runner_policy: RunnerPolicy | None = None) -> None:
         super().__init__()
+        self._runner_policy = runner_policy or RunnerPolicy.from_env()
         self.is_pause = False
         self.restore_time = None
         self.simulator_device = None
@@ -93,6 +95,16 @@ class SimulatorControl(AbstractInput):
         self.game_package_name = "com.ProjectMoon.LimbusCompany"
 
         self.get_simulator()
+
+    def _policy(self) -> RunnerPolicy:
+        """Return the policy, including for object.__new__ test doubles."""
+
+        policy = getattr(self, "_runner_policy", None)
+        if isinstance(policy, RunnerPolicy):
+            return policy
+        policy = RunnerPolicy.from_env()
+        self._runner_policy = policy
+        return policy
 
     @staticmethod
     def _is_recoverable_connection_error(error: Exception) -> bool:
@@ -113,6 +125,11 @@ class SimulatorControl(AbstractInput):
         )
 
     def reconnect(self, reason: str) -> bool:
+        if self._policy().forbid_emulator_launch:
+            raise RunnerDevicePolicyError(
+                f"Runner device connection recovery is disabled after {reason}; failing closed",
+                action="reconnect",
+            )
         if not bool(cfg.get_value("adb_reconnect_on_error", True)):
             return False
 
@@ -133,7 +150,14 @@ class SimulatorControl(AbstractInput):
         try:
             return func()
         except Exception as e:
-            if not self._is_recoverable_connection_error(e) or not self.reconnect(f"{action}: {e}"):
+            if not self._is_recoverable_connection_error(e):
+                raise
+            if self._policy().forbid_emulator_launch:
+                raise RunnerDevicePolicyError(
+                    f"Runner device operation {action} lost its ADB connection; automatic recovery is disabled",
+                    action=action,
+                ) from e
+            if not self.reconnect(f"{action}: {e}"):
                 raise
             log.info("模拟器连接已重建，重试操作: %s", action)
             return func()
@@ -146,6 +170,8 @@ class SimulatorControl(AbstractInput):
 
         try:
             self._call_with_reconnect("启动游戏", _start_game)
+        except RunnerDevicePolicyError:
+            raise
         except Exception as e:
             log.error("启动游戏失败，失败原因为%s", e)
             log.error("启动游戏失败，请确认是否安装了Limbus Company，五秒后将重新尝试启动")
@@ -169,13 +195,24 @@ class SimulatorControl(AbstractInput):
                 raise RuntimeError("其他模拟器需要填写 ADB 端口，例如蓝叠/雷电常见为 5555")
             endpoint = f"127.0.0.1:{port}"
             self.simulator_port = endpoint
+        last_error: Exception | None = None
         for _ in range(3):
-            msg = adb.connect(endpoint)
-            if "connected" in msg:
-                log.debug("成功连接至:%s,连接信息: %s", endpoint, msg)
-                break
-            elif "bad port" in msg:
-                log.error("连接失败，端口号%s不正确，可能是拼写错误或不规范", endpoint)
+            try:
+                msg = adb.connect(endpoint)
+                if "connected" in msg:
+                    log.debug("成功连接至:%s,连接信息: %s", endpoint, msg)
+                    return
+                if "bad port" in msg:
+                    log.error("连接失败，端口号%s不正确，可能是拼写错误或不规范", endpoint)
+            except Exception as error:
+                last_error = error
+                if not self._policy().forbid_emulator_launch:
+                    raise
+        if self._policy().forbid_emulator_launch:
+            raise RunnerDevicePolicyError(
+                f"Runner could not connect to ADB endpoint {endpoint}; emulator recovery is forbidden",
+                action="adb_connect",
+            ) from last_error
 
     def adb_disconnect(self) -> None:
         if not self.simulator_port or ":" not in str(self.simulator_port):
@@ -218,6 +255,11 @@ class SimulatorControl(AbstractInput):
             except AdbError as e:
                 last_error = e
                 log.error("获取模拟器设备失败，ADB 错误: %s，正在尝试重新连接 (%d/3)", e, attempt + 1)
+                if self._policy().forbid_emulator_launch:
+                    raise RunnerDevicePolicyError(
+                        "Runner could not resolve the ADB device; automatic reconnect is disabled",
+                        action="get_simulator",
+                    ) from e
                 try:
                     self.adb_disconnect()
                 except Exception:
@@ -296,6 +338,8 @@ class SimulatorControl(AbstractInput):
             keycode = key_list.get(key.lower(), 66)
             cmd = f"input keyevent {keycode}"
             self._call_with_reconnect("按键", lambda: self.simulator_device.shell(cmd))
+        except RunnerDevicePolicyError:
+            raise
         except Exception as e:
             log.error("输入失败：%s", e)
 
@@ -309,6 +353,8 @@ class SimulatorControl(AbstractInput):
         try:
             send_text = text.replace(" ", "%s")
             self._call_with_reconnect("输入文本", lambda: self.simulator_device.shell(["input", "text", send_text]))
+        except RunnerDevicePolicyError:
+            raise
         except Exception as e:
             log.error("输入文本失败：%s", e)
 

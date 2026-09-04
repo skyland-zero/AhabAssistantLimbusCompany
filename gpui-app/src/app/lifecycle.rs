@@ -175,7 +175,7 @@ impl AhabApp {
                         RpcGateway::decode_response(method::EXECUTION_GET_STATE, response)
                     && let Ok(execution) = serde_json::from_value(value)
                 {
-                    view.home.execution = execution;
+                    view.home.apply_execution_status(execution);
                 }
                 if let Some(response) = stats_response
                     && let Ok(Some(value)) =
@@ -486,7 +486,7 @@ impl AhabApp {
     }
 
     pub(crate) fn maybe_recover_backend(&mut self, cx: &mut Context<Self>) -> bool {
-        if !self.backend_operation.is_idle() || !self.home.rpc.is_sidecar() {
+        if self.exit_requested || !self.backend_operation.is_idle() || !self.home.rpc.is_sidecar() {
             return false;
         }
 
@@ -549,6 +549,7 @@ impl AhabApp {
             backend_operation: BackendOperation::Idle,
             backend_attempt_id: 0,
             backend_epoch: 0,
+            exit_requested: false,
             stop_timeout_generation: 0,
             stats_tick_generation: 0,
             theme_persist_timer_generation: None,

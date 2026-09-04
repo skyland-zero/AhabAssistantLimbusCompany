@@ -1,8 +1,7 @@
 import os
-import shutil
+
 import numpy as np
 import pytest
-from PIL import Image
 
 from module.automation import auto
 from module.automation.text_bootstrap import TextBootstrapManager

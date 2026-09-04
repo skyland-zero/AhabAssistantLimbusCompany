@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import re
 import sys
 import time
@@ -208,19 +207,24 @@ def main() -> None:
             failed.append((gift_id, file_title, str(e)))
             logger.warning(f"✗ Failed {gift_id}: {e}")
 
-    # Summary
-    print("\n" + "=" * 60)
-    print(f"E.G.O Gift Template Download Summary:")
-    print(f"  Target Gifts:  {len(route_gifts)}")
-    print(f"  Matched Gifts: {len(matched_files)}")
-    print(f"  Downloaded:    {success}")
-    print(f"  Skipped:       {skipped} (already exist)")
-    print(f"  Total on disk: {len(list(args.output_dir.glob('*.png')))}")
+    # Summary.  Use stdout directly so this CLI keeps its human-readable
+    # report while satisfying the repository's no-bare-print lint policy.
+    summary_lines = [
+        "",
+        "=" * 60,
+        "E.G.O Gift Template Download Summary:",
+        f"  Target Gifts:  {len(route_gifts)}",
+        f"  Matched Gifts: {len(matched_files)}",
+        f"  Downloaded:    {success}",
+        f"  Skipped:       {skipped} (already exist)",
+        f"  Total on disk: {len(list(args.output_dir.glob('*.png')))}",
+    ]
     if failed:
-        print(f"  Failed ({len(failed)}):")
+        summary_lines.append(f"  Failed ({len(failed)}):")
         for gid, title, err in failed:
-            print(f"    - {gid} ({title}): {err}")
-    print("=" * 60 + "\n")
+            summary_lines.append(f"    - {gid} ({title}): {err}")
+    summary_lines.extend(["=" * 60, ""])
+    sys.stdout.write("\n".join(summary_lines) + "\n")
 
 
 if __name__ == "__main__":

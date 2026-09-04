@@ -12,6 +12,7 @@ import psutil
 from PIL.Image import Image
 
 from core.execution_control import check_cancelled, interruptible_sleep, wait_for_event
+from module.vision_profiler import vision_profiler
 from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
 from utils.singletonmeta import SingletonMeta
@@ -19,7 +20,6 @@ from utils.singletonmeta import SingletonMeta
 from ..config import cfg
 from ..logger import log
 from ..ocr import ocr
-from module.vision_profiler import vision_profiler
 from .input_handlers.input import AbstractInput
 from .screenshot import ScreenShot
 
@@ -84,11 +84,18 @@ class Automation(metaclass=SingletonMeta):
         if self.input_handler:
             self.input_handler = None
 
+        runner_mode = self._runner_mode()
         if session is None:
             try:
-                from module.device_manager import get_device_manager
+                from module.device_manager import get_device_manager, get_runner_session
 
-                session = get_device_manager().active_session
+                session = get_runner_session()
+                if session is None and runner_mode:
+                    from module.device_manager import DeviceError
+
+                    raise DeviceError("Runner 没有已安装的私有设备 session，拒绝使用旧全局连接")
+                if session is None:
+                    session = get_device_manager().active_session
             except ImportError:
                 # Keep import-time compatibility for the legacy application.
                 session = None
@@ -107,6 +114,10 @@ class Automation(metaclass=SingletonMeta):
                 log.debug("使用选中 ADB / Scrcpy 输入模块")
         elif active_kind == "pc":
             self._init_windows_input()
+        elif runner_mode:
+            from module.device_manager import DeviceError
+
+            raise DeviceError("Runner 没有私有设备 session，拒绝回退到旧模拟器连接")
         elif cfg.simulator:
             # Legacy configuration-driven path used by the old UI/CLI.
             if cfg.simulator_type == 0:
@@ -134,6 +145,10 @@ class Automation(metaclass=SingletonMeta):
             self._init_windows_input()
 
         if self.input_handler is None:
+            if runner_mode:
+                from module.device_manager import DeviceError
+
+                raise DeviceError("Runner 没有可用的私有输入控制器")
             if active_kind in ("mumu", "adb"):
                 from module.device_manager import DeviceError
 
@@ -145,6 +160,15 @@ class Automation(metaclass=SingletonMeta):
         self.set_pause = self.input_handler.set_pause
         self.wait_pause = self.input_handler.wait_pause
         self.memory_protection = cfg.memory_protection
+
+    @staticmethod
+    def _runner_mode() -> bool:
+        try:
+            from .input_handlers.simulator.runner_policy import RunnerPolicy
+
+            return RunnerPolicy.from_env().runner_mode
+        except ImportError:
+            return False
 
     def _init_windows_input(self) -> None:
         input_type = cfg.win_input_type
@@ -698,6 +722,8 @@ class Automation(metaclass=SingletonMeta):
                 # never turn cancellation into a retry loop.
                 check_cancelled()
                 log.error(f"截图失败:{e}")
+                if self._runner_mode():
+                    raise
             interruptible_sleep(1)
             if time.time() - start_time > 60:
                 log.error("截图超时，尝试重启游戏")

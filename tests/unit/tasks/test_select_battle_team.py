@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import types
-import pytest
-
 from tasks.teams import team_formation as team_formation_module
 
 

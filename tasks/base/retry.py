@@ -1,5 +1,5 @@
-import os
 import platform
+import subprocess
 import time
 from typing import Callable
 
@@ -24,7 +24,23 @@ _heavy_retry_miss_streak = 0
 def _active_session():
     from module.device_manager import get_device_manager
 
-    return get_device_manager().active_session
+    session = get_device_manager().active_session
+    if session is None and _runner_mode_enabled():
+        from module.device_manager import DeviceError
+
+        raise DeviceError("Runner 没有私有设备 session，拒绝回退到旧全局连接")
+    return session
+
+
+def _runner_mode_enabled() -> bool:
+    """Return the process policy without consulting legacy simulator globals."""
+
+    try:
+        from module.automation.input_handlers.simulator.runner_policy import RunnerPolicy
+
+        return RunnerPolicy.from_env().runner_mode
+    except ImportError:
+        return False
 
 
 def ensure_simulator_game_started() -> bool:
@@ -126,7 +142,21 @@ def kill_game():
         from module.game_and_screen import screen
 
         _, pid = win32process.GetWindowThreadProcessId(screen.handle.hwnd)
-        os.system(f"taskkill /F /PID {pid}")
+        # Keep the legacy force-kill behavior, but use an argv form and a
+        # finite timeout so a stuck taskkill cannot block cancellation.
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(pid)],
+                check=False,
+                timeout=10,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired:
+            log.warning("关闭游戏进程超时(10s)，继续后续流程")
+        except OSError as error:
+            # Match the old best-effort ``os.system`` behavior if the command
+            # is unavailable or cannot be started on a restricted host.
+            log.warning("无法启动 taskkill：%s", error)
     sleep(10)
     wait_start = time.time()
     while True:
