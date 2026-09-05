@@ -771,6 +771,9 @@ class my_script_task(Thread):
             if keep_awake_enabled:
                 # 先切回 AALC 再释放线程级防息屏，避免游戏仍持有前台时继续阻止息屏。
                 mediator.request_focus.emit()
-                interruptible_sleep(0.8)  # 覆盖 WinRT toast 异步归还焦点（延迟约 600ms），再释放防息屏
-                apply_power_keep_awake(False)
+                try:
+                    interruptible_sleep(0.8)  # 覆盖 WinRT toast 异步归还焦点（延迟约 600ms），再释放防息屏
+                finally:
+                    # 停止请求可能中断上面的等待，但防息屏必须释放；取消信号继续向上传播。
+                    apply_power_keep_awake(False)
             auto.clear_img_cache()

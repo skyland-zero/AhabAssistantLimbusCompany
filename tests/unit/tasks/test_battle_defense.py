@@ -1,5 +1,7 @@
 import importlib
 
+import pytest
+
 from core.pseudo_solo import PseudoSoloDefenseState, PseudoSoloObservation
 from tasks.battle.battle import Battle, DefenseForSoloState
 
@@ -389,3 +391,37 @@ def test_damage_p_mouse_fallback_clicks_lower_selector(monkeypatch) -> None:
     assert result is False
     assert pressed_keys == ["p", "p", "enter"]
     assert clicks == [(100 + 50 * scale, 200 + 50 * scale)]
+
+
+def test_dynamic_pseudo_solo_propagates_stop_from_operation_entry(monkeypatch) -> None:
+    from module.my_error.my_error import userStopError
+
+    class FakeBattleObserver:
+        selected_count = 3
+        last_battle_live_count = None
+        calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            self.calls += 1
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+    observer = FakeBattleObserver()
+    state = PseudoSoloDefenseState(DefenseForSoloState(2), observer)
+    state.begin_battle()
+    monkeypatch.setattr(battle_module.auto, "mouse_click_blank", lambda: None)
+
+    def raise_stop(target, **_kwargs):
+        raise userStopError("用户已请求停止任务")
+
+    # 取消信号禁止被吞成“入口未就绪”返回 False 重试，必须直接上抛。
+    monkeypatch.setattr(battle_module.auto, "find_element", raise_stop)
+    monkeypatch.setattr(battle_module, "sleep", lambda _seconds: None)
+
+    with pytest.raises(userStopError):
+        Battle()._battle_operation(
+            first_turn=True,
+            defense_first_round=False,
+            avoid_skill_3=False,
+            defense_for_solo_state=state,
+        )
+    assert observer.calls == 0

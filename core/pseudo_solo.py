@@ -17,10 +17,11 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-from core.execution_control import interruptible_sleep
+from core.execution_control import check_cancelled, interruptible_sleep
 from module.automation import auto
 from module.config import cfg
 from module.logger import log
+from module.my_error.my_error import userStopError
 
 # Kept as a compatibility constant for integrations that imported the old
 # setting.  Battle-row sampling is configured separately below.
@@ -841,6 +842,9 @@ class BattleRosterObserver:
         use_fresh_monitor_frames = getattr(getattr(auto, "screenshot", None), "mode", None) == "L"
 
         for sample_index in range(max(1, int(BATTLE_ROSTER_MAX_SAMPLES))):
+            # 协作式取消：停止请求必须立即上抛，而不是跑完 MAX_SAMPLES
+            # 轮截图 + CV 才退出（supervised runner 的 stop 优雅窗口只有约 3s）。
+            check_cancelled()
             if sample_index > 0 and use_fresh_monitor_frames:
                 interruptible_sleep(BATTLE_ROSTER_SAMPLE_INTERVAL)
 
@@ -958,6 +962,9 @@ class BattleRosterObserver:
                         screenshot = take_monitor_screenshot(gray=False, max_age=0)
                     except TypeError:
                         screenshot = take_monitor_screenshot(gray=False)
+                except userStopError:
+                    # 取消信号不是截图失败，禁止降级为 None 继续采样。
+                    raise
                 except Exception as error:
                     log.debug(
                         "伪单通战斗界面彩色截图失败: "

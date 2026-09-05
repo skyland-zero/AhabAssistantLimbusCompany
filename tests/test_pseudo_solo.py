@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from core import pseudo_solo
@@ -471,3 +473,40 @@ def test_observer_returns_unknown_for_obscured_avatar(monkeypatch) -> None:
 
     assert observer() is PseudoSoloObservation.UNKNOWN
     assert observer.last_battle_slot_states[1]["state"] == "UNKNOWN"
+
+
+def test_observer_sampling_aborts_promptly_when_stop_requested(monkeypatch) -> None:
+    from core.execution_control import bind_cancel_event
+    from module.my_error.my_error import userStopError
+
+    observer = BattleRosterObserver([1] * 12)
+    business_frame = Image.fromarray(np.zeros((1080, 1920), dtype=np.uint8), mode="L")
+    cancel_event = threading.Event()
+    cancel_event.set()  # 停止按钮已在采样开始前按下
+
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", business_frame, raising=False)
+    monkeypatch.setattr(pseudo_solo, "interruptible_sleep", lambda _seconds: None)
+    bind_cancel_event(cancel_event)
+    try:
+        with pytest.raises(userStopError):
+            observer.read_battle_live_count()
+    finally:
+        bind_cancel_event(None)
+
+
+def test_observer_propagates_cancellation_from_monitor_capture(monkeypatch) -> None:
+    from module.my_error.my_error import userStopError
+
+    observer = BattleRosterObserver([1] * 12)
+    business_frame = Image.fromarray(np.zeros((1080, 1920), dtype=np.uint8), mode="L")
+
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", business_frame, raising=False)
+    monkeypatch.setattr(pseudo_solo, "interruptible_sleep", lambda _seconds: None)
+
+    def raise_stop(**_kwargs):
+        raise userStopError("用户已请求停止任务")
+
+    # 取消信号禁止被降级为 screenshot=None 继续采样，必须直接上抛。
+    monkeypatch.setattr(pseudo_solo.auto, "take_monitor_screenshot", raise_stop)
+    with pytest.raises(userStopError):
+        observer.read_battle_live_count()

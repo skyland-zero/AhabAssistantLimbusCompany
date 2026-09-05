@@ -14,6 +14,7 @@ from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.device_manager import is_simulator_runtime
 from module.logger import log
+from module.my_error.my_error import userStopError
 from module.ocr import ocr
 from tasks import sins
 from tasks.base.retry import retry
@@ -241,6 +242,9 @@ class Battle:
                     f"card={win_rate_card} right={right_gear}"
                 )
                 return "auto_p_card"
+        except userStopError:
+            # 取消信号不是识别失败，禁止降级为“入口未就绪”继续重试。
+            raise
         except Exception as error:
             log.debug(f"伪单通战斗操作入口识别失败: {error}")
         return None
