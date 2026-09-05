@@ -220,6 +220,16 @@ def test_battle_portrait_badge_count_rejects_more_portraits_than_selected() -> N
     assert battle_portrait_badge_count(_portrait_frame(4), max_count=3) is None
 
 
+def test_battle_portrait_badge_count_ignores_short_orange_effects() -> None:
+    frame = _portrait_frame(1)
+    # This has enough horizontal width and orange area to pass the old
+    # projection-only detector, but it is only 18 px high and is not a level
+    # badge.
+    frame[1017:1035, 400:460] = (255, 128, 20)
+
+    assert battle_portrait_badge_count(frame) == 1
+
+
 def test_observer_recognizes_only_once_per_battle(monkeypatch) -> None:
     observer = BattleRosterObserver([1] * 12)
     monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
@@ -302,7 +312,62 @@ def test_observer_uses_color_monitor_frame_without_replacing_business_frame(monk
 
     assert observer.read_battle_live_count() == 6
     assert pseudo_solo.auto.screenshot is business_frame
-    assert monitor_calls == [{"gray": False, "max_age": 0}]
+    assert monitor_calls == [
+        {"gray": False, "max_age": 0},
+        {"gray": False, "max_age": 0},
+    ]
+
+
+def test_observer_waits_for_two_stable_color_frames(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 12)
+    business_frame = Image.fromarray(np.zeros((1080, 1920), dtype=np.uint8), mode="L")
+    animation_frame = _fixed_battle_frame(set(range(7)))
+    animation_frame[160:810, 384:1536] = (30, 80, 180)
+    frames = [animation_frame, _portrait_frame(7), _portrait_frame(7)]
+
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", business_frame, raising=False)
+    monkeypatch.setattr(pseudo_solo, "interruptible_sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        pseudo_solo.auto,
+        "take_monitor_screenshot",
+        lambda **_kwargs: frames.pop(0),
+    )
+
+    assert observer.read_battle_live_count() == 7
+    assert observer.last_battle_diagnostics["sample_count"] == 3
+    assert observer.last_battle_diagnostics["valid_sample_count"] == 2
+    assert observer.last_battle_diagnostics["stable_sample_count"] == 2
+    assert observer.last_battle_diagnostics["lock_reason"] == "stable_samples"
+
+
+def test_observer_does_not_lock_on_nonconsecutive_conflicting_samples(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 12)
+    business_frame = Image.fromarray(np.zeros((1080, 1920), dtype=np.uint8), mode="L")
+    frames = [
+        _portrait_frame(7),
+        object(),
+        _portrait_frame(6),
+        object(),
+        _portrait_frame(7),
+        object(),
+    ]
+
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", business_frame, raising=False)
+    monkeypatch.setattr(pseudo_solo, "BATTLE_ROSTER_MAX_SAMPLES", 6)
+    monkeypatch.setattr(pseudo_solo, "interruptible_sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        pseudo_solo.auto,
+        "take_monitor_screenshot",
+        lambda **_kwargs: frames.pop(0),
+    )
+
+    assert observer.read_battle_live_count() is None
+    assert observer.last_battle_diagnostics["sample_count"] == 6
+    assert observer.last_battle_diagnostics["valid_sample_count"] == 3
+    assert observer.last_battle_diagnostics["stable_sample_count"] == 0
+    assert observer.last_battle_diagnostics["lock_reason"] == "no_stable_result"
 
 
 def test_observer_returns_unknown_when_battle_portraits_are_missing(monkeypatch) -> None:

@@ -23,10 +23,9 @@ from utils.image_utils import ImageUtils
 from utils.utils import find_skill3
 
 DEFENSE_FOR_SOLO_TURN_LIMIT = 5
-# The battle gear is partially covered by the lower command row in some
-# resolutions.  Keep the existing crop/operation, but accept the observed
-# 0.72-0.73 match range so pseudo-solo defense is not blocked before it runs.
-DEFENSE_GEAR_THRESHOLD = 0.70
+# Keep the original gear match threshold; lower scores are too prone to
+# matching transition-frame artifacts instead of the actual defense gear.
+DEFENSE_GEAR_THRESHOLD = 0.75
 # Once the pause marker is visible, polling more often than this is enough to
 # catch the command row returning without waiting the old 2 * adaptive delay.
 BATTLE_ANIMATION_POLL_MAX = 1.5
@@ -178,6 +177,74 @@ class Battle:
         log.info(message)
         return message
 
+    @staticmethod
+    def _find_pseudo_solo_operation_entry(crops: dict[str, tuple[int, int, int, int]]) -> str | None:
+        """Return the real command-row entry that may start pseudo-solo logic.
+
+        ``more_information_assets`` is intentionally not used here: it can be
+        visible during the battle-entry animation.  Dynamic survivor counting
+        must wait until either both defense gears or the automatic-P control
+        is actually present.  A single left gear match is not sufficient: the
+        log showed that it can be matched while the command row is still
+        entering the screen.  The turn/P marker is checked first because both
+        gears can also be false matches on that transition frame.
+        """
+
+        try:
+            # ``turn_assets.png`` is an ``assets.png`` full-screen template.
+            # Let the image matcher use its own alpha bounding box; passing a
+            # second crop would make that bbox relative to the wrong origin.
+            turn_marker = auto.find_element("battle/turn_assets.png")
+            win_rate_marker = auto.find_element("battle/win_rate_assets.png")
+            win_rate_card = auto.find_element(
+                "battle/win_rate_card.png",
+                threshold=0.75,
+                my_crop=crops["win_rate"],
+            )
+            if not (turn_marker or win_rate_marker or win_rate_card):
+                log.debug(
+                    "伪单通战斗操作入口未就绪: "
+                    f"turn={turn_marker} win_rate={win_rate_marker} card={win_rate_card}"
+                )
+                return None
+
+            left_gear = auto.find_element(
+                "battle/gear_left.png",
+                threshold=DEFENSE_GEAR_THRESHOLD,
+                my_crop=crops["gear_left"],
+            )
+            right_gear = auto.find_element(
+                "battle/gear_right.png",
+                threshold=DEFENSE_GEAR_THRESHOLD,
+                my_crop=crops["gear_right"],
+            )
+            if left_gear and right_gear:
+                log.debug(
+                    "伪单通战斗操作入口确认: defense_start "
+                    f"left={left_gear} right={right_gear}"
+                )
+                return "defense_start"
+
+            if left_gear or right_gear:
+                log.debug(
+                    "伪单通战斗操作入口尚未完整: "
+                    f"left={left_gear} right={right_gear}"
+                )
+
+            if win_rate_marker:
+                log.debug(f"伪单通战斗操作入口确认: auto_p assets={win_rate_marker}")
+                return "auto_p"
+
+            if win_rate_card and right_gear:
+                log.debug(
+                    "伪单通战斗操作入口确认: auto_p_card "
+                    f"card={win_rate_card} right={right_gear}"
+                )
+                return "auto_p_card"
+        except Exception as error:
+            log.debug(f"伪单通战斗操作入口识别失败: {error}")
+        return None
+
     def _battle_operation(
         self,
         first_turn: bool,
@@ -189,13 +256,26 @@ class Battle:
         use_damage_p: bool = False,
     ) -> bool:
         auto.mouse_click_blank()
+        crops = _battle_ui_crops()
         is_dynamic_pseudo_solo = defense_for_solo_state is not None and callable(
             getattr(defense_for_solo_state, "should_defend", None)
         )
         pseudo_solo_should_defend = False
         pseudo_solo_observation = None
         pseudo_solo_live_count = None
+        pseudo_solo_operation_entry = None
         if is_dynamic_pseudo_solo:
+            observation_pending = bool(getattr(defense_for_solo_state, "battle_observation_pending", False))
+            if observation_pending and isinstance(defense_for_solo_state, PseudoSoloDefenseState):
+                pseudo_solo_operation_entry = self._find_pseudo_solo_operation_entry(crops)
+                if pseudo_solo_operation_entry is None:
+                    log.debug(
+                        "小指良单通等待自动P或守备起点，暂不识别人数/执行战斗操作: "
+                        f"used_this_turn={defense_for_solo_used_this_turn}"
+                    )
+                    return False
+            else:
+                pseudo_solo_operation_entry = "cached_observation" if not observation_pending else "legacy_dynamic"
             pseudo_solo_should_defend = bool(defense_for_solo_state.should_defend())
             pseudo_solo_observation = getattr(defense_for_solo_state, "last_observation", None)
             pseudo_solo_live_count = getattr(defense_for_solo_state, "last_battle_live_count", None)
@@ -213,7 +293,6 @@ class Battle:
             not is_dynamic_pseudo_solo and first_turn and defense_first_round and not defense_for_solo_used_this_turn
         )
         limited_defense_succeeded = False
-        crops = _battle_ui_crops()
         auto_p_mode = "伤害P" if use_damage_p else "胜率P"
         defense_requested = pseudo_solo_should_defend or use_limited_defense or use_first_round_defense
         observation_name = getattr(pseudo_solo_observation, "value", pseudo_solo_observation)
@@ -221,6 +300,7 @@ class Battle:
             "战斗操作判定: "
             f"dynamic_pseudo_solo={is_dynamic_pseudo_solo} observation={observation_name} "
             f"battle_live_count={pseudo_solo_live_count} should_defend={pseudo_solo_should_defend} "
+            f"operation_entry={pseudo_solo_operation_entry} "
             f"used_this_turn={defense_for_solo_used_this_turn} "
             f"limited_defense={use_limited_defense} first_round_defense={use_first_round_defense} "
             f"defense_requested={defense_requested}"

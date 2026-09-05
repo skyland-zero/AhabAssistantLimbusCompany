@@ -1,5 +1,6 @@
 import importlib
 
+from core.pseudo_solo import PseudoSoloDefenseState, PseudoSoloObservation
 from tasks.battle.battle import Battle, DefenseForSoloState
 
 battle_module = importlib.import_module("tasks.battle.battle")
@@ -157,6 +158,105 @@ def test_dynamic_pseudo_solo_retries_when_pause_marker_is_missing(monkeypatch) -
 
     assert result is True
     assert pressed_keys == ["p", "enter"]
+
+
+def test_dynamic_pseudo_solo_waits_for_operation_entry_before_observing(monkeypatch) -> None:
+    class FakeBattleObserver:
+        selected_count = 3
+        last_battle_live_count = 3
+        calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            self.calls += 1
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+    observer = FakeBattleObserver()
+    state = PseudoSoloDefenseState(DefenseForSoloState(2), observer)
+    state.begin_battle()
+    monkeypatch.setattr(battle_module.auto, "mouse_click_blank", lambda: None)
+    # A left-gear-only match is the transition-frame false positive seen in
+    # the debug log; it must not trigger the one-time roster observation.
+    monkeypatch.setattr(
+        battle_module.auto,
+        "find_element",
+        lambda target, **_kwargs: target == "battle/gear_left.png",
+    )
+    monkeypatch.setattr(battle_module, "sleep", lambda _seconds: None)
+
+    assert Battle()._battle_operation(
+        first_turn=True,
+        defense_first_round=False,
+        avoid_skill_3=False,
+        defense_for_solo_state=state,
+    ) is False
+    assert observer.calls == 0
+
+
+def test_dynamic_pseudo_solo_waits_when_gears_match_but_command_row_is_not_ready(monkeypatch) -> None:
+    class FakeBattleObserver:
+        selected_count = 9
+        last_battle_live_count = None
+        calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            self.calls += 1
+            return PseudoSoloObservation.UNKNOWN
+
+    observer = FakeBattleObserver()
+    state = PseudoSoloDefenseState(DefenseForSoloState(2), observer)
+    state.begin_battle()
+    monkeypatch.setattr(battle_module.auto, "mouse_click_blank", lambda: None)
+    monkeypatch.setattr(
+        battle_module.auto,
+        "find_element",
+        lambda target, **_kwargs: target in {"battle/gear_left.png", "battle/gear_right.png"},
+    )
+    monkeypatch.setattr(battle_module, "sleep", lambda _seconds: None)
+
+    assert Battle()._battle_operation(
+        first_turn=True,
+        defense_first_round=False,
+        avoid_skill_3=False,
+        defense_for_solo_state=state,
+    ) is False
+    assert observer.calls == 0
+
+
+def test_dynamic_pseudo_solo_observes_after_defense_entry_is_visible(monkeypatch) -> None:
+    class FakeBattleObserver:
+        selected_count = 3
+        last_battle_live_count = 3
+        calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            self.calls += 1
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+    observer = FakeBattleObserver()
+    state = PseudoSoloDefenseState(DefenseForSoloState(2), observer)
+    state.begin_battle()
+    monkeypatch.setattr(battle_module.auto, "mouse_click_blank", lambda: None)
+    monkeypatch.setattr(
+        battle_module.auto,
+        "find_element",
+        lambda target, **_kwargs: target
+        in {
+            "battle/turn_assets.png",
+            "battle/gear_left.png",
+            "battle/gear_right.png",
+            "battle/pause_assets.png",
+        },
+    )
+    monkeypatch.setattr(battle_module, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(battle_module.Battle, "_defense_this_round", lambda *_args, **_kwargs: True)
+
+    assert Battle()._battle_operation(
+        first_turn=True,
+        defense_first_round=False,
+        avoid_skill_3=False,
+        defense_for_solo_state=state,
+    ) is True
+    assert observer.calls == 1
 
 
 def test_dynamic_pseudo_solo_uses_normal_flow_after_single_survivor(monkeypatch) -> None:

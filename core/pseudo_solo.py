@@ -9,6 +9,7 @@ battle loop.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable, Sequence
 from enum import StrEnum
 from typing import Protocol
@@ -16,14 +17,22 @@ from typing import Protocol
 import cv2
 import numpy as np
 
+from core.execution_control import interruptible_sleep
 from module.automation import auto
 from module.config import cfg
 from module.logger import log
 
 # Kept as a compatibility constant for integrations that imported the old
-# setting.  Single-survivor decisions no longer wait for a second frame.
+# setting.  Battle-row sampling is configured separately below.
 PSEUDO_SOLO_OBSERVATION_STABILITY = 1
 TEAM_PAGE_LIVE_COUNT_THRESHOLD = 0.90
+# The command row can remain hidden behind the battle-entry animation for
+# roughly one second.  Keep sampling the same battle-entry window a little
+# longer so a transient no-badge frame is not cached as UNKNOWN.
+BATTLE_ROSTER_MAX_SAMPLES = 12
+BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES = 2
+BATTLE_ROSTER_SAMPLE_INTERVAL = 0.15
+BATTLE_ROSTER_CENTER_TOLERANCE_RATIO = 0.01
 BATTLE_PORTRAIT_Y_START_RATIO = 0.90
 BATTLE_PORTRAIT_Y_END_RATIO = 0.995
 BATTLE_PORTRAIT_X_START_RATIO = 0.18
@@ -36,6 +45,13 @@ BATTLE_GEAR_LEFT_CROP_RATIO = (0.15, 0.62, 0.42, 0.98)
 BATTLE_GEAR_RIGHT_CROP_RATIO = (0.52, 0.62, 0.82, 0.98)
 BATTLE_ANIMATION_CROP_RATIO = (0.20, 0.15, 0.80, 0.75)
 BATTLE_ANIMATION_MIN_VALUE = 120
+# At 1920x1080 a real orange level badge is about 40x41 px and has an orange
+# component area of roughly 750-900 px.  Short UI effects can have a similar
+# horizontal projection but are much shorter; validate the connected
+# component instead of accepting projection width alone.
+BATTLE_BADGE_MIN_HEIGHT_AT_1080 = 30
+BATTLE_BADGE_MIN_WIDTH_AT_1080 = 28
+BATTLE_BADGE_MIN_AREA_AT_1080 = 500
 
 
 class PseudoSoloObservation(StrEnum):
@@ -305,9 +321,19 @@ def _battle_portrait_badge_detection(
         diagnostics["orange_pixels"] = int((roi_mask > 0).sum())
         projection = (roi_mask > 0).sum(axis=0)
         active_columns = projection >= 10
+        badge_scale = height / 1080
+        min_badge_height = max(16, round(BATTLE_BADGE_MIN_HEIGHT_AT_1080 * badge_scale))
+        min_badge_width = max(18, round(BATTLE_BADGE_MIN_WIDTH_AT_1080 * badge_scale))
+        min_badge_area = max(180, round(BATTLE_BADGE_MIN_AREA_AT_1080 * badge_scale**2))
+        diagnostics["badge_validation_thresholds"] = {
+            "min_component_width": min_badge_width,
+            "min_component_height": min_badge_height,
+            "min_component_area": min_badge_area,
+        }
 
         candidate_runs: list[tuple[int, int, int, int]] = []
         accepted_runs: list[tuple[int, int, int, int]] = []
+        badge_component_details: list[dict[str, object]] = []
         run_start: int | None = None
         for index, active in enumerate(np.r_[active_columns, False]):
             if active and run_start is None:
@@ -322,15 +348,45 @@ def _battle_portrait_badge_detection(
             run = (x1 + run_start, x1 + run_end, run_width, run_area)
             if len(candidate_runs) < 64:
                 candidate_runs.append(run)
-            # A visible level badge is approximately 40 px wide at the
-            # reference screenshot scale.  Small isolated orange UI marks
-            # are intentionally ignored.
-            if 25 <= run_width <= 65 and run_area >= 300:
+
+            run_mask = roi_mask[:, run_start:run_end]
+            component_count, _, stats, _ = cv2.connectedComponentsWithStats(run_mask, 8)
+            largest_component = 0
+            largest_component_size = (0, 0)
+            if component_count > 1:
+                largest_index = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+                largest_component = int(stats[largest_index, cv2.CC_STAT_AREA])
+                largest_component_size = (
+                    int(stats[largest_index, cv2.CC_STAT_WIDTH]),
+                    int(stats[largest_index, cv2.CC_STAT_HEIGHT]),
+                )
+
+            # A visible level badge is approximately 40 px wide and 41 px
+            # high at the reference screenshot scale.  Short orange effects
+            # can have a similar horizontal projection, so width/area alone
+            # is not enough; the largest connected orange component must also
+            # have the expected two-dimensional badge shape.
+            shape_valid = (
+                min(largest_component_size) >= min_badge_width
+                and largest_component_size[1] >= min_badge_height
+                and largest_component >= min_badge_area
+            )
+            if len(badge_component_details) < 64:
+                badge_component_details.append(
+                    {
+                        "run": run,
+                        "largest_component": largest_component,
+                        "component_size": largest_component_size,
+                        "shape_valid": shape_valid,
+                    }
+                )
+            if 25 <= run_width <= 65 and shape_valid:
                 accepted_runs.append(run)
             run_start = None
 
         diagnostics["candidate_runs"] = candidate_runs
         diagnostics["candidate_run_total"] = len(candidate_runs)
+        diagnostics["badge_component_details"] = badge_component_details
         diagnostics["accepted_runs"] = accepted_runs
         max_allowed = max(0, min(int(max_count), 12))
         if len(accepted_runs) < 1:
@@ -571,6 +627,12 @@ class PseudoSoloDefenseState:
             return self._battle_observation
         return getattr(self._observer, "last_observation", PseudoSoloObservation.UNKNOWN)
 
+    @property
+    def battle_observation_pending(self) -> bool:
+        """Return whether this battle still needs its first row observation."""
+
+        return not self._battle_observed
+
     def observe_team_page(self, floor: int) -> bool:
         """Synchronize the defense budget with the visible live roster.
 
@@ -715,7 +777,10 @@ class BattleRosterObserver:
         Only the badges actually found in the frame become candidate slots;
         no command-slot count is inferred from gear anchors.  A
         partial/animated portrait is UNKNOWN rather than being silently
-        omitted.
+        omitted.  The battle is still observed only once, but that one
+        observation is a short sequence of fresh frames.  This avoids caching
+        the first transition frame as UNKNOWN while keeping the result fixed
+        for the rest of the battle.
         """
 
         frame_token = self._frame_token()
@@ -744,29 +809,6 @@ class BattleRosterObserver:
             )
             return None
 
-        screenshot = getattr(auto, "screenshot", None)
-        original_screenshot = screenshot
-        screenshot_source = "business_frame"
-        # The battle loop keeps a grayscale business frame for template
-        # matching.  Request one color monitor frame only for this cached
-        # portrait-count observation; it does not replace the business frame
-        # or change the battle operation.
-        if getattr(screenshot, "mode", None) == "L":
-            screenshot_source = "monitor_color_frame"
-            take_monitor_screenshot = getattr(auto, "take_monitor_screenshot", None)
-            if callable(take_monitor_screenshot):
-                try:
-                    try:
-                        screenshot = take_monitor_screenshot(gray=False, max_age=0)
-                    except TypeError:
-                        screenshot = take_monitor_screenshot(gray=False)
-                except Exception as error:
-                    log.debug(f"伪单通战斗界面彩色截图失败: {error}")
-                    screenshot = None
-            else:
-                screenshot = None
-                screenshot_source = "no_color_capture_api"
-
         def image_description(image: object) -> str:
             if image is None:
                 return "none"
@@ -780,37 +822,191 @@ class BattleRosterObserver:
                     shape = str(shape)
             return f"type={type(image).__name__},mode={mode},size={size},shape={shape}"
 
-        live_count, diagnostics = _battle_visible_portrait_detection(
-            screenshot,
-            max_count=max_count,
+        log.info(
+            "伪单通战斗人数识别开始稳定采样: "
+            f"selected_count={self.selected_count} max_samples={BATTLE_ROSTER_MAX_SAMPLES} "
+            f"required_stable={BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES} "
+            f"interval={BATTLE_ROSTER_SAMPLE_INTERVAL:.2f}s"
         )
+
+        sampling_started = time.monotonic()
+        sample_summaries: list[dict[str, object]] = []
+        last_diagnostics: dict[str, object] = {}
+        previous_count: int | None = None
+        previous_centers: list[float] = []
+        stable_samples = 0
+        valid_samples = 0
+        locked_count: int | None = None
+        locked_diagnostics: dict[str, object] = {}
+        use_fresh_monitor_frames = getattr(getattr(auto, "screenshot", None), "mode", None) == "L"
+
+        for sample_index in range(max(1, int(BATTLE_ROSTER_MAX_SAMPLES))):
+            if sample_index > 0 and use_fresh_monitor_frames:
+                interruptible_sleep(BATTLE_ROSTER_SAMPLE_INTERVAL)
+
+            screenshot, screenshot_source, original_screenshot = self._capture_battle_color_frame(sample_index)
+            live_count, diagnostics = _battle_visible_portrait_detection(
+                screenshot,
+                max_count=max_count,
+            )
+            last_diagnostics = diagnostics
+
+            centers = self._battle_diagnostic_centers(diagnostics)
+            if live_count is not None:
+                valid_samples += 1
+                if self._same_battle_sample(
+                    previous_count,
+                    previous_centers,
+                    live_count,
+                    centers,
+                    diagnostics,
+                ):
+                    stable_samples += 1
+                else:
+                    stable_samples = 1
+                previous_count = live_count
+                previous_centers = centers
+            else:
+                stable_samples = 0
+                previous_count = None
+                previous_centers = []
+
+            animation = diagnostics.get("animation")
+            animation_detected = animation.get("detected") if isinstance(animation, dict) else None
+            sample_summary = {
+                "sample": sample_index + 1,
+                "frame_id": getattr(auto, "_frame_id", None),
+                "screenshot_id": id(screenshot),
+                "source": screenshot_source,
+                "result": live_count,
+                "reason": diagnostics.get("reason"),
+                "animation_detected": animation_detected,
+                "centers": [round(value, 2) for value in centers],
+                "stable_run": stable_samples,
+            }
+            sample_summaries.append(sample_summary)
+            log.debug(
+                "伪单通战斗人数识别采样详情: "
+                f"sample={sample_index + 1}/{max(1, int(BATTLE_ROSTER_MAX_SAMPLES))} "
+                f"frame_id={getattr(auto, '_frame_id', None)} screenshot_id={id(screenshot)} "
+                f"selected_count={self.selected_count} source={screenshot_source} "
+                f"original={image_description(original_screenshot)} image={image_description(screenshot)} "
+                f"result={live_count} reason={diagnostics.get('reason')} "
+                f"stable_run={stable_samples} animation={diagnostics.get('animation')} "
+                f"slot_states={diagnostics.get('slot_states')} "
+                f"visible_badge_centers={diagnostics.get('visible_badge_centers')} "
+                f"roi={diagnostics.get('roi')} orange_pixels={diagnostics.get('orange_pixels')} "
+                f"candidate_runs={diagnostics.get('candidate_runs')} "
+                f"badge_thresholds={diagnostics.get('badge_validation_thresholds')} "
+                f"badge_components={diagnostics.get('badge_component_details')} "
+                f"accepted_runs={diagnostics.get('accepted_runs')}"
+            )
+
+            if live_count is not None and stable_samples >= max(1, int(BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES)):
+                locked_count = live_count
+                locked_diagnostics = diagnostics
+                break
+
+        diagnostics = dict(locked_diagnostics or last_diagnostics)
+        diagnostics.setdefault("detection_source", "visible_badges")
+        diagnostics["sample_count"] = len(sample_summaries)
+        diagnostics["valid_sample_count"] = valid_samples
+        diagnostics["stable_sample_count"] = stable_samples if locked_count is not None else 0
+        diagnostics["sample_results"] = sample_summaries
+        diagnostics["lock_reason"] = "stable_samples" if locked_count is not None else "no_stable_result"
+        diagnostics["elapsed_ms"] = round((time.monotonic() - sampling_started) * 1000, 1)
         self._last_battle_diagnostics = diagnostics
         self._last_battle_slot_states = list(diagnostics.get("slot_states", []))
-        log.debug(
-            "伪单通战斗人数识别详情: "
-            f"frame_id={frame_id} screenshot_id={screenshot_id} selected_count={self.selected_count} "
-            f"source={screenshot_source} original={image_description(original_screenshot)} "
-            f"detection_source={diagnostics.get('detection_source')} "
-            f"image={image_description(screenshot)} "
-            f"animation={diagnostics.get('animation')} slot_states={diagnostics.get('slot_states')} "
-            f"visible_badge_centers={diagnostics.get('visible_badge_centers')} "
-            f"roi={diagnostics.get('roi')} "
-            f"orange_pixels={diagnostics.get('orange_pixels')} "
-            f"candidate_runs={diagnostics.get('candidate_runs')} "
-            f"accepted_runs={diagnostics.get('accepted_runs')} "
-            f"result={live_count} reason={diagnostics.get('reason')}"
+
+        log.info(
+            "伪单通战斗人数识别锁定: "
+            f"result={locked_count} lock_reason={diagnostics['lock_reason']} "
+            f"samples={len(sample_summaries)} valid_samples={valid_samples} "
+            f"stable_samples={diagnostics['stable_sample_count']} elapsed_ms={diagnostics['elapsed_ms']} "
+            f"sample_results={sample_summaries}"
         )
-        if live_count is None:
+        if locked_count is None:
             log.info(
                 "伪单通战斗界面人数识别为UNKNOWN（"
                 f"reason={diagnostics.get('reason')}），本回合不守备，按普通P处理"
             )
             return None
 
-        self._last_battle_live_count = live_count
-        observation_name = "single_survivor" if live_count == 1 else "multiple_survivors"
-        log.info(f"伪单通战斗界面识别到{live_count}名存活人格，状态={observation_name}")
-        return live_count
+        self._last_battle_live_count = locked_count
+        observation_name = "single_survivor" if locked_count == 1 else "multiple_survivors"
+        log.info(f"伪单通战斗界面识别到{locked_count}名存活人格，状态={observation_name}")
+        return locked_count
+
+    def _capture_battle_color_frame(self, sample_index: int) -> tuple[object, str, object]:
+        """Capture one color frame without replacing the business screenshot."""
+
+        original_screenshot = getattr(auto, "screenshot", None)
+        screenshot = original_screenshot
+        screenshot_source = "business_frame"
+
+        # The battle loop normally keeps a grayscale business frame.  A fresh
+        # color monitor capture is required for every sample so the sampler
+        # can wait out the transition animation.  RGB test frames and callers
+        # that already provide a color business frame remain usable without
+        # forcing an unrelated screen capture.
+        if getattr(original_screenshot, "mode", None) == "L":
+            screenshot_source = "monitor_color_frame"
+            take_monitor_screenshot = getattr(auto, "take_monitor_screenshot", None)
+            if callable(take_monitor_screenshot):
+                try:
+                    try:
+                        screenshot = take_monitor_screenshot(gray=False, max_age=0)
+                    except TypeError:
+                        screenshot = take_monitor_screenshot(gray=False)
+                except Exception as error:
+                    log.debug(
+                        "伪单通战斗界面彩色截图失败: "
+                        f"sample={sample_index + 1} error={error}"
+                    )
+                    screenshot = None
+                    screenshot_source = "monitor_capture_failed"
+            else:
+                screenshot = None
+                screenshot_source = "no_color_capture_api"
+
+        return screenshot, screenshot_source, original_screenshot
+
+    @staticmethod
+    def _battle_diagnostic_centers(diagnostics: dict[str, object]) -> list[float]:
+        centers = diagnostics.get("visible_badge_centers", [])
+        if not isinstance(centers, (list, tuple)):
+            return []
+        result: list[float] = []
+        for center in centers:
+            try:
+                value = float(center)
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(value):
+                result.append(value)
+        return result
+
+    @staticmethod
+    def _same_battle_sample(
+        previous_count: int | None,
+        previous_centers: Sequence[float],
+        current_count: int,
+        current_centers: Sequence[float],
+        current_diagnostics: dict[str, object],
+    ) -> bool:
+        """Check that two accepted samples describe the same visible row."""
+
+        if previous_count is None or previous_count != current_count:
+            return False
+        if len(previous_centers) != len(current_centers) or len(current_centers) != current_count:
+            return False
+        shape = current_diagnostics.get("shape")
+        try:
+            width = float(shape[1])  # type: ignore[index]
+        except (IndexError, TypeError, ValueError):
+            width = 1920.0
+        tolerance = max(8.0, width * BATTLE_ROSTER_CENTER_TOLERANCE_RATIO)
+        return all(abs(float(left) - float(right)) <= tolerance for left, right in zip(previous_centers, current_centers))
 
     @property
     def last_battle_live_count(self) -> int | None:
