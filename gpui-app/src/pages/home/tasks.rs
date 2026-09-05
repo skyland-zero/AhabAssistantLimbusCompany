@@ -378,24 +378,9 @@ pub(super) fn mirror_card(
         });
         option_items.push(control_row(label, toggle));
     }
-    let floor_suffix = app.home.mirror_floor.as_ref().and_then(|floor| {
-        if floor.floor == 0 {
-            return None;
-        }
-        Some(if floor.floorTotal > 0 {
-            match language {
-                crate::model::Language::ZhCn => {
-                    format!(" · 第{}层/共{}层", floor.floor, floor.floorTotal)
-                }
-                _ => format!(" · Floor {}/{}", floor.floor, floor.floorTotal),
-            }
-        } else {
-            match language {
-                crate::model::Language::ZhCn => format!(" · 第{}层", floor.floor),
-                _ => format!(" · Floor {}", floor.floor),
-            }
-        })
-    });
+    // 楼层后缀与卡片 chip 共用同一格式化入口，避免三处各写一遍双语分支。
+    let floor_suffix = super::stats::mirror_floor_label(app.home.mirror_floor.as_ref(), language)
+        .map(|label| format!(" · {label}"));
     let progress = app.home.mirror_progress.as_ref().map(|progress| {
         div()
             .flex()

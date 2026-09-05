@@ -910,12 +910,15 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
     } else {
         StatCounts::default()
     };
-    let state = if current.runId.is_some() {
-        current.state
-    } else {
-        snapshot.execution.state
-    };
-    let current_task = current.currentTaskId.or(snapshot.execution.currentTaskId);
+    // 显示状态以 execution.status 为准（带 stateRevision 的权威快照），
+    // 状态与当前任务必须来自同一份快照，避免混读两份 payload 拼出矛盾显示。
+    let (state, current_task) = display_run_state(snapshot);
+    // 用时只计算一次：秒边界多次调用 SystemTime::now() 会让同一卡片出现两个差 1 秒的用时。
+    let elapsed_str = format_duration(live_elapsed_secs(
+        current,
+        snapshot.stats.updatedAt,
+        state,
+    ));
     let state_text = match state {
         ExecutionState::Starting => text("启动中", "Starting").get(language),
         ExecutionState::Running => text("运行中", "Running").get(language),
@@ -980,8 +983,6 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
         );
 
     let info_row = {
-        let elapsed_secs = live_elapsed_secs(current, snapshot.stats.updatedAt, state);
-        let elapsed_str = format_duration(elapsed_secs);
         let started_hm = current.startedAt.map(|ms| {
             let secs_of_day = ((ms / 1000) % 86400 + 86400) % 86400;
             // UTC+8 for local display
@@ -1004,35 +1005,22 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 started_hm.unwrap_or_else(|| "--:--".into())
             ));
             if current_task_is_mirror(current_task) {
-                let base_label = if infinite {
-                    "∞".to_string()
-                } else if targets.mirror > 0 {
-                    format!("{}层", targets.mirror)
-                } else {
-                    "5层".to_string()
-                };
-                // Append the live in-run floor (1-based). `base_label` is the
-                // configured run count; the suffix is the current floor.
-                let floor_label = match snapshot.mirror_floor.as_ref() {
-                    Some(floor) if floor.floor > 0 => match language {
-                        crate::model::Language::ZhCn => {
-                            format!("{} · 第{}层", base_label, floor.floor)
-                        }
-                        _ => format!("{} · F{}", base_label, floor.floor),
-                    },
-                    _ => base_label,
-                };
-                row = row.child(
-                    div()
-                        .ml_auto()
-                        .px(px(6.0))
-                        .py(px(1.0))
-                        .rounded_sm()
-                        .bg(rgba((ACCENT << 8) | 0x18))
-                        .text_size(px(9.0))
-                        .text_color(rgb(ACCENT))
-                        .child(floor_label),
-                );
+                // 楼层只显示一次：总层数已知时带上（第3层/共5层），与任务区共用同一格式化入口。
+                if let Some(floor_label) =
+                    mirror_floor_label(snapshot.mirror_floor.as_ref(), language)
+                {
+                    row = row.child(
+                        div()
+                            .ml_auto()
+                            .px(px(6.0))
+                            .py(px(1.0))
+                            .rounded_sm()
+                            .bg(rgba((ACCENT << 8) | 0x18))
+                            .text_size(px(9.0))
+                            .text_color(rgb(ACCENT))
+                            .child(floor_label),
+                    );
+                }
             }
             row
         } else {
@@ -1081,30 +1069,19 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                     div()
                         .flex()
                         .items_center()
-                        .justify_between()
                         .text_size(px(9.5))
                         .text_color(rgb(TEXT_MUTED))
-                        .child({
-                            let mut label = format!(
-                                "镜牢进度 {}/{}{}",
-                                display_completed,
-                                if infinite {
-                                    "∞".to_string()
-                                } else {
-                                    targets.mirror.to_string()
-                                },
-                                if is_running { " · 进行中" } else { "" }
-                            );
-                            if let Some(floor) = snapshot.mirror_floor.as_ref()
-                                && floor.floor > 0
-                            {
-                                label.push_str(&format!(" · 第{}层", floor.floor));
-                            }
-                            label
-                        })
-                        .child(div().text_color(rgb(TEXT)).child(format_duration(
-                            live_elapsed_secs(current, snapshot.stats.updatedAt, state),
-                        ))),
+                        // 楼层后缀与右侧用时已删除：楼层只在上方 chip 显示，用时只在信息行显示。
+                        .child(format!(
+                            "镜牢进度 {}/{}{}",
+                            display_completed,
+                            if infinite {
+                                "∞".to_string()
+                            } else {
+                                targets.mirror.to_string()
+                            },
+                            if is_running { " · 进行中" } else { "" }
+                        )),
                 )
                 .into_any_element()
         } else {
@@ -1156,6 +1133,49 @@ fn current_run_card(snapshot: &StatsSnapshot) -> Div {
 
 fn current_task_is_mirror(task: Option<FixedTaskId>) -> bool {
     matches!(task, Some(FixedTaskId::Mirror))
+}
+
+fn display_run_state(snapshot: &StatsSnapshot) -> (ExecutionState, Option<FixedTaskId>) {
+    let current = &snapshot.stats.currentRun;
+    let execution = &snapshot.execution;
+    if execution.runId.is_some() {
+        // execution.status（带 stateRevision）是权威快照：点了停止后这里会立刻
+        // 变成 Stopping，而 stats 事件可能还滞后为 Running。缺失字段回落到 currentRun。
+        (
+            execution.state,
+            execution.currentTaskId.or(current.currentTaskId),
+        )
+    } else if current.runId.is_some() {
+        // 过渡期：execution 快照还没跟上新 run，沿用 currentRun 避免闪烁。
+        (current.state, current.currentTaskId)
+    } else {
+        (ExecutionState::Idle, None)
+    }
+}
+
+/// 楼层显示的唯一格式化入口：本次运行 chip 与任务配置区共用，避免中英双语分支散落重复。
+/// floor 为 0 或缺失时返回 None，调用方直接不渲染。
+pub(super) fn mirror_floor_label(
+    floor: Option<&MirrorFloorPayload>,
+    language: Language,
+) -> Option<String> {
+    let floor = floor?;
+    if floor.floor == 0 {
+        return None;
+    }
+    Some(if floor.floorTotal > 0 {
+        match language {
+            crate::model::Language::ZhCn => {
+                format!("第{}层/共{}层", floor.floor, floor.floorTotal)
+            }
+            _ => format!("Floor {}/{}", floor.floor, floor.floorTotal),
+        }
+    } else {
+        match language {
+            crate::model::Language::ZhCn => format!("第{}层", floor.floor),
+            _ => format!("Floor {}", floor.floor),
+        }
+    })
 }
 
 fn mirror_progress_ratio(completed: u32, target: u32, infinite: bool) -> f32 {
@@ -1259,7 +1279,11 @@ fn period_summary_section(
             week.thread,
         ))
         .child(period_item(
-            text("镜牢", "Mirror").get(language),
+            format!(
+                "{}({})",
+                text("镜牢", "Mirror").get(language),
+                text("累计", "total").get(language)
+            ),
             today.mirror,
             week.mirror,
         ));
@@ -1272,7 +1296,7 @@ fn period_summary_section(
         .child(items)
 }
 
-fn period_item(label: &'static str, today: u32, week: u32) -> Div {
+fn period_item(label: impl Into<String>, today: u32, week: u32) -> Div {
     div()
         .flex_1()
         .min_w_0()
@@ -1289,7 +1313,7 @@ fn period_item(label: &'static str, today: u32, week: u32) -> Div {
                 .text_size(px(9.5))
                 .text_color(rgb(TEXT_MUTED))
                 .truncate()
-                .child(label),
+                .child(label.into()),
         )
         .child(
             div()
@@ -1400,69 +1424,26 @@ fn recent_mirror_section(
                     div()
                         .text_size(px(11.0))
                         .text_color(rgb(TEXT_MUTED))
-                        .child(text("最近镜牢", "Recent Mirror").get(language)),
+                        .child(text("上次镜牢", "Last Mirror").get(language)),
                 ),
         )
         .child(header_actions);
 
     let body = match snapshot.stats.lastMirror.as_ref() {
-        Some(record) => div()
-            .flex()
-            .flex_col()
-            .gap(px(2.5))
-            .mt(px(2.0))
-            .child(mirror_context_line(record, language))
-            .child(
-                div()
-                    .flex()
-                    .gap_1p5()
-                    .child(recent_mirror_metric(
-                        text("战斗", "Battle").get(language),
-                        record.battleSeconds,
-                    ))
-                    .child(recent_mirror_metric(
-                        text("事件", "Events").get(language),
-                        record.eventSeconds,
-                    ))
-                    .child(recent_mirror_metric(
-                        text("商店", "Shop").get(language),
-                        record.shopSeconds,
-                    )),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_1p5()
-                    .child(recent_mirror_metric(
-                        text("寻路", "Path").get(language),
-                        record.findRoadSeconds,
-                    ))
-                    .child(recent_mirror_metric(
-                        text("主题包", "Theme").get(language),
-                        record.themePackSeconds,
-                    ))
-                    .child(recent_mirror_metric(
-                        text("奖励卡", "Reward").get(language),
-                        record.rewardCardSeconds,
-                    )),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_1p5()
-                    .child(recent_mirror_metric(
-                        text("饰品", "Ego").get(language),
-                        record.egoGiftSeconds,
-                    ))
-                    .child(recent_mirror_metric(
-                        text("结算", "Claim").get(language),
-                        record.settlementSeconds,
-                    ))
-                    .child(recent_mirror_metric(
-                        text("其他", "Other").get(language),
-                        record.otherSeconds,
-                    )),
-            ),
+        Some(record) => {
+            // 摘要只放耗时 Top3，完整 9 项在明细弹窗看，避免 185px 卡片被 3 行格子塞满。
+            let mut top_row = div().flex().gap_1p5();
+            for (label, seconds) in top_mirror_timings(record, language) {
+                top_row = top_row.child(recent_mirror_metric(label, seconds));
+            }
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.5))
+                .mt(px(2.0))
+                .child(mirror_context_line(record, language))
+                .child(top_row)
+        }
         None => div()
             .h(px(40.0))
             .flex()
@@ -1479,6 +1460,42 @@ fn recent_mirror_section(
         .flex_col()
         .child(header)
         .child(body)
+}
+
+/// 上次镜牢耗时 Top3（标签, 秒数），按耗时降序。卡片摘要用，完整 9 项在明细弹窗。
+fn top_mirror_timings(
+    record: &MirrorCompletionStats,
+    language: Language,
+) -> Vec<(&'static str, f64)> {
+    let mut timings = vec![
+        (text("战斗", "Battle").get(language), record.battleSeconds),
+        (text("事件", "Events").get(language), record.eventSeconds),
+        (text("商店", "Shop").get(language), record.shopSeconds),
+        (
+            text("寻路", "Path").get(language),
+            record.findRoadSeconds,
+        ),
+        (
+            text("主题包", "Theme").get(language),
+            record.themePackSeconds,
+        ),
+        (
+            text("奖励卡", "Reward").get(language),
+            record.rewardCardSeconds,
+        ),
+        (text("饰品", "Ego").get(language), record.egoGiftSeconds),
+        (
+            text("结算", "Claim").get(language),
+            record.settlementSeconds,
+        ),
+        (text("其他", "Other").get(language), record.otherSeconds),
+    ];
+    timings.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    timings.truncate(3);
+    timings
 }
 
 fn recent_mirror_metric(label: &'static str, seconds: f64) -> Div {
@@ -1536,11 +1553,7 @@ fn format_duration(seconds: f64) -> String {
 }
 
 fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) -> Div {
-    let ratio = if infinite || target == 0 {
-        0.0
-    } else {
-        (completed as f32 / target as f32).clamp(0.0, 1.0)
-    };
+    // 三格只保留数字：镜牢进度已有主进度条，迷你进度条属于重复指标。
     let value = if infinite {
         format!("{completed} / ∞")
     } else {
@@ -1570,20 +1583,6 @@ fn run_metric(label: &'static str, completed: u32, target: u32, infinite: bool) 
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(TEXT))
                 .child(value),
-        )
-        .child(
-            div()
-                .h(px(3.0))
-                .w_full()
-                .rounded_full()
-                .bg(rgba((TEXT_MUTED << 8) | 0x24))
-                .child(
-                    div()
-                        .h_full()
-                        .w(relative(ratio))
-                        .rounded_full()
-                        .bg(rgb(ACCENT)),
-                ),
         )
 }
 
@@ -1770,5 +1769,109 @@ mod tests {
         assert_eq!(snapshot.language, Language::ZhCn);
         assert!(snapshot.stats.lastMirror.is_none());
         assert_eq!(snapshot.stats.today.exp, 0);
+    }
+
+    #[test]
+    fn display_run_state_prefers_execution_snapshot() {
+        let mut snapshot = StatsSnapshot::default();
+        // execution.status 是权威快照：点了停止后这里先变 Stopping，
+        // stats 事件滞后为 Running 时也不能再显示运行中。
+        snapshot.stats.currentRun.runId = Some("run-1".to_string());
+        snapshot.stats.currentRun.state = ExecutionState::Running;
+        snapshot.stats.currentRun.currentTaskId = Some(FixedTaskId::Mirror);
+        snapshot.execution.runId = Some("run-1".to_string());
+        snapshot.execution.state = ExecutionState::Stopping;
+        snapshot.execution.currentTaskId = Some(FixedTaskId::Mirror);
+
+        let (state, task) = display_run_state(&snapshot);
+        assert_eq!(state, ExecutionState::Stopping);
+        assert_eq!(task, Some(FixedTaskId::Mirror));
+    }
+
+    #[test]
+    fn display_run_state_falls_back_while_execution_snapshot_lags() {
+        let mut snapshot = StatsSnapshot::default();
+        snapshot.stats.currentRun.runId = Some("run-1".to_string());
+        snapshot.stats.currentRun.state = ExecutionState::Running;
+        snapshot.stats.currentRun.currentTaskId = Some(FixedTaskId::DailyTask);
+
+        let (state, task) = display_run_state(&snapshot);
+        assert_eq!(state, ExecutionState::Running);
+        assert_eq!(task, Some(FixedTaskId::DailyTask));
+
+        let idle = StatsSnapshot::default();
+        let (state, task) = display_run_state(&idle);
+        assert_eq!(state, ExecutionState::Idle);
+        assert_eq!(task, None);
+    }
+
+    #[test]
+    fn mirror_floor_label_hides_missing_floors() {
+        assert_eq!(mirror_floor_label(None, Language::ZhCn), None);
+        assert_eq!(
+            mirror_floor_label(
+                Some(&MirrorFloorPayload {
+                    floor: 0,
+                    ..Default::default()
+                }),
+                Language::ZhCn
+            ),
+            None
+        );
+        assert_eq!(
+            mirror_floor_label(
+                Some(&MirrorFloorPayload {
+                    floor: 3,
+                    floorTotal: 5,
+                    ..Default::default()
+                }),
+                Language::ZhCn
+            ),
+            Some("第3层/共5层".to_string())
+        );
+        assert_eq!(
+            mirror_floor_label(
+                Some(&MirrorFloorPayload {
+                    floor: 3,
+                    ..Default::default()
+                }),
+                Language::EnUs
+            ),
+            Some("Floor 3".to_string())
+        );
+    }
+
+    #[test]
+    fn top_mirror_timings_returns_three_longest_phases() {
+        let record = MirrorCompletionStats {
+            completedAt: String::new(),
+            runId: None,
+            totalSeconds: 0.0,
+            battleSeconds: 100.0,
+            eventSeconds: 30.0,
+            shopSeconds: 5.0,
+            findRoadSeconds: 60.0,
+            themePackSeconds: 0.0,
+            rewardCardSeconds: 0.0,
+            egoGiftSeconds: 0.0,
+            settlementSeconds: 200.0,
+            otherSeconds: 1.0,
+            eventCount: 0,
+            failed: None,
+            failureReason: None,
+            team: None,
+            hardMode: false,
+            mode: String::new(),
+            floorCount: 0,
+            routeId: String::new(),
+            routeName: String::new(),
+            routeNameEn: String::new(),
+        };
+
+        let top = top_mirror_timings(&record, Language::ZhCn);
+        assert_eq!(top.len(), 3);
+        assert_eq!(top[0].1, 200.0);
+        assert_eq!(top[1].1, 100.0);
+        assert_eq!(top[2].1, 60.0);
     }
 }
