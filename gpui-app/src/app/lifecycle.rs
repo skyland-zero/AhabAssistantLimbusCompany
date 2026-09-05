@@ -71,6 +71,11 @@ fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
     {
         settings.accentId = accent;
     }
+    if let Ok(skin) = std::env::var("AHAB_VISUAL_SKIN")
+        && !skin.trim().is_empty()
+    {
+        settings.skinId = skin;
+    }
 }
 
 impl AhabApp {

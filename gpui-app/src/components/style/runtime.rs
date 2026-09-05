@@ -1,5 +1,7 @@
 use std::cell::Cell;
 
+use gpui::Styled;
+
 use super::{AccentId, ColorToken, Palette};
 
 thread_local! {
@@ -15,6 +17,20 @@ pub fn set_current_render_palette(palette: Palette) {
 
 pub fn current_render_palette() -> Palette {
     CURRENT_RENDER_PALETTE.with(Cell::get)
+}
+
+/// Corner radius that follows the active skin: the limbus skin squares off
+/// cards and controls while the modern skin keeps its rounded geometry.
+/// Call sites keep their existing shape choice (`large` = card-level) so a
+/// skin switch cannot move layout, only corners.
+pub fn skin_rounded(control: gpui::Div, large: bool) -> gpui::Div {
+    if current_render_palette().skin.is_limbus() {
+        control.rounded_none()
+    } else if large {
+        control.rounded_lg()
+    } else {
+        control.rounded_md()
+    }
 }
 
 /// Paint a token without routing it through the legacy RGB compatibility
@@ -49,6 +65,22 @@ fn token_for_legacy_hex(hex: u32, palette: Palette) -> Option<ColorToken> {
         0xfbe9ec | 0x3a1e24 | 0xdbeafe | 0x1e293b | 0xfef3c7 | 0x3b2f14 | 0xd1fae5 | 0x14332a
         | 0xede9fe | 0x2b2247 => palette.brand_light,
         0x17120a => palette.brand_foreground,
+        // Limbus skin surfaces: pages hardcoding the modern dark tokens
+        // keep following the active palette after a skin switch.
+        0x0b0a0e => palette.background,
+        0xd8d0bc => palette.foreground,
+        0x1b1114 => palette.card,
+        0x241619 => palette.popover,
+        0x2a1b1e => palette.secondary,
+        0x968a70 => palette.muted_foreground,
+        0x3a2023 => palette.accent_surface,
+        0xe8c43c => palette.warning,
+        0x462c2c => palette.border,
+        0x6b4a1a => palette.input,
+        0xd8a800 => palette.ring,
+        0xb92828 => palette.danger,
+        0x3a1414 => palette.danger_light,
+        0x3a2e14 => palette.warning_light,
         0x202936 | 0x354152 => palette.muted,
         0x1b222d => palette.card,
         0x3d301b | 0x5d4820 => palette.brand_light,

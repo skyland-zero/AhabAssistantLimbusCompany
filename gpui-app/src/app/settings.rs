@@ -56,6 +56,13 @@ impl AhabApp {
         }
     }
 
+    pub fn set_skin(&mut self, skin: &str) {
+        self.state.settings.skinId = skin.to_owned();
+        if let Err(error) = self.state.save() {
+            eprintln!("failed to persist skin: {error}");
+        }
+    }
+
     pub fn set_language(&mut self, language: Language) {
         self.state.settings.language = language;
         if let Err(error) = self.state.save() {

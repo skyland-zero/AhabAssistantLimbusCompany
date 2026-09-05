@@ -219,6 +219,11 @@ pub fn title_bar(
 }
 
 fn titlebar_separator_hex(palette: Palette) -> u32 {
+    // The limbus skin wants a solid mustard rule under the title bar,
+    // matching the gold bands used on card headers.
+    if palette.skin.is_limbus() {
+        return (palette.ring.rgb_hex() << 8) | 0xff;
+    }
     let alpha = u32::from(palette.input.alpha()) * 3 / 5;
     (palette.input.rgb_hex() << 8) | alpha
 }

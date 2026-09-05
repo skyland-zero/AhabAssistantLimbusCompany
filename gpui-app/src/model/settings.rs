@@ -37,6 +37,9 @@ pub struct AppSettings {
     pub rightPanelCollapsed: bool,
     pub themeMode: ThemeMode,
     pub accentId: String,
+    /// Visual skin id (`"default"` or `"limbus"`). Unknown values fall
+    /// back to the modern skin, mirroring the `accentId` contract.
+    pub skinId: String,
     pub language: Language,
     pub lastDeviceId: Option<String>,
 }
@@ -49,6 +52,7 @@ impl Default for AppSettings {
             rightPanelCollapsed: false,
             themeMode: ThemeMode::System,
             accentId: "crimson".into(),
+            skinId: "default".into(),
             language: Language::ZhCn,
             lastDeviceId: None,
         }
@@ -206,6 +210,7 @@ mod tests {
         assert!(!settings.rightPanelCollapsed);
         assert_eq!(settings.themeMode, ThemeMode::System);
         assert_eq!(settings.accentId, "crimson");
+        assert_eq!(settings.skinId, "default");
         assert_eq!(settings.language, Language::ZhCn);
         assert_eq!(settings.lastDeviceId, None);
     }
@@ -221,6 +226,19 @@ mod tests {
         assert_eq!(migrated.rightPanelWidth, 280);
         assert_eq!(migrated.language, Language::ZhCn);
     }
+    #[test]
+    fn new_skin_id_round_trips_without_a_schema_migration() {
+        let settings = AppSettings {
+            skinId: "limbus".into(),
+            ..AppSettings::default()
+        };
+        let json = settings.to_json().unwrap();
+        assert_eq!(AppSettings::from_json(&json).unwrap(), settings);
+        // Old files without skinId keep rendering the modern skin.
+        let legacy = AppSettings::from_json(r#"{"accentId":"blue"}"#).unwrap();
+        assert_eq!(legacy.skinId, "default");
+    }
+
     #[test]
     fn new_accent_id_round_trips_without_a_schema_migration() {
         let settings = AppSettings {

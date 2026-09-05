@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::components::base::limbus_corner_brackets;
+
 pub(super) struct TaskCardSpec {
     pub(super) task: FixedTaskId,
     pub(super) title: String,
@@ -153,14 +155,22 @@ pub(super) fn task_card(
         );
     }
 
-    let mut root = div()
-        .relative()
-        .min_w_0()
-        .overflow_hidden()
-        .rounded_lg()
-        .border_1()
-        .border_color(if executing { rgb(ACCENT) } else { rgba(0) })
-        .bg(rgb(SURFACE));
+    let limbus = current_render_palette().skin.is_limbus();
+    let mut root = div().relative().min_w_0().overflow_hidden();
+    root = if limbus {
+        root.rounded_none().border_1().border_color(if executing {
+            rgb(ACCENT)
+        } else {
+            palette_rgb(current_render_palette().border)
+        })
+    } else {
+        root.rounded_lg().border_1().border_color(if executing {
+            rgb(ACCENT)
+        } else {
+            rgba(0)
+        })
+    };
+    root = root.bg(rgb(SURFACE));
     root = root.child(header);
     if expanded && let Some(body) = body {
         let body = div()
@@ -175,6 +185,11 @@ pub(super) fn task_card(
                 |body, progress| body.opacity(progress).top(px(-4.0 * (1.0 - progress))),
             );
         root = root.child(body);
+    }
+    if limbus {
+        for bracket in limbus_corner_brackets(&current_render_palette()) {
+            root = root.child(bracket);
+        }
     }
     root
 }

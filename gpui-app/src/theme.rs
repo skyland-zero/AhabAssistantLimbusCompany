@@ -8,7 +8,7 @@
 //! system appearance changes, call `cx.notify()`, and render it without
 //! maintaining a second mutable settings store.
 
-pub use crate::components::style::{AccentId, ColorScheme, Palette};
+pub use crate::components::style::{AccentId, ColorScheme, Palette, SkinId};
 use crate::model::AppSettings;
 pub use crate::model::{Language, ThemeMode};
 
@@ -47,9 +47,10 @@ pub const fn resolve_scheme(mode: ThemeMode, system_is_dark: bool) -> ColorSchem
 
 /// Derive the complete visual palette from canonical persisted settings.
 pub fn palette_for_settings(settings: &AppSettings, system_is_dark: bool) -> Palette {
-    Palette::for_scheme(
+    Palette::for_skin(
         resolve_scheme(settings.themeMode, system_is_dark),
         AccentId::parse(&settings.accentId),
+        SkinId::parse(&settings.skinId),
     )
 }
 
@@ -59,6 +60,7 @@ pub fn palette_for_settings(settings: &AppSettings, system_is_dark: bool) -> Pal
 pub struct ThemeSnapshot {
     pub mode: ThemeMode,
     pub accent: AccentId,
+    pub skin: SkinId,
     pub language: Language,
     pub scheme: ColorScheme,
     pub palette: Palette,
@@ -68,12 +70,14 @@ impl ThemeSnapshot {
     pub fn from_settings(settings: &AppSettings, system_is_dark: bool) -> Self {
         let scheme = resolve_scheme(settings.themeMode, system_is_dark);
         let accent = AccentId::parse(&settings.accentId);
+        let skin = SkinId::parse(&settings.skinId);
         Self {
             mode: settings.themeMode,
             accent,
+            skin,
             language: settings.language,
             scheme,
-            palette: Palette::for_scheme(scheme, accent),
+            palette: Palette::for_skin(scheme, accent, skin),
         }
     }
 
@@ -86,6 +90,11 @@ impl ThemeSnapshot {
 /// original string in `AppSettings` for forward-compatible persistence.
 pub fn normalize_accent_id(accent_id: &str) -> &'static str {
     AccentId::parse(accent_id).as_str()
+}
+
+/// Normalize a skin id the same way: the raw string stays persisted.
+pub fn normalize_skin_id(skin_id: &str) -> &'static str {
+    SkinId::parse(skin_id).as_str()
 }
 
 pub const fn language_tag(language: Language) -> &'static str {
@@ -125,8 +134,28 @@ mod tests {
         let snapshot = ThemeSnapshot::from_settings(&settings, false);
         assert_eq!(snapshot.scheme, ColorScheme::Dark);
         assert_eq!(snapshot.accent, AccentId::Violet);
+        assert_eq!(snapshot.skin, SkinId::Default);
         assert_eq!(snapshot.language, Language::EnUs);
         assert_eq!(snapshot.palette, Palette::dark(AccentId::Violet));
+    }
+
+    #[test]
+    fn snapshot_applies_the_limbus_skin_without_changing_mode() {
+        let settings = AppSettings {
+            themeMode: ThemeMode::Light,
+            accentId: "limbus-brass".into(),
+            skinId: "limbus".into(),
+            ..AppSettings::default()
+        };
+        let snapshot = ThemeSnapshot::from_settings(&settings, false);
+        assert_eq!(snapshot.mode, ThemeMode::Light);
+        assert_eq!(snapshot.skin, SkinId::Limbus);
+        assert_eq!(
+            snapshot.palette,
+            Palette::for_skin(ColorScheme::Light, AccentId::LimbusBrass, SkinId::Limbus)
+        );
+        assert_eq!(normalize_skin_id("limbus"), "limbus");
+        assert_eq!(normalize_skin_id("unknown"), "default");
     }
 
     #[test]

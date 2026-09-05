@@ -3,6 +3,7 @@ use super::*;
 use gpui::{AnyView, App, Render, Window};
 
 use crate::theme::Palette;
+use crate::theme::SkinId;
 
 struct AccentTooltip {
     label: String,
@@ -40,6 +41,7 @@ pub fn appearance_card(
     theme: ThemeMode,
     language: Language,
     accent: &str,
+    skin: &str,
 ) -> Div {
     let mut modes = segmented_group();
     for (candidate, label) in [
@@ -129,8 +131,46 @@ pub fn appearance_card(
         accents = accents.child(control);
     }
 
-    let mut languages = segmented_group();
-    for (candidate, label) in [(Language::ZhCn, "简体中文"), (Language::EnUs, "English")] {
+    let mut skins = segmented_group();
+    for preset in SkinId::ALL {
+        let id = preset.as_str();
+        let selected = skin == id;
+        let label = match language {
+            Language::ZhCn => preset.name_zh(),
+            Language::EnUs => preset.name_en(),
+        };
+        let mut control = button(
+            label,
+            if selected {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Ghost
+            },
+        )
+        .id(format!("settings-skin-{id}"))
+        .px_3()
+        .py_1()
+        .text_size(px(12.));
+        let message = format!("{}: {label}", text("风格", "Skin").get(language));
+        let key_message = message.clone();
+        control = control
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.set_skin(id);
+                view.show_toast(crate::shell::ToastKind::Info, message.clone(), cx);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.set_skin(id);
+                    view.show_toast(crate::shell::ToastKind::Info, key_message.clone(), cx);
+                    cx.notify();
+                }
+            }));
+        skins = skins.child(control);
+    }
+
+    let mut languages = segmented_group();    for (candidate, label) in [(Language::ZhCn, "简体中文"), (Language::EnUs, "English")] {
         let mut control = button(
             label,
             if language == candidate {
@@ -169,6 +209,7 @@ pub fn appearance_card(
         .child(settings_list(vec![
             setting_line(text("主题模式", "Theme Mode").get(language), modes),
             setting_line(text("强调色", "Accent Color").get(language), accents),
+            setting_line(text("风格", "Skin").get(language), skins),
             setting_line(
                 text("语言 / Language", "Language / 语言").get(language),
                 languages,

@@ -78,14 +78,20 @@ pub fn button_with_palette(
     };
 
     let focus_ring = palette.ring;
+    let limbus = palette.skin.is_limbus();
     let mut control = div()
         .flex()
         .items_center()
         .justify_center()
         .gap_2()
         .px_4()
-        .py_2()
-        .rounded_md()
+        .py_2();
+    control = if limbus {
+        control.rounded_none()
+    } else {
+        control.rounded_md()
+    };
+    control = control
         .tab_index(0)
         .border_1()
         .border_color(paint_color(if matches!(variant, ButtonVariant::Outline) {
@@ -163,8 +169,13 @@ pub fn badge_with_palette(
         .flex()
         .items_center()
         .px_2()
-        .py_1()
-        .rounded_md()
+        .py_1();
+    control = if palette.skin.is_limbus() {
+        control.rounded_none()
+    } else {
+        control.rounded_md()
+    };
+    control = control
         .bg(paint_color(background))
         .text_color(paint_color(foreground))
         .text_size(px(11.));
@@ -172,6 +183,42 @@ pub fn badge_with_palette(
         control = control.opacity(0.5);
     }
     control.child(label.into())
+}
+
+/// Gold L-brackets pinned to the four corners of a limbus surface.
+///
+/// The brackets are absolutely positioned, so they decorate the frame
+/// without moving any content or changing the surface's box. Page-local
+/// containers (home task cards, panel cards) reuse this to speak the same
+/// frame language as [`card`].
+pub(crate) fn limbus_corner_brackets(palette: &Palette) -> [Div; 4] {
+    let gold = paint_color(palette.ring);
+    let bracket = |top: bool, left: bool| {
+        let mut corner = div().absolute().w(px(13.)).h(px(13.));
+        corner = if top { corner.top(px(3.)) } else { corner.bottom(px(3.)) };
+        corner = if left {
+            corner.left(px(3.))
+        } else {
+            corner.right(px(3.))
+        };
+        corner = if top {
+            corner.border_t_2()
+        } else {
+            corner.border_b_2()
+        };
+        corner = if left {
+            corner.border_l_2()
+        } else {
+            corner.border_r_2()
+        };
+        corner.border_color(gold)
+    };
+    [
+        bracket(true, true),
+        bracket(true, false),
+        bracket(false, true),
+        bracket(false, false),
+    ]
 }
 
 /// State used by a card that is also a clickable/focusable surface.
@@ -193,10 +240,15 @@ pub fn card_with_palette(child: impl IntoElement, palette: &Palette) -> Div {
 
 pub fn card_with_state(child: impl IntoElement, palette: &Palette, state: CardState) -> Div {
     let focus_ring = palette.ring;
-    let mut surface = div()
-        .min_w_0()
-        .p_4()
-        .rounded_lg()
+    let limbus = palette.skin.is_limbus();
+    let mut surface = div().min_w_0().p_4();
+    surface = if limbus {
+        // Positioned ancestor for the absolute corner brackets below.
+        surface.rounded_none().relative()
+    } else {
+        surface.rounded_lg()
+    };
+    surface = surface
         .bg(paint_color(palette.card))
         .text_color(paint_color(palette.card_foreground))
         .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
@@ -216,5 +268,11 @@ pub fn card_with_state(child: impl IntoElement, palette: &Palette, state: CardSt
     if state.disabled {
         surface = surface.opacity(0.5);
     }
-    surface.child(child)
+    let mut surface = surface.child(child);
+    if limbus {
+        for bracket in limbus_corner_brackets(palette) {
+            surface = surface.child(bracket);
+        }
+    }
+    surface
 }

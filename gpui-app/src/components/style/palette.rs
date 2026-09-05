@@ -1,10 +1,11 @@
-use super::tokens::{AccentId, AccentTokens, ColorScheme, ColorToken};
+use super::tokens::{AccentId, AccentTokens, ColorScheme, ColorToken, SkinId};
 
 /// All visual tokens needed by pages and reusable controls.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Palette {
     pub scheme: ColorScheme,
     pub accent: AccentId,
+    pub skin: SkinId,
     pub background: ColorToken,
     pub foreground: ColorToken,
     pub card: ColorToken,
@@ -41,11 +42,59 @@ pub struct Palette {
 
 impl Palette {
     pub const fn for_scheme(scheme: ColorScheme, accent: AccentId) -> Self {
+        Self::for_skin(scheme, accent, SkinId::Default)
+    }
+
+    /// Derive the full token set. The limbus skin keeps the accent-driven
+    /// brand colors but replaces every neutral surface with the cold-black /
+    /// dark-red边狱 surfaces and makes borders visible; layout is untouched.
+    pub const fn for_skin(scheme: ColorScheme, accent: AccentId, skin: SkinId) -> Self {
         let accent_tokens = AccentTokens::for_scheme(accent, scheme);
+        if skin.is_limbus() {
+            return Self {
+                scheme,
+                accent,
+                skin,
+                // near-black with a cold tint, sampled from official key art
+                background: ColorToken::rgb(0x0b0a0e),
+                // bone white
+                foreground: ColorToken::rgb(0xd8d0bc),
+                // dark red-black card
+                card: ColorToken::rgb(0x1b1114),
+                card_foreground: ColorToken::rgb(0xd8d0bc),
+                popover: ColorToken::rgb(0x241619),
+                popover_foreground: ColorToken::rgb(0xd8d0bc),
+                primary: ColorToken::rgb(0xd8d0bc),
+                primary_foreground: ColorToken::rgb(0x14090a),
+                secondary: ColorToken::rgb(0x2a1b1e),
+                secondary_foreground: ColorToken::rgb(0xd8d0bc),
+                muted: ColorToken::rgb(0x241619),
+                muted_foreground: ColorToken::rgb(0xb3a68a),
+                accent_surface: ColorToken::rgb(0x3a2023),
+                accent_foreground: ColorToken::rgb(0xe8c43c),
+                destructive: ColorToken::rgb(0xff6467),
+                // visible dark-red border instead of transparent
+                border: ColorToken::rgb(0x462c2c),
+                input: ColorToken::rgb(0x6b4a1a),
+                ring: ColorToken::rgb(0xd8a800),
+                success: ColorToken::rgb(0x4cdb7c),
+                success_light: ColorToken::rgb(0x0c341e),
+                warning: ColorToken::rgb(0xe8c43c),
+                warning_light: ColorToken::rgb(0x3a2e14),
+                danger: ColorToken::rgb(0xb92828),
+                danger_light: ColorToken::rgb(0x3a1414),
+                selection: ColorToken::rgba(0xd8a80033),
+                brand: accent_tokens.brand,
+                brand_hover: accent_tokens.brand_hover,
+                brand_light: accent_tokens.brand_light,
+                brand_foreground: accent_tokens.brand_foreground,
+            };
+        }
         match scheme {
             ColorScheme::Light => Self {
                 scheme,
                 accent,
+                skin,
                 // oklch(0.963 0.003 25)
                 background: ColorToken::rgb(0xf5f2f2),
                 // oklch(0.145 0 0)
@@ -82,6 +131,7 @@ impl Palette {
             ColorScheme::Dark => Self {
                 scheme,
                 accent,
+                skin,
                 // oklch(0.135 0.005 25)
                 background: ColorToken::rgb(0x0a0707),
                 // oklch(0.985 0 0)
@@ -126,8 +176,16 @@ impl Palette {
         Self::for_scheme(ColorScheme::Dark, accent)
     }
 
+    pub const fn limbus_dark(accent: AccentId) -> Self {
+        Self::for_skin(ColorScheme::Dark, accent, SkinId::Limbus)
+    }
+
     pub fn from_strings(scheme: ColorScheme, accent: &str) -> Self {
         Self::for_scheme(scheme, AccentId::parse(accent))
+    }
+
+    pub fn from_strings_with_skin(scheme: ColorScheme, accent: &str, skin: SkinId) -> Self {
+        Self::for_skin(scheme, AccentId::parse(accent), skin)
     }
 }
 

@@ -75,6 +75,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File gpui-app/scripts/capture_visual.ps
 - 主题包、工具箱、资源中心、设置和帮助页均通过统一 RPC 边界工作；帮助目录使用 GPUI `ScrollHandle` 跳转，不嵌入 WebView。
 - 队伍名称、编队码、观察饰品、Mirror 酱 CDK 使用 `EntityInputHandler` 文本输入，支持 UTF-16 选择、中文 IME 基础路径和剪贴板。
 - 页面旧 token 会通过 render-time Palette 跟随浅色/深色和强调色；全局 Toast、日志复制和自动滚动已接入。
+- 外观设置新增「风格」皮肤轴（现代/边狱）：边狱皮肤只换色面与直角，不动任何布局；切边狱建议搭配深色 + 边狱黄铜强调色。主题美术由 `scripts/generate_limbus_theme.py` 程序化生成（见 `gpui-app/resources/assets/themes/limbus/README.md`），截图加 `-Skins limbus` 即可覆盖（边狱自动用黄铜强调色）。
 - 使用 `Ctrl-Q` 退出。
 
 Python sidecar 负责业务服务和全局热键，GPUI 负责窗口与页面；真实 JPEG 事件、连接设备后的持续实时预览、资源同步进度和任务镜牢进度已纳入事件泵。实时预览默认约每 2 秒以最长边 540 像素的 JPEG 推送，并在断开设备后清理画面；主控台把统计、实时画面和日志拆成独立子视图，只刷新收到事件的子树，任务运行状态通过标题栏主控台圆点提示。

@@ -18,10 +18,10 @@ pub use runtime::{
     ACCENT, BACKGROUND, BORDER, DANGER, FONT_LG, FONT_MD, FONT_SM, FONT_XL, FONT_XS, GREEN,
     RADIUS_LG, RADIUS_MD, RADIUS_SM, RADIUS_XL, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5,
     SPACE_6, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED, current_render_palette, palette_rgb,
-    render_rgb, render_rgba, set_current_render_palette,
+    render_rgb, render_rgba, set_current_render_palette, skin_rounded,
 };
 #[allow(unused_imports)]
-pub use tokens::{ACCENT_PRESETS, AccentId, AccentPreset, AccentTokens, ColorScheme, ColorToken};
+pub use tokens::{ACCENT_PRESETS, AccentId, AccentPreset, AccentTokens, ColorScheme, ColorToken, SkinId};
 
 #[cfg(test)]
 mod tests {
@@ -35,6 +35,30 @@ mod tests {
         assert_ne!(light.card, dark.card);
         assert!(light.border.is_transparent());
         assert_eq!(dark.input.alpha(), 0x26);
+    }
+
+    #[test]
+    fn skin_ids_are_stable_and_unknown_values_fall_back() {
+        for skin in SkinId::ALL {
+            assert_eq!(SkinId::parse(skin.as_str()), skin);
+        }
+        assert_eq!(SkinId::parse("old-value"), SkinId::Default);
+        assert_eq!(SkinId::parse(""), SkinId::Default);
+        assert!(SkinId::Limbus.is_limbus());
+        assert!(!SkinId::Default.is_limbus());
+    }
+
+    #[test]
+    fn limbus_skin_replaces_neutral_surfaces_but_keeps_brand() {
+        let modern = Palette::dark(AccentId::LimbusBrass);
+        let limbus = Palette::limbus_dark(AccentId::LimbusBrass);
+        assert_eq!(limbus.skin, SkinId::Limbus);
+        assert_eq!(limbus.background.rgb_hex(), 0x0b0a0e);
+        assert_eq!(limbus.card.rgb_hex(), 0x1b1114);
+        assert_eq!(limbus.ring.rgb_hex(), 0xd8a800);
+        assert!(!limbus.border.is_transparent());
+        assert_eq!(limbus.brand, modern.brand);
+        assert_ne!(limbus.background, modern.background);
     }
 
     #[test]

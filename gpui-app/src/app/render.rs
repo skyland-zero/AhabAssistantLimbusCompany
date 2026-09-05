@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use gpui::{Animation, AnimationExt, Context, Entity, Render, Window, div, prelude::*, px, rgb};
+use gpui::{Animation, AnimationExt, Context, Entity, Render, Window, div, img, prelude::*, px, rgb};
 
 use super::AhabApp;
 use super::HomeInvalidation;
-use crate::{components::style::Palette, pages, shell};
+use crate::{assets, components::style::Palette, pages, shell};
 
 impl AhabApp {
     pub(crate) fn ensure_titlebar_status_dot(
@@ -78,6 +78,31 @@ impl AhabApp {
     }
 }
 
+/// Full-window background artwork for the limbus skin.
+///
+/// The modern skin paints a flat color (rendered by the root div itself).
+/// The limbus skin layers its procedural nebula/crack texture underneath
+/// the whole window at low opacity so every page inherits the atmosphere
+/// without changing any page layout.
+fn limbus_background(palette: Palette) -> gpui::Div {
+    if !palette.skin.is_limbus() {
+        return div();
+    }
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .child(
+            img(assets::image_source(assets::theme(
+                assets::ThemeAsset::LimbusBg,
+            )))
+            .size_full()
+            .opacity(0.5),
+        )
+}
+
 impl Render for AhabApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let current_page = self.current_page;
@@ -104,6 +129,7 @@ impl Render for AhabApp {
             .bg(rgb(palette.background.rgb_hex()))
             .text_color(rgb(palette.foreground.rgb_hex()))
             .font_family("Segoe UI")
+            .child(limbus_background(palette))
             .child(shell::title_bar(window, current_page, self, palette, cx))
             .child(
                 div()

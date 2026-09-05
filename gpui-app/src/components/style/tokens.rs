@@ -38,6 +38,57 @@ pub enum ColorScheme {
     Dark,
 }
 
+/// The visual skin applied on top of scheme + accent.
+///
+/// `Default` is the current flat modern look. `Limbus` keeps the same
+/// layout and components but swaps surfaces for the cold-black / dark-red /
+/// mustard-gold边狱 language and squares off control corners.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SkinId {
+    #[default]
+    Default,
+    Limbus,
+}
+
+impl SkinId {
+    pub const ALL: [Self; 2] = [Self::Default, Self::Limbus];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Limbus => "limbus",
+        }
+    }
+
+    pub const fn name_zh(self) -> &'static str {
+        match self {
+            Self::Default => "现代",
+            Self::Limbus => "边狱",
+        }
+    }
+
+    pub const fn name_en(self) -> &'static str {
+        match self {
+            Self::Default => "Modern",
+            Self::Limbus => "Limbus",
+        }
+    }
+
+    pub const fn is_limbus(self) -> bool {
+        matches!(self, Self::Limbus)
+    }
+
+    /// Unknown values fall back to the modern skin so old settings files
+    /// keep rendering exactly as before.
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "limbus" => Self::Limbus,
+            "default" => Self::Default,
+            _ => Self::Default,
+        }
+    }
+}
+
 /// The six accent identifiers accepted by the persisted UI settings.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum AccentId {

@@ -8,6 +8,8 @@ param(
     [string[]]$Languages = @("zh-CN", "en-US"),
     [ValidateSet("light", "dark")]
     [string[]]$Themes = @("light", "dark"),
+    [ValidateSet("default", "limbus")]
+    [string[]]$Skins = @("default"),
     [ValidateSet("home", "teams", "themes", "toolbox", "resources", "help", "settings")]
     [string[]]$Pages = @("home", "teams", "themes", "toolbox", "resources", "help", "settings"),
     [string[]]$States = @()
@@ -84,6 +86,7 @@ $settings = @{
     rightPanelCollapsed = $false
     themeMode = "light"
     accentId = "crimson"
+    skinId = "default"
     language = "zh-CN"
 } | ConvertTo-Json
 $settings | Set-Content -Encoding utf8 $settingsPath
@@ -97,11 +100,15 @@ try {
         foreach ($language in $Languages) {
             $languageShort = if ($language -eq "zh-CN") { "zh" } else { "en" }
             foreach ($theme in $Themes) {
+                foreach ($skin in $Skins) {
                 foreach ($case in $cases) {
+                    $skinSuffix = if ($skin -eq "default") { "" } else { "-$skin" }
+                    $skinAccent = if ($skin -eq "limbus") { "limbus-brass" } else { "crimson" }
                     $env:APPDATA = $profile
                     $env:AHAB_VISUAL_THEME = $theme
                     $env:AHAB_VISUAL_LANGUAGE = $language
-                    $env:AHAB_VISUAL_ACCENT = "crimson"
+                    $env:AHAB_VISUAL_ACCENT = $skinAccent
+                    $env:AHAB_VISUAL_SKIN = $skin
                     $env:AHAB_VISUAL_PAGE = $case.Page
                     if ([string]::IsNullOrWhiteSpace($case.State)) {
                         Remove-Item Env:AHAB_VISUAL_STATE -ErrorAction SilentlyContinue
@@ -113,7 +120,7 @@ try {
                         # GPUI loads fonts and assets during the first frame. Keep
                         # this delay explicit so captures are not startup frames.
                         Start-Sleep -Seconds 2
-                        $output = Join-Path $OutputDirectory "gpui-$languageShort-$theme-$($case.Suffix)-$size.png"
+                        $output = Join-Path $OutputDirectory "gpui-$languageShort-$theme$skinSuffix-$($case.Suffix)-$size.png"
                         & python $capture --pid $($process.Id) --output $output --logical-width $logicalWidth --logical-height $logicalHeight --settle-ms 800
                         if ($LASTEXITCODE -ne 0) {
                             throw "capture failed with exit code ${LASTEXITCODE}: $output"
@@ -129,11 +136,13 @@ try {
             }
         }
     }
+}
 } finally {
     Stop-GpuiProcess
     Remove-Item Env:AHAB_VISUAL_THEME -ErrorAction SilentlyContinue
     Remove-Item Env:AHAB_VISUAL_LANGUAGE -ErrorAction SilentlyContinue
     Remove-Item Env:AHAB_VISUAL_ACCENT -ErrorAction SilentlyContinue
+    Remove-Item Env:AHAB_VISUAL_SKIN -ErrorAction SilentlyContinue
     Remove-Item Env:AHAB_VISUAL_PAGE -ErrorAction SilentlyContinue
     Remove-Item Env:AHAB_VISUAL_STATE -ErrorAction SilentlyContinue
 }

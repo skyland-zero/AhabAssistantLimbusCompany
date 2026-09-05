@@ -9,12 +9,13 @@ mod cards;
 use std::process::Command;
 
 use gpui::{
-    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, prelude::*, px, rgb as gpui_rgb,
+    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, img, prelude::*, px,
+    rgb as gpui_rgb,
 };
 
 use crate::{
     app::{AhabApp, SURFACE, TEXT, TEXT_MUTED},
-    components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette},
+    components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette, skin_rounded},
     components::{
         ButtonVariant, TextInput, action_button, button, card, is_activation_key, page_root,
         palette_rgb, render_rgb as rgb, scroll_area_with_handle_children, svg_icon, switch,
@@ -45,6 +46,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let theme = app.state.settings.themeMode;
     let accent = app.state.settings.accentId.clone();
+    let skin = app.state.settings.skinId.clone();
     let hotkey = app.settings_page.hotkey.clone();
     let system = app.settings_page.system.clone();
     let cdk_input = app.settings_inputs.cdk.clone();
@@ -52,7 +54,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let feedback = app.settings_page.feedback.clone();
 
     let mut sections = vec![
-        cards::appearance_card(app, cx, theme, language, &accent),
+        cards::appearance_card(app, cx, theme, language, &accent, &skin),
         cards::hotkey_card(app, cx, &hotkey, language),
         cards::system_card(app, cx, &system, language),
         cards::experimental_card(app, cx, &system, language),
@@ -173,25 +175,48 @@ fn active_settings_section(top_item: usize, section_count: usize) -> usize {
 }
 
 fn settings_card(title: &'static str, body: Div) -> Div {
-    card(
+    // Limbus skin swaps the flat title row for a riveted dark-red metal
+    // band with a gold stencil title. Same 44px slot, no layout shift.
+    let header = if current_render_palette().skin.is_limbus() {
         div()
-            .p_0()
-            .flex()
-            .flex_col()
+            .relative()
+            .w_full()
+            .h(px(44.))
+            .overflow_hidden()
+            .child(
+                img(crate::assets::image_source(crate::assets::theme(
+                    crate::assets::ThemeAsset::LimbusTagband,
+                )))
+                .w_full()
+                .h_full(),
+            )
             .child(
                 div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .flex()
+                    .items_center()
                     .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(palette_rgb(current_render_palette().input))
-                    .text_size(px(14.))
+                    .text_size(px(15.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(TEXT))
+                    .text_color(palette_rgb(current_render_palette().accent_foreground))
                     .child(title),
             )
-            .child(body),
-    )
-    .p_0()
+    } else {
+        div()
+            .px_4()
+            .py_3()
+            .border_b_1()
+            .border_color(palette_rgb(current_render_palette().input))
+            .text_size(px(14.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(rgb(TEXT))
+            .child(title)
+    };
+    card(div().p_0().flex().flex_col().child(header).child(body)).p_0()
 }
 
 fn settings_list(children: impl IntoIterator<Item = Div>) -> Div {
@@ -246,13 +271,15 @@ fn setting_line(label: &'static str, control: impl IntoElement) -> Div {
 }
 
 fn segmented_group() -> Div {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .rounded_lg()
-        .bg(rgb(SURFACE))
-        .p_1()
+    skin_rounded(
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .bg(rgb(SURFACE))
+            .p_1(),
+        true,
+    )
 }
 
 fn setting_switch(

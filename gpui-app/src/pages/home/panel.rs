@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::components::base::limbus_corner_brackets;
 use std::sync::Arc;
 
 use gpui::{Context, Image, ImageFormat, ObjectFit, Render, RenderImage, Window, img};
@@ -351,6 +352,24 @@ fn adapt_preview_render_image(render_image: Arc<RenderImage>) -> Arc<RenderImage
 }
 
 pub(super) fn panel_card(child: impl IntoElement) -> Div {
+    // Same frame language as card(): square dark-red frame with gold
+    // corner brackets under the limbus skin, untouched modern geometry.
+    if current_render_palette().skin.is_limbus() {
+        let palette = current_render_palette();
+        let mut surface = div()
+            .min_w_0()
+            .overflow_hidden()
+            .relative()
+            .rounded_none()
+            .border_1()
+            .border_color(palette_rgb(palette.border))
+            .bg(rgb(SURFACE))
+            .child(child);
+        for bracket in limbus_corner_brackets(&palette) {
+            surface = surface.child(bracket);
+        }
+        return surface;
+    }
     div()
         .min_w_0()
         .overflow_hidden()

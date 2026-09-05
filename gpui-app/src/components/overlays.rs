@@ -159,20 +159,32 @@ fn scroll_area_base_without_child(
 
 pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
     let palette = current_render_palette();
-    div()
+    // Limbus skin stamps the blood seal above the copy, like the wax marks
+    // on in-game notices. Modern skin keeps the plain centered copy.
+    let mut root = div()
         .flex()
         .flex_col()
         .items_center()
         .justify_center()
         .gap_2()
         .p_6()
-        .text_color(paint_color(palette.muted_foreground))
-        .child(
-            div()
-                .text_color(paint_color(palette.foreground))
-                .child(title.into()),
-        )
-        .child(detail.into())
+        .text_color(paint_color(palette.muted_foreground));
+    if palette.skin.is_limbus() {
+        root = root.child(
+            gpui::img(crate::assets::image_source(crate::assets::theme(
+                crate::assets::ThemeAsset::LimbusSeal,
+            )))
+            .w(px(72.))
+            .h(px(72.))
+            .opacity(0.85),
+        );
+    }
+    root.child(
+        div()
+            .text_color(paint_color(palette.foreground))
+            .child(title.into()),
+    )
+    .child(detail.into())
 }
 
 pub fn loading(label: impl Into<String>) -> Div {
