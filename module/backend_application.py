@@ -101,6 +101,7 @@ TEAM_MIRROR_BOOL_FIELDS = frozenset(
         "second_system",
         "avoid_skill_3",
         "prioritize_skill_3",
+        "use_damage_p",
         "re_formation_each_floor",
         "defense_first_round",
         "defense_for_solo",

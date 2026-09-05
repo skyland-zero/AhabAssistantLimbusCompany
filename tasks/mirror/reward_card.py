@@ -4,6 +4,7 @@ from module.automation import auto
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
 from tasks.base.retry import retry
+from tasks.mirror.vision_regions import mirror_ego_gift_card_crop
 
 reward_card_model = {
     0: [
@@ -47,6 +48,7 @@ def get_reward_card(model=0):
     state = "select_reward"
     auto.model = "clam"
     reward_card = reward_card_model[model]
+    ego_gift_card_crop = mirror_ego_gift_card_crop()
     while True:
         # 自动截图
         if auto.take_screenshot() is None:
@@ -57,7 +59,10 @@ def get_reward_card(model=0):
         if auto.click_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png", model="clam"):
             log.debug("奖励卡领取后识别到EGO确认，领取流程结束")
             return True
-        if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png"):
+        if auto.find_element(
+            "mirror/road_in_mir/acquire_ego_gift_card.png",
+            my_crop=ego_gift_card_crop,
+        ):
             log.debug("奖励卡领取后进入饰品选择，交回镜牢主循环处理")
             return True
         if auto.click_element("mirror/get_reward_card/continue_choosing_assets.png", model="clam"):

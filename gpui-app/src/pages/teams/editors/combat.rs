@@ -159,6 +159,16 @@ pub(crate) fn combat_editor(
                 "combat-reformation",
             ),
         ),
+        control_row(
+            text("启用伤害P", "Use Damage P").get(language),
+            mirror_switch(
+                app,
+                cx,
+                MirrorBool::UseDamageP,
+                config.use_damage_p,
+                "combat-damage-p",
+            ),
+        ),
     ];
     let preferences = editor_card(
         div()

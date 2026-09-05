@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from core.execution_control import interruptible_sleep as sleep
+from core.pseudo_solo import PseudoSoloDefenseState
 from module.automation import auto
 from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
@@ -17,13 +18,22 @@ from module.ocr import ocr
 from tasks import sins
 from tasks.base.retry import retry
 from tasks.event import event_handling
+from tasks.mirror.vision_regions import mirror_ego_gift_card_crop
 from utils.image_utils import ImageUtils
 from utils.utils import find_skill3
 
 DEFENSE_FOR_SOLO_TURN_LIMIT = 5
-# MuMu's scaled battle UI can render the left skill anchor below the general
-# image-match threshold even when the battle command row is fully visible.
-DEFENSE_GEAR_THRESHOLD = 0.75
+# The battle gear is partially covered by the lower command row in some
+# resolutions.  Keep the existing crop/operation, but accept the observed
+# 0.72-0.73 match range so pseudo-solo defense is not blocked before it runs.
+DEFENSE_GEAR_THRESHOLD = 0.70
+# Once the pause marker is visible, polling more often than this is enough to
+# catch the command row returning without waiting the old 2 * adaptive delay.
+BATTLE_ANIMATION_POLL_MAX = 1.5
+# A missed battle-state frame is normally a short transition.  Keep the
+# adaptive value for diagnostics, but do not sleep longer than this before the
+# next fresh frame.
+BATTLE_MISS_WAIT_MAX = 1.0
 
 
 def _battle_ui_crops() -> dict[str, tuple[int, int, int, int]]:
@@ -37,7 +47,7 @@ def _battle_ui_crops() -> dict[str, tuple[int, int, int, int]]:
         "in_mirror": (int(width * 0.72), int(height * 0.04), int(width * 0.92), int(height * 0.28)),
         "dead": (int(width * 0.08), int(height * 0.50), int(width * 0.92), int(height * 0.95)),
         "dead_all": (int(width * 0.20), int(height * 0.18), int(width * 0.80), int(height * 0.82)),
-        "acquire_gift_card": (int(width * 0.10), int(height * 0.20), int(width * 0.90), int(height * 0.80)),
+        "acquire_gift_card": mirror_ego_gift_card_crop(height),
     }
 
 
@@ -126,50 +136,130 @@ class Battle:
 
         return new_time
 
+    def _start_auto_p(
+        self,
+        *,
+        use_damage_p: bool,
+        crops: dict[str, tuple[int, int, int, int]],
+    ) -> str:
+        """Start automatic battle with the configured Win Rate/Damage mode."""
+
+        mode_name = "伤害P" if use_damage_p else "胜率P"
+        auto.key_press("p")
+        if use_damage_p:
+            # The game toggles the automatic result selector with a second P
+            # before Enter.  Keep the key sequence separate so it remains
+            # observable in diagnostics and easy to test.
+            auto.key_press("p")
+        sleep(0.5)
+        auto.key_press("enter")
+
+        if self.mouse_click_rate:
+            my_scale = cfg.set_win_size / 1440
+            if pos := auto.find_element("battle/win_rate_card.png", threshold=0.75, my_crop=crops["win_rate"]):
+                option_offset_y = 50 * my_scale if use_damage_p else -50 * my_scale
+                click_x = pos[0] + 50 * my_scale
+                click_y = pos[1] + option_offset_y
+                auto.mouse_click(click_x, click_y)
+                auto.click_element("battle/gear_right.png", my_crop=crops["gear_right"])
+                log.debug(
+                    f"自动{mode_name}鼠标兜底: anchor={pos} click=({click_x:.1f},{click_y:.1f})"
+                )
+        else:
+            sleep(1)
+            pause_visible = bool(auto.find_element("battle/pause_assets.png", threshold=0.75))
+            self.mouse_click_rate = not pause_visible
+            log.debug(
+                f"自动{mode_name}键盘结果确认: pause_visible={pause_visible} "
+                f"mouse_fallback={self.mouse_click_rate}"
+            )
+
+        message = f"使用{mode_name}开始战斗（按键={'P+P+Enter' if use_damage_p else 'P+Enter'}）"
+        log.info(message)
+        return message
+
     def _battle_operation(
         self,
         first_turn: bool,
         defense_first_round: bool,
         avoid_skill_3: bool,
         prioritize_skill_3: bool = False,
-        defense_for_solo_state: DefenseForSoloState | None = None,
+        defense_for_solo_state: DefenseForSoloState | PseudoSoloDefenseState | None = None,
         defense_for_solo_used_this_turn: bool = False,
+        use_damage_p: bool = False,
     ) -> bool:
         auto.mouse_click_blank()
+        is_dynamic_pseudo_solo = defense_for_solo_state is not None and callable(
+            getattr(defense_for_solo_state, "should_defend", None)
+        )
+        pseudo_solo_should_defend = False
+        pseudo_solo_observation = None
+        pseudo_solo_live_count = None
+        if is_dynamic_pseudo_solo:
+            pseudo_solo_should_defend = bool(defense_for_solo_state.should_defend())
+            pseudo_solo_observation = getattr(defense_for_solo_state, "last_observation", None)
+            pseudo_solo_live_count = getattr(defense_for_solo_state, "last_battle_live_count", None)
+            # ``should_defend`` is the source of truth for the dynamic mode;
+            # this flag only prevents submitting the same defense twice in one
+            # turn, as the existing battle loop already does.
+            pseudo_solo_should_defend = pseudo_solo_should_defend and not defense_for_solo_used_this_turn
         use_limited_defense = (
             defense_for_solo_state is not None
+            and not is_dynamic_pseudo_solo
             and defense_for_solo_state.remaining_turns > 0
             and not defense_for_solo_used_this_turn
         )
-        use_first_round_defense = first_turn and defense_first_round and not defense_for_solo_used_this_turn
+        use_first_round_defense = (
+            not is_dynamic_pseudo_solo and first_turn and defense_first_round and not defense_for_solo_used_this_turn
+        )
         limited_defense_succeeded = False
         crops = _battle_ui_crops()
-        if (use_limited_defense or use_first_round_defense) and auto.find_element(
-            "battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_left"]
-        ):
-            if use_limited_defense:
+        auto_p_mode = "伤害P" if use_damage_p else "胜率P"
+        defense_requested = pseudo_solo_should_defend or use_limited_defense or use_first_round_defense
+        observation_name = getattr(pseudo_solo_observation, "value", pseudo_solo_observation)
+        log.debug(
+            "战斗操作判定: "
+            f"dynamic_pseudo_solo={is_dynamic_pseudo_solo} observation={observation_name} "
+            f"battle_live_count={pseudo_solo_live_count} should_defend={pseudo_solo_should_defend} "
+            f"used_this_turn={defense_for_solo_used_this_turn} "
+            f"limited_defense={use_limited_defense} first_round_defense={use_first_round_defense} "
+            f"defense_requested={defense_requested}"
+        )
+
+        if defense_requested:
+            if pseudo_solo_should_defend:
+                msg = "小指良单通检测到多人存活，执行全员守备"
+            elif use_limited_defense:
                 msg = f"小指良单通连续防御（剩余{defense_for_solo_state.remaining_turns}回合），开始战斗"
             else:
                 msg = "第一回合全员防御，开始战斗"
             if self._defense_this_round() is False:
-                if use_limited_defense:
-                    msg = "小指良单通连续防御失败，本回合改为P+Enter"
+                if pseudo_solo_should_defend or use_limited_defense:
+                    msg = f"小指良单通连续防御失败，本回合改为{auto_p_mode}"
                 else:
-                    msg = "第一回合全员防御失败，本场战斗改为P+Enter"
-                auto.key_press("p")
-                sleep(0.5)
-                auto.key_press("enter")
-            elif use_limited_defense:
-                defense_for_solo_state.consume_turn()
-                limited_defense_succeeded = True
-                log.info(f"小指良单通连续防御已执行，剩余 {defense_for_solo_state.remaining_turns} 回合")
-                if defense_for_solo_state.remaining_turns == 0:
-                    log.info("本次镜牢的连续防御已完成，后续回合恢复普通战斗操作")
+                    msg = f"第一回合全员防御失败，本场战斗改为{auto_p_mode}"
+                self._start_auto_p(use_damage_p=use_damage_p, crops=crops)
+            else:
+                if use_limited_defense:
+                    limited_defense_succeeded = True
+                    defense_for_solo_state.consume_turn()
+                    log.info(f"小指良单通连续防御已执行，剩余 {defense_for_solo_state.remaining_turns} 回合")
+                    if defense_for_solo_state.remaining_turns == 0:
+                        log.info("本次镜牢的连续防御已完成，后续回合恢复普通战斗操作")
+                elif pseudo_solo_should_defend:
+                    limited_defense_succeeded = True
+                    consume_turn = getattr(defense_for_solo_state, "consume_turn", None)
+                    if callable(consume_turn):
+                        before_turns = getattr(defense_for_solo_state, "remaining_turns", None)
+                        consume_turn()
+                        after_turns = getattr(defense_for_solo_state, "remaining_turns", None)
+                        log.info(
+                            "小指良单通本场守备回合已执行: "
+                            f"remaining_turns={before_turns}->{after_turns}"
+                        )
             sleep(2)
             if not auto.find_element("battle/pause_assets.png", take_screenshot=True):
-                auto.key_press("p")
-                sleep(0.5)
-                auto.key_press("enter")
+                self._start_auto_p(use_damage_p=use_damage_p, crops=crops)
         elif self.defense_all_time:
             if auto.find_element("battle/gear_left.png", threshold=DEFENSE_GEAR_THRESHOLD, my_crop=crops["gear_left"]):
                 msg = "使用全员防御模式开始战斗"
@@ -181,32 +271,13 @@ class Battle:
             mode_name = "优先" if use_prioritize_skill_3 else "避免"
             msg = f"使用{mode_name}3技能模式开始战斗"
             if self._chain_battle(prioritize_skill_3=use_prioritize_skill_3) is False:
-                msg = f"使用{mode_name}三技能的链接战失败，本场战斗改为P+Enter"
-                auto.key_press("p")
-                sleep(0.5)
-                auto.key_press("enter")
+                msg = f"使用{mode_name}三技能的链接战失败，本场战斗改为{auto_p_mode}"
+                self._start_auto_p(use_damage_p=use_damage_p, crops=crops)
             sleep(2)
             if not auto.find_element("battle/pause_assets.png", take_screenshot=True):
-                auto.key_press("p")
-                sleep(0.5)
-                auto.key_press("enter")
+                self._start_auto_p(use_damage_p=use_damage_p, crops=crops)
         else:
-            auto.key_press("p")
-            sleep(0.5)
-            auto.key_press("enter")
-            msg = "使用P+Enter开始战斗"
-            if self.mouse_click_rate:
-                my_scale = cfg.set_win_size / 1440
-                if pos := auto.find_element("battle/win_rate_card.png", threshold=0.75, my_crop=crops["win_rate"]):
-                    pos = [pos[0] + 50 * my_scale, pos[1] - 50 * my_scale]
-                    auto.mouse_click(pos[0], pos[1])
-                    auto.click_element("battle/gear_right.png", my_crop=crops["gear_right"])
-            else:
-                sleep(1)
-                if not auto.find_element("battle/pause_assets.png", threshold=0.75):
-                    self.mouse_click_rate = True
-                else:
-                    self.mouse_click_rate = False
+            msg = self._start_auto_p(use_damage_p=use_damage_p, crops=crops)
         log.debug(msg)
         return limited_defense_succeeded
 
@@ -220,8 +291,9 @@ class Battle:
         defense_on_turn1=False,
         choice_event_handling=True,
         combat_count=1,
-        defense_for_solo_state: DefenseForSoloState | None = None,
+        defense_for_solo_state: DefenseForSoloState | PseudoSoloDefenseState | None = None,
         prioritize_skill_3=False,
+        use_damage_p=False,
     ):
         chance = self.INIT_CHANCE
         waiting = self._update_wait_time()
@@ -236,6 +308,14 @@ class Battle:
             defense_first_round = True
             turn_ocr_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/turn_ocr_assets.png"))
 
+        begin_battle_observation = getattr(defense_for_solo_state, "begin_battle", None)
+        if callable(begin_battle_observation):
+            # A Battle.fight invocation owns one battle.  Reset the observer
+            # here so a normal next battle gets one fresh count, while a task
+            # restarted during an existing battle also gets exactly one first
+            # observation when its command row becomes available.
+            begin_battle_observation()
+
         first_turn = True
         defense_for_solo_used_this_turn = False
         start_time = time.time()
@@ -249,8 +329,26 @@ class Battle:
                 prioritize_skill_3=prioritize_skill_3,
                 defense_for_solo_state=defense_for_solo_state,
                 defense_for_solo_used_this_turn=defense_for_solo_used_this_turn,
+                use_damage_p=use_damage_p,
             )
             defense_for_solo_used_this_turn = defense_for_solo_used_this_turn or limited_defense_succeeded
+
+        def find_reward_page() -> Optional[str]:
+            """Return the visible mirror reward page before probing battle controls.
+
+            ``battle/win_rate_assets.png`` is a very small, full-screen template.
+            On the EGO gift page a static UI detail can match it, so reward-page
+            detection must happen before any generic battle-operation trigger.
+            """
+
+            if auto.find_element("mirror/road_in_mir/select_encounter_reward_card_assets.png"):
+                return "select_encounter_reward_card"
+            if auto.find_element(
+                "mirror/road_in_mir/acquire_ego_gift_card.png",
+                my_crop=crops["acquire_gift_card"],
+            ):
+                return "acquire_ego_gift_card"
+            return None
 
         self.fail_times = 0
         while self.running:
@@ -291,7 +389,7 @@ class Battle:
 
             # 如果正在交战过程
             if auto.find_element("battle/pause_assets.png"):
-                sleep(2 * waiting)  # 战斗播片中增大间隔
+                sleep(min(2 * waiting, BATTLE_ANIMATION_POLL_MAX))  # 战斗播片中适度增大间隔
                 chance = self.INIT_CHANCE
                 first_turn = False
                 defense_for_solo_used_this_turn = False
@@ -345,6 +443,15 @@ class Battle:
                                 return False
                             if auto.click_element("battle/setting_assets.png"):
                                 continue
+
+            # Reward/Gift pages must win over the loose win-rate template match
+            # below.  Otherwise the stale battle loop can run pseudo-solo
+            # recognition and press P repeatedly after combat has ended.
+            if reward_page := find_reward_page():
+                log.info(f"战斗已结束，检测到镜牢{reward_page}页面，停止人数识别并返回奖励流程")
+                if infinite_battle:
+                    continue
+                break
 
             # 如果正在战斗待机界面
             # 更新回合数
@@ -544,11 +651,14 @@ class Battle:
             if auto.click_element("battle/continue_assets.png"):
                 continue
                 # 如果网络波动，需要点击重试
-            if retry() is False:
+            # The current frame was already captured and no click happened on
+            # this path, so let retry reuse it instead of taking a duplicate
+            # screenshot before checking rare network dialogs.
+            if retry(screenshot_ready=True) is False:
                 return False
 
             chance -= 1
-            sleep(waiting)
+            sleep(min(waiting, BATTLE_MISS_WAIT_MAX))
             # 更新等待时间
             waiting = self._update_wait_time(waiting, True, total_count)
             # 统计失败次数

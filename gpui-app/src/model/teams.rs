@@ -82,6 +82,8 @@ pub struct TeamMirrorConfig {
     pub second_system_power_up: bool,
     pub avoid_skill_3: bool,
     pub prioritize_skill_3: bool,
+    #[serde(default)]
+    pub use_damage_p: bool,
     pub re_formation_each_floor: bool,
     pub defense_first_round: bool,
     pub defense_for_solo: bool,
@@ -153,6 +155,7 @@ impl Default for TeamMirrorConfig {
             second_system_power_up: false,
             avoid_skill_3: false,
             prioritize_skill_3: false,
+            use_damage_p: false,
             re_formation_each_floor: false,
             defense_first_round: false,
             defense_for_solo: false,
@@ -262,6 +265,7 @@ mod tests {
             "opening_items",
             "opening_items_select",
             "opening_items_system",
+            "use_damage_p",
         ] {
             object.remove(key);
         }
@@ -269,6 +273,7 @@ mod tests {
         assert!(!config.reward_cards);
         assert_eq!(config.shopping_strategy_select, 0);
         assert_eq!(config.opening_items_system, 0);
+        assert!(!config.use_damage_p);
     }
 
     #[test]

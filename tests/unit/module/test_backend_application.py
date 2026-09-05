@@ -1298,6 +1298,7 @@ def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection
     assert team["mirrorConfig"]["shopping_strategy_select"] == 5
     assert team["mirrorConfig"]["reward_cards"] is True
     assert team["mirrorConfig"]["opening_items_system"] == 3
+    assert team["mirrorConfig"]["use_damage_p"] is False
     app.close()
 
 
@@ -1560,7 +1561,7 @@ def test_team_save_requires_ryoshu_and_two_family_members_for_pseudo_solo() -> N
         "name": "伪单通校验",
         "purpose": "mirror",
         "enabled": False,
-        "mirrorConfig": {"defense_for_solo": True},
+        "mirrorConfig": {"defense_for_solo": True, "use_damage_p": True},
     }
 
     with pytest.raises(ValueError, match="必须包含良秀"):
@@ -1572,6 +1573,7 @@ def test_team_save_requires_ryoshu_and_two_family_members_for_pseudo_solo() -> N
     saved = app.team_save({**common, "sinners": ["ryoshu", "faust", "yi_sang"]})
     assert saved["sinners"] == ["ryoshu", "faust", "yi_sang"]
     assert saved["mirrorConfig"]["defense_for_solo"] is True
+    assert saved["mirrorConfig"]["use_damage_p"] is True
     app.close()
 
 

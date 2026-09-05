@@ -213,11 +213,40 @@ class ImageUtils:
     @staticmethod
     def match_template(screenshot, template, bbox, model="clam"):
         try:
+            if (
+                screenshot is None
+                or template is None
+                or not hasattr(screenshot, "shape")
+                or not hasattr(template, "shape")
+                or screenshot.size == 0
+                or template.size == 0
+                or len(screenshot.shape) < 2
+                or len(template.shape) < 2
+            ):
+                return None, 0.0
+
             shape = screenshot.shape
             if len(shape) == 2:
                 height, width = shape
             elif len(shape) == 3:
                 height, width, _ = shape
+            else:
+                return None, 0.0
+
+            template_height, template_width = template.shape[:2]
+
+            def match(source):
+                if (
+                    source is None
+                    or source.size == 0
+                    or source.shape[0] < template_height
+                    or source.shape[1] < template_width
+                ):
+                    return None
+                if _blur_on:
+                    source = cv2.GaussianBlur(source, (3, 3), 0)
+                return cv2.matchTemplate(source, template, cv2.TM_CCOEFF_NORMED)
+
             if model == "normal":
                 if bbox:
                     bbox = (
@@ -238,29 +267,25 @@ class ImageUtils:
             from module.config import cfg as _cfg
             _blur_on = bool(getattr(_cfg, "enable_template_blur", False))
             if bbox is not None and model != "aggressive":
-                if _blur_on:
-                    screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
-                    blurred_crop = cv2.GaussianBlur(screenshot_crop, (3, 3), 0)
-                    result = cv2.matchTemplate(blurred_crop, template, cv2.TM_CCOEFF_NORMED)
-                else:
-                    screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
-                    result = cv2.matchTemplate(screenshot_crop, template, cv2.TM_CCOEFF_NORMED)
+                screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+                result = match(screenshot_crop)
+                if result is None:
+                    return None, 0.0
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                 h, w = template.shape[:2]
                 center = (bbox[0] + max_loc[0] + w // 2, bbox[1] + max_loc[1] + h // 2)
                 return center, max_val
             else:
-                if _blur_on:
-                    blurred_screenshot = cv2.GaussianBlur(screenshot, (3, 3), 0)
-                    result = cv2.matchTemplate(blurred_screenshot, template, cv2.TM_CCOEFF_NORMED)
-                else:
-                    result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
+                result = match(screenshot)
+                if result is None:
+                    return None, 0.0
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                 h, w = template.shape[:2]
                 center = (int(max_loc[0]) + w // 2, int(max_loc[1]) + h // 2)
                 return center, max_val
         except Exception as e:
             log.error(f"图片识别出现错误：{e}")
+            return None, 0.0
 
     @staticmethod
     def match_template_with_multiple_targets(screenshot, template, threshold, min_dist=10):
@@ -271,6 +296,20 @@ class ImageUtils:
         大小快速增长。先把过阈值区域分成连通块，每块只取最高点，
         再执行原有的最小距离抑制，可以保留目标级别的结果并避免全量排序。
         """
+        if (
+            screenshot is None
+            or template is None
+            or not hasattr(screenshot, "shape")
+            or not hasattr(template, "shape")
+            or screenshot.size == 0
+            or template.size == 0
+            or len(screenshot.shape) < 2
+            or len(template.shape) < 2
+            or screenshot.shape[0] < template.shape[0]
+            or screenshot.shape[1] < template.shape[1]
+        ):
+            return []
+
         w, h = ImageUtils.get_image_info(template)
         # 模板已按开关预糊，仅当开启时对截图高斯
         from module.config import cfg as _cfg2

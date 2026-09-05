@@ -71,6 +71,9 @@ mod tests {
         state.set_mirror_bool(MirrorBool::DefenseForSolo, true);
         let config = state.editor.as_ref().unwrap().mirror_config();
         assert!(!config.defense_first_round && config.defense_for_solo);
+        state.set_mirror_bool(MirrorBool::UseDamageP, true);
+        let config = state.editor.as_ref().unwrap().mirror_config();
+        assert!(config.use_damage_p);
     }
 
     #[test]

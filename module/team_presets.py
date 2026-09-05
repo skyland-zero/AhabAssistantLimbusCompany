@@ -60,6 +60,7 @@ _HOS_RYOSHU_SOLO_SETTING: dict[str, Any] = {
     # compatible mode at runtime.
     "skill_replacement_mode": 0,
     "defense_for_solo": True,
+    "use_damage_p": False,
     # This remains the compatibility fallback when live roster OCR is
     # unavailable.  Known counts are handled dynamically at runtime.
     "defense_for_solo_turns": 5,

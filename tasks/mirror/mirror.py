@@ -49,6 +49,7 @@ from tasks.mirror.search_road import (
     search_road_simple_keyboard,
 )
 from tasks.mirror.select_theme_pack import select_theme_pack
+from tasks.mirror.vision_regions import mirror_ego_gift_card_crop
 from tasks.teams.team_formation import check_team, load_team_code_in_game, select_battle_team, team_formation
 from utils.image_utils import ImageUtils
 
@@ -95,6 +96,9 @@ MIRROR_SINNER_NAMES_EN = (
     "Gregor",
 )
 
+EVENT_EFFECT_POLL_INTERVAL = 0.75
+SETTLEMENT_BACKOFFS = (0.75, 1.5, 3.0, 6.0)
+
 
 # 输出时间统计
 def to_log_with_time(msg, elapsed_time):
@@ -138,6 +142,7 @@ class Mirror:
         self.system = all_systems[team_setting.team_system]  # 选择的体系
         self.avoid_skill_3 = team_setting.avoid_skill_3  # 是否避免使用3技能
         self.prioritize_skill_3 = team_setting.prioritize_skill_3  # 是否优先使用3技能
+        self.use_damage_p = team_setting.use_damage_p  # 是否使用伤害P
         # 开局星光加成
         self.opening_bonus = team_setting.opening_bonus
         self.use_starlight = team_setting.use_starlight
@@ -205,6 +210,7 @@ class Mirror:
         self.parallel_mode_confirmed = False
         self.is_entering_node = False
         self.entering_node_time = 0.0
+        self._next_event_effect_check_at = 0.0
 
     def _clear_entering_node_state(self) -> None:
         """清除进入节点过渡状态锁。"""
@@ -339,6 +345,7 @@ class Mirror:
             prioritize_skill_3=self.prioritize_skill_3,
             defense_first_round=self.defense_first_round,
             defense_for_solo_state=self.defense_for_solo_state,
+            use_damage_p=self.use_damage_p,
         )
         self.battle_total_time += elapsed
 
@@ -760,6 +767,7 @@ class Mirror:
         # 计时开始
         start_time = time.time()
         vision_profiler.reset()
+        self._next_event_effect_check_at = 0.0
 
         if auto.click_element("home/drive_assets.png") or auto.find_element("home/window_assets.png"):
             sleep(0.5)
@@ -859,9 +867,17 @@ class Mirror:
             win_h = int(cfg.set_win_size or 1080)
             win_w = int(win_h * 16 / 9)
             event_effect_crop = (int(win_w * 0.20), int(win_h * 0.25), int(win_w * 0.85), int(win_h * 0.85))
-            if auto.click_element("mirror/road_in_mir/event_effect_button.png", threshold=0.75, my_crop=event_effect_crop):
-                auto.click_element("mirror/road_in_mir/select_event_effect_confirm.png")
-                continue
+            now = time.monotonic()
+            if now >= self._next_event_effect_check_at:
+                self._next_event_effect_check_at = now + EVENT_EFFECT_POLL_INTERVAL
+                if auto.click_element(
+                    "mirror/road_in_mir/event_effect_button.png",
+                    threshold=0.75,
+                    my_crop=event_effect_crop,
+                ):
+                    self._next_event_effect_check_at = 0.0
+                    auto.click_element("mirror/road_in_mir/select_event_effect_confirm.png")
+                    continue
 
             # 在镜牢中寻路
             if auto.find_element("mirror/road_in_mir/legend_assets.png"):
@@ -994,10 +1010,11 @@ class Mirror:
                 self.enter_mir_with_star()
                 continue
 
-            # P0止血：全屏88ms 4%命中，限中部卡牌区 0.12W-0.88W / 0.12H-0.82H
+            # P0止血：全屏88ms 4%命中，限中部卡牌区；EGO页的卡牌横向分布，不能只取单个命中点
             _ego_h = int(cfg.set_win_size or 1080)
             _ego_w = int(_ego_h * 16 / 9)
-            _ego_card_crop = (int(_ego_w * 0.12), int(_ego_h * 0.12), int(_ego_w * 0.88), int(_ego_h * 0.82))
+            _ego_card_crop = mirror_ego_gift_card_crop(_ego_h)
+            _ego_dialog_crop = (int(_ego_w * 0.12), int(_ego_h * 0.12), int(_ego_w * 0.88), int(_ego_h * 0.82))
             if auto.find_element("mirror/road_in_mir/acquire_ego_gift_card.png", my_crop=_ego_card_crop):
                 self._clear_entering_node_state()
                 _, elapsed = self._time_call(self.acquire_ego_gift)
@@ -1005,11 +1022,11 @@ class Mirror:
                 continue
             if (
                 main_loop_count < 50
-                and auto.find_element("mirror/road_in_mir/acquire_ego_gift_box_assets.png", model="clam", my_crop=_ego_card_crop)
+                and auto.find_element("mirror/road_in_mir/acquire_ego_gift_box_assets.png", model="clam", my_crop=_ego_dialog_crop)
                 and auto.find_element(
                     "mirror/road_in_mir/acquire_ego_gift_refuse_assets.png",
                     model="clam",
-                    my_crop=_ego_card_crop,
+                    my_crop=_ego_dialog_crop,
                 )
             ):
                 self._clear_entering_node_state()
@@ -1017,8 +1034,8 @@ class Mirror:
                 self.ego_gift_total_time += elapsed
                 continue
             if main_loop_count < 30 and (
-                auto.find_element("mirror/road_in_mir/refuse_gift_assets.png", my_crop=_ego_card_crop)
-                or auto.find_language_text("拒绝饰品", "refuse", my_crop=_ego_card_crop)
+                auto.find_element("mirror/road_in_mir/refuse_gift_assets.png", my_crop=_ego_dialog_crop)
+                or auto.find_language_text("拒绝饰品", "refuse", my_crop=_ego_dialog_crop)
             ):
                 self._clear_entering_node_state()
                 _, elapsed = self._time_call(self.acquire_ego_gift, type=2)
@@ -1126,7 +1143,6 @@ class Mirror:
         failed = None
         settlement_attempt = 0
         MAX_SETTLEMENT_ATTEMPTS = 5
-        BASE_BACKOFF = 1.5
         settlement_success = False
         # 用于稳健判断是否真正100%：连续2次未找到才视为非100%，避免首帧过渡误判
         not_found_100_count = 0
@@ -1149,9 +1165,7 @@ class Mirror:
                 if not_found_100_count >= 2:
                     failed = True
             # 如果回到主界面，退出循环（兼容多种主界面标识）
-            if auto.find_element("home/drive_assets.png") or auto.find_element(
-                "home/window_assets.png"
-            ) or auto.find_element("home/drive_words_assets.png"):
+            if auto.find_element("home/drive_assets.png") or auto.find_element("home/window_assets.png"):
                 settlement_success = True
                 break
             if auto.click_element("battle/battle_finish_confirm_assets.png"):
@@ -1276,12 +1290,10 @@ class Mirror:
             # 处理周年活动弹出的窗口
             if auto.click_element("home/close_anniversary_event_assets.png"):
                 continue
-            retry()
+            retry(screenshot_ready=True)
             settlement_attempt += 1
             if settlement_attempt < MAX_SETTLEMENT_ATTEMPTS:
-                delay = BASE_BACKOFF * (2 ** (settlement_attempt - 1))
-                # 5次上限时延迟序列 1.5/3/6/12/24，上限12s避免过长
-                delay = min(delay, 12.0)
+                delay = SETTLEMENT_BACKOFFS[settlement_attempt - 1]
                 log.warning(f"结算重试 {settlement_attempt}/{MAX_SETTLEMENT_ATTEMPTS} 失败，{delay:.1f}s后指数退避重试")
                 if settlement_attempt == 1:
                     auto.model = "normal"
@@ -1331,13 +1343,18 @@ class Mirror:
                 to_log_with_time(msg, t)
             log.debug(f"战斗时间:{self.battle_total_time} 事件时间:{self.event_total_time} 商店时间:{self.shop_total_time} 寻路时间:{self.find_road_total_time} 主题包时间:{self.theme_pack_total_time} 奖励卡时间:{self.reward_card_total_time} 饰品时间:{self.ego_gift_total_time} 结算时间:{self.settlement_total_time} 其他时间:{other_time} 总时间:{elapsed_time}")
             to_log_with_time(f"此次镜牢使用{self.system}体系队伍", elapsed_time)
-            log.error(f"奖励领取失败：已重试{MAX_SETTLEMENT_ATTEMPTS}次(1.5s/3s/6s/12s)仍未回到主界面，大概率饼不足，已自动停止任务")
+            log.error(
+                f"奖励领取失败：已重试{MAX_SETTLEMENT_ATTEMPTS}次(0.75s/1.5s/3s/6s)仍未回到主界面，"
+                "大概率饼不足，已自动停止任务"
+            )
             try:
                 mediator.task_completed.emit("mirror", 1, dict(self.last_completion_stats))
             except Exception:
                 pass
             request_cancellation()
-            raise userStopError(f"镜牢结算领取超时，已自动停止任务（已重试{MAX_SETTLEMENT_ATTEMPTS}次 1.5s/3s/6s/12s）")
+            raise userStopError(
+                f"镜牢结算领取超时，已自动停止任务（已重试{MAX_SETTLEMENT_ATTEMPTS}次 0.75s/1.5s/3s/6s）"
+            )
         if failed:
             # 非超时但判定为未完成（floor_3_exit 等）仍按原逻辑返回
             end_time = time.time()

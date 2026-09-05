@@ -19,6 +19,14 @@ def test_multiple_template_matching_returns_one_peak_per_target() -> None:
     assert set(matches) == expected
 
 
+def test_template_matching_returns_no_match_when_region_is_smaller_than_template() -> None:
+    screenshot = np.zeros((8, 8), dtype=np.uint8)
+    template = np.zeros((12, 12), dtype=np.uint8)
+
+    assert ImageUtils.match_template(screenshot, template, None) == (None, 0.0)
+    assert ImageUtils.match_template_with_multiple_targets(screenshot, template, threshold=0.8) == []
+
+
 def test_feature_matching_accepts_precomputed_descriptors() -> None:
     rng = np.random.default_rng(11)
     template = rng.integers(0, 255, size=(80, 80), dtype=np.uint8)

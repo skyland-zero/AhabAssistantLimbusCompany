@@ -61,6 +61,7 @@ impl TeamsState {
                     config.avoid_skill_3 = false;
                 }
             }
+            MirrorBool::UseDamageP => config.use_damage_p = value,
             MirrorBool::ReformationEachFloor => config.re_formation_each_floor = value,
             MirrorBool::DefenseFirstRound => {
                 config.defense_first_round = value;

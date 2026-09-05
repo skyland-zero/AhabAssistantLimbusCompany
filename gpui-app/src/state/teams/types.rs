@@ -202,6 +202,7 @@ pub enum MirrorBool {
     SecondSystemPowerUp,
     AvoidSkill3,
     PrioritizeSkill3,
+    UseDamageP,
     ReformationEachFloor,
     DefenseFirstRound,
     DefenseForSolo,

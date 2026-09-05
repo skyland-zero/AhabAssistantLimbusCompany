@@ -87,6 +87,9 @@ class TeamSetting(BaseModel):
     prioritize_skill_3: bool = False
     """优先使用3技能"""
 
+    use_damage_p: bool = False
+    """自动战斗时使用伤害P而不是胜率P"""
+
     re_formation_each_floor: bool = False
     """每个楼层重新编队"""
 
