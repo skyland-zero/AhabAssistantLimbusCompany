@@ -56,11 +56,9 @@ fn switch_with_track(
         .h(px(20.))
         .p(px(1.))
         .rounded_full()
-        .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.border))
-        .bg(paint_color(track))
-        .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
+        .bg(paint_color(track));
     if checked {
         control = control.justify_end();
     }
@@ -72,6 +70,8 @@ fn switch_with_track(
     } else {
         let hover_track = paint_color(hover_track);
         control = control
+            .tab_index(0)
+            .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
             .cursor_pointer()
             .hover(move |style| style.bg(hover_track));
     }

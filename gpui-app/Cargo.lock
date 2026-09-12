@@ -134,6 +134,7 @@ name = "ahab-gpui-app"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "chrono",
  "embed-resource",
  "gpui",
  "gpui_platform",

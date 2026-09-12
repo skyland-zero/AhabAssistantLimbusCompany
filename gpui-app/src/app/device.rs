@@ -21,7 +21,7 @@ impl AhabApp {
                 }
                 if this
                     .update_in(cx, |view, window, cx| {
-                        let invalidation = view.poll_backend_events();
+                        let invalidation = view.poll_backend_events(cx);
                         let recovering = if view.exit_requested {
                             false
                         } else {
@@ -51,7 +51,7 @@ impl AhabApp {
         .detach();
     }
 
-    pub(crate) fn poll_backend_events(&mut self) -> HomeInvalidation {
+    pub(crate) fn poll_backend_events(&mut self, cx: &mut Context<Self>) -> HomeInvalidation {
         let events = self.home.rpc.take_events();
         let mut invalidation = HomeInvalidation::default();
         if !events.is_empty() {
@@ -131,6 +131,25 @@ impl AhabApp {
             self.home.apply_events(home_events);
             self.toolbox.apply_events(toolbox_events);
             self.resources.apply_events(resource_events);
+            // The terminal progress event must stay visible for one frame; the
+            // timer is scheduled from the event path so rendering stays pure.
+            if self.resources.take_completed_sync() {
+                let done_message = match self.state.settings.language {
+                    crate::model::Language::ZhCn => "资源同步完成",
+                    crate::model::Language::EnUs => "Resource sync completed",
+                };
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(300))
+                        .await;
+                    let _ = this.update(cx, |view, cx| {
+                        view.resources.finish_sync();
+                        view.show_toast(crate::shell::ToastKind::Success, done_message, cx);
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
             for run_id in exit_requests {
                 if self.home.accepts_exit_request(run_id.as_deref()) {
                     // Completion actions are emitted only after the sidecar
@@ -245,7 +264,7 @@ impl AhabApp {
             let request = rpc.request_async(crate::ipc::contract::method::DEVICE_LIST, None);
             let result = cx
                 .background_executor()
-                .spawn(async move { request.recv().ok() })
+                .spawn(async move { request.recv().await.ok() })
                 .await
                 .map(|response| {
                     crate::ipc::RpcGateway::decode_response(
@@ -305,7 +324,7 @@ impl AhabApp {
             let request = rpc.request_async(method, params);
             let result = cx
                 .background_executor()
-                .spawn(async move { request.recv().ok() })
+                .spawn(async move { request.recv().await.ok() })
                 .await
                 .map(|response| crate::ipc::RpcGateway::decode_response(method, response))
                 .unwrap_or_else(|| Err(crate::ipc::RpcError::new(-32000, "后端连接已断开")));

@@ -5,7 +5,10 @@
 //! mutable state and therefore cannot drift from `AppState.settings`.
 
 pub mod en_us;
+pub mod messages;
 pub mod zh_cn;
+
+pub use messages::feedback;
 
 use crate::model::Language;
 

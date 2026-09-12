@@ -34,6 +34,9 @@ struct MockState {
     last_start_client_request_id: Option<String>,
     last_start_response: Option<Value>,
     sequence: super::contract::RequestSequence,
+    /// Monotonic sequence attached to every emitted event so the GPUI event
+    /// dedup path is exercised by the mock exactly like the real sidecar.
+    event_sequence: u64,
     tasks: TasksConfig,
     execution: ExecutionStatusPayload,
     stats: ExecutionStatsPayload,

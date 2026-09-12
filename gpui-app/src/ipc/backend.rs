@@ -1,7 +1,6 @@
 use std::sync::{
     Arc, RwLock,
     atomic::{AtomicBool, Ordering},
-    mpsc::{self, Receiver},
 };
 
 use serde_json::Value;
@@ -100,7 +99,11 @@ impl SidecarSupervisor {
         )
     }
 
-    fn request_async(&self, method: &str, params: Option<Value>) -> Receiver<RpcResponse> {
+    fn request_async(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> async_channel::Receiver<RpcResponse> {
         if self.restarting.load(Ordering::Acquire) {
             return ready_receiver(Self::restarting_response(0));
         }
@@ -135,9 +138,9 @@ impl SidecarSupervisor {
     }
 }
 
-fn ready_receiver(response: RpcResponse) -> Receiver<RpcResponse> {
-    let (sender, receiver) = mpsc::channel();
-    let _ = sender.send(response);
+fn ready_receiver(response: RpcResponse) -> async_channel::Receiver<RpcResponse> {
+    let (sender, receiver) = async_channel::bounded(1);
+    let _ = sender.send_blocking(response);
     receiver
 }
 
@@ -207,13 +210,6 @@ impl BackendClient {
         }
     }
 
-    pub fn restart_sidecar(&self) -> Result<(), String> {
-        match self {
-            Self::Mock(_) => Err("mock backend does not restart".to_owned()),
-            Self::Sidecar(supervisor) => supervisor.restart(),
-        }
-    }
-
     pub fn call(&self, method: &str, params: Option<Value>) -> RpcResponse {
         match self {
             Self::Mock(client) => client.call(method, params),
@@ -221,7 +217,11 @@ impl BackendClient {
         }
     }
 
-    pub fn request_async(&self, method: &str, params: Option<Value>) -> Receiver<RpcResponse> {
+    pub fn request_async(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> async_channel::Receiver<RpcResponse> {
         match self {
             Self::Mock(client) => ready_receiver(client.call(method, params)),
             Self::Sidecar(supervisor) => supervisor.request_async(method, params),

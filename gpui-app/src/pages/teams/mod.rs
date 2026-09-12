@@ -24,8 +24,9 @@ use crate::{
     components::{
         BadgeTone, ButtonVariant, badge, button, card, empty_state,
         is_activation_key as team_activation_key, loading, page_root, page_toolbar, palette_rgb,
-        render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_option, select_popup,
-        select_trigger, settings_grid, svg_icon_bytes, switch, tab_surface_with_palette,
+        render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_keyboard_index,
+        select_option, select_options_state, select_popup, select_trigger, settings_grid,
+        svg_icon_bytes, switch, tab_surface_with_palette,
     },
     i18n::paired as text,
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPreset, TeamPurpose, team_number_from_id},
@@ -169,18 +170,7 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
         width,
         on_change,
     } = config;
-    let selected_index = options
-        .iter()
-        .position(|(value, _)| value == &current)
-        .unwrap_or(0);
-    let selected_label = options
-        .get(selected_index)
-        .map(|(_, label)| label.clone())
-        .unwrap_or_else(|| current.clone());
-    let values = options
-        .iter()
-        .map(|(value, _)| value.clone())
-        .collect::<Vec<_>>();
+    let (selected_label, values) = select_options_state(&options, &current);
     let has_current = options.iter().any(|(value, _)| value == &current);
     let open = app.teams.is_select_open(select);
     let palette = current_render_palette();
@@ -227,17 +217,7 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
             .iter()
             .position(|candidate| candidate == &key_current)
             .unwrap_or(0);
-        let next_index = match key.as_str() {
-            "left" | "arrowleft" | "up" | "arrowup" => Some(
-                (current_index as isize - 1).rem_euclid(key_values.len().max(1) as isize) as usize,
-            ),
-            "right" | "arrowright" => Some((current_index + 1) % key_values.len().max(1)),
-            "down" | "arrowdown" if open => Some((current_index + 1) % key_values.len().max(1)),
-            "down" | "arrowdown" => Some(current_index),
-            "home" => Some(0),
-            "end" => key_values.len().checked_sub(1),
-            _ => None,
-        };
+        let next_index = select_keyboard_index(&key, current_index, key_values.len(), open);
         if let Some(next_index) = next_index
             && let Some(value) = key_values.get(next_index)
         {

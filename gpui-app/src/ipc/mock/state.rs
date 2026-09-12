@@ -8,6 +8,7 @@ impl Default for MockState {
             last_start_client_request_id: None,
             last_start_response: None,
             sequence: crate::ipc::contract::RequestSequence::default(),
+            event_sequence: 0,
             tasks: TasksConfig::default(),
             execution: ExecutionStatusPayload::default(),
             stats: ExecutionStatsPayload {

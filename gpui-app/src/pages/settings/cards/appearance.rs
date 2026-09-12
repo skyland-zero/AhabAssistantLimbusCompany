@@ -170,7 +170,8 @@ pub fn appearance_card(
         skins = skins.child(control);
     }
 
-    let mut languages = segmented_group();    for (candidate, label) in [(Language::ZhCn, "简体中文"), (Language::EnUs, "English")] {
+    let mut languages = segmented_group();
+    for (candidate, label) in [(Language::ZhCn, "简体中文"), (Language::EnUs, "English")] {
         let mut control = button(
             label,
             if language == candidate {

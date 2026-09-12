@@ -2,9 +2,13 @@ use super::*;
 
 impl HomeState {
     pub fn apply_stats_summary(&mut self, value: serde_json::Value) -> bool {
-        let Ok(stats) = serde_json::from_value(value) else {
+        let Ok(stats) = serde_json::from_value::<ExecutionStatsPayload>(value) else {
             return false;
         };
+        // Hydration must not overwrite a newer event with an older snapshot.
+        if stats.updatedAt < self.stats.updatedAt {
+            return false;
+        }
         self.stats = stats;
         true
     }

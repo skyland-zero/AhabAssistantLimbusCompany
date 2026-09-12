@@ -267,18 +267,7 @@ pub(super) fn home_select(
         disabled,
         on_change,
     } = config;
-    let selected_index = options
-        .iter()
-        .position(|(value, _)| value == &current)
-        .unwrap_or(0);
-    let selected_label = options
-        .get(selected_index)
-        .map(|(_, label)| label.clone())
-        .unwrap_or_else(|| current.clone());
-    let values = options
-        .iter()
-        .map(|(value, _)| value.clone())
-        .collect::<Vec<_>>();
+    let (selected_label, values) = select_options_state(&options, &current);
     let open = app.home.is_select_open(select);
     let palette = crate::components::style::current_render_palette();
     let mut trigger = select_trigger(selected_label, open, &palette)
@@ -320,20 +309,7 @@ pub(super) fn home_select(
                     .iter()
                     .position(|candidate| candidate == &key_current)
                     .unwrap_or(0);
-                let next_index = match key.as_str() {
-                    "left" | "arrowleft" | "up" | "arrowup" => Some(
-                        (current_index as isize - 1).rem_euclid(key_values.len().max(1) as isize)
-                            as usize,
-                    ),
-                    "right" | "arrowright" => Some((current_index + 1) % key_values.len().max(1)),
-                    "down" | "arrowdown" if open => {
-                        Some((current_index + 1) % key_values.len().max(1))
-                    }
-                    "down" | "arrowdown" => Some(current_index),
-                    "home" => Some(0),
-                    "end" => key_values.len().checked_sub(1),
-                    _ => None,
-                };
+                let next_index = select_keyboard_index(&key, current_index, key_values.len(), open);
                 if let Some(next_index) = next_index
                     && let Some(value) = key_values.get(next_index)
                 {

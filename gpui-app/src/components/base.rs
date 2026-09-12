@@ -92,7 +92,6 @@ pub fn button_with_palette(
         control.rounded_md()
     };
     control = control
-        .tab_index(0)
         .border_1()
         .border_color(paint_color(if matches!(variant, ButtonVariant::Outline) {
             palette.input
@@ -100,8 +99,7 @@ pub fn button_with_palette(
             palette.border
         }))
         .bg(paint_color(background))
-        .text_color(paint_color(foreground))
-        .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
+        .text_color(paint_color(foreground));
 
     if matches!(variant, ButtonVariant::Icon) {
         control = control.px_2().py_2();
@@ -112,10 +110,15 @@ pub fn button_with_palette(
     }
 
     if state.is_inert() {
+        // Inert buttons must not be reachable by Tab/arrow navigation; a
+        // focus ring on a control that ignores activation is a false
+        // affordance.
         control = control.opacity(0.5);
     } else {
         let hover_background = paint_color(hover_background);
         control = control
+            .tab_index(0)
+            .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
             .cursor_pointer()
             .hover(move |style| style.bg(hover_background));
     }
@@ -165,11 +168,7 @@ pub fn badge_with_palette(
         BadgeTone::Danger => (palette.danger_light, palette.danger),
     };
 
-    let mut control = div()
-        .flex()
-        .items_center()
-        .px_2()
-        .py_1();
+    let mut control = div().flex().items_center().px_2().py_1();
     control = if palette.skin.is_limbus() {
         control.rounded_none()
     } else {
@@ -195,7 +194,11 @@ pub(crate) fn limbus_corner_brackets(palette: &Palette) -> [Div; 4] {
     let gold = paint_color(palette.ring);
     let bracket = |top: bool, left: bool| {
         let mut corner = div().absolute().w(px(13.)).h(px(13.));
-        corner = if top { corner.top(px(3.)) } else { corner.bottom(px(3.)) };
+        corner = if top {
+            corner.top(px(3.))
+        } else {
+            corner.bottom(px(3.))
+        };
         corner = if left {
             corner.left(px(3.))
         } else {

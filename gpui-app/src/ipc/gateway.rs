@@ -54,16 +54,12 @@ impl RpcGateway {
         &self,
         method: &str,
         params: Option<Value>,
-    ) -> std::sync::mpsc::Receiver<RpcResponse> {
+    ) -> async_channel::Receiver<RpcResponse> {
         self.client.request_async(method, params)
     }
 
     pub fn submit(&self, method: &str, params: Option<Value>) {
         self.client.submit(method, params);
-    }
-
-    pub fn restart_sidecar(&self) -> Result<(), String> {
-        self.client.restart_sidecar()
     }
 
     pub fn start_or_connect(&self) -> Result<BackendAttach, String> {

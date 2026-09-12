@@ -3,10 +3,7 @@ mod execution;
 mod selection;
 mod stats;
 
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    time::Instant,
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde_json::json;
 
@@ -108,7 +105,6 @@ pub struct HomeState {
     pub after_completion_open: bool,
     pub after_completion_draft: Option<crate::model::AfterCompletionConfig>,
     pub last_event_sequence: u64,
-    pub(crate) stopping_since: Option<Instant>,
     pub(crate) state_before_stopping: Option<ExecutionState>,
     /// The latest accepted preview stream identity.  `None` means no preview
     /// event has established a baseline since the last execution boundary.
@@ -193,7 +189,6 @@ impl HomeState {
             after_completion_open: false,
             after_completion_draft: None,
             last_event_sequence: 0,
-            stopping_since: None,
             state_before_stopping: None,
             preview_identity: None,
             preview_generation_floor: HashMap::new(),

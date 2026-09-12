@@ -16,7 +16,6 @@ pub(super) fn execution_toolbar(
 ) -> Div {
     let language = app.state.settings.language;
     let palette = current_render_palette();
-    let is_dark = matches!(palette.scheme, crate::components::style::ColorScheme::Dark);
 
     let mut select_all = button("", ButtonVariant::Outline)
         .id("select-all")
@@ -39,16 +38,34 @@ pub(super) fn execution_toolbar(
                 .child(text("清空", "Clear All").get(language)),
         );
     if !busy {
-        select_all = select_all.on_click(cx.listener(|view, _, _, cx| {
-            view.home.set_all_tasks(true);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-        clear_all = clear_all.on_click(cx.listener(|view, _, _, cx| {
-            view.home.set_all_tasks(false);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        select_all = select_all
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.home.set_all_tasks(true);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.set_all_tasks(true);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }));
+        clear_all = clear_all
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.home.set_all_tasks(false);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.set_all_tasks(false);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }));
     }
 
     let mut after_button = button("", ButtonVariant::Ghost)
@@ -71,11 +88,20 @@ pub(super) fn execution_toolbar(
                 )),
         );
     if !busy {
-        after_button = after_button.on_click(cx.listener(|view, _, _, cx| {
-            view.home.set_after_completion_open(true);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        after_button = after_button
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.home.set_after_completion_open(true);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.set_after_completion_open(true);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }));
     }
 
     let (pause_icon, pause_label, pause_icon_color) = if state == ExecutionState::Paused {
@@ -110,11 +136,20 @@ pub(super) fn execution_toolbar(
         .child(action_icon(pause_icon, 14., pause_icon_color))
         .child(pause_label);
     if busy && can_pause_or_resume(state) {
-        pause = pause.on_click(cx.listener(|view, _, _, cx| {
-            view.home.pause_or_resume();
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        pause = pause
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.home.pause_or_resume();
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.home.pause_or_resume();
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }));
     } else if is_stop_pending(state) || state == ExecutionState::Starting {
         pause = pause.opacity(0.65).cursor_not_allowed();
     }
@@ -161,11 +196,10 @@ pub(super) fn execution_toolbar(
         .child(run_icon_element)
         .child(run_label);
     if !busy {
-        let kbd_bg = if is_dark {
-            rgba(0xffffff33)
-        } else {
-            rgba(0x00000028)
-        };
+        // The keycap sits on the brand button, so derive its overlay from
+        // the button foreground token; a literal 0xffffff is aliased to the
+        // card color by the legacy palette map and disappears in dark mode.
+        let kbd_bg = rgba((palette.brand_foreground.rgb_hex() << 8) | 0x33);
         run = run.child(
             div()
                 .rounded_sm()
@@ -180,83 +214,37 @@ pub(super) fn execution_toolbar(
         );
     }
     if busy && !is_stop_pending(state) {
-        run = run.on_click(cx.listener(|view, _, _, cx| {
-            view.stop_execution(cx);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        run = run
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.stop_execution(cx);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.stop_execution(cx);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }));
     } else if is_stop_pending(state) {
         run = run.opacity(0.65).cursor_not_allowed();
     } else {
-        run = run.on_click(cx.listener(|view, _, _, cx| {
-            let language = view.state.settings.language;
-            if view.home.selected_task_count() == 0 {
-                view.show_toast(
-                    crate::shell::ToastKind::Warning,
-                    text(
-                        "请至少勾选一个要执行的任务",
-                        "Select at least one task to run",
-                    )
-                    .get(language),
-                    cx,
-                );
-            } else if view.home.device_status != ConnectionStatus::Connected {
-                if view.home.devices.is_empty() {
-                    view.home.open_select = Some(HomeSelect::Device);
-                    view.home.device_error = Some(
-                        text(
-                            "未检测到可用的游戏窗口或模拟器，请先启动游戏并连接",
-                            "No game window or emulator detected, please launch and connect first",
-                        )
-                        .get(language)
-                        .to_owned(),
-                    );
-                    view.show_toast(
-                        crate::shell::ToastKind::Warning,
-                        text(
-                            "未连接设备，请先选择游戏窗口或模拟器",
-                            "Device not connected, please select game window first",
-                        )
-                        .get(language),
-                        cx,
-                    );
-                } else {
-                    let last_id_opt = view
-                        .state
-                        .settings
-                        .lastDeviceId
-                        .clone()
-                        .filter(|id| view.home.devices.iter().any(|d| &d.id == id));
-                    if let Some(last_id) = last_id_opt {
-                        view.show_toast(
-                            crate::shell::ToastKind::Info,
-                            text(
-                                "正在自动连接上次使用的设备...",
-                                "Auto-connecting to last used device...",
-                            )
-                            .get(language),
-                            cx,
-                        );
-                        view.select_device(last_id, cx);
-                    } else {
-                        view.home.open_select = Some(HomeSelect::Device);
-                        view.show_toast(
-                            crate::shell::ToastKind::Warning,
-                            text(
-                                "请先选择并连接游戏窗口或模拟器",
-                                "Please select and connect a device first",
-                            )
-                            .get(language),
-                            cx,
-                        );
-                    }
+        run = run
+            .on_click(cx.listener(|view, _, _, cx| {
+                view.start_execution(cx);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if is_activation_key(event) {
+                    window.prevent_default();
+                    view.start_execution(cx);
+                    cx.stop_propagation();
+                    cx.notify();
                 }
-            } else {
-                view.home.start();
-            }
-            cx.stop_propagation();
-            cx.notify();
-        }));
+            }));
     }
 
     let mut command_group = div().min_w_0().flex().items_center().gap_2();

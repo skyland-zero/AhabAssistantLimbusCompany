@@ -206,8 +206,8 @@ pub mod event {
 mod tests {
     use super::*;
     use crate::model::{
-        ExecutionStatsPayload, ExecutionStatusPayload, LogEntryPayload, PreviewStatusPayload,
-        ScreenshotFrame,
+        ExecutionStatsPayload, ExecutionStatusPayload, LogEntryPayload, LogLevel,
+        PreviewStatusPayload, ScreenshotFrame,
     };
 
     #[test]
@@ -293,6 +293,21 @@ mod tests {
         )
         .expect("Python log.entry fixture should decode");
         assert_eq!(log.runId.as_deref(), Some("run-fixture"));
+
+        // Raw Python ``logging`` level names are accepted through serde
+        // aliases, and a legacy producer that omits ``ts`` still yields a
+        // visible log line instead of a silently dropped event.
+        let legacy_log = serde_json::from_str::<LogEntryPayload>(
+            r#"{"level":"warning","message":"legacy warning"}"#,
+        )
+        .expect("legacy warning level should decode as warn");
+        assert_eq!(legacy_log.level, LogLevel::Warn);
+        assert_eq!(legacy_log.ts, 0);
+        let critical_log = serde_json::from_str::<LogEntryPayload>(
+            r#"{"level":"critical","message":"legacy critical"}"#,
+        )
+        .expect("legacy critical level should decode as error");
+        assert_eq!(critical_log.level, LogLevel::Error);
     }
 
     #[test]

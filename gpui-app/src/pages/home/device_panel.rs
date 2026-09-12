@@ -303,7 +303,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                             .bg(palette_rgb(palette.warning_light))
                             .text_size(px(9.0))
                             .text_color(palette_rgb(palette.warning))
-                            .child(action_icon(ICON_HISTORY, 10., 0xFAAD14))
+                            .child(action_icon(ICON_HISTORY, 10., palette.warning.rgb_hex()))
                             .child(text("上次", "Last").get(language)),
                     );
                 }
@@ -360,19 +360,23 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
             .py_1()
             .rounded_md()
             .border_1()
-            .border_color(rgba(0xFF4D4F40))
-            .bg(rgba(0xFF4D4F14))
+            .border_color(rgba((palette.danger.rgb_hex() << 8) | 0x40))
+            .bg(rgba((palette.danger.rgb_hex() << 8) | 0x14))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
                     .min_w_0()
-                    .child(action_icon(ICON_ALERT_CIRCLE, 13., 0xFF4D4F))
+                    .child(action_icon(
+                        ICON_ALERT_CIRCLE,
+                        13.,
+                        palette.danger.rgb_hex(),
+                    ))
                     .child(
                         div()
                             .text_size(px(11.0))
-                            .text_color(rgb(0xFF4D4F))
+                            .text_color(palette_rgb(palette.danger))
                             .truncate()
                             .child(err.clone()),
                     ),
@@ -384,7 +388,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                     .h(px(20.0))
                     .p_0()
                     .gap_0()
-                    .child(action_icon(ICON_X, 12., 0xFF4D4F))
+                    .child(action_icon(ICON_X, 12., palette.danger.rgb_hex()))
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.home.dismiss_device_error();
                         cx.stop_propagation();

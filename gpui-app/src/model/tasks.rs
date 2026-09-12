@@ -1,5 +1,13 @@
 #![allow(non_snake_case)]
 
+//! Tasks/execution serde contract.
+//!
+//! NOTE (AGENTS.md §3.2 exception): this file exceeds the 500-line target
+//! because it is one serde contract (tasks config, execution status/stats and
+//! mirror payloads) whose field names, defaults and camelCase mapping must be
+//! reviewed against the Python dispatcher as a single unit.  Splitting the
+//! structs across files would make a cross-language rename easy to miss.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -361,7 +369,9 @@ impl Default for TasksConfig {
 }
 
 fn schema_version() -> u32 {
-    1
+    // The sidecar advertises schema 3 for this payload; keep the default in
+    // lockstep so a round-trip cannot silently downgrade the contract.
+    3
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

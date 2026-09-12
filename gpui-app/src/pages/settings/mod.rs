@@ -185,7 +185,7 @@ fn settings_card(title: &'static str, body: Div) -> Div {
             .overflow_hidden()
             .child(
                 img(crate::assets::image_source(crate::assets::theme(
-                    crate::assets::ThemeAsset::LimbusTagband,
+                    crate::assets::ThemeAsset::Tagband,
                 )))
                 .w_full()
                 .h_full(),
@@ -272,12 +272,7 @@ fn setting_line(label: &'static str, control: impl IntoElement) -> Div {
 
 fn segmented_group() -> Div {
     skin_rounded(
-        div()
-            .flex()
-            .items_center()
-            .gap_1()
-            .bg(rgb(SURFACE))
-            .p_1(),
+        div().flex().items_center().gap_1().bg(rgb(SURFACE)).p_1(),
         true,
     )
 }
@@ -303,23 +298,7 @@ fn setting_switch(
 }
 
 fn localized_feedback(feedback: &str, language: Language) -> String {
-    if matches!(language, Language::ZhCn) {
-        return feedback.to_owned();
-    }
-    if let Some(version) = feedback.strip_prefix("当前已是最新版本：") {
-        return format!("You are on the latest version ({version})");
-    }
-    if let Some(version) = feedback.strip_prefix("发现新版本：") {
-        return format!("Update available: {version}");
-    }
-    match feedback {
-        "设置已保存" => "Settings saved".to_owned(),
-        "正在发送测试通知" => "Sending test notification".to_owned(),
-        "测试通知已发送" => "Test notification sent".to_owned(),
-        "已请求打开 GitHub 仓库" => "GitHub repository opened".to_owned(),
-        "未知" => "Unknown".to_owned(),
-        _ => feedback.to_owned(),
-    }
+    crate::i18n::feedback(feedback, language)
 }
 
 fn language_code(language: Language) -> &'static str {

@@ -93,6 +93,17 @@ impl ResourcesState {
         self.sync_finish_scheduled = false;
     }
 
+    /// Consume one newly completed sync so the event pump can schedule the
+    /// terminal-progress delay outside the render path.
+    pub(crate) fn take_completed_sync(&mut self) -> bool {
+        if self.sync_progress == Some(100) && !self.sync_finish_scheduled {
+            self.sync_finish_scheduled = true;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {
         for event in events {
             if event.event == event::RESOURCE_SYNC_PROGRESS {

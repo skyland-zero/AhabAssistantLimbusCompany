@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use gpui::{Animation, AnimationExt, Context, Entity, Render, Window, div, img, prelude::*, px, rgb};
+use gpui::{
+    Animation, AnimationExt, Context, Entity, Render, Window, div, img, prelude::*, px, rgb,
+};
 
 use super::AhabApp;
 use super::HomeInvalidation;
@@ -95,11 +97,9 @@ fn limbus_background(palette: Palette) -> gpui::Div {
         .right_0()
         .bottom_0()
         .child(
-            img(assets::image_source(assets::theme(
-                assets::ThemeAsset::LimbusBg,
-            )))
-            .size_full()
-            .opacity(0.5),
+            img(assets::image_source(assets::theme(assets::ThemeAsset::Bg)))
+                .size_full()
+                .opacity(0.5),
         )
 }
 

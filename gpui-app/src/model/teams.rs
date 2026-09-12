@@ -218,7 +218,9 @@ pub fn team_number_from_id(id: &str) -> Option<u32> {
 }
 
 fn schema_version() -> u32 {
-    1
+    // The sidecar advertises schema 3 for this payload; keep the default in
+    // lockstep so a round-trip cannot silently downgrade the contract.
+    3
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

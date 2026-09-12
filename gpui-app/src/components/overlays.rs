@@ -172,7 +172,7 @@ pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
     if palette.skin.is_limbus() {
         root = root.child(
             gpui::img(crate::assets::image_source(crate::assets::theme(
-                crate::assets::ThemeAsset::LimbusSeal,
+                crate::assets::ThemeAsset::Seal,
             )))
             .w(px(72.))
             .h(px(72.))

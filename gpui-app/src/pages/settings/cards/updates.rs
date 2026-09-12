@@ -202,14 +202,14 @@ pub fn about_card(_app: &mut AhabApp, cx: &mut Context<AhabApp>, language: Langu
     repo = repo
         .on_click(cx.listener(|view, _, _, cx| {
             open_repo();
-            view.settings_page.feedback = Some("已请求打开 GitHub 仓库".to_owned());
+            view.settings_page.note_repository_opened();
             cx.notify();
         }))
         .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
             if is_activation_key(event) {
                 window.prevent_default();
                 open_repo();
-                view.settings_page.feedback = Some("已请求打开 GitHub 仓库".to_owned());
+                view.settings_page.note_repository_opened();
                 cx.notify();
             }
         }));

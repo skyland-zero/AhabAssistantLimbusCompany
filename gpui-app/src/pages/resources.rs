@@ -4,8 +4,6 @@
 //! grid, and explicit synchronization progress, success, warning, loading,
 //! and empty states.
 
-use std::time::Duration;
-
 use gpui::{Context, Div, div, prelude::*, px, relative};
 
 use crate::{
@@ -24,28 +22,6 @@ const ICON_REFRESH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0
 const ICON_SEARCH_CHECK: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 2 2 4-4"/></svg>"#;
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
-    // The mock emits its terminal progress event synchronously. Keep that
-    // state alive for one visible frame so the native client shows the same
-    // progress feedback as the asynchronous React IPC path.
-    if app.resources.sync_progress == Some(100) && !app.resources.sync_finish_scheduled {
-        app.resources.sync_finish_scheduled = true;
-        let done_message = match app.state.settings.language {
-            Language::ZhCn => "资源同步完成",
-            Language::EnUs => "Resource sync completed",
-        };
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(300))
-                .await;
-            let _ = this.update(cx, |view, cx| {
-                view.resources.finish_sync();
-                view.show_toast(crate::shell::ToastKind::Success, done_message, cx);
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-
     let language = app.state.settings.language;
     let progress = app.resources.sync_progress;
     let feedback = app.resources.feedback.clone();
@@ -304,15 +280,7 @@ fn format_sync_time(timestamp: Option<i64>, language: Language) -> String {
 }
 
 fn localized_feedback(feedback: &str, language: Language) -> String {
-    if matches!(language, Language::ZhCn) {
-        return feedback.to_owned();
-    }
-    match feedback {
-        "发现资源更新" => "Resource updates found".to_owned(),
-        "资源已是最新版本" => "Resources are up to date".to_owned(),
-        "资源同步完成" => "Resource sync completed".to_owned(),
-        _ => feedback.to_owned(),
-    }
+    crate::i18n::feedback(feedback, language)
 }
 
 #[cfg(test)]

@@ -1,88 +1,6 @@
-use std::time::Duration;
-
-use gpui::Context;
-
-use super::{AhabApp, BackendOperation, BackendPhase, BackendStatus, Page, VisualState};
-use crate::{
-    app_inputs::{SettingsInputs, TeamInputs},
-    ipc::{BackendAttach, BackendClient, RpcGateway, contract::method},
-    model::{Language, LogLevel},
-    state::{
-        AppState, HomeState, ResourcesState, SettingsPageState, TeamsState, ThemePacksState,
-        ToolboxState,
-    },
-};
-
-const MAX_AUTO_RETRIES: u8 = 3;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum BackendStartReason {
-    Initial,
-    ManualRetry,
-    Reconnect,
-}
-
-fn runtime_client() -> BackendClient {
-    let mode = std::env::var("AHAB_BACKEND")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let visual_run = std::env::var_os("AHAB_VISUAL_PAGE").is_some()
-        || std::env::var_os("AHAB_VISUAL_STATE").is_some();
-    let use_mock = mode == "mock" || (mode.is_empty() && visual_run);
-    if use_mock {
-        return BackendClient::mock();
-    }
-    BackendClient::unavailable("Python 后端正在等待 GPUI 首帧启动")
-}
-
-fn retry_delay(retry_no: u8) -> Duration {
-    Duration::from_secs(match retry_no {
-        1 => 1,
-        2 => 2,
-        _ => 4,
-    })
-}
-
-fn localized(language: Language, zh: &'static str, en: &'static str) -> String {
-    match language {
-        Language::ZhCn => zh.to_owned(),
-        Language::EnUs => en.to_owned(),
-    }
-}
-
-fn apply_visual_overrides(settings: &mut crate::model::AppSettings) {
-    if let Ok(theme) = std::env::var("AHAB_VISUAL_THEME") {
-        settings.themeMode = match theme.to_ascii_lowercase().as_str() {
-            "light" => crate::model::ThemeMode::Light,
-            "dark" => crate::model::ThemeMode::Dark,
-            "system" => crate::model::ThemeMode::System,
-            _ => settings.themeMode,
-        };
-    }
-    if let Ok(language) = std::env::var("AHAB_VISUAL_LANGUAGE") {
-        settings.language = match language.as_str() {
-            "en-US" | "en-us" | "en" => crate::model::Language::EnUs,
-            "zh-CN" | "zh-cn" | "zh" => crate::model::Language::ZhCn,
-            _ => settings.language,
-        };
-    }
-    if let Ok(accent) = std::env::var("AHAB_VISUAL_ACCENT")
-        && !accent.trim().is_empty()
-    {
-        settings.accentId = accent;
-    }
-    if let Ok(skin) = std::env::var("AHAB_VISUAL_SKIN")
-        && !skin.trim().is_empty()
-    {
-        settings.skinId = skin;
-    }
-}
+use super::*;
 
 impl AhabApp {
-    /// Hydrate the first renderable state from the sidecar away from the
-    /// render thread. This is called only after the backend handshake has
-    /// completed, so constructors and the first frame never wait on network
-    /// responses.
     pub fn start_backend_hydration(&mut self, cx: &mut Context<Self>) {
         if !self.home.rpc.is_sidecar() {
             return;
@@ -113,37 +31,37 @@ impl AhabApp {
             // without touching GPUI state from background threads.
             let tasks_response = cx
                 .background_executor()
-                .spawn(async move { tasks_request.recv().ok() });
+                .spawn(async move { tasks_request.recv().await.ok() });
             let devices_response = cx
                 .background_executor()
-                .spawn(async move { devices_request.recv().ok() });
+                .spawn(async move { devices_request.recv().await.ok() });
             let execution_response = cx
                 .background_executor()
-                .spawn(async move { execution_request.recv().ok() });
+                .spawn(async move { execution_request.recv().await.ok() });
             let stats_response = cx
                 .background_executor()
-                .spawn(async move { stats_request.recv().ok() });
+                .spawn(async move { stats_request.recv().await.ok() });
             let teams_response = cx
                 .background_executor()
-                .spawn(async move { teams_request.recv().ok() });
+                .spawn(async move { teams_request.recv().await.ok() });
             let sinners_response = cx
                 .background_executor()
-                .spawn(async move { sinners_request.recv().ok() });
+                .spawn(async move { sinners_request.recv().await.ok() });
             let presets_response = cx
                 .background_executor()
-                .spawn(async move { presets_request.recv().ok() });
+                .spawn(async move { presets_request.recv().await.ok() });
             let themes_response = cx
                 .background_executor()
-                .spawn(async move { themes_request.recv().ok() });
+                .spawn(async move { themes_request.recv().await.ok() });
             let resources_response = cx
                 .background_executor()
-                .spawn(async move { resources_request.recv().ok() });
+                .spawn(async move { resources_request.recv().await.ok() });
             let hotkey_response = cx
                 .background_executor()
-                .spawn(async move { hotkey_request.recv().ok() });
+                .spawn(async move { hotkey_request.recv().await.ok() });
             let system_response = cx
                 .background_executor()
-                .spawn(async move { system_request.recv().ok() });
+                .spawn(async move { system_request.recv().await.ok() });
 
             let tasks_response = tasks_response.await;
             let devices_response = devices_response.await;
@@ -243,21 +161,7 @@ impl AhabApp {
         .detach();
     }
 
-    fn log_backend(&mut self, level: LogLevel, message: impl Into<String>) {
-        self.home.append_local_log(level, message);
-    }
-
-    pub(crate) fn log_backend_localized(
-        &mut self,
-        level: LogLevel,
-        zh: &'static str,
-        en: &'static str,
-    ) {
-        let message = localized(self.state.settings.language, zh, en);
-        self.log_backend(level, message);
-    }
-
-    fn backend_attempt_is_current(&self, attempt_id: u64) -> bool {
+    pub(crate) fn backend_attempt_is_current(&self, attempt_id: u64) -> bool {
         match self.backend_operation {
             BackendOperation::Connecting {
                 attempt_id: current,
@@ -271,7 +175,7 @@ impl AhabApp {
         }
     }
 
-    fn install_backend_client(&mut self, client: BackendClient) {
+    pub(crate) fn install_backend_client(&mut self, client: BackendClient) {
         self.home.rpc = RpcGateway::new(client.shared());
         self.teams.rpc = RpcGateway::new(client.shared());
         self.theme_packs.rpc = RpcGateway::new(client.shared());
@@ -488,206 +392,5 @@ impl AhabApp {
             }
         })
         .detach();
-    }
-
-    pub(crate) fn maybe_recover_backend(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.exit_requested || !self.backend_operation.is_idle() || !self.home.rpc.is_sidecar() {
-            return false;
-        }
-
-        if self.backend_status.is_ready() && !self.home.rpc.is_connected() {
-            self.log_backend_localized(
-                LogLevel::Warn,
-                "Python 后端连接已断开，开始自动恢复",
-                "Python backend connection lost; starting automatic recovery",
-            );
-            self.start_backend_connection(cx, BackendStartReason::Reconnect);
-            return true;
-        }
-
-        false
-    }
-
-    pub fn new() -> Self {
-        let mut state = AppState::load();
-        apply_visual_overrides(&mut state.settings);
-        let current_page = std::env::var("AHAB_VISUAL_PAGE")
-            .ok()
-            .and_then(|page| Page::parse(&page))
-            .unwrap_or(Page::Home);
-        let visual_state = std::env::var("AHAB_VISUAL_STATE")
-            .ok()
-            .and_then(|state| VisualState::parse(&state));
-        let client = runtime_client();
-        let backend_status = if client.is_sidecar() {
-            BackendStatus::waiting_for_first_frame()
-        } else {
-            BackendStatus::mock()
-        };
-        let home = HomeState::with_client(
-            client.shared(),
-            state.settings.rightPanelWidth,
-            state.settings.rightPanelCollapsed,
-        );
-
-        let mut app = Self {
-            current_page,
-            state,
-            home,
-            teams: TeamsState::with_client(client.shared()),
-            theme_packs: ThemePacksState::with_client(client.shared()),
-            toolbox: ToolboxState::with_client(client.shared()),
-            resources: ResourcesState::with_client(client.shared()),
-            settings_page: SettingsPageState::with_client(client),
-            team_inputs: TeamInputs::default(),
-            settings_inputs: SettingsInputs::default(),
-            visual_state,
-            settings_scroll: gpui::ScrollHandle::new(),
-            settings_active_section: 0,
-            help_scroll: gpui::ScrollHandle::new(),
-            help_active_section: 0,
-            toast: None,
-            toast_generation: 0,
-            home_views: None,
-            titlebar_status_dot: None,
-            backend_status,
-            backend_operation: BackendOperation::Idle,
-            backend_attempt_id: 0,
-            backend_epoch: 0,
-            exit_requested: false,
-            stop_timeout_generation: 0,
-            stats_tick_generation: 0,
-            theme_persist_timer_generation: None,
-            preview_control: Default::default(),
-            window_minimized: false,
-            window_subscriptions: Vec::new(),
-        };
-
-        if app.backend_status.phase == BackendPhase::WaitingForFirstFrame {
-            app.log_backend_localized(
-                LogLevel::Info,
-                "GPUI 窗口已创建，等待首帧后启动 Python 后端",
-                "GPUI window created; Python backend will start after the first frame",
-            );
-        }
-
-        app
-    }
-
-    pub(crate) fn apply_visual_state(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.visual_state.take() else {
-            return;
-        };
-        self.current_page = state.page();
-        match state {
-            VisualState::HomeExpanded => {
-                self.home
-                    .expanded_tasks
-                    .insert(crate::model::FixedTaskId::DailyTask);
-            }
-            VisualState::HomeSelect => {
-                self.home
-                    .expanded_tasks
-                    .insert(crate::model::FixedTaskId::GetReward);
-                self.home.open_select = Some(crate::state::HomeSelect::RewardMode);
-            }
-            VisualState::HomeRunning => {
-                self.home.start();
-            }
-            VisualState::HomePaused => {
-                self.home.start();
-                self.home.pause_or_resume();
-            }
-            VisualState::HomeAfterCompletion => {
-                self.home.set_after_completion_open(true);
-            }
-            VisualState::TeamsEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
-                }
-            }
-            VisualState::TeamsShopEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
-                    self.teams.set_editor_tab(crate::state::TeamEditorTab::Shop);
-                }
-            }
-            VisualState::TeamsCombatEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Combat);
-                }
-            }
-            VisualState::TeamsStarlightEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Starlight);
-                }
-            }
-            VisualState::TeamsAdvancedEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Advanced);
-                }
-            }
-            VisualState::TeamsDelete => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.request_delete(team);
-                }
-            }
-            VisualState::TeamsSelect => {
-                if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
-                    self.teams.open_select = Some(crate::state::TeamSelect::Purpose);
-                }
-            }
-            VisualState::SettingsHotkey => {
-                self.settings_page.capturing = Some(crate::state::HotkeyTarget::StartStop);
-            }
-            VisualState::SettingsSelect => {
-                self.settings_page.open_select = Some(crate::state::SettingsSelect::UpdateSource);
-            }
-            VisualState::SettingsLatest => {
-                self.settings_page.check_update();
-            }
-            VisualState::ToolboxRunning => {
-                self.toolbox.toggle(crate::model::ToolId::InfiniteBattle);
-            }
-            VisualState::ResourcesSyncing => {
-                self.resources.sync_progress = Some(42);
-                self.resources.sync_finish_scheduled = false;
-            }
-            VisualState::HelpScrolled => {
-                self.help_scroll.scroll_to_top_of_item(6);
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn automatic_retry_delays_use_exponential_backoff() {
-        assert_eq!(retry_delay(1), Duration::from_secs(1));
-        assert_eq!(retry_delay(2), Duration::from_secs(2));
-        assert_eq!(retry_delay(3), Duration::from_secs(4));
-        assert_eq!(retry_delay(0), Duration::from_secs(4));
-    }
-
-    #[test]
-    fn retry_budget_allows_three_retries_after_the_initial_attempt() {
-        assert_eq!(MAX_AUTO_RETRIES, 3);
-        assert_eq!(usize::from(MAX_AUTO_RETRIES) + 1, 4);
     }
 }

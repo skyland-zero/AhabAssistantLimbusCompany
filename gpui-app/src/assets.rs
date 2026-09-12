@@ -2,12 +2,23 @@
 
 //! Asset identity, embedding, and dev/release resolution.
 //!
+//! NOTE (AGENTS.md §3.2 exception): this file exceeds the 500-line target
+//! because it is the single static asset identity table (`Asset`,
+//! `SinnerAsset`, `StatusEffectAsset`, `ThemeAsset`) plus its resolver.  The
+//! table is intentionally kept in one place so every embedded path and file
+//! name can be audited together; splitting it would scatter the release
+//! resource contract.
+//!
 //! Pages should request an [`Asset`] instead of joining paths. Fixed assets are
 //! embedded from the canonical `gpui-app/resources/assets` tree so a release
 //! cannot depend on the checkout layout. [`AssetResolver::resolve`]
 //! additionally finds copied files for GPUI APIs that require a filesystem path
-//! (and for future large assets). No absolute application path is encoded in
-//! this module.
+//! (and for future large assets).
+//!
+//! The compile-time `CARGO_MANIFEST_DIR` root is used as a *debug-only* fallback
+//! for `cargo run`; release builds resolve resources next to the executable and
+//! from the current directory, so the checkout path is never required at
+//! runtime.
 
 use std::{io, path::PathBuf, sync::Arc};
 
@@ -132,33 +143,33 @@ impl StatusEffectAsset {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ThemeAsset {
     /// Cold-black background with nebula blotches and cracks.
-    LimbusBg,
+    Bg,
     /// Dark-red riveted metal band used for card headers.
-    LimbusTagband,
+    Tagband,
     /// Riveted dark-red frame with a transparent middle.
-    LimbusFrame,
+    Frame,
     /// Mustard-gold divider flourish on a transparent ground.
-    LimbusDivider,
+    Divider,
     /// Blood-red wax-seal accent on a transparent ground.
-    LimbusSeal,
+    Seal,
 }
 
 impl ThemeAsset {
     pub const ALL: [Self; 5] = [
-        Self::LimbusBg,
-        Self::LimbusTagband,
-        Self::LimbusFrame,
-        Self::LimbusDivider,
-        Self::LimbusSeal,
+        Self::Bg,
+        Self::Tagband,
+        Self::Frame,
+        Self::Divider,
+        Self::Seal,
     ];
 
     pub const fn file_name(self) -> &'static str {
         match self {
-            Self::LimbusBg => "bg.png",
-            Self::LimbusTagband => "tagband.png",
-            Self::LimbusFrame => "frame.png",
-            Self::LimbusDivider => "divider.png",
-            Self::LimbusSeal => "seal-red.png",
+            Self::Bg => "bg.png",
+            Self::Tagband => "tagband.png",
+            Self::Frame => "frame.png",
+            Self::Divider => "divider.png",
+            Self::Seal => "seal-red.png",
         }
     }
 }
@@ -186,7 +197,9 @@ impl Asset {
             Self::TitleBanner => PathBuf::from("limbus_title_banner.png"),
             Self::Sinner(sinner) => PathBuf::from("sinners").join(sinner.file_name()),
             Self::StatusEffect(effect) => PathBuf::from("status_effects").join(effect.file_name()),
-            Self::Theme(theme) => PathBuf::from("themes").join("limbus").join(theme.file_name()),
+            Self::Theme(theme) => PathBuf::from("themes")
+                .join("limbus")
+                .join(theme.file_name()),
             Self::Help(Language::ZhCn) => PathBuf::from("content").join("help-zh.md"),
             Self::Help(Language::EnUs) => PathBuf::from("content").join("help-en.md"),
         }
@@ -295,23 +308,23 @@ impl Asset {
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/status_effects/tremor.png"
             )),
-            Self::Theme(ThemeAsset::LimbusBg) => include_bytes!(concat!(
+            Self::Theme(ThemeAsset::Bg) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/themes/limbus/bg.png"
             )),
-            Self::Theme(ThemeAsset::LimbusTagband) => include_bytes!(concat!(
+            Self::Theme(ThemeAsset::Tagband) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/themes/limbus/tagband.png"
             )),
-            Self::Theme(ThemeAsset::LimbusFrame) => include_bytes!(concat!(
+            Self::Theme(ThemeAsset::Frame) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/themes/limbus/frame.png"
             )),
-            Self::Theme(ThemeAsset::LimbusDivider) => include_bytes!(concat!(
+            Self::Theme(ThemeAsset::Divider) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/themes/limbus/divider.png"
             )),
-            Self::Theme(ThemeAsset::LimbusSeal) => include_bytes!(concat!(
+            Self::Theme(ThemeAsset::Seal) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/themes/limbus/seal-red.png"
             )),

@@ -12,7 +12,10 @@ mod tabs;
 #[allow(unused_imports)]
 pub use inputs::{clamp_number, number_stepper, text_input, text_input_with_palette};
 #[allow(unused_imports)]
-pub use select::{select, select_option, select_popup, select_trigger, select_with_palette};
+pub use select::{
+    select, select_keyboard_index, select_option, select_options_state, select_popup,
+    select_trigger, select_with_palette,
+};
 #[allow(unused_imports)]
 pub use slider::{normalize_slider, slider, slider_with_palette};
 #[allow(unused_imports)]

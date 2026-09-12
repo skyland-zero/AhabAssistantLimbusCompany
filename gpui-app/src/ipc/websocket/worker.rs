@@ -1,11 +1,22 @@
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 use super::*;
 
+/// Where a completed response is delivered.
+///
+/// Synchronous callers use a standard channel and block on it; asynchronous
+/// callers use an async channel so waiting never occupies a background
+/// executor thread.
+pub(super) enum ResponseSink {
+    Sync(Sender<RpcResponse>),
+    Async(async_channel::Sender<RpcResponse>),
+}
+
 pub(super) enum WorkerCommand {
     Request {
         request: RpcRequest,
-        response_tx: Option<Sender<RpcResponse>>,
+        response_tx: Option<ResponseSink>,
         report_completion: bool,
     },
     Shutdown,
@@ -14,7 +25,7 @@ pub(super) enum WorkerCommand {
 struct PendingRequest {
     method: String,
     params: Option<Value>,
-    response_tx: Option<Sender<RpcResponse>>,
+    response_tx: Option<ResponseSink>,
     report_completion: bool,
     deadline: Instant,
 }
@@ -187,8 +198,15 @@ fn complete(
     completions: &Arc<Mutex<VecDeque<RpcCompletion>>>,
     activity: &TransportActivity,
 ) {
-    if let Some(waiter) = pending.response_tx {
-        let _ = waiter.send(response.clone());
+    if let Some(sink) = pending.response_tx {
+        match sink {
+            ResponseSink::Sync(sender) => {
+                let _ = sender.send(response.clone());
+            }
+            ResponseSink::Async(sender) => {
+                let _ = sender.send_blocking(response.clone());
+            }
+        }
     }
     if pending.report_completion {
         let mut queued = false;

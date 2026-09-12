@@ -325,28 +325,7 @@ pub(super) fn starlight_points_label(cost: u32, language: Language) -> String {
 }
 
 pub(super) fn localized_feedback(feedback: &str, language: Language) -> String {
-    if matches!(language, Language::ZhCn) {
-        return feedback.to_owned();
-    }
-    if let Some(detail) = feedback.strip_prefix("导入失败：") {
-        return format!("Import failed: {detail}");
-    }
-    match feedback {
-        "已导入队伍 JSON（尚未保存）" => "Team JSON imported (not saved yet)".to_owned(),
-        "队伍 JSON 已复制" => "Team JSON copied".to_owned(),
-        "队伍已保存" => "Team saved".to_owned(),
-        "队伍已删除" => "Team deleted".to_owned(),
-        "队伍名称不能为空" => "Team name is required".to_owned(),
-        "队伍最多选择 12 名人格" => "A team can contain at most 12 sinners".to_owned(),
-        "当前没有打开队伍编辑器" => "No team editor is open".to_owned(),
-        "队伍 JSON 必须是对象" => "Team JSON must be an object".to_owned(),
-        "队伍 JSON 缺少 name" => "Team JSON is missing name".to_owned(),
-        "purpose 无效" => "Invalid team purpose".to_owned(),
-        "sinners 无效" => "Invalid sinner list".to_owned(),
-        "mirrorConfig 必须是对象" => "mirrorConfig must be an object".to_owned(),
-        "mirrorConfig 默认值无效" => "Invalid mirrorConfig defaults".to_owned(),
-        _ => feedback.to_owned(),
-    }
+    crate::i18n::feedback(feedback, language)
 }
 
 pub(super) fn discard_value(systems: &crate::model::DiscardSystems, index: usize) -> bool {

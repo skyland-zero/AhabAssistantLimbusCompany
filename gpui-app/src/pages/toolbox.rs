@@ -11,8 +11,8 @@ use crate::{
     app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
     components::style::{DANGER, GREEN, current_render_palette},
     components::{
-        BadgeTone, ButtonVariant, action_button, badge, card, empty_state, is_activation_key,
-        page_root, palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon,
+        BadgeTone, ButtonVariant, action_button, badge, card, is_activation_key, page_root,
+        palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon,
     },
     i18n::{Localized, paired as text},
     model::{Language, ToolId},
@@ -88,7 +88,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .into_iter()
         .map(|tool| tool_card(app, cx, tool, language))
         .collect();
-    let has_tools = !cards.is_empty();
 
     // The minimum native window is 800px, where the React md breakpoint
     // produces two columns. Keeping this explicit also avoids a container
@@ -100,16 +99,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .gap(px(16.))
         .children(cards);
 
-    let body = if has_tools {
-        div().w_full().child(grid)
-    } else {
-        div().w_full().child(empty_state(
-            text("暂无工具", "No tools available").get(language),
-            text("工具资源尚未加载。", "Tool resources are not loaded yet.").get(language),
-        ))
-    };
-
-    let mut content = div().w_full().flex().flex_col().gap_3().child(body).child(
+    let mut content = div().w_full().flex().flex_col().gap_3().child(grid).child(
         card(
             div().text_size(px(12.)).text_color(rgb(TEXT_MUTED)).child(
                 text(
@@ -335,25 +325,7 @@ fn tool_icon_path(icon: ToolIcon) -> &'static str {
 }
 
 fn localized_feedback(feedback: &str, language: Language) -> String {
-    if matches!(language, Language::ZhCn) {
-        return feedback.to_owned();
-    }
-    if let Some(path) = feedback.strip_prefix("截图完成：") {
-        return format!("Screenshot saved: {path}");
-    }
-    if feedback == "已修改分辨率为 1080P (240 DPI)" {
-        return "Resolution changed to 1080P (240 DPI)".to_owned();
-    }
-    if feedback == "已修改分辨率为 1080P (240 DPI)，Scrcpy 已重连" {
-        return "Resolution changed to 1080P (240 DPI), Scrcpy reconnected".to_owned();
-    }
-    if feedback == "已还原设备分辨率与 DPI" {
-        return "Device resolution and DPI restored".to_owned();
-    }
-    if feedback == "已还原设备分辨率与 DPI，Scrcpy 已重连" {
-        return "Device resolution and DPI restored, Scrcpy reconnected".to_owned();
-    }
-    feedback.to_owned()
+    crate::i18n::feedback(feedback, language)
 }
 
 #[cfg(test)]

@@ -30,12 +30,10 @@ pub fn select_with_palette(
         .px_3()
         .py_2()
         .rounded_md()
-        .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.card))
-        .text_color(paint_color(palette.foreground))
-        .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
+        .text_color(paint_color(palette.foreground));
     if state.focused {
         control = control.border_color(paint_color(palette.ring));
     }
@@ -43,7 +41,11 @@ pub fn select_with_palette(
         control = control.opacity(0.5);
     } else {
         let hover = paint_color(palette.accent_surface);
-        control = control.cursor_pointer().hover(move |style| style.bg(hover));
+        control = control
+            .tab_index(0)
+            .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover));
     }
 
     let mut value = div().flex().items_center().gap_2();
@@ -150,4 +152,48 @@ pub fn select_option(label: impl Into<String>, selected: bool, palette: &Palette
     let hover = paint_color(palette.accent_surface);
     option = option.hover(move |style| style.bg(hover));
     option.child(label.into())
+}
+
+/// Resolve the selected option label and the value list for a select control.
+///
+/// Every page-owned select shares this derivation so the fallback behavior for
+/// a missing current value cannot diverge between pages.
+pub fn select_options_state(options: &[(String, String)], current: &str) -> (String, Vec<String>) {
+    let selected_index = options
+        .iter()
+        .position(|(value, _)| value == current)
+        .unwrap_or(0);
+    let selected_label = options
+        .get(selected_index)
+        .map(|(_, label)| label.clone())
+        .unwrap_or_else(|| current.to_owned());
+    let values = options
+        .iter()
+        .map(|(value, _)| value.clone())
+        .collect::<Vec<_>>();
+    (selected_label, values)
+}
+
+/// Compute the next index for a keyboard navigation key.
+///
+/// Shared by the page select implementations so Enter/Space/arrows/Home/End
+/// semantics cannot drift; `None` means the key does not move the selection.
+pub fn select_keyboard_index(
+    key: &str,
+    current_index: usize,
+    value_count: usize,
+    open: bool,
+) -> Option<usize> {
+    let modulo = value_count.max(1);
+    match key {
+        "left" | "arrowleft" | "up" | "arrowup" => {
+            Some((current_index as isize - 1).rem_euclid(modulo as isize) as usize)
+        }
+        "right" | "arrowright" => Some((current_index + 1) % modulo),
+        "down" | "arrowdown" if open => Some((current_index + 1) % modulo),
+        "down" | "arrowdown" => Some(current_index),
+        "home" => Some(0),
+        "end" => value_count.checked_sub(1),
+        _ => None,
+    }
 }

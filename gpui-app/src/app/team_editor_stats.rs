@@ -24,7 +24,7 @@ impl AhabApp {
                 let request = rpc.request_async(method::TEAM_STATS_GET, Some(params));
                 let response = cx
                     .background_executor()
-                    .spawn(async move { request.recv().ok() })
+                    .spawn(async move { request.recv().await.ok() })
                     .await;
                 let result = match response {
                     None => Err("后端连接已断开".to_owned()),
@@ -81,7 +81,7 @@ impl AhabApp {
                 let request = rpc.request_async(method::TEAM_STATS_CLEAR, Some(params));
                 let response = cx
                     .background_executor()
-                    .spawn(async move { request.recv().ok() })
+                    .spawn(async move { request.recv().await.ok() })
                     .await;
                 let result = match response {
                     None => Err("后端连接已断开".to_owned()),

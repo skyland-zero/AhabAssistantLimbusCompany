@@ -7,7 +7,7 @@ mod sidecar;
 mod worker;
 
 use sidecar::SidecarGuard;
-use worker::{WorkerCommand, run_worker};
+use worker::{ResponseSink, WorkerCommand, run_worker};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -19,7 +19,7 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc::{self, Receiver, Sender},
+        mpsc::{self, Sender},
     },
     thread,
     time::Duration,
@@ -155,14 +155,16 @@ impl WebSocketClient {
         &self,
         method: impl Into<String>,
         params: Option<Value>,
-    ) -> Receiver<RpcResponse> {
+    ) -> async_channel::Receiver<RpcResponse> {
         let request = RpcRequest::new(
             self.shared.next_id.fetch_add(1, Ordering::Relaxed),
             method,
             params,
         );
-        let (sender, receiver) = mpsc::channel();
-        self.enqueue_request(request, Some(sender), false);
+        // An async channel lets callers await the response without blocking a
+        // background-executor thread for up to REQUEST_TIMEOUT.
+        let (sender, receiver) = async_channel::bounded(1);
+        self.enqueue_request(request, Some(ResponseSink::Async(sender)), false);
         receiver
     }
 
@@ -266,7 +268,7 @@ impl WebSocketClient {
     pub(crate) fn send_request(&self, request: RpcRequest) -> RpcResponse {
         let id = request.id;
         let (response_tx, response_rx) = mpsc::channel();
-        self.enqueue_request(request, Some(response_tx), false);
+        self.enqueue_request(request, Some(ResponseSink::Sync(response_tx)), false);
         match response_rx.recv_timeout(REQUEST_TIMEOUT) {
             Ok(response) => response,
             Err(error) => RpcResponse::failure(
@@ -279,14 +281,14 @@ impl WebSocketClient {
     fn enqueue_request(
         &self,
         request: RpcRequest,
-        response_tx: Option<Sender<RpcResponse>>,
+        response_tx: Option<ResponseSink>,
         report_completion: bool,
     ) {
         let id = request.id;
         if !self.is_connected() {
             let response = self.unavailable_response(id);
             if let Some(sender) = response_tx {
-                let _ = sender.send(response.clone());
+                Self::deliver_to_sink(sender, response.clone());
             }
             if report_completion {
                 self.push_completion(&request, response);
@@ -302,7 +304,7 @@ impl WebSocketClient {
         else {
             let response = self.unavailable_response(id);
             if let Some(sender) = response_tx {
-                let _ = sender.send(response.clone());
+                Self::deliver_to_sink(sender, response.clone());
             }
             if report_completion {
                 self.push_completion(&request, response);
@@ -323,7 +325,7 @@ impl WebSocketClient {
             if let WorkerCommand::Request { response_tx, .. } = error.0
                 && let Some(sender) = response_tx
             {
-                let _ = sender.send(response.clone());
+                Self::deliver_to_sink(sender, response.clone());
             }
             if report_completion {
                 self.push_completion_parts(method, params, response);
@@ -333,6 +335,17 @@ impl WebSocketClient {
 
     fn push_completion(&self, request: &RpcRequest, response: RpcResponse) {
         self.push_completion_parts(request.method.clone(), request.params.clone(), response);
+    }
+
+    fn deliver_to_sink(sink: ResponseSink, response: RpcResponse) {
+        match sink {
+            ResponseSink::Sync(sender) => {
+                let _ = sender.send(response);
+            }
+            ResponseSink::Async(sender) => {
+                let _ = sender.send_blocking(response);
+            }
+        }
     }
 
     fn push_completion_parts(&self, method: String, params: Option<Value>, response: RpcResponse) {

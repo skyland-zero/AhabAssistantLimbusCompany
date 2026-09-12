@@ -164,11 +164,9 @@ pub(super) fn task_card(
             palette_rgb(current_render_palette().border)
         })
     } else {
-        root.rounded_lg().border_1().border_color(if executing {
-            rgb(ACCENT)
-        } else {
-            rgba(0)
-        })
+        root.rounded_lg()
+            .border_1()
+            .border_color(if executing { rgb(ACCENT) } else { rgba(0) })
     };
     root = root.bg(rgb(SURFACE));
     root = root.child(header);

@@ -263,14 +263,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 }
 
 fn localized_feedback(feedback: &str, language: Language) -> String {
-    if matches!(language, Language::ZhCn) {
-        return feedback.to_owned();
-    }
-    match feedback {
-        "已恢复默认权重" => "Default weights restored".to_owned(),
-        "主题包设置已保存" => "Theme-pack settings saved".to_owned(),
-        _ => feedback.to_owned(),
-    }
+    crate::i18n::feedback(feedback, language)
 }
 
 #[cfg(test)]

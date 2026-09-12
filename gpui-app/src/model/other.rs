@@ -49,11 +49,16 @@ pub struct SyncProgressPayload {
 pub enum LogLevel {
     Debug,
     Info,
+    #[serde(alias = "warning")]
     Warn,
+    #[serde(alias = "critical", alias = "fatal")]
     Error,
 }
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct LogEntryPayload {
+    /// Epoch milliseconds.  A legacy sidecar that omits the timestamp still
+    /// produces a visible log line instead of a silently dropped event.
+    #[serde(default)]
     pub ts: i64,
     pub level: LogLevel,
     pub message: String,
@@ -138,7 +143,9 @@ impl Default for SystemSettingsConfig {
 }
 
 fn schema_version() -> u32 {
-    1
+    // The sidecar advertises schema 3 for this payload; keep the default in
+    // lockstep so a round-trip cannot silently downgrade the contract.
+    3
 }
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

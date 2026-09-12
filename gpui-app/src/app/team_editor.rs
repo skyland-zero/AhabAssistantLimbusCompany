@@ -82,7 +82,7 @@ impl AhabApp {
                 let request = rpc.request_async(method::TEAM_SAVE, Some(params));
                 let response = cx
                     .background_executor()
-                    .spawn(async move { request.recv().ok() })
+                    .spawn(async move { request.recv().await.ok() })
                     .await;
                 let result = match response {
                     None => Err("后端连接已断开".to_owned()),
@@ -93,7 +93,7 @@ impl AhabApp {
                             let list_request = rpc.request_async(method::TEAM_LIST, None);
                             let list_response = cx
                                 .background_executor()
-                                .spawn(async move { list_request.recv().ok() })
+                                .spawn(async move { list_request.recv().await.ok() })
                                 .await;
                             match list_response {
                                 None => Err("team.save 已成功，但无法读取队伍列表".to_owned()),
@@ -166,7 +166,7 @@ impl AhabApp {
                 let request = rpc.request_async(method::TEAM_SAVE, Some(value));
                 let response = cx
                     .background_executor()
-                    .spawn(async move { request.recv().ok() })
+                    .spawn(async move { request.recv().await.ok() })
                     .await;
                 let result = match response {
                     None => Err("后端连接已断开".to_owned()),
@@ -178,7 +178,7 @@ impl AhabApp {
                                 let list_request = rpc.request_async(method::TEAM_LIST, None);
                                 let list_response = cx
                                     .background_executor()
-                                    .spawn(async move { list_request.recv().ok() })
+                                    .spawn(async move { list_request.recv().await.ok() })
                                     .await;
                                 match list_response {
                                     None => Err("team.save 已成功，但无法读取队伍列表".to_owned()),
@@ -239,7 +239,7 @@ impl AhabApp {
                 );
                 let response = cx
                     .background_executor()
-                    .spawn(async move { request.recv().ok() })
+                    .spawn(async move { request.recv().await.ok() })
                     .await;
                 let result = match response {
                     None => Err("后端连接已断开".to_owned()),

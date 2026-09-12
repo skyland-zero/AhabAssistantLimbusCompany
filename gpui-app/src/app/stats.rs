@@ -15,7 +15,7 @@ impl AhabApp {
             let request = rpc.request_async(method::STATS_GET_DAILY_SUMMARY, None);
             let response = cx
                 .background_executor()
-                .spawn(async move { request.recv().ok() })
+                .spawn(async move { request.recv().await.ok() })
                 .await;
             let result = response
                 .map(|response| {

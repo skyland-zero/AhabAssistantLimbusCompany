@@ -21,7 +21,9 @@ pub use runtime::{
     render_rgb, render_rgba, set_current_render_palette, skin_rounded,
 };
 #[allow(unused_imports)]
-pub use tokens::{ACCENT_PRESETS, AccentId, AccentPreset, AccentTokens, ColorScheme, ColorToken, SkinId};
+pub use tokens::{
+    ACCENT_PRESETS, AccentId, AccentPreset, AccentTokens, ColorScheme, ColorToken, SkinId,
+};
 
 #[cfg(test)]
 mod tests {

@@ -82,6 +82,14 @@ impl SettingsPageState {
         };
     }
 
+    /// Record that the external repository link was requested.
+    ///
+    /// Pages call this instead of writing the feedback field directly, keeping
+    /// business state behind the state-layer boundary.
+    pub fn note_repository_opened(&mut self) {
+        self.feedback = Some("已请求打开 GitHub 仓库".to_owned());
+    }
+
     pub fn close_select(&mut self) {
         self.open_select = None;
     }
