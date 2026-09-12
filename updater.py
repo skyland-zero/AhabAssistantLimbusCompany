@@ -9,7 +9,11 @@ from pathlib import Path, PurePosixPath
 
 import psutil
 
-from module.update.signature import UpdateSignatureError, verify_signed_manifest_files
+from module.update.signature import (
+    UpdateSignatureError,
+    signature_enforcement_required,
+    verify_signed_manifest_files,
+)
 
 
 class UpdateManifestError(ValueError):
@@ -246,8 +250,10 @@ class Updater:
             None,
         )
         if selected is None:
-            required = os.getenv("AALC_UPDATE_REQUIRE_SIGNATURE", "").strip().lower() in {"1", "true", "yes"}
-            if required:
+            # Fail closed: a release without the detached signature pair is
+            # rejected unless the operator explicitly opts out for a legacy
+            # channel (``AALC_UPDATE_REQUIRE_SIGNATURE=0``).
+            if signature_enforcement_required():
                 raise UpdateSignatureError("更新包缺少签名清单")
             return None
         manifest_path, signature_path = selected

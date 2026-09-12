@@ -992,6 +992,11 @@ class RunnerSupervisor:
             return True
         seq = int(message["seq"])
         finish_ack_seq: int | None = None
+        # Snapshot transitions are collected under ``session.lock`` but applied
+        # after it is released.  ``request_stop`` must be able to take
+        # ``session.lock`` without holding ``_condition``; nesting the two in
+        # opposite orders was an ABBA deadlock.
+        snapshot_update: tuple[str, Mapping[str, Any], bool] | None = None
         with session.lock:
             if seq <= session.last_event_seq:
                 # Duplicates and delayed low-priority events are safe to discard.
@@ -1004,33 +1009,15 @@ class RunnerSupervisor:
             elif message_type == "ready":
                 session.ready_seen = True
                 session.ready_event.set()
-                with self._condition:
-                    self._replace_snapshot_locked(ready_at=time.monotonic())
+                snapshot_update = ("ready", message, False)
             elif message_type == "status":
-                target = message.get("status")
-                with self._condition:
-                    if target == "running" and self._snapshot.state in {RunnerState.STARTING, RunnerState.PAUSED}:
-                        self._replace_snapshot_locked(state=RunnerState.RUNNING, device_lease=DeviceLeaseState.RUNNER)
-                    elif target == "paused" and self._snapshot.state in {RunnerState.RUNNING, RunnerState.STARTING}:
-                        self._replace_snapshot_locked(state=RunnerState.PAUSED, device_lease=DeviceLeaseState.RUNNER)
-                    elif target == "stopping" and self._snapshot.state is not RunnerState.IDLE:
-                        self._replace_snapshot_locked(state=RunnerState.STOPPING)
+                snapshot_update = ("status", message, False)
             elif message_type == "task.started":
-                task_id = message.get("taskId")
-                if isinstance(task_id, str):
-                    with self._condition:
-                        self._replace_snapshot_locked(current_task_id=task_id)
+                snapshot_update = ("task.started", message, False)
             elif message_type == "finished":
                 session.finished_seen = True
                 session.finished_event.set()
-                with self._condition:
-                    self._replace_snapshot_locked(
-                        state=RunnerState.RESTORING,
-                        device_lease=DeviceLeaseState.RESTORING,
-                        outcome=message.get("outcome"),
-                        forced=bool(message.get("forced", False)) or session.forced,
-                        error=message.get("error"),
-                    )
+                snapshot_update = ("finished", message, bool(session.forced))
                 # Defer ACK until the callback has had a chance to persist the
                 # finished frame, finalSeq and any preceding resource/config
                 # obligations.  A callback failure therefore cannot be
@@ -1039,10 +1026,39 @@ class RunnerSupervisor:
                 # inspection or stop requests.
                 finish_ack_seq = seq
             elif message_type == "error":
-                error = message.get("error")
-                if not isinstance(error, Mapping):
-                    error = {"code": "RUNNER_INIT_FAILED", "message": str(message.get("message", "Runner error"))}
-                with self._condition:
+                snapshot_update = ("error", message, False)
+        if snapshot_update is not None:
+            kind, event_message, forced = snapshot_update
+            with self._condition:
+                if kind == "ready":
+                    self._replace_snapshot_locked(ready_at=time.monotonic())
+                elif kind == "status":
+                    target = event_message.get("status")
+                    if target == "running" and self._snapshot.state in {RunnerState.STARTING, RunnerState.PAUSED}:
+                        self._replace_snapshot_locked(state=RunnerState.RUNNING, device_lease=DeviceLeaseState.RUNNER)
+                    elif target == "paused" and self._snapshot.state in {RunnerState.RUNNING, RunnerState.STARTING}:
+                        self._replace_snapshot_locked(state=RunnerState.PAUSED, device_lease=DeviceLeaseState.RUNNER)
+                    elif target == "stopping" and self._snapshot.state is not RunnerState.IDLE:
+                        self._replace_snapshot_locked(state=RunnerState.STOPPING)
+                elif kind == "task.started":
+                    task_id = event_message.get("taskId")
+                    if isinstance(task_id, str):
+                        self._replace_snapshot_locked(current_task_id=task_id)
+                elif kind == "finished":
+                    self._replace_snapshot_locked(
+                        state=RunnerState.RESTORING,
+                        device_lease=DeviceLeaseState.RESTORING,
+                        outcome=event_message.get("outcome"),
+                        forced=bool(event_message.get("forced", False)) or forced,
+                        error=event_message.get("error"),
+                    )
+                elif kind == "error":
+                    error = event_message.get("error")
+                    if not isinstance(error, Mapping):
+                        error = {
+                            "code": "RUNNER_INIT_FAILED",
+                            "message": str(event_message.get("message", "Runner error")),
+                        }
                     self._replace_snapshot_locked(error=dict(error))
         callback = self.event_callback
         if callback is not None:
@@ -1379,11 +1395,25 @@ class RunnerSupervisor:
             if self._snapshot.state is RunnerState.STOPPING:
                 return CommandResult(True, self._snapshot)
             session = self._session
-            if session is not None:
-                with session.lock:
-                    session.stop_requested = True
-                    session.requested_by = requested_by
-            self._replace_snapshot_locked(state=RunnerState.STOPPING, requested_by=requested_by)
+        # Record the request on the session without holding ``_condition``.
+        # ``_handle_event`` takes ``session.lock`` and must never wait for a
+        # thread that is itself waiting on ``session.lock`` while holding
+        # ``_condition``: the previous nesting was an ABBA deadlock.
+        if session is not None:
+            with session.lock:
+                session.stop_requested = True
+                session.requested_by = requested_by
+        with self._condition:
+            # The run may have finalized while this request waited on
+            # ``session.lock``.  Only a still-active run may transition to
+            # STOPPING; never regress RESTORING/IDLE back to STOPPING.
+            if self._session is session and self._snapshot.run_id == run_id:
+                if session is None or self._snapshot.state in {
+                    RunnerState.STARTING,
+                    RunnerState.RUNNING,
+                    RunnerState.PAUSED,
+                }:
+                    self._replace_snapshot_locked(state=RunnerState.STOPPING, requested_by=requested_by)
         # Command sending and timeout supervision are deliberately outside the
         # state lock.  A blocked pipe cannot block another stop/getState call.
         if session is None or session.process is None:

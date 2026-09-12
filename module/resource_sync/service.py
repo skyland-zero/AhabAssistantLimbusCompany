@@ -660,6 +660,10 @@ class ResourceSyncService:
                     raise ValueError(f"资源包内文件校验失败: {entry.path}")
 
                 target_path = self.assets_dir / entry.path
+                # 清单校验已经拒绝绝对/上级路径；在写入前再做一次包含性校验，
+                # 避免后续重构绕过反序列化边界。
+                if not target_path.resolve().is_relative_to(self.assets_dir.resolve()):
+                    raise ValueError(f"资源目标路径越出资源目录: {entry.path}")
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(extracted_path, target_path)
                 downloaded_count += 1

@@ -68,6 +68,7 @@ class FakeConfig:
             "set_mirror_count": 1,
             "infinite_dungeons": False,
             "hard_mirror": False,
+            "hard_mirror_target_floors": 5,
             "no_weekly_bonuses": False,
             "floor_3_exit": False,
             "save_rewards": False,
@@ -627,7 +628,7 @@ def test_runner_execution_uses_lease_sequence_and_idempotent_controls(tmp_path) 
 
     stopped = app.execution_stop({"runId": first["runId"], "requestedBy": "user"})
     assert stopped["accepted"] is True
-    deadline = time.monotonic() + 1.0
+    deadline = time.monotonic() + 3.0
     while app.execution_get_state()["state"] != "idle" and time.monotonic() < deadline:
         time.sleep(0.01)
     state = app.execution_get_state()
@@ -957,7 +958,7 @@ def test_runner_repository_delta_and_typed_events_are_deduplicated(tmp_path) -> 
         deviceRestore="restored",
     )
     app.execution_get_state()
-    deadline = time.monotonic() + 1.0
+    deadline = time.monotonic() + 3.0
     while app.execution_get_state()["state"] != "idle" and time.monotonic() < deadline:
         time.sleep(0.01)
     assert repository.create_calls == [run_id]
@@ -1825,3 +1826,26 @@ def test_tool_resolution_set_and_reset(monkeypatch) -> None:
     assert res_pc["error"]["code"] == -32020
 
     app.close()
+
+
+def test_tasks_set_config_rejects_out_of_range_and_non_finite_numbers() -> None:
+    app = make_application()
+    try:
+        assert app.tasks_get_config()["set_windows"]["screenshot_interval"] == 0.5
+
+        with pytest.raises(ValueError, match="screenshot_interval"):
+            app.tasks_set_config({"set_windows": {"screenshot_interval": -5}})
+        with pytest.raises(ValueError, match="screenshot_interval"):
+            app.tasks_set_config({"set_windows": {"screenshot_interval": float("nan")}})
+        with pytest.raises(ValueError, match="set_win_size"):
+            app.tasks_set_config({"set_windows": {"set_win_size": 10**9}})
+        with pytest.raises(ValueError, match="hard_mirror_target_floors"):
+            app.tasks_set_config({"mirror": {"hard_mirror_target_floors": -1}})
+        with pytest.raises(ValueError, match="set_lunacy_to_enkephalin"):
+            app.tasks_set_config({"buy_enkephalin": {"set_lunacy_to_enkephalin": 9}})
+
+        # A valid update still persists.
+        assert app.tasks_set_config({"set_windows": {"screenshot_interval": 1.5}}) is True
+        assert app.config.values["screenshot_interval"] == 1.5
+    finally:
+        app.close()

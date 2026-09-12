@@ -9,6 +9,7 @@ import pytest
 pytest.importorskip("websockets")
 from websockets.asyncio.client import connect
 
+from module.execution.event_adapter import RunnerEventAdapter
 from module.rpc_dispatcher import RpcDispatcher
 from module.websocket_server import WebSocketServer
 from tests.unit.module.test_backend_application import make_application
@@ -96,11 +97,30 @@ async def _exercise_server() -> None:
 
             # RunnerEventAdapter keeps ``execution.log`` for legacy Python
             # listeners, while the GPUI wire contract consumes ``log.entry``.
-            app.emit("execution.log", {"ts": 1, "level": "info", "message": "runner"})
+            # Feed the real Runner shape (``timestamp`` in seconds +
+            # ``logging`` level name) so a contract regression cannot pass
+            # unnoticed.
+            RunnerEventAdapter(app.emit).forward(
+                {
+                    "type": "log.entry",
+                    "runId": "run-1",
+                    "seq": 5,
+                    "timestamp": 1_725_000_000.5,
+                    "level": "warning",
+                    "logger": "task.mirror",
+                    "message": "runner",
+                }
+            )
             event = json.loads(await asyncio.wait_for(client.recv(), timeout=1))
             assert event == {
                 "event": "log.entry",
-                "payload": {"ts": 1, "level": "info", "message": "runner"},
+                "payload": {
+                    "runId": "run-1",
+                    "level": "warn",
+                    "logger": "task.mirror",
+                    "message": "runner",
+                    "ts": 1_725_000_000_500,
+                },
                 "seq": 2,
             }
     finally:

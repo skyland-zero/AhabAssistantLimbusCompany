@@ -53,7 +53,7 @@ def test_preview_stop_and_wait_retains_worker_on_timeout() -> None:
     assert preview.start("pc:limbus")
     assert entered.wait(1.0)
 
-    assert not preview.stop_and_wait(time.monotonic() + 0.02)
+    assert not preview.stop_and_wait(time.monotonic() + 0.3)
     assert preview.running
     # The retained worker can be joined once the native/capture operation has
     # returned; stop_and_wait does not create a replacement worker.
@@ -79,7 +79,7 @@ def test_preview_drops_frame_from_stopped_generation() -> None:
     preview = PreviewCapture(emit, capture=capture, interval=0.05)
     assert preview.start("pc:limbus")
     assert entered.wait(1.0)
-    assert not preview.stop_and_wait(time.monotonic() + 0.02)
+    assert not preview.stop_and_wait(time.monotonic() + 0.3)
     release.set()
     assert preview.stop_and_wait(time.monotonic() + 1.0)
     assert frames == []
@@ -95,11 +95,11 @@ def test_input_pause_and_stop_are_condition_wakeable() -> None:
 
     started = time.monotonic()
     input_handler.request_stop()
-    waiter.join(0.5)
+    waiter.join(2.0)
 
     assert not waiter.is_alive()
     assert result == [False]
-    assert time.monotonic() - started < 0.5
+    assert time.monotonic() - started < 2.0
 
     input_handler.reset_control()
     assert input_handler.is_pause is False

@@ -32,6 +32,36 @@ from module.preview_capture import PreviewCapture, encode_screenshot_frame
 
 SCHEMA_VERSION = 3
 WINDOW_POSITIONS = frozenset({"free", "left_top", "right_top", "left_bottom", "right_bottom", "center"})
+# ``tasks.setConfig`` forwards these fields straight into the persisted YAML.
+# Keep explicit bounds for every numeric field so an out-of-range RPC value
+# cannot produce negative sleeps, zero-size scaling or NaN in the config file.
+_INT_CONFIG_BOUNDS: dict[str, tuple[int, int]] = {
+    "set_mirror_count": (1, 99),
+    "set_win_size": (320, 4320),
+    "set_EXP_count": (0, 99),
+    "set_thread_count": (0, 99),
+    "daily_teams": (0, 99),
+    "use_continuous_combat_select": (1, 10),
+    "EXP_day_1_2": (0, 99),
+    "EXP_day_3_4": (0, 99),
+    "EXP_day_5_6": (0, 99),
+    "EXP_day_7": (0, 99),
+    "thread_day_1": (0, 99),
+    "thread_day_2": (0, 99),
+    "thread_day_3": (0, 99),
+    "thread_day_4": (0, 99),
+    "thread_day_5": (0, 99),
+    "thread_day_6": (0, 99),
+    "thread_day_7": (0, 99),
+    "set_get_prize": (0, 2),
+    "set_lunacy_to_enkephalin": (0, 3),
+    "hard_mirror_target_floors": (1, 15),
+}
+_FLOAT_CONFIG_BOUNDS: dict[str, tuple[float, float]] = {
+    "screenshot_interval": (0.0, 60.0),
+    "mouse_action_interval": (0.0, 60.0),
+    "mouse_down_duration": (0.0, 60.0),
+}
 LEGACY_WINDOW_POSITIONS = {
     "0": "center",
     "1": "left_top",
@@ -786,6 +816,9 @@ class BackendApplication:
         self._hotkey_listener: Any | None = None
         self._mediator_bindings: list[tuple[Any, Callable[..., Any]]] = []
         self._preview_capture = preview_capture or PreviewCapture(self.emit)
+        # Serializes preview lifecycle actions (start / stop_and_wait) without
+        # holding the application state lock while joining the capture thread.
+        self._preview_lock = threading.RLock()
         self._preview_enabled = True
         self._preview_device_id: str | None = None
         self._closed = False
@@ -952,25 +985,36 @@ class BackendApplication:
         if not isinstance(enabled, bool):
             raise ValueError("preview.setEnabled.enabled must be a boolean")
 
-        with self._lock:
-            if enabled != self._preview_enabled:
-                self._preview_enabled = enabled
-                if not enabled:
-                    stop_and_wait = getattr(self._preview_capture, "stop_and_wait", None)
-                    if callable(stop_and_wait):
-                        self._invoke_compatible(stop_and_wait, (), {})
-                    else:
-                        self._preview_capture.stop()
-                elif self._preview_device_id:
-                    # A Runner owns the device during an execution lease.  A
-                    # user may change the desired preview preference, but no
-                    # preview worker may regain the device capability yet.
-                    if not self._device_lease_active():
-                        self._preview_capture.start(self._preview_device_id)
+        action: str | None = None
+        with self._preview_lock:
+            with self._lock:
+                if enabled != self._preview_enabled:
+                    self._preview_enabled = enabled
+                    if not enabled:
+                        action = "stop"
+                    elif self._preview_device_id:
+                        # A Runner owns the device during an execution lease.  A
+                        # user may change the desired preview preference, but no
+                        # preview worker may regain the device capability yet.
+                        if not self._device_lease_active():
+                            action = "start"
+            # ``stop_and_wait`` joins the capture thread and can take seconds;
+            # it must run outside ``_lock`` so execution state and device
+            # operations are not blocked behind preview teardown.
+            if action == "stop":
+                stop_and_wait = getattr(self._preview_capture, "stop_and_wait", None)
+                if callable(stop_and_wait):
+                    self._invoke_compatible(stop_and_wait, (), {})
+                else:
+                    self._preview_capture.stop()
+            elif action == "start":
+                self._preview_capture.start(self._preview_device_id)
 
+        with self._lock:
             fallback_running = self._preview_enabled and self._preview_device_id is not None
-            running = bool(getattr(self._preview_capture, "running", fallback_running))
-            return {"enabled": self._preview_enabled, "running": running}
+            enabled_value = self._preview_enabled
+        running = bool(getattr(self._preview_capture, "running", fallback_running))
+        return {"enabled": enabled_value, "running": running}
 
     def stats_get_summary(self) -> dict[str, Any]:
         return self.stats.summary()
@@ -1878,7 +1922,57 @@ class BackendApplication:
         if not isinstance(run_id, str) or not run_id:
             return None
         with self._lock:
-            return self._cleanup_ledgers.get(run_id)
+            ledger = self._cleanup_ledgers.get(run_id)
+        if ledger is None:
+            return None
+        # A finalized run deletes its journal.  A late event must not re-open a
+        # PENDING journal that startup recovery would then treat as a crashed
+        # run, so a ledger whose file is gone is treated as finished.
+        path = getattr(ledger, "path", None)
+        if path is not None:
+            try:
+                if not Path(path).exists():
+                    return None
+            except OSError:
+                return None
+        return ledger
+
+    def _prune_previous_run_state_locked(self, current_run_id: str) -> None:
+        """Drop per-run bookkeeping for finalized runs.
+
+        Only one execution is active at a time.  Keeping every historical
+        run's sets/dicts would grow for the sidecar's lifetime, and a retained
+        cleanup ledger would let a late event re-persist a deleted journal.
+        Called with the new run id while holding ``_lock`` before the new run's
+        containers are initialised.
+        """
+
+        def is_current(run_id: Any) -> bool:
+            return run_id == current_run_id
+
+        for bucket in (
+            self._cleanup_ledgers,
+            self._runner_event_sequences,
+            self._execution_after_completion_requests,
+            self._execution_after_completion_results,
+        ):
+            for run_id in [key for key in bucket if not is_current(key)]:
+                bucket.pop(run_id, None)
+        self._runner_config_cleanup_done = {
+            run_id for run_id in self._runner_config_cleanup_done if is_current(run_id)
+        }
+        self._runner_task_completed_events = {
+            entry for entry in self._runner_task_completed_events if is_current(entry[0])
+        }
+        self._execution_stats_started = {
+            run_id for run_id in self._execution_stats_started if is_current(run_id)
+        }
+        self._execution_stats_finished = {
+            run_id for run_id in self._execution_stats_finished if is_current(run_id)
+        }
+        self._execution_finalized_runs = {
+            run_id for run_id in self._execution_finalized_runs if is_current(run_id)
+        }
 
     def _journal_runner_event(self, message: Mapping[str, Any]) -> None:
         """Persist durable Runner obligations before forwarding the event."""
@@ -2708,6 +2802,7 @@ class BackendApplication:
             if not self._runner_enabled:
                 self._require_active_runtime()
             run_id = uuid.uuid4().hex
+            self._prune_previous_run_state_locked(run_id)
             self._execution_stop.clear()
             self._execution_finalized_runs.discard(run_id)
             self._execution_after_completion_requests[run_id] = []
@@ -3763,16 +3858,18 @@ class BackendApplication:
         if isinstance(current, int) and not isinstance(current, bool):
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError(f"{key} requires an integer")
-            if key in {"set_mirror_count"} and not 1 <= value <= 99:
-                raise ValueError(f"{key} must be between 1 and 99")
-            if key in {"use_continuous_combat_select"} and not 1 <= value <= 10:
-                raise ValueError(f"{key} must be between 1 and 10")
-            if key in {"set_get_prize"} and not 0 <= value <= 2:
-                raise ValueError(f"{key} must be between 0 and 2")
+            bounds = _INT_CONFIG_BOUNDS.get(key)
+            if bounds is not None and not bounds[0] <= value <= bounds[1]:
+                raise ValueError(f"{key} must be between {bounds[0]} and {bounds[1]}")
             return
         if isinstance(current, float):
             if not isinstance(value, (int, float)) or isinstance(value, bool):
                 raise ValueError(f"{key} requires a number")
+            if not math.isfinite(float(value)):
+                raise ValueError(f"{key} requires a finite number")
+            bounds = _FLOAT_CONFIG_BOUNDS.get(key)
+            if bounds is not None and not bounds[0] <= float(value) <= bounds[1]:
+                raise ValueError(f"{key} must be between {bounds[0]} and {bounds[1]}")
             return
         if isinstance(current, str) and not isinstance(value, str):
             raise ValueError(f"{key} requires a string")
@@ -3942,13 +4039,24 @@ class BackendApplication:
         status = payload.get("status")
         device_id = payload.get("deviceId")
         try:
-            with self._lock:
-                if status == "connected" and isinstance(device_id, str) and device_id:
-                    self._preview_device_id = device_id
-                    if self._preview_enabled and not self._device_lease_active():
-                        self._preview_capture.start(device_id)
-                elif status in {"connecting", "disconnected"}:
-                    self._preview_device_id = None
+            action: str | None = None
+            start_id: str | None = None
+            with self._preview_lock:
+                with self._lock:
+                    if status == "connected" and isinstance(device_id, str) and device_id:
+                        self._preview_device_id = device_id
+                        if self._preview_enabled and not self._device_lease_active():
+                            action = "start"
+                            start_id = device_id
+                    elif status in {"connecting", "disconnected"}:
+                        self._preview_device_id = None
+                        action = "stop"
+                # Preview lifecycle calls join/start the capture thread; keep
+                # them outside ``_lock`` so a status callback cannot stall
+                # execution or device operations for seconds.
+                if action == "start" and start_id is not None:
+                    self._preview_capture.start(start_id)
+                elif action == "stop":
                     stop_and_wait = getattr(self._preview_capture, "stop_and_wait", None)
                     if callable(stop_and_wait):
                         self._invoke_compatible(stop_and_wait, (), {})
@@ -4037,7 +4145,12 @@ class BackendApplication:
             self.emit("execution.stats", stats_payload)
 
     def _on_task_completed(self, kind: Any, count: Any = 1, details: Any = None) -> None:
-        run_id = self._execution_run_id
+        # Snapshot the execution identity under the state lock: every writer of
+        # these fields holds ``_lock`` (``_set_execution_fields_locked``), so an
+        # unlocked read could pair a run id with a newer run's stop flag.
+        with self._lock:
+            run_id = self._execution_run_id
+            should_notify = self._execution_state == "running" and not self._execution_stop.is_set()
         if run_id is None:
             return
         task_kind = str(kind)
@@ -4054,7 +4167,7 @@ class BackendApplication:
             return
         if payload is not None:
             self.emit("execution.stats", payload)
-            if self._execution_state == "running" and not self._execution_stop.is_set():
+            if should_notify:
                 notification_details = payload.get("lastMirror") if task_kind == "mirror" else None
                 if isinstance(notification_details, Mapping):
                     # 仅结算超时视为失败通知；其他 failed（如中途放弃/未100%但已回到主界面）不按失败推送，避免正常领取被误报为错误

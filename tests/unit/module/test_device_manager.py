@@ -143,7 +143,7 @@ def test_suspend_timeout_keeps_lease_fail_closed_until_old_cleanup_finishes(monk
     monkeypatch.setattr(manager, "_cleanup_session", cleanup)
 
     with pytest.raises(DeviceError, match="截止时间"):
-        manager.suspend_for_execution("run-3", time.monotonic() + 0.03)
+        manager.suspend_for_execution("run-3", time.monotonic() + 0.3)
     assert cleanup_started.wait(timeout=1)
     assert manager.lease_state == "restoring"
     assert manager.lease_recovery == "restart_backend"
@@ -180,7 +180,7 @@ def test_suspend_timeout_marks_lease_terminal_and_rejects_new_controller(monkeyp
         manager._connect_cancel = stale_cancel
 
     with pytest.raises(DeviceError, match="安静下来"):
-        manager.suspend_for_execution("run-operation-race", time.monotonic() + 0.03)
+        manager.suspend_for_execution("run-operation-race", time.monotonic() + 0.3)
     assert manager.lease_state == "restoring"
     assert manager.lease_recovery == "restart_backend"
     assert manager.active_session == DeviceSession(target, old_controller)
@@ -248,3 +248,27 @@ def test_resume_claims_restoring_transition_against_concurrent_caller(monkeypatc
     thread.join(timeout=1)
     assert not thread.is_alive()
     assert result["status"] == "connected"
+
+
+def test_adb_resolution_requires_a_discovered_target_after_a_scan_snapshot() -> None:
+    manager = DeviceManager()
+    manager._targets["adb:127.0.0.1:5555"] = DeviceManager._make_adb_target("127.0.0.1:5555")
+
+    # An endpoint that is not in the latest discovery snapshot cannot be
+    # invented by device.connect.
+    with pytest.raises(DeviceError, match="扫描结果"):
+        manager._resolve_target("adb:10.0.0.9:5555")
+
+    resolved = manager._resolve_target("adb:127.0.0.1:5555")
+    assert resolved.endpoint == "127.0.0.1:5555"
+
+    with pytest.raises(DeviceError, match="非法"):
+        manager._resolve_target("adb:bad path")
+
+
+def test_adb_resolution_without_a_scan_snapshot_still_validates_the_endpoint() -> None:
+    manager = DeviceManager()
+    resolved = manager._resolve_target("adb:127.0.0.1:5555")
+    assert resolved.endpoint == "127.0.0.1:5555"
+    with pytest.raises(DeviceError, match="非法"):
+        DeviceManager()._resolve_target("adb:")

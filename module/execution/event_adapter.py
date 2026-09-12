@@ -9,8 +9,14 @@ boundary and does not import the backend (or WebSocket) module itself.
 from __future__ import annotations
 
 import inspect
+import time
 from collections.abc import Callable, Mapping
 from typing import Any
+
+# Protocol liveness events stay inside the Runner boundary.  The GPUI wire
+# contract has no consumer for them, and a 1 Hz unknown event would occupy
+# the bounded outbound queue and can trigger the backpressure disconnect.
+_INTERNAL_EVENT_TYPES = frozenset({"heartbeat"})
 
 
 class RunnerEventAdapter:
@@ -64,6 +70,8 @@ class RunnerEventAdapter:
         message_type = event.get("type")
         if not isinstance(message_type, str) or not message_type:
             raise ValueError("Runner event type is required")
+        if message_type in _INTERNAL_EVENT_TYPES:
+            return None
         destination = self.EVENT_MAP.get(message_type, message_type)
         fields = self._payload(message_type, event, payload)
         self._record_ledger(message_type, event, fields)
@@ -173,6 +181,35 @@ class RunnerEventAdapter:
         elif message_type in {"warning", "hdr.warning"}:
             fields.setdefault("level", "warn")
             fields.setdefault("message", "Runner warning")
+        elif message_type == "log.entry":
+            # Runner logs use ``timestamp`` (epoch seconds, float) and raw
+            # ``logging`` level names.  The wire contract (Rust
+            # ``LogEntryPayload``) requires ``ts`` in epoch milliseconds plus
+            # the canonical debug/info/warn/error vocabulary.  Normalise here
+            # so a Runner log can never be silently dropped at the UI boundary.
+            value = fields.get("ts", fields.get("timestamp"))
+            fields.pop("timestamp", None)
+            try:
+                ts = float(value)
+            except (TypeError, ValueError):
+                ts = time.time()
+            if ts < 10_000_000_000:
+                # Epoch seconds (Runner producer) vs epoch milliseconds (wire).
+                ts *= 1000.0
+            try:
+                fields["ts"] = max(0, int(ts))
+            except (OverflowError, ValueError):
+                fields["ts"] = int(time.time() * 1000)
+            fields["level"] = {
+                "debug": "debug",
+                "info": "info",
+                "warn": "warn",
+                "warning": "warn",
+                "error": "error",
+                "critical": "error",
+                "fatal": "error",
+            }.get(str(fields.get("level", "info")).strip().casefold(), "info")
+            fields.setdefault("message", "")
         return fields
 
     def _call_sink(self, destination: str, fields: Mapping[str, Any]) -> Any:

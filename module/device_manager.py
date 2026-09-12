@@ -321,6 +321,12 @@ class DeviceManager:
         self._operation_condition = threading.Condition(self._lock)
         self._device_operations = 0
         self._status_lock = threading.RLock()
+        # Serializes listener invocation without ever being nested inside
+        # ``_status_lock``.  Preview listeners join the capture thread, so
+        # calling them under ``_status_lock`` would stall connect/disconnect
+        # and execution.start for seconds.
+        self._status_emit_lock = threading.Lock()
+        self._status_sequence = 0
         self._targets: dict[str, DeviceTarget] = {}
         self._active: DeviceSession | None = None
         self._connecting = False
@@ -1099,11 +1105,12 @@ class DeviceManager:
                     self._connect_thread = None
                     self._connect_target = None
                     current = True
-            if current:
-                # Keep status ordering serialized, but do not hold the manager
-                # lock while preview listeners perform their own cleanup.
-                self._emit_status(device_id, "connected", run_id=run_id)
-                self._emit_connection_details(session)
+        if current:
+            # Emitted outside ``_status_lock``: preview listeners may join the
+            # capture thread, and the status sequence keeps ordering so a
+            # disconnect that raced this publish still wins.
+            self._emit_status(device_id, "connected", run_id=run_id)
+            self._emit_connection_details(session)
 
         if not current:
             # The caller owns cleanup for a stale session.  Keeping it here
@@ -1142,8 +1149,11 @@ class DeviceManager:
                     # this event so preview consumers stop before controller
                     # teardown, and no later connected event can overtake it.
                     self._restore_runtime_config()
-                    self._emit_status(device_id, "disconnected", run_id=run_id)
-                    self._emit_notice("error", f"连接设备失败：{error}")
+            if current:
+                # Emitted outside ``_status_lock`` so a preview listener join
+                # cannot stall another device operation.
+                self._emit_status(device_id, "disconnected", run_id=run_id)
+                self._emit_notice("error", f"连接设备失败：{error}")
 
         cleanup = session or pending
         if cleanup is not None:
@@ -1254,10 +1264,13 @@ class DeviceManager:
             with self._lock:
                 active_id = self._active.target.info.id if self._active else None
 
-            # Stop consumers before tearing down the controller. BackendApplication
-            # maps this event to PreviewCapture.stop(), preventing a completed
-            # task's preview loop from racing the connection cleanup.
-            self._emit_status(None, "disconnected")
+        # Stop consumers before tearing down the controller. BackendApplication
+        # maps this event to PreviewCapture.stop(), preventing a completed
+        # task's preview loop from racing the connection cleanup.  Emitted
+        # outside ``_status_lock`` so a slow preview join cannot stall another
+        # device operation.
+        self._emit_status(None, "disconnected")
+        with self._status_lock:
             self._disconnect_active(restore_config=True)
         if pending_thread is not None and pending_thread is not threading.current_thread():
             pending_thread.join(timeout=2.0)
@@ -1267,7 +1280,13 @@ class DeviceManager:
 
     def close(self) -> None:
         """Best-effort shutdown hook for the sidecar process."""
-        self._assert_device_writable("关闭设备连接")
+        try:
+            self._assert_device_writable("关闭设备连接")
+        except DeviceError as error:
+            # A failed lease restore leaves the manager fail-closed; shutdown
+            # must still drain the connection instead of raising out of the
+            # sidecar's finally block (which would skip config.flush()).
+            log.warning("关闭设备管理器时租约仍处于活动状态：%s", error)
         with self._status_lock:
             pending_thread = self._cancel_pending_connection()
             try:
@@ -1300,7 +1319,20 @@ class DeviceManager:
             target = self._make_mumu_target(instance)
         elif device_id.startswith("adb:"):
             endpoint = device_id.removeprefix("adb:")
-            target = self._make_adb_target(endpoint)
+            if re.fullmatch(r"[A-Za-z0-9_.:-]{1,256}", endpoint) is None:
+                raise DeviceError(f"非法的 ADB 设备地址：{endpoint}")
+            with self._lock:
+                known = self._targets.get(device_id)
+                has_scan_snapshot = bool(self._targets)
+            if known is not None:
+                target = known
+            elif has_scan_snapshot:
+                # ``device.connect`` must not invent an arbitrary endpoint once
+                # a discovery snapshot exists; the caller has to refresh the
+                # device list and pick a visible serial.
+                raise DeviceError(f"设备不在最近的扫描结果中：{device_id}，请刷新设备列表")
+            else:
+                target = self._make_adb_target(endpoint)
         else:
             target = None
 
@@ -1495,7 +1527,16 @@ class DeviceManager:
         if run_id:
             payload["runId"] = run_id
         with self._status_lock:
-            self._emit(self._status_listeners, "device.status", payload)
+            self._status_sequence += 1
+            sequence = self._status_sequence
+            listeners = tuple(self._status_listeners)
+        # Publish outside the status lock.  The sequence check keeps the
+        # observable order: a status superseded while an older batch of
+        # listeners is still running is dropped instead of overtaking it.
+        with self._status_emit_lock:
+            if sequence != self._status_sequence:
+                return
+            self._emit(listeners, "device.status", payload)
 
     def _emit_notice(self, level: str, message: str) -> None:
         self._emit(self._notice_listeners, "app.notice", {"level": level, "message": message})

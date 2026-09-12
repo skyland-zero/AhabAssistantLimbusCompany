@@ -95,10 +95,26 @@ async def _watch_parent(parent_pid: int, stop_event: asyncio.Event) -> None:
         import psutil
     except ImportError:
         return
+    try:
+        parent_create_time = psutil.Process(parent_pid).create_time()
+    except psutil.Error:
+        stop_event.set()
+        return
     while not stop_event.is_set():
-        if not psutil.pid_exists(parent_pid):
+        try:
+            process = psutil.Process(parent_pid)
+            # PID existence alone is not identity: a reused PID must not keep
+            # an orphaned sidecar alive.  Match the creation time captured at
+            # startup, mirroring the runner/cleanup identity probes.
+            if abs(process.create_time() - parent_create_time) > 0.001:
+                stop_event.set()
+                return
+        except psutil.NoSuchProcess:
             stop_event.set()
             return
+        except psutil.AccessDenied:
+            # The parent is alive but temporarily uninspectable; retry.
+            pass
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=2.0)
         except asyncio.TimeoutError:

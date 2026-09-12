@@ -318,7 +318,7 @@ class S:
         self.hazard()
         p = OUTDIR / f"tab-{name}.png"
         self.img.save(p, optimize=True)
-        print(f"saved {p.name} {(p.stat().st_size/1024):.1f} KB")
+        print(f"saved {p.name} {(p.stat().st_size/1024):.1f} KB")  # noqa: T201
 
 
 # ================= pages =================

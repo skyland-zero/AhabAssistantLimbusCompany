@@ -40,7 +40,7 @@ _COALESCIBLE_EVENTS = {
     "device.status",
     "resource.sync.progress",
 }
-_DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"log.entry", "execution.log"}
+_DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"log.entry", "execution.log", "heartbeat"}
 # RunnerEventAdapter keeps the historical sidecar event names internally, but
 # the GPUI contract uses the canonical top-level event for log entries.  Apply
 # this compatibility alias only at the transport boundary so existing Python
@@ -172,15 +172,39 @@ class WebSocketServer:
         execution_executor, self._execution_executor = self._execution_executor, None
         mutation_executor, self._mutation_executor = self._mutation_executor, None
         read_executor, self._read_executor = self._read_executor, None
-        if execution_executor is not None:
-            await asyncio.to_thread(execution_executor.shutdown, wait=True, cancel_futures=True)
-        if mutation_executor is not None:
-            await asyncio.to_thread(mutation_executor.shutdown, wait=True, cancel_futures=True)
-        if read_executor is not None:
-            await asyncio.to_thread(read_executor.shutdown, wait=True, cancel_futures=True)
+        for name, executor in (
+            ("execution", execution_executor),
+            ("mutation", mutation_executor),
+            ("read", read_executor),
+        ):
+            if executor is not None:
+                await self._drain_executor(name, executor)
         log.removeHandler(self._log_handler)
         self.application.remove_event_listener(self._on_application_event)
         self._loop = None
+
+    @staticmethod
+    async def _drain_executor(name: str, executor: ThreadPoolExecutor) -> None:
+        """Stop an RPC executor without letting a long dispatch hang shutdown.
+
+        ``cancel_futures`` only drops queued work; a worker already inside
+        ``dispatcher.dispatch`` cannot be cancelled.  Wait for it with a bound
+        and let ``BackendApplication.close()`` own the remaining process/runner
+        termination instead of blocking sidecar exit indefinitely.
+        """
+
+        executor.shutdown(wait=False, cancel_futures=True)
+        deadline = asyncio.get_running_loop().time() + 5.0
+        while asyncio.get_running_loop().time() < deadline:
+            threads = [
+                thread
+                for thread in getattr(executor, "_threads", ()) or ()
+                if thread.is_alive()
+            ]
+            if not threads:
+                return
+            await asyncio.sleep(0.05)
+        log.warning("RPC %s executor did not stop within the shutdown deadline", name)
 
     def publish(self, event: str, payload: dict[str, Any], sequence: int | None = None) -> None:
         """Queue an event from any worker thread without spawning a task."""

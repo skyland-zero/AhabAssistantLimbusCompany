@@ -189,7 +189,7 @@ def main() -> None:
     make_divider().save(OUT / "divider.png", optimize=True)
     make_seal().save(OUT / "seal-red.png", optimize=True)
     for p in sorted(OUT.glob("*.png")):
-        print(f"{p.name:16s} {p.stat().st_size/1024:7.1f} KB")
+        print(f"{p.name:16s} {p.stat().st_size/1024:7.1f} KB")  # noqa: T201
 
 
 if __name__ == "__main__":

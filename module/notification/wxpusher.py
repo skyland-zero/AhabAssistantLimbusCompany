@@ -346,7 +346,14 @@ class NotificationService:
 
     def send_test(self, spt: str) -> Mapping[str, Any]:
         normalized = normalize_spt(spt)
-        return self.sender.send_message(
+        # A test notification must never occupy an RPC worker for the full
+        # production retry budget (3 x 10s).  Probe once with a short timeout
+        # and surface the failure to the caller; only the injected/default
+        # production client is replaced, so test doubles keep their behavior.
+        sender = self.sender
+        if isinstance(sender, WxPusherClient):
+            sender = WxPusherClient(max_attempts=1, timeout=5.0, retry_backoff=0.0)
+        return sender.send_message(
             normalized,
             "AALC WxPusher 测试通知\n如果你看到这条消息，通知配置已经生效。",
             "AALC WxPusher 测试通知",

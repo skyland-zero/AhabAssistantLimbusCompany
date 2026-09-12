@@ -23,7 +23,7 @@ from core.events import Event, mediator
 from core.i18n import tr
 from module.config import cfg
 from module.logger import log
-from module.update.signature import UpdateSignatureError
+from module.update.signature import UpdateSignatureError, signature_enforcement_required
 from utils.utils import decrypt_string
 
 md_renderer = MarkdownIt("gfm-like", {"html": True})
@@ -380,7 +380,7 @@ def update(assets_url, *, manifest_url=None, signature_url=None):
                             mediator.update_progress.emit(progress)
             os.replace(temporary_path, file_path)
 
-        require_signature = os.getenv("AALC_UPDATE_REQUIRE_SIGNATURE", "").strip().lower() in {"1", "true", "yes"}
+        require_signature = signature_enforcement_required()
         for url, suffix in ((manifest_url, ".manifest.json"), (signature_url, ".manifest.sig")):
             metadata_path = os.path.join("update_temp", f"{archive_stem}{suffix}")
             metadata_temporary_path = f"{metadata_path}.download"
@@ -449,4 +449,8 @@ def start_update_thread(assets_url):
 
 def start_update(assert_name):
     source_file = os.path.abspath("./AALC Updater.exe")
-    subprocess.Popen([source_file, assert_name], creationflags=subprocess.DETACHED_PROCESS)
+    environment = os.environ.copy()
+    # The updater enforces signatures by default; carry an explicit opt-out
+    # through the detached process instead of relying on inherited state.
+    environment.setdefault("AALC_UPDATE_REQUIRE_SIGNATURE", "1")
+    subprocess.Popen([source_file, assert_name], creationflags=subprocess.DETACHED_PROCESS, env=environment)

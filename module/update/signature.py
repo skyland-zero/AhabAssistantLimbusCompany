@@ -24,6 +24,22 @@ class UpdateSignatureError(ValueError):
     """Raised when a downloaded update cannot be authenticated or matched."""
 
 
+_SIGNATURE_OPT_OUT = {"0", "false", "no", "off"}
+
+
+def signature_enforcement_required() -> bool:
+    """Whether a missing detached signature must abort an update.
+
+    Fail closed: releases are signed by default and the updater must reject an
+    archive whose manifest pair is absent.  An operator running a legacy
+    channel that cannot ship signatures has to opt out explicitly with
+    ``AALC_UPDATE_REQUIRE_SIGNATURE=0``.
+    """
+
+    value = os.getenv("AALC_UPDATE_REQUIRE_SIGNATURE", "").strip().casefold()
+    return value not in _SIGNATURE_OPT_OUT
+
+
 @dataclass(frozen=True)
 class SignedUpdateManifest:
     """Validated metadata bound to one update archive."""

@@ -25,5 +25,18 @@ CONFIG_PATH = str(
 THEME_PACK_LIST_EXAMPLE_PATH = str(
     (_APPLICATION_ROOT / "assets" / "config" / "theme_pack_list.example.yaml").resolve()
 )
-THEME_PACK_LIST_PATH = str((_APPLICATION_ROOT / "theme_pack_list.yaml").resolve())
-THEME_PACK_WEIGHT_PATH = str((_APPLICATION_ROOT / "theme_pack_weight").resolve())
+# Theme-pack state is written back to disk.  Keep the same env-override seam as
+# ``CONFIG_PATH`` so tests and embedders can redirect all mutable state without
+# touching the checkout.
+_THEME_PACK_LIST_ENV_PATH = os.environ.get("AALC_THEME_PACK_LIST_PATH")
+_THEME_PACK_WEIGHT_ENV_PATH = os.environ.get("AALC_THEME_PACK_WEIGHT_PATH")
+THEME_PACK_LIST_PATH = str(
+    Path(_THEME_PACK_LIST_ENV_PATH).expanduser().resolve()
+    if _THEME_PACK_LIST_ENV_PATH
+    else (_APPLICATION_ROOT / "theme_pack_list.yaml").resolve()
+)
+THEME_PACK_WEIGHT_PATH = str(
+    Path(_THEME_PACK_WEIGHT_ENV_PATH).expanduser().resolve()
+    if _THEME_PACK_WEIGHT_ENV_PATH
+    else (_APPLICATION_ROOT / "theme_pack_weight").resolve()
+)

@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from module.update.signature import (
     UpdateSignatureError,
     canonical_manifest_bytes,
+    signature_enforcement_required,
     verify_signed_manifest,
 )
 
@@ -66,3 +67,15 @@ def test_signed_manifest_rejects_unknown_fields(tmp_path) -> None:
 
     with pytest.raises(UpdateSignatureError, match="字段"):
         verify_signed_manifest(manifest, signature, archive, public_key)
+
+
+def test_signature_enforcement_fails_closed_and_supports_explicit_opt_out(monkeypatch) -> None:
+    monkeypatch.delenv("AALC_UPDATE_REQUIRE_SIGNATURE", raising=False)
+    assert signature_enforcement_required() is True
+    monkeypatch.setenv("AALC_UPDATE_REQUIRE_SIGNATURE", "1")
+    assert signature_enforcement_required() is True
+    monkeypatch.setenv("AALC_UPDATE_REQUIRE_SIGNATURE", "true")
+    assert signature_enforcement_required() is True
+    for value in ("0", "false", "no", "off", " FALSE "):
+        monkeypatch.setenv("AALC_UPDATE_REQUIRE_SIGNATURE", value)
+        assert signature_enforcement_required() is False

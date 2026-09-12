@@ -181,7 +181,7 @@ def test_runner_runtime_close_is_bounded_and_reuses_pending_cleanup(monkeypatch)
     monkeypatch.setattr(manager, "_cleanup_session", cleanup)
 
     with pytest.raises(DeviceError, match="截止时间"):
-        runtime.close(deadline=time.monotonic() + 0.03)
+        runtime.close(deadline=time.monotonic() + 0.3)
     assert entered.wait(timeout=1)
     assert runtime.closed is False
 

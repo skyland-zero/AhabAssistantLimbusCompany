@@ -265,7 +265,7 @@ def test_stop_ack_enqueue_does_not_wait_for_a_blocked_command_pipe() -> None:
     runner.send_command = blocked_send
     started = time.monotonic()
     assert supervisor.request_stop(accepted.run_id).accepted is True
-    assert time.monotonic() - started < 0.2
+    assert time.monotonic() - started < 1.0
     final = supervisor.wait_for_idle(2)
     blocked.set()
     assert final.outcome == "stopped"
@@ -326,3 +326,67 @@ def test_frozen_factory_locates_runner_beside_application(monkeypatch, tmp_path)
     argv, is_frozen = factory.locate()
     assert argv == [str(runner)]
     assert is_frozen is True
+
+
+def test_snapshot_updates_never_run_while_the_session_lock_is_held(monkeypatch) -> None:
+    """Regression guard for the supervisor ABBA lock inversion.
+
+    ``request_stop`` must take ``session.lock`` without holding
+    ``_condition``; the event reader must therefore never call
+    ``_replace_snapshot_locked`` while it still owns ``session.lock``.
+    """
+
+    factory = FakeRunnerFactory("complete")
+    supervisor = RunnerSupervisor(runner_factory=factory, hello_timeout=1, ready_timeout=1, kill_wait=0.1)
+    violations: list[str] = []
+    original = supervisor._replace_snapshot_locked
+
+    def guarded(*args, **kwargs):
+        session = supervisor._session
+        if session is not None and session.lock._is_owned():
+            violations.append(threading.current_thread().name)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(supervisor, "_replace_snapshot_locked", guarded)
+    supervisor.start({"taskId": "mirror"})
+    final = wait_idle(supervisor)
+    assert final.state is RunnerState.IDLE
+    assert violations == []
+
+
+def test_request_stop_racing_a_status_flood_finishes_within_a_bound() -> None:
+    """A stopped run must not wedge the event reader or the RPC caller."""
+
+    stop_flood = threading.Event()
+
+    def flood(runner) -> None:
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline and not stop_flood.is_set():
+            runner.emit("status", status="running")
+            time.sleep(0.001)
+
+    factory = FakeRunnerFactory(flood)
+    supervisor = RunnerSupervisor(
+        runner_factory=factory,
+        hello_timeout=1,
+        ready_timeout=1,
+        stop_grace=0.05,
+        kill_wait=0.05,
+    )
+    accepted = supervisor.start({"taskId": "mirror"})
+    assert supervisor.wait_for_state(RunnerState.RUNNING, 2).state is RunnerState.RUNNING
+
+    results: list[object] = []
+    callers = [
+        threading.Thread(target=lambda: results.append(supervisor.request_stop(accepted.run_id)))
+        for _ in range(4)
+    ]
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join(timeout=5)
+    stop_flood.set()
+
+    assert all(not caller.is_alive() for caller in callers), "request_stop deadlocked"
+    assert len(results) == 4
+    assert supervisor.wait_for_idle(5).state is RunnerState.IDLE

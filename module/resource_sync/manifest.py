@@ -3,11 +3,39 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 # 资源清单协议版本仍保持为 1，并统一承载整包同步所需的元数据字段。
 RESOURCE_SYNC_SCHEMA_VERSION = 1
+
+
+def _validate_relative_path(value: Any, field_name: str) -> str:
+    """校验清单路径是安全的相对路径。
+
+    清单来自远端，目标路径会被拼接到本地资源目录后写入。必须在反序列化
+    时就拒绝绝对路径、盘符、上级目录和 Windows 备用数据流语法，而不是到
+    复制时才检查。
+    """
+
+    path = str(value)
+    if not path or path != path.strip():
+        raise ValueError(f"{field_name} 必须是非空的相对路径")
+    if any(character in path for character in ("\x00", "\r", "\n")):
+        raise ValueError(f"{field_name} 包含非法控制字符")
+    normalized = path.replace("\\", "/")
+    # 拒绝 POSIX 绝对路径、UNC 和 Windows 盘符。
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        raise ValueError(f"{field_name} 不允许绝对路径：{path}")
+    # 冒号在 Windows 上会打开备用数据流；清单路径不需要它。
+    if ":" in normalized:
+        raise ValueError(f"{field_name} 包含非法字符：{path}")
+    # 按原始段校验，避免 PurePosixPath 把 ``a//b`` 或 ``./x`` 静默归一化。
+    segments = normalized.split("/")
+    if any(segment in {"", ".", ".."} for segment in segments):
+        raise ValueError(f"{field_name} 不允许空段、当前目录或上级目录：{path}")
+    return path
 
 
 def _reject_unknown_keys(payload: Mapping[str, Any], allowed_keys: set[str]) -> None:
@@ -57,7 +85,7 @@ class ResourceFileEntry:
         _reject_unknown_keys(payload, {"path", "sha256", "size"})
         # 再执行类型归一化，确保后续比较逻辑拿到稳定类型。
         return cls(
-            path=str(payload["path"]),
+            path=_validate_relative_path(payload["path"], "ResourceFileEntry.path"),
             sha256=str(payload["sha256"]),
             size=int(payload["size"]),
         )
@@ -99,7 +127,7 @@ class ResourcePackageEntry:
         _reject_unknown_keys(payload, {"path", "sha256", "size", "format"})
         # 第二步：逐个字段做类型归一化，重建资源包元数据对象。
         return cls(
-            path=str(payload["path"]),
+            path=_validate_relative_path(payload["path"], "ResourcePackageEntry.path"),
             sha256=str(payload["sha256"]),
             size=int(payload["size"]),
             format=str(payload["format"]),
