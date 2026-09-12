@@ -74,7 +74,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                 .child(action_icon(trigger_icon, 14., TEXT))
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(12.))
                         .text_color(palette_rgb(if selected_device.is_some() {
                             palette.foreground
                         } else {
@@ -181,7 +181,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                 .gap_2()
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(12.))
                         .text_color(palette_rgb(palette.muted_foreground))
                         .child(
                             text(
@@ -198,7 +198,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                     )
                     .id("rescan-devices")
                     .h(px(24.0))
-                    .text_size(px(11.0))
+                    .text_size(px(11.))
                     .px_2()
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.refresh_devices(cx);
@@ -267,7 +267,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                             .min_w_0()
                             .child(
                                 div()
-                                    .text_size(px(12.0))
+                                    .text_size(px(12.))
                                     .font_weight(if is_selected {
                                         FontWeight::SEMIBOLD
                                     } else {
@@ -283,7 +283,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                             )
                             .children(dev_detail.map(|d| {
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(10.))
                                     .text_color(palette_rgb(palette.muted_foreground))
                                     .truncate()
                                     .child(d)
@@ -301,7 +301,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                             .py(px(1.0))
                             .rounded_sm()
                             .bg(palette_rgb(palette.warning_light))
-                            .text_size(px(9.0))
+                            .text_size(px(9.5))
                             .text_color(palette_rgb(palette.warning))
                             .child(action_icon(ICON_HISTORY, 10., palette.warning.rgb_hex()))
                             .child(text("上次", "Last").get(language)),
@@ -375,7 +375,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                     ))
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(px(11.))
                             .text_color(palette_rgb(palette.danger))
                             .truncate()
                             .child(err.clone()),

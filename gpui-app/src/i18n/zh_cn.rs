@@ -5,7 +5,8 @@ pub const CATALOG: Catalog = Catalog {
     titlebar_title: "AALC",
     nav_home: "主控台",
     nav_teams: "队伍管理",
-    nav_themes: "主题包",
+    // Renamed from 主题包: it clashed with the visual skin picker in Settings.
+    nav_themes: "镜牢主题包",
     nav_toolbox: "工具箱",
     nav_resources: "资源中心",
     nav_help: "帮助",

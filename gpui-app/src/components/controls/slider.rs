@@ -28,7 +28,7 @@ pub fn slider_with_palette(
         .relative()
         .w(px(width))
         .h(px(16.))
-        .rounded_md()
+        .skin_rounded(palette, false)
         .tab_index(0)
         .focus_visible({
             let ring = palette.ring;
@@ -41,7 +41,7 @@ pub fn slider_with_palette(
                 .top(px(track_y))
                 .w_full()
                 .h(px(6.))
-                .rounded_md()
+                .skin_rounded(palette, false)
                 .bg(paint_color(palette.muted)),
         )
         .child(
@@ -51,7 +51,7 @@ pub fn slider_with_palette(
                 .top(px(track_y))
                 .w(px(width * normalized))
                 .h(px(6.))
-                .rounded_md()
+                .skin_rounded(palette, false)
                 .bg(paint_color(palette.primary)),
         )
         .child(

@@ -313,7 +313,7 @@ pub(super) fn empty_slot_card(
                             .gap_1()
                             .child(
                                 div()
-                                    .text_size(px(13.))
+                                    .text_size(px(12.))
                                     .text_color(rgb(TEXT_MUTED))
                                     .child(text("未配置", "Not configured").get(language)),
                             )

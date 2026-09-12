@@ -1,6 +1,7 @@
 //! Reusable state-free controls. Pages own the model and event handlers;
 //! these modules only render the shared visual primitives.
 
+use super::style::{FONT_MD, ShapeExt};
 use super::*;
 
 mod inputs;

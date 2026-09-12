@@ -45,7 +45,7 @@ pub(crate) fn mirror_history_row(
                 .gap_2()
                 .child(
                     div()
-                        .text_size(px(10.0))
+                        .text_size(px(10.))
                         .text_color(rgb(TEXT_MUTED))
                         .child(format!("#{index}")),
                 )
@@ -53,7 +53,7 @@ pub(crate) fn mirror_history_row(
                     div()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(11.0))
+                        .text_size(px(11.))
                         .text_color(rgb(TEXT))
                         .child(completed_at),
                 ),
@@ -74,7 +74,7 @@ pub(crate) fn mirror_history_row(
                 .child(badge(status_label, status_tone))
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(12.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(ACCENT))
                         .child(format_duration(record.totalSeconds)),
@@ -86,7 +86,7 @@ pub(crate) fn mirror_history_row(
         .flex()
         .items_center()
         .gap_1p5()
-        .text_size(px(10.5))
+        .text_size(px(10.))
         .text_color(rgb(TEXT_MUTED))
         .child(
             div()

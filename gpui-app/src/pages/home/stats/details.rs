@@ -57,7 +57,7 @@ pub(crate) fn daily_details_overlay(
                 .child(action_icon(ICON_CALENDAR_CHECK, 17., ACCENT))
                 .child(
                     div()
-                        .text_size(px(16.0))
+                        .text_size(px(16.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(TEXT))
                         .child(text("每日刷本明细", "Daily Run Details").get(language)),
@@ -71,7 +71,7 @@ pub(crate) fn daily_details_overlay(
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(12.0))
+            .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED))
             .child(text("正在加载每日统计…", "Loading daily statistics…").get(language))
     } else if let Some(error) = app.home.stats_details_error.clone() {
@@ -80,7 +80,7 @@ pub(crate) fn daily_details_overlay(
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(12.0))
+            .text_size(px(12.))
             .text_color(palette_rgb(palette.danger))
             .child(error)
     } else if let Some(data) = app.home.daily_stats.clone() {
@@ -91,7 +91,7 @@ pub(crate) fn daily_details_overlay(
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(12.0))
+            .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED))
             .child(text("暂无每日统计", "No daily statistics yet").get(language))
     };
@@ -197,12 +197,12 @@ pub(crate) fn mirror_details_overlay(
                         .gap(px(1.0))
                         .child(
                             div()
-                                .text_size(px(16.0))
+                                .text_size(px(16.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(rgb(TEXT))
                                 .child(text("镜牢明细", "Mirror Details").get(language)),
                         )
-                        .child(div().text_size(px(10.5)).text_color(rgb(TEXT_MUTED)).child(
+                        .child(div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
                             format!(
                                 "{} {}/30",
                                 text("最近", "Latest").get(language),
@@ -273,7 +273,7 @@ pub(crate) fn mirror_history_body(
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(12.0))
+            .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED))
             .child(text("暂无镜牢完成记录", "No completed mirror runs").get(language))
             .into_any_element();
@@ -312,7 +312,7 @@ pub(crate) fn daily_details_body(
         .bg(rgba((ACCENT << 8) | 0x18))
         .child(
             div()
-                .text_size(px(12.0))
+                .text_size(px(12.))
                 .text_color(rgb(TEXT_MUTED))
                 .child(format!(
                     "{}  ·  {}",
@@ -326,7 +326,7 @@ pub(crate) fn daily_details_body(
                 .items_center()
                 .gap_3()
                 .mt_1()
-                .text_size(px(13.0))
+                .text_size(px(12.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(TEXT))
                 .child(format!(
@@ -385,7 +385,7 @@ pub(crate) fn daily_details_body(
             .items_center()
             .justify_center()
             .h(px(100.0))
-            .text_size(px(12.0))
+            .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED))
             .child(text("暂无每日数据", "No daily data").get(language))
             .into_any_element()

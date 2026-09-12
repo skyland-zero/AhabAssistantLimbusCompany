@@ -68,7 +68,7 @@ pub(crate) fn mirror_card(
             .id(format!("mirror-hard-floors-{target}"))
             .px_2()
             .py_0p5()
-            .text_size(px(11.0));
+            .text_size(px(11.));
             if !busy {
                 btn = btn.on_click(cx.listener(move |view, _, _, cx| {
                     view.home.set_hard_mirror_target_floors(target);
@@ -182,7 +182,7 @@ pub(crate) fn mirror_card(
             .py_1()
             .rounded_md()
             .bg(rgba((ACCENT << 8) | 0x22))
-            .child(div().text_size(px(11.0)).text_color(rgb(ACCENT)).child({
+            .child(div().text_size(px(11.)).text_color(rgb(ACCENT)).child({
                 let base = if progress.isInfinite {
                     format!(
                         "{} {} / ∞",

@@ -24,9 +24,13 @@ GOLD_D = (179, 134, 0)
 BLOOD_D = (74, 16, 16)
 BLOOD = (150, 24, 24)
 BONE = (216, 208, 188)
-RIVET = (120, 100, 60)
 
-random.seed(7)
+# Each generator reseeds itself so adding or removing one asset cannot shift
+# another asset's random stream. Regenerating therefore only touches the files
+# whose code actually changed.
+SEED_BG = 7
+SEED_DIVIDER = 11
+SEED_SEAL = 13
 
 
 def grain(base: Image.Image, sigma: int = 10, alpha: int = 30) -> Image.Image:
@@ -59,6 +63,7 @@ def erode(d: ImageDraw.ImageDraw, box, n: int = 40, color=BG):
 
 
 def make_bg() -> Image.Image:
+    random.seed(SEED_BG)
     w, h = 1600, 900
     img = Image.new("RGB", (w, h), BG)
     d = ImageDraw.Draw(img)
@@ -79,66 +84,22 @@ def make_bg() -> Image.Image:
         d.line(pts, fill=(30, 28, 34), width=1)
     img = grain(img)
     img = vignette(img)
-    d = ImageDraw.Draw(img)
-    d.rectangle([0, h - 30, w, h - 28], fill=GOLD_D)
-    # hazard: dark red/black instead of gold/black
-    x, flip = 0, False
-    while x < w:
-        if flip:
-            d.polygon([(x, h), (x + 22, h), (x + 22 + 30, h - 28), (x + 30, h - 28)],
-                      fill=(60, 14, 14))
-        x += 22
-        flip = not flip
+    # No page chrome is baked in. This plate is stretched to the window size,
+    # so a bottom rule or hazard band would float at ~97% of the window height
+    # instead of sitting at the bottom of the content, and would also be
+    # stretched vertically. Chrome belongs to the widgets, not the backdrop.
     return img
 
 
-def rivet_row(d: ImageDraw.ImageDraw, y: int, x0: int, x1: int, step: int = 90,
-              color=RIVET):
-    x = x0 + step // 2
-    while x < x1:
-        d.ellipse([x - 5, y - 5, x + 5, y + 5], fill=(20, 14, 10), outline=color, width=2)
-        d.point((x - 1, y - 1), fill=color)
-        x += step
-
-
-def make_tagband() -> Image.Image:
-    """Dark-red metal band with tag holes + rivets (card header / button base)."""
-    w, h = 800, 72
-    img = Image.new("RGB", (w, h), BLOOD_D)
-    d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, w, 5], fill=(30, 8, 8))
-    d.rectangle([0, h - 5, w, h], fill=GOLD_D)
-    d.rectangle([0, 5, w, 9], fill=(120, 30, 30))
-    # tag holes
-    for x in (60, w // 2, w - 60):
-        d.rounded_rectangle([x - 26, 12, x + 26, 26], radius=7, fill=(8, 5, 5),
-                            outline=(20, 10, 10), width=2)
-    rivet_row(d, h - 16, 0, w, step=120)
-    img = grain(img, sigma=12, alpha=34)
-    erode(ImageDraw.Draw(img), (0, 0, w, h), n=60)
-    return img
-
-
-def make_frame() -> Image.Image:
-    """Riveted dark-red frame corner set: full 256 frame tile (transparent middle)."""
-    s = 256
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    t = 14
-    d.rectangle([0, 0, s - 1, t - 1], fill=BLOOD_D + (255,))
-    d.rectangle([0, s - t, s - 1, s - 1], fill=BLOOD_D + (255,))
-    d.rectangle([0, 0, t - 1, s - 1], fill=BLOOD_D + (255,))
-    d.rectangle([s - t, 0, s - 1, s - 1], fill=BLOOD_D + (255,))
-    d.rectangle([0, 0, s - 1, 2], fill=GOLD_D + (255,))
-    d.rectangle([0, s - 3, s - 1, s - 1], fill=GOLD_D + (255,))
-    for x, y in [(28, 7), (s - 28, 7), (28, s - 7), (s - 28, s - 7),
-                 (7, 28), (7, s - 28), (s - 7, 28), (s - 7, s - 28)]:
-        d.ellipse([x - 4, y - 4, x + 4, y + 4], fill=(20, 14, 10, 255),
-                  outline=RIVET + (255,), width=2)
-    return img
+# NOTE: the card-header band and the riveted frame are no longer generated as
+# bitmaps. Stretching an 800x72 band to the card width distorted its rivets and
+# smears, and a 256x256 frame tile could not be resized without the same
+# problem, so both are now drawn as resolution-independent geometry in
+# `gpui-app/src/components/base.rs`. Only the assets below are shipped.
 
 
 def make_divider() -> Image.Image:
+    random.seed(SEED_DIVIDER)
     w, h = 1200, 26
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -158,6 +119,7 @@ def make_divider() -> Image.Image:
 
 
 def make_seal() -> Image.Image:
+    random.seed(SEED_SEAL)
     s = 256
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -184,8 +146,6 @@ def main() -> None:
     for p in OUT.glob("*.png"):
         p.unlink()
     make_bg().save(OUT / "bg.png", optimize=True)
-    make_tagband().save(OUT / "tagband.png", optimize=True)
-    make_frame().save(OUT / "frame.png", optimize=True)
     make_divider().save(OUT / "divider.png", optimize=True)
     make_seal().save(OUT / "seal-red.png", optimize=True)
     for p in sorted(OUT.glob("*.png")):

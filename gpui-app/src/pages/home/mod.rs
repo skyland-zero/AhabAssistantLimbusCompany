@@ -34,10 +34,11 @@ use crate::{
         ACCENT, AhabApp, BACKGROUND, BORDER, BackendPhase, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED,
     },
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, current_render_palette, is_activation_key,
-        palette_rgb, render_rgb as rgb, render_rgba as rgba, scroll_area, scroll_area_with_id,
-        select_keyboard_index, select_option, select_options_state, select_popup, select_trigger,
-        settings_grid, switch, switch_accent, tab_surface_with_palette,
+        BadgeTone, ButtonVariant, ShapeExt, apply_card_shadow, badge, button, card,
+        current_render_palette, is_activation_key, palette_rgb, render_rgb as rgb,
+        render_rgba as rgba, scroll_area, scroll_area_with_id, select_keyboard_index,
+        select_option, select_options_state, select_popup, select_trigger, settings_grid,
+        shape_rounded, switch, switch_accent, tab_surface_with_palette,
     },
     i18n::{self, Key as I18nKey, paired as text},
     model::{
@@ -123,7 +124,9 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .min_h_0()
         .flex()
         .overflow_hidden()
-        .bg(rgb(BACKGROUND))
+        // No background here: the root window Div owns `palette.background`
+        // and the skin's artwork layer sits between the two. Painting it again
+        // would hide the artwork.
         .child(left_panel)
         .child(splitter)
         .child(right)

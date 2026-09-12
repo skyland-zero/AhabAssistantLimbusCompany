@@ -22,7 +22,7 @@ pub(super) fn execution_toolbar(
         .h(px(32.0))
         .px(px(10.0))
         .gap(px(4.0))
-        .text_size(px(12.0))
+        .text_size(px(12.))
         .child(action_icon(ICON_CHECK_SQUARE, 14., TEXT))
         .child(text("全选", "Select All").get(language));
     let mut clear_all = button("", ButtonVariant::Outline)
@@ -30,7 +30,7 @@ pub(super) fn execution_toolbar(
         .h(px(32.0))
         .px(px(10.0))
         .gap(px(4.0))
-        .text_size(px(12.0))
+        .text_size(px(12.))
         .child(action_icon(ICON_ROTATE, 14., TEXT_MUTED))
         .child(
             div()
@@ -76,7 +76,7 @@ pub(super) fn execution_toolbar(
         .min_w_0()
         .px(px(10.0))
         .gap(px(6.0))
-        .text_size(px(12.0))
+        .text_size(px(12.))
         .child(action_icon(ICON_SLIDERS, 14., ACCENT))
         .child(
             div()
@@ -132,7 +132,7 @@ pub(super) fn execution_toolbar(
         .h(px(34.0))
         .px(px(12.0))
         .gap(px(6.0))
-        .text_size(px(12.0))
+        .text_size(px(12.))
         .child(action_icon(pause_icon, 14., pause_icon_color))
         .child(pause_label);
     if busy && can_pause_or_resume(state) {
@@ -191,7 +191,7 @@ pub(super) fn execution_toolbar(
         .h(px(34.0))
         .px(px(16.0))
         .gap(px(6.0))
-        .text_size(px(12.0))
+        .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
         .child(run_icon_element)
         .child(run_label);
@@ -207,7 +207,7 @@ pub(super) fn execution_toolbar(
                 .px(px(5.0))
                 .py(px(1.5))
                 .font_family("monospace")
-                .text_size(px(10.0))
+                .text_size(px(10.))
                 .font_weight(FontWeight::NORMAL)
                 .text_color(palette_rgb(palette.brand_foreground))
                 .child("F10"),

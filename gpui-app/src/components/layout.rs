@@ -1,12 +1,14 @@
 use gpui::{Div, div, prelude::*, px};
 
-use super::{card, current_render_palette, palette_rgb};
+use super::card;
 
 /// Shared outer surface for top-level pages.
 ///
-/// Home has its own split-pane layout, while the remaining pages use this
-/// page frame so their background, padding, and vertical rhythm stay aligned
-/// with Home's cards.
+/// Deliberately paints **no** background: the root window `Div` already owns
+/// `palette.background`, and the skin's background artwork layer is inserted
+/// between the two. An opaque page root used to sit on top of that layer and
+/// hid it completely, so the limbus nebula plate had never actually been
+/// visible.
 pub fn page_root() -> Div {
     div()
         .size_full()
@@ -21,7 +23,6 @@ pub fn page_root() -> Div {
         .pr(px(10.0))
         .pt(px(10.0))
         .pb(px(10.0))
-        .bg(palette_rgb(current_render_palette().background))
 }
 
 /// Shared card surface for page-level action bars.

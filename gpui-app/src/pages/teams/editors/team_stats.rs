@@ -248,7 +248,7 @@ pub(crate) fn team_stats_clear_overlay(
                     .p_4()
                     .child(
                         div()
-                            .text_size(px(15.))
+                            .text_size(px(14.))
                             .text_color(palette_rgb(palette.foreground))
                             .child(
                                 text("确认清除队伍统计？", "Clear team statistics?").get(language),

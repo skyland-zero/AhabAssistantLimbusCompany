@@ -78,7 +78,7 @@ pub(crate) fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 .child(action_icon(ICON_PLAY, 14., ACCENT))
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(12.))
                         .text_color(rgb(TEXT_MUTED))
                         .child(text("本次运行", "Current Run").get(language)),
                 ),
@@ -91,7 +91,7 @@ pub(crate) fn current_run_card(snapshot: &StatsSnapshot) -> Div {
         .flex()
         .items_center()
         .gap_2()
-        .text_size(px(11.0))
+        .text_size(px(11.))
         .text_color(rgb(TEXT_MUTED))
         .child(text("当前任务", "Task").get(language))
         .child(
@@ -120,7 +120,7 @@ pub(crate) fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 .flex()
                 .items_center()
                 .gap_2()
-                .text_size(px(10.0))
+                .text_size(px(10.))
                 .text_color(rgb(TEXT_MUTED));
             row = row.child(match language {
                 crate::model::Language::ZhCn => format!(
@@ -146,7 +146,7 @@ pub(crate) fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                             .py(px(1.0))
                             .rounded_sm()
                             .bg(rgba((ACCENT << 8) | 0x18))
-                            .text_size(px(9.0))
+                            .text_size(px(9.5))
                             .text_color(rgb(ACCENT))
                             .child(floor_label),
                     );
@@ -352,14 +352,14 @@ pub(crate) fn run_metric(label: &'static str, completed: u32, target: u32, infin
         .bg(rgba((SURFACE_HOVER << 8) | 0x45))
         .child(
             div()
-                .text_size(px(10.0))
+                .text_size(px(10.))
                 .text_color(rgb(TEXT_MUTED))
                 .truncate()
                 .child(label),
         )
         .child(
             div()
-                .text_size(px(16.0))
+                .text_size(px(16.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(TEXT))
                 .child(value),

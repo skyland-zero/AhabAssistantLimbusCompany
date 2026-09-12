@@ -49,7 +49,7 @@ pub fn enkephalin_details(app: &mut AhabApp, cx: &mut Context<AhabApp>, busy: bo
                     skip,
                 ))
                 .child(
-                    div().text_size(px(11.0)).text_color(rgb(TEXT_MUTED)).child(
+                    div().text_size(px(11.)).text_color(rgb(TEXT_MUTED)).child(
                         text(
                             "除狂气换体外，不自动将多余体力合成为脑啡肽模块。",
                             "Do not convert surplus enkephalin into modules.",

@@ -5,7 +5,8 @@ pub const CATALOG: Catalog = Catalog {
     titlebar_title: "AALC",
     nav_home: "Console",
     nav_teams: "Teams",
-    nav_themes: "Themes",
+    // Renamed from "Themes": it clashed with the interface skin picker.
+    nav_themes: "Mirror Packs",
     nav_toolbox: "Toolbox",
     nav_resources: "Resources",
     nav_help: "Help",

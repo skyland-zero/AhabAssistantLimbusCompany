@@ -174,7 +174,7 @@ pub(crate) fn basic_editor(
                                 .px_1()
                                 .rounded_md()
                                 .bg(palette_rgb(current_render_palette().brand))
-                                .text_size(px(9.))
+                                .text_size(px(9.5))
                                 .text_color(palette_rgb(current_render_palette().brand_foreground))
                                 .child(format!("#{}", index + 1))
                         })

@@ -1,6 +1,7 @@
 use super::*;
 
-use crate::components::base::limbus_corner_brackets;
+use crate::components::frame_corner_brackets;
+use crate::pages::home::{apply_card_shadow, shape_rounded};
 
 pub(super) struct TaskCardSpec {
     pub(super) task: FixedTaskId,
@@ -111,7 +112,7 @@ pub(super) fn task_card(
                 div()
                     .min_w_0()
                     .truncate()
-                    .text_size(px(14.0))
+                    .text_size(px(14.))
                     .text_color(rgb(if executing {
                         ACCENT
                     } else if !enabled {
@@ -141,7 +142,7 @@ pub(super) fn task_card(
                 .w(px(16.0))
                 .flex_none()
                 .text_center()
-                .text_size(px(16.0))
+                .text_size(px(16.))
                 .text_color(rgb(TEXT_MUTED))
                 .child(action_icon(
                     if expanded {
@@ -155,20 +156,17 @@ pub(super) fn task_card(
         );
     }
 
-    let limbus = current_render_palette().skin.is_limbus();
+    let palette = current_render_palette();
+    let framed = palette.uses_frame_decor();
     let mut root = div().relative().min_w_0().overflow_hidden();
-    root = if limbus {
-        root.rounded_none().border_1().border_color(if executing {
-            rgb(ACCENT)
-        } else {
-            palette_rgb(current_render_palette().border)
-        })
+    root = shape_rounded(root, palette.shape.radius_lg);
+    root = root.border_1().border_color(if executing {
+        rgb(ACCENT)
     } else {
-        root.rounded_lg()
-            .border_1()
-            .border_color(if executing { rgb(ACCENT) } else { rgba(0) })
-    };
+        palette_rgb(palette.border)
+    });
     root = root.bg(rgb(SURFACE));
+    root = apply_card_shadow(root, palette.shape.shadow, None);
     root = root.child(header);
     if expanded && let Some(body) = body {
         let body = div()
@@ -184,8 +182,8 @@ pub(super) fn task_card(
             );
         root = root.child(body);
     }
-    if limbus {
-        for bracket in limbus_corner_brackets(&current_render_palette()) {
+    if framed {
+        for bracket in frame_corner_brackets(&current_render_palette()) {
             root = root.child(bracket);
         }
     }
@@ -210,7 +208,7 @@ pub(super) fn task_icon(label: &'static str, executing: bool) -> Div {
                     .bg(rgb(if executing { ACCENT } else { SURFACE_HOVER }))
                     .text_color(rgb(color))
                     .font_family("monospace")
-                    .text_size(px(9.0))
+                    .text_size(px(9.5))
                     .child(label),
             )
             .child(action_icon(ICON_SLIDERS, 16., color));
@@ -248,7 +246,7 @@ pub(super) fn control_row(label: impl Into<String>, control: impl IntoElement) -
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(13.))
+                .text_size(px(12.))
                 .text_color(rgb(TEXT))
                 .child(label.into()),
         )

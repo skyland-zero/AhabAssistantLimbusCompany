@@ -144,30 +144,35 @@ impl StatusEffectAsset {
 pub enum ThemeAsset {
     /// Cold-black background with nebula blotches and cracks.
     Bg,
-    /// Dark-red riveted metal band used for card headers.
-    Tagband,
-    /// Riveted dark-red frame with a transparent middle.
-    Frame,
     /// Mustard-gold divider flourish on a transparent ground.
+    ///
+    /// Rendered at a fixed aspect ratio only. The card-header band and the
+    /// riveted frame used to ship as bitmaps too, but stretching them to the
+    /// card width distorted their rivets and smears, so both were replaced by
+    /// procedural geometry in `components::base`.
     Divider,
     /// Blood-red wax-seal accent on a transparent ground.
     Seal,
 }
 
 impl ThemeAsset {
-    pub const ALL: [Self; 5] = [
-        Self::Bg,
-        Self::Tagband,
-        Self::Frame,
-        Self::Divider,
-        Self::Seal,
-    ];
+    pub const ALL: [Self; 3] = [Self::Bg, Self::Divider, Self::Seal];
+
+    /// Natural pixel size of the source art.
+    ///
+    /// Callers that scale a theme asset must preserve this ratio: these assets
+    /// are decorative and only look right when they are not stretched.
+    pub const fn natural_size(self) -> (f32, f32) {
+        match self {
+            Self::Bg => (1600.0, 900.0),
+            Self::Divider => (1200.0, 26.0),
+            Self::Seal => (256.0, 256.0),
+        }
+    }
 
     pub const fn file_name(self) -> &'static str {
         match self {
             Self::Bg => "bg.png",
-            Self::Tagband => "tagband.png",
-            Self::Frame => "frame.png",
             Self::Divider => "divider.png",
             Self::Seal => "seal-red.png",
         }
@@ -311,14 +316,6 @@ impl Asset {
             Self::Theme(ThemeAsset::Bg) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/resources/assets/themes/limbus/bg.png"
-            )),
-            Self::Theme(ThemeAsset::Tagband) => include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/resources/assets/themes/limbus/tagband.png"
-            )),
-            Self::Theme(ThemeAsset::Frame) => include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/resources/assets/themes/limbus/frame.png"
             )),
             Self::Theme(ThemeAsset::Divider) => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),

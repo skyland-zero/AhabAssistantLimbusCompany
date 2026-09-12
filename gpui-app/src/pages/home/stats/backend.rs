@@ -97,7 +97,7 @@ pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<Ah
                 .child(action_icon(ICON_RADIO, 14., ACCENT))
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(12.))
                         .text_color(rgb(TEXT_MUTED))
                         .child(text("Python 后端", "Python Backend").get(language)),
                 ),
@@ -114,7 +114,7 @@ pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<Ah
             div()
                 .min_w_0()
                 .truncate()
-                .text_size(px(11.0))
+                .text_size(px(11.))
                 .text_color(rgb(TEXT_MUTED))
                 .child(detail),
         );
@@ -129,7 +129,7 @@ pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<Ah
         .px_2()
         .py_0()
         .gap_1()
-        .text_size(px(11.0))
+        .text_size(px(11.))
         .child(action_icon(ICON_REFRESH, 12., ACCENT));
         let root = root.clone();
         retry = retry.on_click(move |_, _, cx| {

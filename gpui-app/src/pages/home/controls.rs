@@ -53,7 +53,7 @@ pub(super) fn task_header(
         .py_0()
         .child(
             div()
-                .text_size(px(14.0))
+                .text_size(px(14.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(TEXT))
                 .child(i18n::text(language, I18nKey::HomeTitle)),

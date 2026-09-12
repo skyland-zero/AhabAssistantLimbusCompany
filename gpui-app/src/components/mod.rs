@@ -9,6 +9,7 @@
 
 pub mod action_button;
 pub mod base;
+pub mod chrome;
 pub mod controls;
 pub mod icon;
 pub mod keyboard;
@@ -19,12 +20,17 @@ pub mod text_input;
 
 pub use action_button::action_button;
 pub use base::*;
+pub use chrome::*;
 pub use controls::*;
 pub use icon::{svg_icon, svg_icon_bytes};
 pub use keyboard::is_activation_key;
 pub use layout::{page_root, page_toolbar, settings_grid};
 pub use overlays::*;
-pub use style::{current_render_palette, palette_rgb, render_rgb, render_rgba};
+#[allow(unused_imports)]
+pub use style::{
+    Decor, ShadowLevel, Shape, ShapeExt, apply_card_shadow, current_render_palette, palette_hsla,
+    palette_rgb, render_rgb, render_rgba, shape_rounded, skin_rounded,
+};
 pub use text_input::TextInput;
 
 use gpui::{Div, Rgba, Stateful, div, prelude::*, px};
@@ -69,16 +75,30 @@ mod tests {
     }
 
     #[test]
-    fn compatibility_palette_is_not_the_old_dark_only_palette() {
-        assert_eq!(BACKGROUND, Palette::default().background.rgb_hex());
-        assert_eq!(SURFACE, Palette::default().card.rgb_hex());
-        assert_eq!(BORDER, Palette::default().input.rgb_hex());
-        assert_ne!(BACKGROUND, 0x0f141c);
-        assert_eq!(ACCENT, Palette::default().brand.rgb_hex());
-        assert_eq!(GREEN, Palette::default().success.rgb_hex());
-        assert_eq!(DANGER, Palette::default().danger.rgb_hex());
-        assert_eq!(SURFACE_HOVER, Palette::default().secondary.rgb_hex());
-        assert_eq!(TEXT, Palette::default().foreground.rgb_hex());
-        assert_eq!(TEXT_MUTED, Palette::default().muted_foreground.rgb_hex());
+    fn compatibility_constants_are_reserved_tags_not_colors() {
+        // The tagged constants must never be mistaken for a real sRGB value:
+        // render_rgb is the only thing that gives them meaning.
+        let palette = Palette::default();
+        crate::components::style::set_current_render_palette(palette);
+        assert_eq!(
+            render_rgb(BACKGROUND),
+            gpui::rgba(palette.background.rgba_hex())
+        );
+        assert_eq!(render_rgb(SURFACE), gpui::rgba(palette.card.rgba_hex()));
+        assert_eq!(render_rgb(BORDER), gpui::rgba(palette.input.rgba_hex()));
+        assert_eq!(render_rgb(ACCENT), gpui::rgba(palette.brand.rgba_hex()));
+        assert_eq!(render_rgb(GREEN), gpui::rgba(palette.success.rgba_hex()));
+        assert_eq!(render_rgb(DANGER), gpui::rgba(palette.danger.rgba_hex()));
+        assert_eq!(
+            render_rgb(SURFACE_HOVER),
+            gpui::rgba(palette.secondary.rgba_hex())
+        );
+        assert_eq!(render_rgb(TEXT), gpui::rgba(palette.foreground.rgba_hex()));
+        assert_eq!(
+            render_rgb(TEXT_MUTED),
+            gpui::rgba(palette.muted_foreground.rgba_hex())
+        );
+        // The old dark-only prototype background must stay unrepresentable.
+        assert_ne!(render_rgb(BACKGROUND), gpui::rgb(0x0f141c));
     }
 }

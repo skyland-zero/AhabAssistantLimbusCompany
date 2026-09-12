@@ -1,3 +1,4 @@
+use super::style::FONT_SM;
 use super::*;
 
 /// Common visual state for controls that do not own their interaction model.
@@ -72,13 +73,14 @@ pub fn button_with_palette(
             palette.accent_surface,
         ),
         ButtonVariant::Ghost => (palette.card, palette.foreground, palette.muted),
-        ButtonVariant::Destructive => (palette.danger, palette.brand_foreground, palette.danger),
+        // `danger_foreground`, not `brand_foreground`: the latter is dark ink
+        // on the brass accent, which produced dark-on-dark-red text.
+        ButtonVariant::Destructive => (palette.danger, palette.danger_foreground, palette.danger),
         ButtonVariant::Icon => (palette.card, palette.foreground, palette.secondary),
         ButtonVariant::Link => (palette.background, palette.brand, palette.brand_light),
     };
 
     let focus_ring = palette.ring;
-    let limbus = palette.skin.is_limbus();
     let mut control = div()
         .flex()
         .items_center()
@@ -86,11 +88,7 @@ pub fn button_with_palette(
         .gap_2()
         .px_4()
         .py_2();
-    control = if limbus {
-        control.rounded_none()
-    } else {
-        control.rounded_md()
-    };
+    control = shape_rounded(control, palette.shape.radius_md);
     control = control
         .border_1()
         .border_color(paint_color(if matches!(variant, ButtonVariant::Outline) {
@@ -169,59 +167,15 @@ pub fn badge_with_palette(
     };
 
     let mut control = div().flex().items_center().px_2().py_1();
-    control = if palette.skin.is_limbus() {
-        control.rounded_none()
-    } else {
-        control.rounded_md()
-    };
+    control = shape_rounded(control, palette.shape.radius_sm);
     control = control
         .bg(paint_color(background))
         .text_color(paint_color(foreground))
-        .text_size(px(11.));
+        .text_size(px(FONT_SM));
     if state.disabled {
         control = control.opacity(0.5);
     }
     control.child(label.into())
-}
-
-/// Gold L-brackets pinned to the four corners of a limbus surface.
-///
-/// The brackets are absolutely positioned, so they decorate the frame
-/// without moving any content or changing the surface's box. Page-local
-/// containers (home task cards, panel cards) reuse this to speak the same
-/// frame language as [`card`].
-pub(crate) fn limbus_corner_brackets(palette: &Palette) -> [Div; 4] {
-    let gold = paint_color(palette.ring);
-    let bracket = |top: bool, left: bool| {
-        let mut corner = div().absolute().w(px(13.)).h(px(13.));
-        corner = if top {
-            corner.top(px(3.))
-        } else {
-            corner.bottom(px(3.))
-        };
-        corner = if left {
-            corner.left(px(3.))
-        } else {
-            corner.right(px(3.))
-        };
-        corner = if top {
-            corner.border_t_2()
-        } else {
-            corner.border_b_2()
-        };
-        corner = if left {
-            corner.border_l_2()
-        } else {
-            corner.border_r_2()
-        };
-        corner.border_color(gold)
-    };
-    [
-        bracket(true, true),
-        bracket(true, false),
-        bracket(false, true),
-        bracket(false, false),
-    ]
 }
 
 /// State used by a card that is also a clickable/focusable surface.
@@ -243,27 +197,32 @@ pub fn card_with_palette(child: impl IntoElement, palette: &Palette) -> Div {
 
 pub fn card_with_state(child: impl IntoElement, palette: &Palette, state: CardState) -> Div {
     let focus_ring = palette.ring;
-    let limbus = palette.skin.is_limbus();
-    let mut surface = div().min_w_0().p_4();
-    surface = if limbus {
-        // Positioned ancestor for the absolute corner brackets below.
-        surface.rounded_none().relative()
-    } else {
-        surface.rounded_lg()
-    };
+    // Positioned ancestor for the absolute decoration layers below.
+    let mut surface = div().min_w_0().p_4().relative();
+    surface = shape_rounded(surface, palette.shape.radius_lg);
     surface = surface
         .bg(paint_color(palette.card))
         .text_color(paint_color(palette.card_foreground))
         .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
 
-    // The browser token is transparent globally. A focused card still gets a
-    // visible ring, while a caller can opt into a subtle interactive hover.
+    // The browser token was transparent globally, which left dark-mode cards
+    // without any outline. Every skin that defines a visible border gets one.
     if !palette.border.is_transparent() {
         surface = surface.border_1().border_color(paint_color(palette.border));
     }
     if state.focused {
         surface = surface.border_1().border_color(paint_color(palette.ring));
     }
+    if !palette.glow.is_transparent() {
+        surface = apply_card_shadow(
+            surface,
+            palette.shape.shadow,
+            Some(palette_hsla(palette.glow)),
+        );
+    } else {
+        surface = apply_card_shadow(surface, palette.shape.shadow, None);
+    }
+
     if state.interactive && !state.disabled {
         let hover = paint_color(palette.secondary);
         surface = surface.cursor_pointer().hover(move |style| style.bg(hover));
@@ -272,10 +231,60 @@ pub fn card_with_state(child: impl IntoElement, palette: &Palette, state: CardSt
         surface = surface.opacity(0.5);
     }
     let mut surface = surface.child(child);
-    if limbus {
-        for bracket in limbus_corner_brackets(palette) {
-            surface = surface.child(bracket);
+    match palette.decor {
+        Decor::LimbusFrame => {
+            for bracket in frame_corner_brackets(palette) {
+                surface = surface.child(bracket);
+            }
         }
+        Decor::Glass => {
+            // A one-pixel highlight along the top edge is what makes a
+            // translucent panel read as glass rather than as a flat tint.
+            if !palette.hilite.is_transparent() {
+                surface = surface.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .h(px(1.))
+                        .rounded_t(px(palette.shape.radius_lg as f32))
+                        .bg(paint_color(palette.hilite)),
+                );
+            }
+        }
+        Decor::Plain | Decor::Archive | Decor::Mist => {}
     }
     surface
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::style::{AccentId, ColorScheme, SkinId};
+
+    #[test]
+    fn every_skin_and_accent_can_build_a_card_and_header() {
+        for skin in SkinId::ALL {
+            for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+                let palette = Palette::for_skin(scheme, AccentId::Crimson, skin);
+                crate::components::style::set_current_render_palette(palette);
+                let _ = card_header("Header", &palette);
+                let _ = card(div().child("body"));
+                let _ = rule(&palette);
+                let _ = button("Ok", ButtonVariant::Default);
+                let _ = button("Delete", ButtonVariant::Destructive);
+                let _ = badge("tag", BadgeTone::Danger);
+            }
+        }
+    }
+
+    #[test]
+    fn brackets_are_only_meaningful_for_the_frame_skin() {
+        let limbus = Palette::for_skin(ColorScheme::Dark, AccentId::LimbusBrass, SkinId::Limbus);
+        assert!(limbus.uses_frame_decor());
+        let glass = Palette::for_skin(ColorScheme::Dark, AccentId::Crimson, SkinId::Glass);
+        assert!(!glass.uses_frame_decor());
+        assert_eq!(frame_corner_brackets(&limbus).len(), 4);
+    }
 }

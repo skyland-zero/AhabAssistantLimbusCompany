@@ -27,7 +27,7 @@ pub fn text_input_with_palette(
         .w_full()
         .px_3()
         .py_2()
-        .rounded_md()
+        .skin_rounded(palette, false)
         .border_1()
         .border_color(paint_color(if state.focused {
             palette.ring
@@ -51,7 +51,7 @@ pub fn number_stepper(value: i32, min: i32, max: i32) -> Div {
         .justify_between()
         .px_2()
         .py_1()
-        .rounded_md()
+        .skin_rounded(&palette, false)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.card))

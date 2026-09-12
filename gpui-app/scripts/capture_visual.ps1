@@ -8,7 +8,7 @@ param(
     [string[]]$Languages = @("zh-CN", "en-US"),
     [ValidateSet("light", "dark")]
     [string[]]$Themes = @("light", "dark"),
-    [ValidateSet("default", "limbus")]
+    [ValidateSet("default", "glass", "archive", "limbus", "mist")]
     [string[]]$Skins = @("default"),
     [ValidateSet("home", "teams", "themes", "toolbox", "resources", "help", "settings")]
     [string[]]$Pages = @("home", "teams", "themes", "toolbox", "resources", "help", "settings"),
@@ -103,7 +103,10 @@ try {
                 foreach ($skin in $Skins) {
                 foreach ($case in $cases) {
                     $skinSuffix = if ($skin -eq "default") { "" } else { "-$skin" }
-                    $skinAccent = if ($skin -eq "limbus") { "limbus-brass" } else { "crimson" }
+                    # The framed skins were designed around brass; the others
+                    # use the default accent so a baseline is comparable.
+                    $brassSkins = @("limbus", "mist")
+                    $skinAccent = if ($brassSkins -contains $skin) { "limbus-brass" } else { "crimson" }
                     $env:APPDATA = $profile
                     $env:AHAB_VISUAL_THEME = $theme
                     $env:AHAB_VISUAL_LANGUAGE = $language

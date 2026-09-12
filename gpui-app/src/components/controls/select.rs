@@ -29,7 +29,7 @@ pub fn select_with_palette(
         .w_full()
         .px_3()
         .py_2()
-        .rounded_md()
+        .skin_rounded(palette, false)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.card))
@@ -83,12 +83,12 @@ pub fn select_trigger(label: impl Into<String>, open: bool, palette: &Palette) -
         .min_w_0()
         .h(px(30.))
         .px_2p5()
-        .rounded_md()
+        .skin_rounded(palette, false)
         .tab_index(0)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.card))
-        .text_size(px(13.))
+        .text_size(px(12.))
         .text_color(paint_color(palette.foreground))
         .focus_visible({
             let ring = palette.ring;
@@ -118,7 +118,7 @@ pub fn select_popup(options: impl IntoElement, palette: &Palette) -> Div {
         .left_0()
         .right_0()
         .p_1()
-        .rounded_md()
+        .skin_rounded(palette, false)
         .border_1()
         .border_color(paint_color(palette.input))
         .bg(paint_color(palette.popover))
@@ -135,10 +135,10 @@ pub fn select_option(label: impl Into<String>, selected: bool, palette: &Palette
         .min_w_0()
         .min_h(px(28.))
         .px_2()
-        .rounded_sm()
+        .skin_radius_sm(palette)
         .tab_index(0)
         .cursor_pointer()
-        .text_size(px(13.))
+        .text_size(px(12.))
         .text_color(paint_color(if selected {
             palette.brand
         } else {

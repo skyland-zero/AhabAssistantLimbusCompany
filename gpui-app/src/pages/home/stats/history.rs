@@ -42,7 +42,7 @@ pub(crate) fn period_summary_section(
         .px(px(6.0))
         .py_0()
         .gap_1()
-        .text_size(px(10.0))
+        .text_size(px(10.))
         .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
@@ -67,7 +67,7 @@ pub(crate) fn period_summary_section(
                 .items_center()
                 .gap_1p5()
                 .child(action_icon(ICON_HISTORY, 13., ACCENT))
-                .child(div().text_size(px(11.0)).text_color(rgb(TEXT_MUTED)).child(
+                .child(div().text_size(px(11.)).text_color(rgb(TEXT_MUTED)).child(
                     text("周期统计 (今日/本周)", "Period Stats (Today/Week)").get(language),
                 )),
         )
@@ -132,7 +132,7 @@ pub(crate) fn period_item(label: impl Into<String>, today: u32, week: u32) -> Di
                 .gap(px(2.0))
                 .child(
                     div()
-                        .text_size(px(13.0))
+                        .text_size(px(12.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(TEXT))
                         .child(today.to_string()),
@@ -157,7 +157,7 @@ pub(crate) fn recent_mirror_section(
         .px(px(6.0))
         .py_0()
         .gap_1()
-        .text_size(px(10.0))
+        .text_size(px(10.))
         .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
@@ -201,7 +201,7 @@ pub(crate) fn recent_mirror_section(
                 )
                 .child(
                     div()
-                        .text_size(px(11.0))
+                        .text_size(px(11.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(ACCENT))
                         .child(format_duration(record.totalSeconds)),
@@ -232,7 +232,7 @@ pub(crate) fn recent_mirror_section(
                 .child(action_icon(ICON_COMPASS, 13., ACCENT))
                 .child(
                     div()
-                        .text_size(px(11.0))
+                        .text_size(px(11.))
                         .text_color(rgb(TEXT_MUTED))
                         .child(text("上次镜牢", "Last Mirror").get(language)),
                 ),
@@ -259,7 +259,7 @@ pub(crate) fn recent_mirror_section(
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(10.5))
+            .text_size(px(10.))
             .text_color(rgb(TEXT_MUTED))
             .child(text("暂无完成记录", "No completed mirror").get(language)),
     };

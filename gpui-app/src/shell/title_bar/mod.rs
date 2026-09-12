@@ -3,7 +3,7 @@ use gpui::{Context, Div, Entity, Window, WindowControlArea, div, img, prelude::*
 use crate::{
     app::{AhabApp, Page},
     assets,
-    components::style::Palette,
+    components::style::{Decor, Palette, ShapeExt},
     i18n::{self, Key as I18nKey},
     model::{Language, ThemeMode},
     shell::ToastKind,
@@ -209,7 +209,7 @@ pub fn title_bar(
         .flex()
         .items_center()
         .border_b_1()
-        .border_color(rgba(titlebar_separator_hex(palette)))
+        .border_color(rgba(titlebar_separator(palette)))
         .bg(rgb(palette.card.rgb_hex()))
         .child(brand)
         .child(pages)
@@ -218,14 +218,21 @@ pub fn title_bar(
         .child(controls)
 }
 
-fn titlebar_separator_hex(palette: Palette) -> u32 {
-    // The limbus skin wants a solid mustard rule under the title bar,
-    // matching the gold bands used on card headers.
-    if palette.skin.is_limbus() {
-        return (palette.ring.rgb_hex() << 8) | 0xff;
+/// Rule under the title bar, per decoration language.
+///
+/// The framed skins draw a solid accent rule (matching their card headers),
+/// the archive skin a softer hairline, the glass skin its top highlight, and
+/// the flat skin the reduced-contrast separator the web client used.
+fn titlebar_separator(palette: Palette) -> u32 {
+    match palette.decor {
+        Decor::LimbusFrame | Decor::Mist => (palette.decor_line.rgb_hex() << 8) | 0xff,
+        Decor::Archive => (palette.decor_line.rgb_hex() << 8) | 0x8c,
+        Decor::Glass => (palette.hilite.rgb_hex() << 8) | u32::from(palette.hilite.alpha()),
+        Decor::Plain => {
+            let alpha = u32::from(palette.input.alpha()) * 3 / 5;
+            (palette.input.rgb_hex() << 8) | alpha
+        }
     }
-    let alpha = u32::from(palette.input.alpha()) * 3 / 5;
-    (palette.input.rgb_hex() << 8) | alpha
 }
 
 struct NavItemConfig {
@@ -253,7 +260,6 @@ fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElemen
         .flex()
         .items_center()
         .gap(px(6.))
-        .rounded_md()
         .px(px(8.))
         .py(px(4.))
         .text_size(px(12.))
@@ -269,6 +275,7 @@ fn nav_item(config: NavItemConfig, cx: &mut Context<AhabApp>) -> impl IntoElemen
             palette.muted_foreground.rgb_hex()
         })))
         .child(page.label_for(language));
+    item = item.skin_rounded(&palette, false);
 
     if page == Page::Home
         && let Some(status_dot) = status_dot
@@ -308,7 +315,7 @@ fn utility_button(
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .skin_rounded(&palette, false)
         .cursor_pointer()
         .text_color(rgb(palette.muted_foreground.rgb_hex()))
         .focus_visible(|style| style.border_1().border_color(rgb(palette.ring.rgb_hex())))
@@ -431,11 +438,26 @@ mod tests {
     }
 
     #[test]
-    fn titlebar_separator_reduces_theme_input_contrast() {
-        let light = titlebar_separator_hex(Palette::light(AccentId::Crimson));
-        let dark = titlebar_separator_hex(Palette::dark(AccentId::Crimson));
+    fn titlebar_separator_reduces_theme_input_contrast_for_the_flat_skin() {
+        let light = titlebar_separator(Palette::light(AccentId::Crimson));
+        let dark = titlebar_separator(Palette::dark(AccentId::Crimson));
 
         assert_eq!(light & 0xff, 0x99);
         assert_eq!(dark & 0xff, 0x16);
+    }
+
+    #[test]
+    fn framed_skins_draw_an_opaque_decor_rule() {
+        use crate::components::style::SkinId;
+        for skin in [SkinId::Limbus, SkinId::Mist] {
+            let palette = Palette::for_skin(
+                crate::components::style::ColorScheme::Dark,
+                AccentId::LimbusBrass,
+                skin,
+            );
+            let separator = titlebar_separator(palette);
+            assert_eq!(separator & 0xff, 0xff, "{}", skin.as_str());
+            assert_eq!(separator >> 8, palette.decor_line.rgb_hex());
+        }
     }
 }

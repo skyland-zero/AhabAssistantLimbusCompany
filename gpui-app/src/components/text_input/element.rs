@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::style::ShapeExt;
 
 use gpui::{
     CursorStyle, Element, ElementId, ElementInputHandler, Entity, Focusable, GlobalElementId,
@@ -208,7 +209,7 @@ impl Render for TextInput {
             .h(px(34.))
             .w_full()
             .px_3()
-            .rounded_md()
+            .skin_rounded(&palette, false)
             .border_1()
             .border_color(paint_color(palette.input))
             .bg(paint_color(palette.card))

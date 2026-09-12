@@ -9,16 +9,18 @@ mod cards;
 use std::process::Command;
 
 use gpui::{
-    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, img, prelude::*, px,
-    rgb as gpui_rgb,
+    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, prelude::*, px, rgb as gpui_rgb,
 };
 
 use crate::{
     app::{AhabApp, SURFACE, TEXT, TEXT_MUTED},
-    components::style::{ACCENT_PRESETS, ColorScheme, GREEN, current_render_palette, skin_rounded},
+    components::style::{
+        ACCENT_PRESETS, ColorScheme, FONT_SM, GREEN, current_render_palette, skin_rounded,
+    },
     components::{
-        ButtonVariant, TextInput, action_button, button, card, is_activation_key, page_root,
-        palette_rgb, render_rgb as rgb, scroll_area_with_handle_children, svg_icon, switch,
+        ButtonVariant, TextInput, action_button, button, card, card_header, is_activation_key,
+        page_root, palette_rgb, render_rgb as rgb, scroll_area_with_handle_children, svg_icon,
+        switch, themed_divider,
     },
     i18n::{Localized, paired as text},
     model::{Language, ThemeMode, UpdateSource},
@@ -62,12 +64,13 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         cards::notification_card(app, cx, wxpusher_spt_input, language),
         cards::about_card(app, cx, language),
     ];
+    sections.push(themed_divider(&current_render_palette()));
     sections.push(
         div()
             .flex()
             .justify_center()
             .pt_1()
-            .text_size(px(11.))
+            .text_size(px(FONT_SM))
             .text_color(rgb(TEXT_MUTED))
             .child(format!(
                 "{} · Ahab Assistant Limbus Company v{}",
@@ -175,47 +178,11 @@ fn active_settings_section(top_item: usize, section_count: usize) -> usize {
 }
 
 fn settings_card(title: &'static str, body: Div) -> Div {
-    // Limbus skin swaps the flat title row for a riveted dark-red metal
-    // band with a gold stencil title. Same 44px slot, no layout shift.
-    let header = if current_render_palette().skin.is_limbus() {
-        div()
-            .relative()
-            .w_full()
-            .h(px(44.))
-            .overflow_hidden()
-            .child(
-                img(crate::assets::image_source(crate::assets::theme(
-                    crate::assets::ThemeAsset::Tagband,
-                )))
-                .w_full()
-                .h_full(),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .bottom_0()
-                    .flex()
-                    .items_center()
-                    .px_4()
-                    .text_size(px(15.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(palette_rgb(current_render_palette().accent_foreground))
-                    .child(title),
-            )
-    } else {
-        div()
-            .px_4()
-            .py_3()
-            .border_b_1()
-            .border_color(palette_rgb(current_render_palette().input))
-            .text_size(px(14.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(rgb(TEXT))
-            .child(title)
-    };
+    // The header decoration is owned by the active skin's decoration
+    // language; every variant occupies the same 44px slot so switching skins
+    // cannot shift the body below it.
+    let palette = current_render_palette();
+    let header = card_header(title, &palette);
     card(div().p_0().flex().flex_col().child(header).child(body)).p_0()
 }
 
@@ -230,7 +197,7 @@ fn settings_list(children: impl IntoIterator<Item = Div>) -> Div {
 fn setting_row(label: &'static str, detail: &'static str, control: impl IntoElement) -> Div {
     let mut copy = div().flex().flex_col().gap_1().min_w_0().flex_1().child(
         div()
-            .text_size(px(13.))
+            .text_size(px(12.))
             .font_weight(FontWeight::MEDIUM)
             .text_color(rgb(TEXT))
             .child(label),
@@ -262,7 +229,7 @@ fn setting_line(label: &'static str, control: impl IntoElement) -> Div {
             div()
                 .min_w_0()
                 .flex_1()
-                .text_size(px(13.))
+                .text_size(px(12.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(rgb(TEXT))
                 .child(label),

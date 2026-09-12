@@ -159,6 +159,22 @@ mod tests {
     }
 
     #[test]
+    fn every_shipped_skin_round_trips_through_persisted_ids() {
+        for skin in SkinId::ALL {
+            let settings = AppSettings {
+                skinId: skin.as_str().to_owned(),
+                ..AppSettings::default()
+            };
+            let snapshot = ThemeSnapshot::from_settings(&settings, true);
+            assert_eq!(snapshot.skin, skin);
+            assert_eq!(normalize_skin_id(skin.as_str()), skin.as_str());
+            assert_eq!(snapshot.palette.skin, skin);
+            assert_eq!(snapshot.palette.shape, skin.shape());
+            assert_eq!(snapshot.palette.decor, skin.decor());
+        }
+    }
+
+    #[test]
     fn language_tags_keep_the_model_contract() {
         assert_eq!(language_tag(Language::ZhCn), "zh-CN");
         assert_eq!(language_tag(Language::EnUs), "en-US");

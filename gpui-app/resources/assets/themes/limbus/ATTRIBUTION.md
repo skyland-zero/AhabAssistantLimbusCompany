@@ -1,6 +1,6 @@
 # ATTRIBUTION
 
-- `bg.png` / `tagband.png` / `frame.png` / `divider.png` / `seal-red.png`：
+- `bg.png` / `divider.png` / `seal-red.png`：
   原创程序化生成（`scripts/generate_limbus_theme.py`），无第三方版权，
   与 Limbus Company 官方美术仅为风格致敬，不构成复制。
 - 设计参考时浏览过 `limbuscompany.wiki.gg` 上的官方宣传图

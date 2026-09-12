@@ -10,15 +10,14 @@ pub fn tabs(labels: &[&str], selected: usize) -> Div {
 /// tabs control.
 pub fn tab_surface_with_palette(active: bool, palette: &Palette) -> Div {
     let focus_ring = palette.ring;
-    div()
+    let mut surface = div()
         .flex()
         .items_center()
         .justify_center()
         .h(px(28.))
         .px_3()
-        .rounded_md()
         .tab_index(0)
-        .text_size(px(12.))
+        .text_size(px(FONT_MD))
         .font_weight(if active {
             gpui::FontWeight::MEDIUM
         } else {
@@ -40,7 +39,11 @@ pub fn tab_surface_with_palette(active: bool, palette: &Palette) -> Div {
         } else {
             palette.card
         }))
-        .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
+        .focus_visible(move |style| style.border_color(paint_color(focus_ring)));
+    // Tabs used to stay `rounded_md` under every skin, which left 6px corners
+    // next to square limbus cards.
+    surface = shape_rounded(surface, palette.shape.radius_md);
+    surface
 }
 
 /// Render tabs with per-tab disabled state. An empty `disabled` slice keeps

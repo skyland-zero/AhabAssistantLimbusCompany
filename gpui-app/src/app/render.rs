@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, Context, Entity, Render, Window, div, img, prelude::*, px, rgb,
+    Animation, AnimationExt, Context, Entity, Render, Window, div, img, linear_color_stop,
+    linear_gradient, pattern_slash, prelude::*, px, rgb,
 };
 
 use super::AhabApp;
@@ -80,27 +81,69 @@ impl AhabApp {
     }
 }
 
-/// Full-window background artwork for the limbus skin.
+/// Full-window background artwork for skins that layer texture underneath the
+/// pages.
 ///
-/// The modern skin paints a flat color (rendered by the root div itself).
-/// The limbus skin layers its procedural nebula/crack texture underneath
-/// the whole window at low opacity so every page inherits the atmosphere
-/// without changing any page layout.
-fn limbus_background(palette: Palette) -> gpui::Div {
-    if !palette.skin.is_limbus() {
-        return div();
+/// The flat skins paint nothing (the root `Div` already carries
+/// `palette.background`). Each decorated skin gets a resolution-independent
+/// layer so no page has to know about it:
+///
+/// * limbus — the procedural nebula/crack plate at half opacity;
+/// * mist   — a red vignette plus a low-opacity diagonal grain;
+/// * glass  — a faint accent wash along the top edge.
+fn skin_background(palette: Palette) -> gpui::Div {
+    let layer = div().absolute().top_0().left_0().right_0().bottom_0();
+    // A top-edge wash rather than a full-height gradient: a full-height tint
+    // would colour the whole page instead of just its atmosphere.
+    let top_wash = |height_percent: f32, from: gpui::Rgba| {
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .h(gpui::relative(height_percent))
+            .bg(linear_gradient(
+                180.0,
+                linear_color_stop(from, 0.0),
+                linear_color_stop(gpui::rgba(0x00000000), 1.0),
+            ))
+    };
+    match palette.decor {
+        // The plate is a cold-black nebula sampled from dark key art.
+        // Composited at half opacity over parchment it grimes the page down to
+        // a grey-taupe (#7B766F), so the light scheme paints no artwork at all
+        // rather than an inverted one.
+        crate::components::style::Decor::LimbusFrame => {
+            if palette.is_dark() {
+                layer.child(
+                    img(assets::image_source(assets::theme(assets::ThemeAsset::Bg)))
+                        .size_full()
+                        .opacity(0.5),
+                )
+            } else {
+                layer
+            }
+        }
+        crate::components::style::Decor::Mist => {
+            layer.child(top_wash(0.45, gpui::rgba(0x8c1d1d5c))).child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    // A one-pixel hatch reads as film grain on the near-black
+                    // ground. Kept at 2% white: above that the weave becomes
+                    // legible as a pattern rather than as grain.
+                    .bg(pattern_slash(gpui::rgba(0xffffff05), 1.0, 6.0)),
+            )
+        }
+        crate::components::style::Decor::Glass => layer.child(top_wash(
+            0.28,
+            crate::components::style::palette_rgb(palette.glow),
+        )),
+        crate::components::style::Decor::Archive | crate::components::style::Decor::Plain => layer,
     }
-    div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
-        .child(
-            img(assets::image_source(assets::theme(assets::ThemeAsset::Bg)))
-                .size_full()
-                .opacity(0.5),
-        )
 }
 
 impl Render for AhabApp {
@@ -129,7 +172,7 @@ impl Render for AhabApp {
             .bg(rgb(palette.background.rgb_hex()))
             .text_color(rgb(palette.foreground.rgb_hex()))
             .font_family("Segoe UI")
-            .child(limbus_background(palette))
+            .child(skin_background(palette))
             .child(shell::title_bar(window, current_page, self, palette, cx))
             .child(
                 div()

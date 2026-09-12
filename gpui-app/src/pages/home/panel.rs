@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::components::base::limbus_corner_brackets;
+use crate::components::frame_corner_brackets;
 use std::sync::Arc;
 
 use gpui::{Context, Image, ImageFormat, ObjectFit, Render, RenderImage, Window, img};
@@ -144,11 +144,11 @@ impl Render for PreviewView {
             .w_full()
             .aspect_ratio(16.0 / 9.0)
             .overflow_hidden()
-            .rounded_md()
+            .skin_rounded(&current_render_palette(), false)
             .border_1()
-            .border_color(rgba(0))
+            .border_color(palette_rgb(current_render_palette().border))
             .bg(rgb(BACKGROUND))
-            .text_size(px(11.0));
+            .text_size(px(11.));
 
         if let Some(image) = self.screenshot_render_image.clone() {
             screenshot_body = screenshot_body
@@ -310,7 +310,7 @@ fn live_indicator() -> Div {
         .flex()
         .items_center()
         .gap(px(3.0))
-        .text_size(px(9.0))
+        .text_size(px(9.5))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(success)
         .child("LIVE")
@@ -352,32 +352,25 @@ fn adapt_preview_render_image(render_image: Arc<RenderImage>) -> Arc<RenderImage
 }
 
 pub(super) fn panel_card(child: impl IntoElement) -> Div {
-    // Same frame language as card(): square dark-red frame with gold
-    // corner brackets under the limbus skin, untouched modern geometry.
-    if current_render_palette().skin.is_limbus() {
-        let palette = current_render_palette();
-        let mut surface = div()
-            .min_w_0()
-            .overflow_hidden()
-            .relative()
-            .rounded_none()
-            .border_1()
-            .border_color(palette_rgb(palette.border))
-            .bg(rgb(SURFACE))
-            .child(child);
-        for bracket in limbus_corner_brackets(&palette) {
-            surface = surface.child(bracket);
-        }
-        return surface;
-    }
-    div()
+    // Same surface language as card(), minus the padding: the agent's own
+    // panel headings provide the spacing.
+    let palette = current_render_palette();
+    let mut surface = div()
         .min_w_0()
         .overflow_hidden()
-        .rounded_lg()
+        .relative()
         .border_1()
-        .border_color(rgba(0))
+        .border_color(palette_rgb(palette.border))
         .bg(rgb(SURFACE))
-        .child(child)
+        .child(child);
+    surface = shape_rounded(surface, palette.shape.radius_lg);
+    surface = apply_card_shadow(surface, palette.shape.shadow, None);
+    if palette.uses_frame_decor() {
+        for bracket in frame_corner_brackets(&palette) {
+            surface = surface.child(bracket);
+        }
+    }
+    surface
 }
 
 pub(super) fn panel_heading(icon_data: &'static [u8], title: &'static str) -> Div {
@@ -385,7 +378,7 @@ pub(super) fn panel_heading(icon_data: &'static [u8], title: &'static str) -> Di
         .flex()
         .items_center()
         .gap_2()
-        .text_size(px(12.0))
+        .text_size(px(12.))
         .text_color(rgb(TEXT_MUTED))
         .child(action_icon(icon_data, 14., TEXT_MUTED))
         .child(title)

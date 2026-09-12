@@ -5,6 +5,7 @@ use super::*;
 mod appearance;
 mod hotkeys;
 mod notifications;
+mod skin_preview;
 mod system;
 mod updates;
 

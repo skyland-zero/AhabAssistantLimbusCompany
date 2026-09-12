@@ -62,7 +62,9 @@ pub fn dialog_overlay(child: impl IntoElement, palette: &Palette) -> Div {
         .items_center()
         .justify_center()
         .p_4()
-        .bg(gpui::rgba(0x00000080))
+        // The scrim is a palette token so a light skin can dim with ink and a
+        // dark skin can dim with black instead of one hardcoded 50% black.
+        .bg(paint_color(palette.scrim))
         .child(child)
         .text_color(paint_color(palette.foreground))
 }
@@ -159,8 +161,10 @@ fn scroll_area_base_without_child(
 
 pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
     let palette = current_render_palette();
-    // Limbus skin stamps the blood seal above the copy, like the wax marks
-    // on in-game notices. Modern skin keeps the plain centered copy.
+    // Each decoration language gets its own empty-state marker: the limbus
+    // skin stamps its wax seal, the archive skin leaves a ruled blank, and
+    // the flat skins stay plain. No skin invents text or geometry that would
+    // shift the surrounding layout.
     let mut root = div()
         .flex()
         .flex_col()
@@ -169,15 +173,47 @@ pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
         .gap_2()
         .p_6()
         .text_color(paint_color(palette.muted_foreground));
-    if palette.skin.is_limbus() {
-        root = root.child(
-            gpui::img(crate::assets::image_source(crate::assets::theme(
-                crate::assets::ThemeAsset::Seal,
-            )))
-            .w(px(72.))
-            .h(px(72.))
-            .opacity(0.85),
-        );
+    match palette.decor {
+        Decor::LimbusFrame => {
+            root = root.child(
+                gpui::img(crate::assets::image_source(crate::assets::theme(
+                    crate::assets::ThemeAsset::Seal,
+                )))
+                .w(px(72.))
+                .h(px(72.))
+                .opacity(0.85),
+            );
+        }
+        Decor::Archive => {
+            root = root.child(
+                div()
+                    .w(px(64.))
+                    .h(px(2.))
+                    .bg(paint_color(palette.decor_line))
+                    .opacity(0.5),
+            );
+        }
+        Decor::Glass => {
+            root = root.child(
+                div()
+                    .w(px(44.))
+                    .h(px(44.))
+                    .skin_rounded(&palette, true)
+                    .border_1()
+                    .border_color(paint_color(palette.hilite))
+                    .bg(paint_color(palette.secondary)),
+            );
+        }
+        Decor::Mist => {
+            root = root.child(
+                div()
+                    .w(px(28.))
+                    .h(px(2.))
+                    .bg(paint_color(palette.decor_line))
+                    .opacity(0.7),
+            );
+        }
+        Decor::Plain => {}
     }
     root.child(
         div()
@@ -206,7 +242,7 @@ pub fn skeleton(width: gpui::Pixels, height: gpui::Pixels) -> Div {
     div()
         .w(width)
         .h(height)
-        .rounded_md()
+        .skin_rounded(&current_render_palette(), false)
         .bg(paint_color(current_render_palette().muted))
 }
 

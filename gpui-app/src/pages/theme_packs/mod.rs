@@ -186,7 +186,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 .child(
                     div()
                         .font_family("Consolas")
-                        .text_size(px(13.))
+                        .text_size(px(12.))
                         .text_color(rgb(TEXT))
                         .child(total_weight.to_string()),
                 ),

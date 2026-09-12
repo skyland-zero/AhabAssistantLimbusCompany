@@ -73,7 +73,7 @@ impl Render for LogPanelView {
                     .gap_2()
                     .py(px(2.0))
                     .font_family("monospace")
-                    .text_size(px(11.0))
+                    .text_size(px(11.))
                     .child(
                         div()
                             .w(px(62.0))
@@ -97,7 +97,7 @@ impl Render for LogPanelView {
             .h(px(24.0))
             .px(px(8.0))
             .gap(px(4.0))
-            .text_size(px(12.0))
+            .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED))
             .child(action_icon(ICON_TRASH, 14., TEXT_MUTED))
             .child(text("清空", "Clear").get(language));

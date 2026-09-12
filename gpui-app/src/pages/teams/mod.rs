@@ -62,7 +62,7 @@ fn delete_confirmation(
                 .gap_3()
                 .child(
                     div()
-                        .text_size(px(15.))
+                        .text_size(px(14.))
                         .text_color(rgb(TEXT))
                         .child(text("确认删除队伍？", "Delete this team?").get(language)),
                 )
@@ -380,7 +380,7 @@ fn control_row(label: impl Into<String>, control: impl IntoElement) -> Div {
                 .flex_1()
                 .min_w_0()
                 .truncate()
-                .text_size(px(13.))
+                .text_size(px(12.))
                 .text_color(rgb(TEXT))
                 .child(label.into()),
         )
