@@ -22,6 +22,9 @@ uv run python scripts/sign_update_manifest.py `
   --version v1.2.3
 ```
 
-兼容旧发布源时，缺少签名清单仍可下载；设置
-`AALC_UPDATE_REQUIRE_SIGNATURE=1` 可切换为强制模式。新发布流程在
-配置 signing secret 后会自动上传签名元数据。
+更新器默认强制校验：缺少签名清单或签名不匹配时会拒绝安装（fail
+closed）。仅当确实要对接无法提供签名的旧发布源时，显式设置
+`AALC_UPDATE_REQUIRE_SIGNATURE=0`（`false`/`no`/`off` 同样视为关闭）
+才会退回兼容模式。新发布流程在配置 signing secret 后会自动上传签名元数据；
+`module/update/checker.py` 启动 `AALC Updater.exe` 时也会显式传递
+`AALC_UPDATE_REQUIRE_SIGNATURE=1`，避免环境继承导致降级。
