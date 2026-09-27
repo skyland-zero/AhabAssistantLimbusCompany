@@ -121,6 +121,21 @@ impl AhabApp {
                     .expanded_tasks
                     .insert(crate::model::FixedTaskId::DailyTask);
             }
+            VisualState::HomeMirrorDetails => {
+                // Deferred: the sheet is pushed onto Root, which cannot be
+                // mutated while this frame is being built.
+                //
+                // This capture shows the *empty* history. The records arrive from
+                // the async bootstrap fetch, and a sheet snapshots its data when
+                // it opens, so there is no point in the first frames where the
+                // records exist and the sheet is still open. A poll-until-loaded
+                // version was tried and was worse: when it lost the race it
+                // photographed the plain home page, which reads as a pass while
+                // proving nothing.
+                cx.defer_in(window, move |view, window, cx| {
+                    view.open_mirror_details(window, cx);
+                });
+            }
             VisualState::HomeSelect => {
                 self.home
                     .expanded_tasks

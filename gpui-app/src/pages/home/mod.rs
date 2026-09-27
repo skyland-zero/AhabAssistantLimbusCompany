@@ -16,6 +16,7 @@ mod task_details;
 mod tasks;
 mod views;
 
+pub(crate) use stats::mirror_history_body;
 pub(crate) use views::HomeViewRefs;
 
 use cards::*;
@@ -139,7 +140,6 @@ pub fn render_overlay(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<
         .right_0()
         .bottom_0()
         .child(stats::daily_details_overlay(app, cx))
-        .child(stats::mirror_details_overlay(app, cx))
         .child(execution::after_completion_editor(
             app,
             cx,

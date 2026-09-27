@@ -33,6 +33,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory, $settingsDirectory |
 
 $statePages = @{
     "home-expanded" = "home"
+    "home-mirror-details" = "home"
     "home-select" = "home"
     "home-running" = "home"
     "home-paused" = "home"

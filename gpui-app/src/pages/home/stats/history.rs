@@ -167,10 +167,10 @@ pub(crate) fn recent_mirror_section(
     .text_size(px(10.))
     .child(action_icon(IconName::ScrollText, 11., ACCENT));
     let root_for_details = root.clone();
-    details = details.on_click(move |_, _, cx| {
+    details = details.on_click(move |_, window, cx| {
         if let Some(root) = root_for_details.upgrade() {
             root.update(cx, |view, cx| {
-                view.open_mirror_details(cx);
+                view.open_mirror_details(window, cx);
                 cx.stop_propagation();
             });
         }

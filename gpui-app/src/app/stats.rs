@@ -1,4 +1,5 @@
-use gpui::Context;
+use gpui::{Context, ParentElement as _, Styled as _, Window, div};
+use gpui_component::WindowExt as _;
 
 use super::AhabApp;
 use crate::ipc::{RpcGateway, contract::method};
@@ -48,9 +49,68 @@ impl AhabApp {
         cx.notify();
     }
 
-    pub fn open_mirror_details(&mut self, cx: &mut Context<Self>) {
+    /// Opens the mirror history as a side sheet.
+    ///
+    /// The records are snapshotted here, while the app is not being rendered:
+    /// a `Root` sheet's builder runs inside `AhabApp::render` and cannot borrow
+    /// the app. That is only sound because this viewer's data is already
+    /// loaded - see `open_stats_details`, which has to fetch first and cannot
+    /// use the same trick without losing its loading state.
+    pub fn open_mirror_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.home.set_stats_details_open(false);
         self.home.set_mirror_details_open(true);
+        let language = self.state.settings.language;
+        let records: Vec<_> = if self.home.stats.mirrorHistory.is_empty() {
+            self.home.stats.lastMirror.clone().into_iter().collect()
+        } else {
+            self.home.stats.mirrorHistory.clone()
+        };
+        let app = cx.entity().downgrade();
+        let close_app = app.clone();
+        window.open_sheet(cx, move |sheet, _window, _cx| {
+            let count = records.len();
+            sheet
+                .title(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            gpui_component::Icon::new(crate::components::IconName::ScrollText)
+                                .size(gpui::px(17.))
+                                .text_color(crate::components::style::palette_rgb(
+                                    crate::components::style::current_render_palette().brand,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(gpui::px(1.0))
+                                .child(
+                                    div()
+                                        .text_size(gpui::px(16.))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .child(
+                                            crate::i18n::paired("镜牢明细", "Mirror Details")
+                                                .get(language),
+                                        ),
+                                )
+                                .child(div().text_size(gpui::px(10.)).child(format!(
+                                    "{} {count}/30",
+                                    crate::i18n::paired("最近", "Latest").get(language)
+                                ))),
+                        ),
+                )
+                .size(gpui::relative(0.6))
+                .on_close({
+                    let close_app = close_app.clone();
+                    move |_, _, cx| {
+                        let _ = close_app.update(cx, |view, cx| view.close_mirror_details(cx));
+                    }
+                })
+                .child(crate::pages::mirror_history_body(&records, language))
+        });
         cx.notify();
     }
 
