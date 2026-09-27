@@ -55,6 +55,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             current_render_palette().muted_foreground
         };
         let mut link = button(
+            format!("help-toc-{toc_index}"),
             title,
             if toc_index == active_toc {
                 ButtonVariant::Secondary
@@ -62,7 +63,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 ButtonVariant::Ghost
             },
         )
-        .id(format!("help-toc-{toc_index}"))
         .w_full()
         .justify_start()
         .px_2()
@@ -89,6 +89,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let mut language_switch = div().flex().items_center().gap_1();
     for (candidate, label) in [(Language::ZhCn, "简体中文"), (Language::EnUs, "English")] {
         let mut control = button(
+            format!("help-language-{candidate:?}"),
             label,
             if candidate == language {
                 ButtonVariant::Secondary
@@ -96,7 +97,6 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 ButtonVariant::Ghost
             },
         )
-        .id(format!("help-language-{candidate:?}"))
         .px_2()
         .py_1()
         .text_size(px(11.));
@@ -274,8 +274,7 @@ fn render_inline(text: &str, cx: &mut Context<AhabApp>) -> Div {
             }
             InlinePart::Link { label, url } => {
                 let url_for_key = url.clone();
-                let mut link = button(label, ButtonVariant::Ghost)
-                    .id(format!("help-link-{}", url))
+                let mut link = button(format!("help-link-{}", url), label, ButtonVariant::Ghost)
                     .px_1()
                     .py_0()
                     .text_size(px(14.))

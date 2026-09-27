@@ -17,16 +17,14 @@ pub(super) fn execution_toolbar(
     let language = app.state.settings.language;
     let palette = current_render_palette();
 
-    let mut select_all = button("", ButtonVariant::Outline)
-        .id("select-all")
+    let mut select_all = button("select-all", "", ButtonVariant::Outline)
         .h(px(32.0))
         .px(px(10.0))
         .gap(px(4.0))
         .text_size(px(12.))
         .child(action_icon(ICON_CHECK_SQUARE, 14., TEXT))
         .child(text("全选", "Select All").get(language));
-    let mut clear_all = button("", ButtonVariant::Outline)
-        .id("clear-all")
+    let mut clear_all = button("clear-all", "", ButtonVariant::Outline)
         .h(px(32.0))
         .px(px(10.0))
         .gap(px(4.0))
@@ -68,8 +66,7 @@ pub(super) fn execution_toolbar(
             }));
     }
 
-    let mut after_button = button("", ButtonVariant::Ghost)
-        .id("after-completion-open")
+    let mut after_button = button("after-completion-open", "", ButtonVariant::Ghost)
         .h(px(32.0))
         .flex_none()
         .max_w(px(280.0))
@@ -127,8 +124,7 @@ pub(super) fn execution_toolbar(
             palette.warning.rgb_hex(),
         )
     };
-    let mut pause = button("", ButtonVariant::Outline)
-        .id("pause-resume")
+    let mut pause = button("pause-resume", "", ButtonVariant::Outline)
         .h(px(34.0))
         .px(px(12.0))
         .gap(px(6.0))
@@ -186,8 +182,7 @@ pub(super) fn execution_toolbar(
     } else {
         brand_action_icon(run_icon, 14.).into_any_element()
     };
-    let mut run = button("", run_variant)
-        .id("start-stop")
+    let mut run = button("start-stop", "", run_variant)
         .h(px(34.0))
         .px(px(16.0))
         .gap(px(6.0))

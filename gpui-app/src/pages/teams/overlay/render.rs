@@ -131,12 +131,15 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         }
     }));
 
-    let mut close = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
-        .id("team-editor-cancel")
-        .h(px(32.))
-        .px_3()
-        .py_0()
-        .on_click(cx.listener(|view, _, _, cx| view.close_team_editor(cx)));
+    let mut close = button(
+        "team-editor-cancel",
+        text("取消", "Cancel").get(language),
+        ButtonVariant::Ghost,
+    )
+    .h(px(32.))
+    .px_3()
+    .py_0()
+    .on_click(cx.listener(|view, _, _, cx| view.close_team_editor(cx)));
     close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
@@ -151,10 +154,10 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .unwrap_or_else(|| team.name.clone());
     let can_save = !current_name.trim().is_empty() && !app.teams.saving;
     let mut save = button(
+        "team-editor-save",
         text("保存队伍", "Save Team").get(language),
         ButtonVariant::Default,
     )
-    .id("team-editor-save")
     .h(px(32.))
     .px_3()
     .py_0();

@@ -150,8 +150,7 @@ pub(super) fn task_counter(
     cx: &mut Context<AhabApp>,
     action: HomeCounterAction,
 ) -> Div {
-    let mut decrement = button("", ButtonVariant::Outline)
-        .id(format!("{id}-decrement"))
+    let mut decrement = button(format!("{id}-decrement"), "", ButtonVariant::Outline)
         .w(px(26.))
         .h(px(26.))
         .p_0()
@@ -176,8 +175,7 @@ pub(super) fn task_counter(
         decrement = decrement.opacity(0.45).cursor_not_allowed();
     }
 
-    let mut increment = button("", ButtonVariant::Outline)
-        .id(format!("{id}-increment"))
+    let mut increment = button(format!("{id}-increment"), "", ButtonVariant::Outline)
         .w(px(26.))
         .h(px(26.))
         .p_0()

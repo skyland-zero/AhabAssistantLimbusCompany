@@ -246,10 +246,10 @@ pub(crate) fn basic_editor(
         }));
 
     let mut clear_sinners = button(
+        "team-clear-sinners",
         text("清空人格", "Clear Sinners").get(language),
         ButtonVariant::Ghost,
-    )
-    .id("team-clear-sinners");
+    );
     clear_sinners = clear_sinners.on_click(cx.listener(|view, _, _, cx| {
         view.teams.clear_sinners();
         cx.notify();

@@ -1,3 +1,8 @@
+use gpui::{ElementId, SharedString};
+use gpui_component::Disableable as _;
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::tag::Tag;
+
 use super::style::FONT_SM;
 use super::*;
 
@@ -47,102 +52,98 @@ pub enum ButtonVariant {
     Link,
 }
 
-/// A clickable button surface. Add `.on_click(...)` at the call site when the
-/// action is known; this keeps the primitive independent of application state.
-pub fn button(label: impl Into<String>, variant: ButtonVariant) -> Div {
-    button_with_palette(
-        label,
-        variant,
-        &current_render_palette(),
-        ControlState::default(),
-    )
+impl ButtonVariant {
+    /// Project the app's variant vocabulary onto GPUI Kit's.
+    ///
+    /// `Icon` maps to `Ghost` because the app draws icon buttons on a card
+    /// surface, so "same colour as the parent until hover" is the same visual
+    /// intent; GPUI Kit then sizes the padding for a label-less button itself.
+    fn kit(self) -> gpui_component::button::ButtonVariant {
+        use gpui_component::button::ButtonVariant as Kit;
+        match self {
+            Self::Default => Kit::Primary,
+            Self::Outline => Kit::Default,
+            Self::Secondary => Kit::Secondary,
+            Self::Ghost | Self::Icon => Kit::Ghost,
+            Self::Destructive => Kit::Danger,
+            Self::Link => Kit::Link,
+        }
+    }
+
+    /// GPUI Kit splits the variant and the outline flag; the app folds both
+    /// into one name, so the border is re-applied here.
+    const fn outlined(self) -> bool {
+        matches!(self, Self::Outline)
+    }
+
+    const fn is_icon(self) -> bool {
+        matches!(self, Self::Icon)
+    }
 }
 
-pub fn button_with_palette(
-    label: impl Into<String>,
+/// A clickable button surface.
+///
+/// `id` is required because GPUI Kit keys the button's focus handle by it;
+/// two buttons sharing an id would share one focus handle and break Tab order.
+/// Add `.on_click(...)` at the call site when the action is known; this keeps
+/// the primitive independent of application state.
+pub fn button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
     variant: ButtonVariant,
-    palette: &Palette,
+) -> Button {
+    button_inner(id.into(), label.into(), variant, ControlState::default())
+}
+
+/// [`button`] with an explicit disabled/loading state.
+pub fn button_with_state(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    variant: ButtonVariant,
     state: ControlState,
-) -> Div {
-    let (background, foreground, hover_background) = match variant {
-        ButtonVariant::Default => (palette.brand, palette.brand_foreground, palette.brand_hover),
-        ButtonVariant::Outline => (palette.card, palette.foreground, palette.brand_light),
-        ButtonVariant::Secondary => (
-            palette.secondary,
-            palette.secondary_foreground,
-            palette.accent_surface,
-        ),
-        ButtonVariant::Ghost => (palette.card, palette.foreground, palette.muted),
-        // `danger_foreground`, not `brand_foreground`: the latter is dark ink
-        // on the brass accent, which produced dark-on-dark-red text.
-        ButtonVariant::Destructive => (palette.danger, palette.danger_foreground, palette.danger),
-        ButtonVariant::Icon => (palette.card, palette.foreground, palette.secondary),
-        ButtonVariant::Link => (palette.background, palette.brand, palette.brand_light),
-    };
-
-    let focus_ring = palette.ring;
-    let mut control = div()
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap_2()
-        .px_4()
-        .py_2();
-    control = shape_rounded(control, palette.shape.radius_md);
-    control = control
-        .border_1()
-        .border_color(paint_color(if matches!(variant, ButtonVariant::Outline) {
-            palette.input
-        } else {
-            palette.border
-        }))
-        .bg(paint_color(background))
-        .text_color(paint_color(foreground));
-
-    if matches!(variant, ButtonVariant::Icon) {
-        control = control.px_2().py_2();
-    }
-
-    if state.focused {
-        control = control.border_color(paint_color(palette.ring));
-    }
-
-    if state.is_inert() {
-        // Inert buttons must not be reachable by Tab/arrow navigation; a
-        // focus ring on a control that ignores activation is a false
-        // affordance.
-        control = control.opacity(0.5);
-    } else {
-        let hover_background = paint_color(hover_background);
-        control = control
-            .tab_index(0)
-            .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
-            .cursor_pointer()
-            .hover(move |style| style.bg(hover_background));
-    }
-
-    if state.loading {
-        control = control.child(icon(Icon::LoaderCircle, px(14.), paint_color(foreground)));
-    }
-    let label: String = label.into();
-    if !label.is_empty() {
-        control = control.child(label);
-    }
-    control
+) -> Button {
+    button_inner(id.into(), label.into(), variant, state)
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum BadgeTone {
-    #[default]
-    Neutral,
-    Accent,
-    Success,
-    Warning,
-    Info,
-    Danger,
+fn button_inner(
+    id: ElementId,
+    label: SharedString,
+    variant: ButtonVariant,
+    state: ControlState,
+) -> Button {
+    // The skins own the control geometry, so the app keeps its compact sizing
+    // and the theme bridge supplies every colour. GPUI Kit re-applies the
+    // caller's style last (`refine_style(&instance_style)`), so these win over
+    // its own size defaults.
+    let palette = current_render_palette();
+    let mut control = Button::new(id)
+        .label(label)
+        .with_variant(variant.kit())
+        .h(px(FONT_SM + CONTROL_HEIGHT_PADDING))
+        .px_3()
+        .py_0()
+        .text_size(px(FONT_SM))
+        .rounded(px(palette.shape.radius_md as f32));
+    if variant.outlined() {
+        control = control.outline();
+    }
+    if variant.is_icon() {
+        control = control.px_2().compact();
+    }
+    control.disabled(state.is_inert()).loading(state.loading)
 }
 
-pub fn badge(label: impl Into<String>, tone: BadgeTone) -> Div {
+/// Vertical padding added to the label size to reach the app's control height.
+/// Keeps the previous `py_2` rhythm without pinning a second magic number at
+/// every call site.
+const CONTROL_HEIGHT_PADDING: f32 = 9.0;
+
+/// A compact label chip.
+///
+/// GPUI Kit's same-named `Badge` is a count/dot overlay, so the chip maps to
+/// `Tag` instead. `Tag::custom` carries the palette's already contrast-tested
+/// background/foreground pair through unchanged.
+pub fn badge(label: impl Into<String>, tone: BadgeTone) -> Tag {
     badge_with_palette(
         label,
         tone,
@@ -156,7 +157,7 @@ pub fn badge_with_palette(
     tone: BadgeTone,
     palette: &Palette,
     state: ControlState,
-) -> Div {
+) -> Tag {
     let (background, foreground) = match tone {
         BadgeTone::Neutral => (palette.muted, palette.muted_foreground),
         BadgeTone::Accent => (palette.brand_light, palette.brand),
@@ -166,16 +167,30 @@ pub fn badge_with_palette(
         BadgeTone::Danger => (palette.danger_light, palette.danger),
     };
 
-    let mut control = div().flex().items_center().px_2().py_1();
-    control = shape_rounded(control, palette.shape.radius_sm);
-    control = control
-        .bg(paint_color(background))
-        .text_color(paint_color(foreground))
-        .text_size(px(FONT_SM));
+    let control = Tag::custom(
+        palette_hsla(background),
+        palette_hsla(foreground),
+        palette_hsla(palette.border),
+    )
+    .child(label.into())
+    .text_size(px(FONT_SM))
+    .rounded(px(palette.shape.radius_sm as f32));
     if state.disabled {
-        control = control.opacity(0.5);
+        control.opacity(0.5)
+    } else {
+        control
     }
-    control.child(label.into())
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BadgeTone {
+    #[default]
+    Neutral,
+    Accent,
+    Success,
+    Warning,
+    Info,
+    Danger,
 }
 
 /// State used by a card that is also a clickable/focusable surface.
@@ -272,8 +287,8 @@ mod tests {
                 let _ = card_header("Header", &palette);
                 let _ = card(div().child("body"));
                 let _ = rule(&palette);
-                let _ = button("Ok", ButtonVariant::Default);
-                let _ = button("Delete", ButtonVariant::Destructive);
+                let _ = button("test-ok", "Ok", ButtonVariant::Default);
+                let _ = button("test-delete", "Delete", ButtonVariant::Destructive);
                 let _ = badge("tag", BadgeTone::Danger);
             }
         }

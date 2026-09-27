@@ -4,7 +4,7 @@
 //! grid, and explicit synchronization progress, success, warning, loading,
 //! and empty states.
 
-use gpui::{Context, Div, div, prelude::*, px, relative};
+use gpui::{AnyElement, Context, Div, div, prelude::*, px, relative};
 
 use crate::{
     app::{ACCENT, AhabApp, BORDER, TEXT, TEXT_MUTED},
@@ -28,12 +28,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let groups = app.resources.groups.clone();
 
     let mut check = action_button(
+        "resources-check",
         text("检查更新", "Check for Updates").get(language),
         ButtonVariant::Outline,
         Some(svg_icon(ICON_SEARCH_CHECK, 14., TEXT)),
         28.,
-    )
-    .id("resources-check");
+    );
     check = check
         .on_click(cx.listener(move |view, _, _, cx| {
             view.resources.check_update();
@@ -61,12 +61,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         );
 
     let mut sync = action_button(
+        "resources-sync",
         text("立即同步", "Sync Now").get(language),
         ButtonVariant::Default,
         Some(svg_icon(ICON_REFRESH, 14., TEXT)),
         28.,
-    )
-    .id("resources-sync");
+    );
     if progress.is_none() {
         sync = sync
             .on_click(cx.listener(move |view, _, _, cx| {
@@ -96,7 +96,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         sync = sync.opacity(0.5).cursor_not_allowed();
     }
 
-    let progress_badge = progress.map(|value| {
+    let progress_badge: Option<AnyElement> = progress.map(|value| {
         let mut status = badge("", BadgeTone::Accent);
         status = status
             .child(svg_icon(ICON_REFRESH, 12., ACCENT))
@@ -105,9 +105,10 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                 text("同步中…", "Syncing…").get(language),
                 value
             ));
-        status
+        status.into_any_element()
     });
-    let toolbar_status = progress_badge.unwrap_or_else(|| div().w(px(1.)).h(px(1.)));
+    let toolbar_status =
+        progress_badge.unwrap_or_else(|| div().w(px(1.)).h(px(1.)).into_any_element());
 
     let toolbar = div()
         .flex()

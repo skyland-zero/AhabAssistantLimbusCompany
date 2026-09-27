@@ -144,12 +144,12 @@ fn tool_card(
 
     let action_area = if is_resolution {
         let set_btn = action_button(
+            "tool-action-resolution-set",
             text("修改 1080P", "Set 1080P").get(language),
             ButtonVariant::Default,
             Some(brand_icon(ICON_MONITOR, 14.)),
             32.,
         )
-        .id("tool-action-resolution-set")
         .flex_1()
         .on_click(cx.listener(|view, _, _, cx| {
             view.toolbox.apply_resolution();
@@ -164,12 +164,12 @@ fn tool_card(
         }));
 
         let reset_btn = action_button(
+            "tool-action-resolution-reset",
             text("还原默认", "Restore").get(language),
             ButtonVariant::Outline,
             Some(svg_icon(ICON_ROTATE_CCW, 14., TEXT)),
             32.,
         )
-        .id("tool-action-resolution-reset")
         .flex_1()
         .on_click(cx.listener(|view, _, _, cx| {
             view.toolbox.reset_resolution();
@@ -190,8 +190,10 @@ fn tool_card(
             .child(set_btn)
             .child(reset_btn)
     } else {
+        let action_id = format!("tool-action-{:?}", tool.id);
         let mut action = if is_screenshot {
             action_button(
+                action_id.clone(),
                 text("运行", "Run").get(language),
                 ButtonVariant::Outline,
                 Some(svg_icon(ICON_CAMERA, 16., TEXT)),
@@ -199,6 +201,7 @@ fn tool_card(
             )
         } else if running {
             action_button(
+                action_id.clone(),
                 text("停止", "Stop").get(language),
                 ButtonVariant::Outline,
                 Some(svg_icon(ICON_STOP, 16., TEXT)),
@@ -207,13 +210,13 @@ fn tool_card(
             .text_color(rgb(DANGER))
         } else {
             action_button(
+                action_id,
                 text("运行", "Run").get(language),
                 ButtonVariant::Default,
                 Some(brand_icon(ICON_PLAY, 16.)),
                 32.,
             )
         }
-        .id(format!("tool-action-{:?}", tool.id))
         .w_full();
 
         if is_screenshot {

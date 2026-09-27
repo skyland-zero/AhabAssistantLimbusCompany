@@ -77,10 +77,10 @@ pub(crate) fn team_stats_editor(
     let can_act = !team_id.is_empty() && !stats_loading && !clearing;
 
     let mut refresh = button(
+        "team-stats-refresh",
         text("刷新数据", "Refresh Data").get(language),
         ButtonVariant::Outline,
     )
-    .id("team-stats-refresh")
     .h(px(30.))
     .px_3()
     .py_0();
@@ -98,10 +98,10 @@ pub(crate) fn team_stats_editor(
     }
 
     let mut clear = button(
+        "team-stats-clear",
         text("清除历史统计数据", "Clear History").get(language),
         ButtonVariant::Destructive,
     )
-    .id("team-stats-clear")
     .h(px(30.))
     .px_3()
     .py_0();
@@ -202,14 +202,17 @@ pub(crate) fn team_stats_clear_overlay(
             cx.stop_propagation();
         }));
 
-    let mut cancel = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
-        .id("team-stats-clear-cancel")
-        .h(px(32.))
-        .px_3()
-        .py_0()
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.cancel_clear_team_stats(cx);
-        }));
+    let mut cancel = button(
+        "team-stats-clear-cancel",
+        text("取消", "Cancel").get(language),
+        ButtonVariant::Ghost,
+    )
+    .h(px(32.))
+    .px_3()
+    .py_0()
+    .on_click(cx.listener(|view, _, _, cx| {
+        view.cancel_clear_team_stats(cx);
+    }));
     cancel = cancel.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
@@ -218,10 +221,10 @@ pub(crate) fn team_stats_clear_overlay(
     }));
 
     let mut confirm = button(
+        "team-stats-clear-confirm",
         text("清除", "Clear").get(language),
         ButtonVariant::Destructive,
     )
-    .id("team-stats-clear-confirm")
     .h(px(32.))
     .px_3()
     .py_0()

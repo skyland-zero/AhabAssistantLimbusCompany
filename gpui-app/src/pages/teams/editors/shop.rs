@@ -169,6 +169,7 @@ pub(crate) fn shop_editor(
     for floor in 0..5 {
         let ignored = config.ignore_shop.get(floor).copied().unwrap_or(false);
         let mut control = button(
+            format!("ignore-shop-floor-{}", floor + 1),
             if ignored {
                 format!("{} {}F", text("已忽略", "Ignored").get(language), floor + 1)
             } else {
@@ -180,7 +181,6 @@ pub(crate) fn shop_editor(
                 ButtonVariant::Outline
             },
         )
-        .id(format!("ignore-shop-floor-{}", floor + 1))
         .h(px(32.))
         .px_3()
         .py_0();

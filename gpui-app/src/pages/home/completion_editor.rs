@@ -93,8 +93,7 @@ pub(super) fn after_completion_editor(
         },
     );
 
-    let mut close = button("", ButtonVariant::Ghost)
-        .id("after-completion-close")
+    let mut close = button("after-completion-close", "", ButtonVariant::Ghost)
         .w(px(32.))
         .h(px(32.))
         .px_0()
@@ -112,15 +111,15 @@ pub(super) fn after_completion_editor(
     }));
 
     let mut apply_once = button(
+        "after-completion-apply-once",
         text("仅本次生效", "Apply Once").get(language),
         ButtonVariant::Outline,
-    )
-    .id("after-completion-apply-once");
+    );
     let mut save_default = button(
+        "after-completion-save-default",
         text("保存为默认", "Save as Default").get(language),
         ButtonVariant::Default,
-    )
-    .id("after-completion-save-default");
+    );
     if !busy {
         apply_once = apply_once.on_click(cx.listener(|view, _, _, cx| {
             view.home.apply_after_completion(false);

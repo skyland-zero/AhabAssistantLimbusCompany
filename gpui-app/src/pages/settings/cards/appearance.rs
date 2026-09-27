@@ -18,6 +18,7 @@ pub fn appearance_card(
         (ThemeMode::System, text("跟随系统", "System")),
     ] {
         let mut control = button(
+            format!("settings-theme-{candidate:?}"),
             label.get(language),
             if theme == candidate {
                 ButtonVariant::Secondary
@@ -25,7 +26,6 @@ pub fn appearance_card(
                 ButtonVariant::Ghost
             },
         )
-        .id(format!("settings-theme-{candidate:?}"))
         .px_3()
         .py_1()
         .text_size(px(FONT_MD));
@@ -128,6 +128,7 @@ pub fn appearance_card(
     let mut languages = segmented_group();
     for (candidate, label) in [(Language::ZhCn, "简体中文"), (Language::EnUs, "English")] {
         let mut control = button(
+            format!("settings-language-{candidate:?}"),
             label,
             if language == candidate {
                 ButtonVariant::Secondary
@@ -135,7 +136,6 @@ pub fn appearance_card(
                 ButtonVariant::Ghost
             },
         )
-        .id(format!("settings-language-{candidate:?}"))
         .px_3()
         .py_1()
         .text_size(px(FONT_MD));

@@ -129,14 +129,17 @@ pub(super) fn preset_picker_overlay(
     } else {
         scroll_area_with_id(app, "team-preset-picker-scroll", preset_grid)
     };
-    let mut close = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
-        .id("team-preset-cancel")
-        .h(px(32.))
-        .px_3()
-        .py_0()
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.cancel_team_preset_flow(cx);
-        }));
+    let mut close = button(
+        "team-preset-cancel",
+        text("取消", "Cancel").get(language),
+        ButtonVariant::Ghost,
+    )
+    .h(px(32.))
+    .px_3()
+    .py_0()
+    .on_click(cx.listener(|view, _, _, cx| {
+        view.cancel_team_preset_flow(cx);
+    }));
     close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
@@ -228,14 +231,17 @@ pub(super) fn preset_overwrite_overlay(
         &TeamPresetTarget::Existing(Box::new(target.clone())),
         language,
     );
-    let mut cancel = button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
-        .id("team-preset-overwrite-cancel")
-        .h(px(32.))
-        .px_3()
-        .py_0()
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.cancel_team_preset_flow(cx);
-        }));
+    let mut cancel = button(
+        "team-preset-overwrite-cancel",
+        text("取消", "Cancel").get(language),
+        ButtonVariant::Ghost,
+    )
+    .h(px(32.))
+    .px_3()
+    .py_0()
+    .on_click(cx.listener(|view, _, _, cx| {
+        view.cancel_team_preset_flow(cx);
+    }));
     cancel = cancel.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
@@ -243,10 +249,10 @@ pub(super) fn preset_overwrite_overlay(
         }
     }));
     let mut confirm = button(
+        "team-preset-overwrite-confirm",
         text("确认覆盖", "Confirm overwrite").get(language),
         ButtonVariant::Destructive,
     )
-    .id("team-preset-overwrite-confirm")
     .h(px(32.))
     .px_3()
     .py_0()

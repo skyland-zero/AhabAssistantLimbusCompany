@@ -23,8 +23,7 @@ pub(crate) fn daily_details_overlay(
         })
         .cloned();
 
-    let mut close = button("", ButtonVariant::Icon)
-        .id("stats-daily-close")
+    let mut close = button("stats-daily-close", "", ButtonVariant::Icon)
         .w(px(30.0))
         .h(px(30.0))
         .p_0()
@@ -158,8 +157,7 @@ pub(crate) fn mirror_details_overlay(
     } else {
         app.home.stats.mirrorHistory.clone()
     };
-    let mut close = button("", ButtonVariant::Icon)
-        .id("stats-mirror-close")
+    let mut close = button("stats-mirror-close", "", ButtonVariant::Icon)
         .w(px(30.0))
         .h(px(30.0))
         .p_0()

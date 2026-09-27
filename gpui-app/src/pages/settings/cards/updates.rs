@@ -97,12 +97,12 @@ pub fn update_card(
     }
 
     let mut check = action_button(
+        "settings-check-update",
         text("检查更新", "Check for Updates").get(language),
         ButtonVariant::Outline,
         Some(svg_icon(ICON_SEARCH_CHECK, 14., TEXT)),
         28.,
-    )
-    .id("settings-check-update");
+    );
     check = check
         .on_click(cx.listener(|view, _, _, cx| {
             view.settings_page.check_update();
@@ -117,10 +117,10 @@ pub fn update_card(
         }));
 
     let mut save_cdk = button(
+        "settings-save-cdk",
         text("保存 CDK", "Save CDK").get(language),
         ButtonVariant::Default,
     )
-    .id("settings-save-cdk")
     .px_3()
     .py_1()
     .text_size(px(12.));
@@ -193,12 +193,12 @@ pub fn update_card(
 
 pub fn about_card(_app: &mut AhabApp, cx: &mut Context<AhabApp>, language: Language) -> Div {
     let mut repo = action_button(
+        "settings-open-repo",
         "GitHub",
         ButtonVariant::Ghost,
         Some(svg_icon(ICON_EXTERNAL_LINK, 12., TEXT_MUTED)),
         28.,
-    )
-    .id("settings-open-repo");
+    );
     repo = repo
         .on_click(cx.listener(|view, _, _, cx| {
             open_repo();

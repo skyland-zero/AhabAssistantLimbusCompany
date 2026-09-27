@@ -15,7 +15,11 @@ use shared::*;
 
 use std::rc::Rc;
 
-use gpui::{Context, Div, ImageSource, KeyDownEvent, deferred, div, img, prelude::*, px, relative};
+use gpui::{
+    Context, Div, ElementId, ImageSource, KeyDownEvent, SharedString, deferred, div, img,
+    prelude::*, px, relative,
+};
+use gpui_component::button::Button;
 
 use crate::{
     app::{AhabApp, TEXT, TEXT_MUTED},
@@ -78,16 +82,18 @@ fn delete_confirmation(
                         .justify_end()
                         .gap_2()
                         .child({
-                            let mut cancel =
-                                button(text("取消", "Cancel").get(language), ButtonVariant::Ghost)
-                                    .id("delete-cancel")
-                                    .h(px(32.))
-                                    .px_3()
-                                    .py_0()
-                                    .on_click(cx.listener(|view, _, _, cx| {
-                                        view.teams.cancel_delete();
-                                        cx.notify();
-                                    }));
+                            let mut cancel = button(
+                                "delete-cancel",
+                                text("取消", "Cancel").get(language),
+                                ButtonVariant::Ghost,
+                            )
+                            .h(px(32.))
+                            .px_3()
+                            .py_0()
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.teams.cancel_delete();
+                                cx.notify();
+                            }));
                             cancel = cancel.on_key_down(cx.listener(
                                 |view, event: &KeyDownEvent, window, cx| {
                                     if team_activation_key(event) {
@@ -101,10 +107,10 @@ fn delete_confirmation(
                         })
                         .child({
                             let mut confirm = button(
+                                "delete-confirm",
                                 text("删除", "Delete").get(language),
                                 ButtonVariant::Destructive,
                             )
-                            .id("delete-confirm")
                             .h(px(32.))
                             .px_3()
                             .py_0()
@@ -330,9 +336,13 @@ fn editor_option_grid(children: impl IntoIterator<Item = Div>) -> Div {
     settings_grid(cells, 260.)
 }
 
-fn editor_choice_button(label: impl Into<String>, selected: bool) -> Div {
+fn editor_choice_button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    selected: bool,
+) -> Button {
     let palette = current_render_palette();
-    let mut control = button(label, ButtonVariant::Outline)
+    let mut control = button(id, label, ButtonVariant::Outline)
         .border_color(palette_rgb(if selected {
             palette.brand
         } else {

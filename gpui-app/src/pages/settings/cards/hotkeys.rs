@@ -70,13 +70,16 @@ fn hotkey_capture(
     } else {
         value.as_str()
     };
-    let mut capture = button(label, ButtonVariant::Outline)
-        .id(format!("settings-hotkey-{target:?}"))
-        .min_w(px(128.))
-        .px_3()
-        .py_1()
-        .font_family("Consolas")
-        .text_size(px(12.));
+    let mut capture = button(
+        format!("settings-hotkey-{target:?}"),
+        label,
+        ButtonVariant::Outline,
+    )
+    .min_w(px(128.))
+    .px_3()
+    .py_1()
+    .font_family("Consolas")
+    .text_size(px(12.));
     capture = capture
         .on_click(cx.listener(move |view, _, _, cx| {
             view.settings_page.capture(target);
@@ -96,11 +99,14 @@ fn hotkey_capture(
             }
         }));
 
-    let mut clear = button(text("清除", "Clear").get(language), ButtonVariant::Ghost)
-        .id(format!("settings-hotkey-clear-{target:?}"))
-        .px_2()
-        .py_1()
-        .text_size(px(12.));
+    let mut clear = button(
+        format!("settings-hotkey-clear-{target:?}"),
+        text("清除", "Clear").get(language),
+        ButtonVariant::Ghost,
+    )
+    .px_2()
+    .py_1()
+    .text_size(px(12.));
     if value.is_empty() {
         clear = clear.opacity(0.45).cursor_not_allowed();
     } else {

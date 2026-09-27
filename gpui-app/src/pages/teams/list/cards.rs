@@ -71,10 +71,10 @@ pub(super) fn team_card(
     }));
 
     let mut overwrite = button(
+        format!("overwrite-team-{team_id}"),
         text("从预设覆盖", "Apply preset").get(language),
         ButtonVariant::Outline,
     )
-    .id(format!("overwrite-team-{team_id}"))
     .h(px(30.))
     .px_2()
     .py_0()

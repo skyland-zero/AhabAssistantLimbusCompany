@@ -36,14 +36,17 @@ pub(crate) fn period_summary_section(
     let today = &snapshot.stats.today;
     let week = &snapshot.stats.week;
 
-    let mut details = button(text("明细", "Details").get(language), ButtonVariant::Ghost)
-        .id("stats-daily-open")
-        .h(px(20.0))
-        .px(px(6.0))
-        .py_0()
-        .gap_1()
-        .text_size(px(10.))
-        .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
+    let mut details = button(
+        "stats-daily-open",
+        text("明细", "Details").get(language),
+        ButtonVariant::Ghost,
+    )
+    .h(px(20.0))
+    .px(px(6.0))
+    .py_0()
+    .gap_1()
+    .text_size(px(10.))
+    .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -151,14 +154,17 @@ pub(crate) fn recent_mirror_section(
     language: Language,
     root: &WeakEntity<AhabApp>,
 ) -> Div {
-    let mut details = button(text("明细", "Details").get(language), ButtonVariant::Ghost)
-        .id("stats-mirror-open")
-        .h(px(20.0))
-        .px(px(6.0))
-        .py_0()
-        .gap_1()
-        .text_size(px(10.))
-        .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
+    let mut details = button(
+        "stats-mirror-open",
+        text("明细", "Details").get(language),
+        ButtonVariant::Ghost,
+    )
+    .h(px(20.0))
+    .px(px(6.0))
+    .py_0()
+    .gap_1()
+    .text_size(px(10.))
+    .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -182,8 +188,9 @@ pub(crate) fn recent_mirror_section(
                     },
                     BadgeTone::Danger,
                 )
+                .into_any_element()
             } else {
-                div()
+                div().into_any_element()
             };
             div()
                 .flex()

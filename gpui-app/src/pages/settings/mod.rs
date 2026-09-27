@@ -123,6 +123,7 @@ fn settings_navigation(app: &mut AhabApp, cx: &mut Context<AhabApp>, language: L
     for (index, label) in SETTINGS_SECTIONS.iter().enumerate() {
         let active = app.settings_active_section == index;
         let mut link = button(
+            format!("settings-nav-{index}"),
             label.get(language),
             if active {
                 ButtonVariant::Secondary
@@ -130,7 +131,6 @@ fn settings_navigation(app: &mut AhabApp, cx: &mut Context<AhabApp>, language: L
                 ButtonVariant::Ghost
             },
         )
-        .id(format!("settings-nav-{index}"))
         .w_full()
         .justify_start()
         .px_3()

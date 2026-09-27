@@ -31,6 +31,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let feedback = app.theme_packs.feedback.clone();
 
     let mut sort = action_button(
+        "theme-sort",
         text("按权重排序", "Sort by Weight").get(language),
         if sort_by_weight {
             ButtonVariant::Secondary
@@ -39,8 +40,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         },
         Some(svg_icon(ICON_SORT, 14., ACCENT)),
         28.,
-    )
-    .id("theme-sort");
+    );
     sort = sort
         .on_click(cx.listener(move |view, _, _, cx| {
             view.theme_packs.set_sort_by_weight(!sort_by_weight);
@@ -65,12 +65,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         }));
 
     let mut enable_all = action_button(
+        "theme-enable-all",
         text("全部启用", "Enable All").get(language),
         ButtonVariant::Outline,
         None,
         28.,
-    )
-    .id("theme-enable-all");
+    );
     enable_all = enable_all
         .on_click(cx.listener(move |view, _, _, cx| {
             view.theme_packs.set_all_enabled(true);
@@ -97,12 +97,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         }));
 
     let mut disable_all = action_button(
+        "theme-disable-all",
         text("全部停用", "Disable All").get(language),
         ButtonVariant::Outline,
         None,
         28.,
-    )
-    .id("theme-disable-all");
+    );
     disable_all = disable_all
         .on_click(cx.listener(move |view, _, _, cx| {
             view.theme_packs.set_all_enabled(false);
@@ -129,12 +129,12 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         }));
 
     let mut reset = action_button(
+        "theme-reset",
         text("恢复默认权重", "Reset Weights").get(language),
         ButtonVariant::Ghost,
         Some(svg_icon(ICON_RESET, 14., TEXT_MUTED)),
         28.,
-    )
-    .id("theme-reset");
+    );
     reset = reset
         .on_click(cx.listener(move |view, _, _, cx| {
             view.theme_packs.reset_weights();

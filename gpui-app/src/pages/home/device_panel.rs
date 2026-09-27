@@ -126,8 +126,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
         action_icon(ICON_REFRESH, 14., TEXT_MUTED).into_any_element()
     };
 
-    let mut refresh = button("", ButtonVariant::Icon)
-        .id("device-refresh")
+    let mut refresh = button("device-refresh", "", ButtonVariant::Icon)
         .w(px(28.0))
         .h(px(30.0))
         .p_0()
@@ -148,8 +147,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
         }));
     }
 
-    let mut disconnect = button("", ButtonVariant::Icon)
-        .id("disconnect-device")
+    let mut disconnect = button("disconnect-device", "", ButtonVariant::Icon)
         .w(px(28.0))
         .h(px(30.0))
         .p_0()
@@ -193,10 +191,10 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                 )
                 .child(
                     button(
+                        "rescan-devices",
                         text("重新扫描", "Rescan").get(language),
                         ButtonVariant::Outline,
                     )
-                    .id("rescan-devices")
                     .h(px(24.0))
                     .text_size(px(11.))
                     .px_2()
@@ -382,8 +380,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                     ),
             )
             .child(
-                button("", ButtonVariant::Icon)
-                    .id("dismiss-device-err")
+                button("dismiss-device-err", "", ButtonVariant::Icon)
                     .w(px(20.0))
                     .h(px(20.0))
                     .p_0()

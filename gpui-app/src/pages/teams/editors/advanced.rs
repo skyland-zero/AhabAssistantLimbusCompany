@@ -75,10 +75,10 @@ pub(crate) fn advanced_editor(
         .iter()
         .any(|gift| gift == crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID);
     let mut spiderweb_preset = editor_choice_button(
+        "advanced-spiderweb-gift",
         text("赤红纠缠的蜘蛛巢", "Spiderweb Entangled in Red").get(language),
         has_spiderweb,
     )
-    .id("advanced-spiderweb-gift")
     .h(px(30.))
     .px_2()
     .py_0()
@@ -95,12 +95,15 @@ pub(crate) fn advanced_editor(
             }
         }));
 
-    let mut add_observe = button(text("添加", "Add").get(language), ButtonVariant::Default)
-        .id("advanced-add-observe")
-        .h(px(34.))
-        .px_3()
-        .py_0()
-        .on_click(cx.listener(|view, _, _, cx| view.add_team_observe_gift(cx)));
+    let mut add_observe = button(
+        "advanced-add-observe",
+        text("添加", "Add").get(language),
+        ButtonVariant::Default,
+    )
+    .h(px(34.))
+    .px_3()
+    .py_0()
+    .on_click(cx.listener(|view, _, _, cx| view.add_team_observe_gift(cx)));
     add_observe = add_observe.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
@@ -199,18 +202,20 @@ pub(crate) fn advanced_editor(
                     .justify_end()
                     .gap_2()
                     .child({
-                        let mut close =
-                            button(text("关闭", "Close").get(language), ButtonVariant::Ghost)
-                                .id("advanced-json-close")
-                                .h(px(28.))
-                                .px_3()
-                                .py_0()
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    if let Some(editor) = view.teams.editor.as_mut() {
-                                        editor.json_import_open = false;
-                                    }
-                                    cx.notify();
-                                }));
+                        let mut close = button(
+                            "advanced-json-close",
+                            text("关闭", "Close").get(language),
+                            ButtonVariant::Ghost,
+                        )
+                        .h(px(28.))
+                        .px_3()
+                        .py_0()
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            if let Some(editor) = view.teams.editor.as_mut() {
+                                editor.json_import_open = false;
+                            }
+                            cx.notify();
+                        }));
                         close = close.on_key_down(cx.listener(
                             |view, event: &KeyDownEvent, window, cx| {
                                 if team_activation_key(event) {
@@ -226,10 +231,10 @@ pub(crate) fn advanced_editor(
                     })
                     .child({
                         let mut import = button(
+                            "advanced-json-import",
                             text("校验并覆盖", "Validate & Apply").get(language),
                             ButtonVariant::Default,
                         )
-                        .id("advanced-json-import")
                         .h(px(28.))
                         .px_3()
                         .py_0()

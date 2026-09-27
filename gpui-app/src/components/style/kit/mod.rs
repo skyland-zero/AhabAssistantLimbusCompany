@@ -26,7 +26,7 @@
 mod colors;
 
 use gpui::{App, Global, Window, px};
-use gpui_component::{Theme, ThemeMode};
+use gpui_component::{Theme, ThemeMode, ThemeTokens};
 
 use super::palette::Palette;
 use super::tokens::ShadowLevel;
@@ -66,6 +66,12 @@ pub fn apply(palette: Palette, window: Option<&mut Window>, cx: &mut App) {
     {
         let theme = Theme::global_mut(cx);
         theme.colors = colors::colors(palette);
+        // GPUI Kit keeps a second, legacy token table next to `colors` and its
+        // widgets read *that* (`cx.theme().tokens.button_primary`). It is
+        // derived from `ThemeColor`, but `apply_config` re-derives it from the
+        // registry JSON, so overwriting `colors` alone leaves every button on
+        // the built-in palette. Re-derive it from our colours in the same pass.
+        theme.tokens = ThemeTokens::from(&theme.colors);
         theme.radius = px(palette.shape.radius(false) as f32);
         theme.radius_lg = px(palette.shape.radius(true) as f32);
         // Skins without a shadow language (Archive, Limbus) must not get GPUI
@@ -238,6 +244,30 @@ mod tests {
         assert!(matches!(none.shape.shadow, ShadowLevel::None));
         let raised = Palette::for_skin(ColorScheme::Dark, AccentId::Crimson, SkinId::Mist);
         assert!(!matches!(raised.shape.shadow, ShadowLevel::None));
+    }
+
+    /// GPUI Kit widgets read the legacy `ThemeTokens` table, not `ThemeColor`
+    /// directly. That table is derived from the colour table, so a projection
+    /// that only overwrites `colors` leaves every button on the built-in
+    /// palette. This pins the derivation that makes the projection visible:
+    /// the primary button fill must be the palette's brand, not a default.
+    #[test]
+    fn component_tokens_are_derived_from_the_colour_table() {
+        for palette in every_palette() {
+            let colors = colors::colors(palette);
+            let tokens = ThemeTokens::from(&colors);
+            let brand: gpui::Hsla = tokens.button_primary.into();
+            assert_eq!(
+                brand,
+                super::super::runtime::palette_hsla(palette.brand),
+                "the primary button fill must come from the colour table"
+            );
+            // Guard against the table silently staying at its defaults: a
+            // ship skin where brand equals the danger colour would make the
+            // assertion above pass for the wrong reason.
+            let danger: gpui::Hsla = tokens.button_danger.into();
+            assert_ne!(brand, danger, "brand and danger must stay distinct");
+        }
     }
 
     /// The legacy hue ramp is collapsed onto semantics on purpose, so a page

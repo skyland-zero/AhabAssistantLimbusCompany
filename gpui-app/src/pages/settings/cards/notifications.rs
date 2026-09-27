@@ -7,10 +7,10 @@ pub fn notification_card(
     language: Language,
 ) -> Div {
     let mut save = button(
+        "settings-save-wxpusher-spt",
         text("保存 SPT", "Save SPT").get(language),
         ButtonVariant::Default,
     )
-    .id("settings-save-wxpusher-spt")
     .px_3()
     .py_1()
     .text_size(px(12.));
@@ -26,12 +26,12 @@ pub fn notification_card(
     let test_input = spt_input.clone();
     let key_input = spt_input.clone();
     let mut test = action_button(
+        "settings-test-wxpusher",
         text("发送测试通知", "Send Test").get(language),
         ButtonVariant::Outline,
         None,
         28.,
     )
-    .id("settings-test-wxpusher")
     .on_click(cx.listener(move |view, _, _, cx| {
         let spt = test_input
             .as_ref()

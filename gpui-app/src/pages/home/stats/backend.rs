@@ -121,10 +121,10 @@ pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<Ah
 
     if status.can_manual_retry() {
         let mut retry = button(
+            "backend-retry",
             text("重试启动", "Retry start").get(language),
             ButtonVariant::Ghost,
         )
-        .id("backend-retry")
         .h(px(26.0))
         .px_2()
         .py_0()

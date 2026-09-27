@@ -92,8 +92,7 @@ impl Render for LogPanelView {
             .collect();
 
         let root = self.root.clone();
-        let mut clear_logs = button("", ButtonVariant::Ghost)
-            .id("clear-logs")
+        let mut clear_logs = button("clear-logs", "", ButtonVariant::Ghost)
             .h(px(24.0))
             .px(px(8.0))
             .gap(px(4.0))

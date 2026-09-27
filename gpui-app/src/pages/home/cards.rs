@@ -1,5 +1,7 @@
 use super::*;
 
+use gpui::AnyElement;
+
 use crate::components::frame_corner_brackets;
 use crate::pages::home::{apply_card_shadow, shape_rounded};
 
@@ -10,7 +12,7 @@ pub(super) struct TaskCardSpec {
     pub(super) enabled: bool,
     pub(super) expanded: bool,
     pub(super) executing: bool,
-    pub(super) preview_tags: Vec<Div>,
+    pub(super) preview_tags: Vec<AnyElement>,
     pub(super) body: Option<Div>,
 }
 
@@ -18,14 +20,14 @@ pub(super) fn preview_tag(
     label: impl Into<String>,
     value: impl Into<String>,
     highlight: bool,
-) -> Div {
+) -> AnyElement {
     let label = label.into();
     let tone = if highlight {
         BadgeTone::Accent
     } else {
         BadgeTone::Neutral
     };
-    badge(format!("{label} {}", value.into()), tone)
+    badge(format!("{label} {}", value.into()), tone).into_any_element()
 }
 
 pub(super) fn task_card_with_toggle(

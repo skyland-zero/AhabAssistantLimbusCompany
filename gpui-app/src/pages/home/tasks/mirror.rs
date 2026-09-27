@@ -15,6 +15,7 @@ pub(crate) fn mirror_card(
             text("∞ 无限", "∞ Infinite").get(language),
             BadgeTone::Neutral,
         )
+        .into_any_element()
     } else {
         task_counter(
             config.set_mirror_count,
@@ -25,6 +26,7 @@ pub(crate) fn mirror_card(
             cx,
             Rc::new(|home, delta| home.adjust_mirror_count(delta)),
         )
+        .into_any_element()
     };
     let infinite = task_option_switch(
         text("无限模式", "Infinite Mode").get(language),
@@ -58,6 +60,7 @@ pub(crate) fn mirror_card(
         ] {
             let is_selected = current_floors == target || (target == 5 && current_floors != 15);
             let mut btn = button(
+                format!("mirror-hard-floors-{target}"),
                 label.get(language),
                 if is_selected {
                     ButtonVariant::Secondary
@@ -65,7 +68,6 @@ pub(crate) fn mirror_card(
                     ButtonVariant::Ghost
                 },
             )
-            .id(format!("mirror-hard-floors-{target}"))
             .px_2()
             .py_0p5()
             .text_size(px(11.));

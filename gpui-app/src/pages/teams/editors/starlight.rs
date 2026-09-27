@@ -36,10 +36,10 @@ pub(crate) fn starlight_editor(
     let mut quick = div().flex().items_center().gap_1().flex_wrap();
     for level in 0..=3_u8 {
         let mut control = button(
+            format!("starlight-all-{level}"),
             starlight_level_label(level, language),
             ButtonVariant::Outline,
         )
-        .id(format!("starlight-all-{level}"))
         .h(px(26.))
         .px_2()
         .py_0();
@@ -99,12 +99,14 @@ pub(crate) fn starlight_editor(
         let level = config.opening_bonus.get(index).copied().unwrap_or(0).min(3);
         let mut levels = div().flex().gap_1();
         for candidate in 0..=3_u8 {
-            let mut control =
-                editor_choice_button(starlight_short_level(candidate), candidate == level)
-                    .id(format!("starlight-{index}-{candidate}"))
-                    .h(px(24.))
-                    .px_2()
-                    .py_0();
+            let mut control = editor_choice_button(
+                format!("starlight-{index}-{candidate}"),
+                starlight_short_level(candidate),
+                candidate == level,
+            )
+            .h(px(24.))
+            .px_2()
+            .py_0();
             control = control
                 .on_click(cx.listener(move |view, _, _, cx| {
                     view.teams.set_starlight_level(index, candidate);
