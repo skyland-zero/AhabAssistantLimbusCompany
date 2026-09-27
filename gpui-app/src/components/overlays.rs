@@ -8,75 +8,14 @@ use gpui_component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, Em
 use gpui_component::skeleton::Skeleton;
 use gpui_component::spinner::Spinner;
 
-pub fn dialog(title: impl Into<String>, body: impl IntoElement, actions: impl IntoElement) -> Div {
-    dialog_with_palette(
-        title,
-        body,
-        actions,
-        &current_render_palette(),
-        ControlState::default(),
-    )
-}
-
-pub fn dialog_with_palette(
-    title: impl Into<String>,
-    body: impl IntoElement,
-    actions: impl IntoElement,
-    palette: &Palette,
-    state: ControlState,
-) -> Div {
-    let mut surface = card_with_state(
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .text_size(px(16.))
-                    .text_color(paint_color(palette.foreground))
-                    .child(title.into()),
-            )
-            .child(body)
-            .child(div().flex().justify_end().gap_2().child(actions)),
-        palette,
-        CardState {
-            interactive: false,
-            disabled: state.disabled,
-            focused: state.focused,
-        },
-    );
-    surface = surface
-        .border_1()
-        .border_color(paint_color(if state.focused {
-            palette.ring
-        } else {
-            palette.input
-        }));
-    surface
-}
-
-/// Center a dialog and paint a modal scrim. The owner should close it on Esc,
-/// restore focus to the triggering entity, and attach confirmation handlers;
-/// GPUI cannot infer those application actions from an ordinary `Div`.
-pub fn dialog_overlay(child: impl IntoElement, palette: &Palette) -> Div {
-    div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .p_4()
-        // The scrim is a palette token so a light skin can dim with ink and a
-        // dark skin can dim with black instead of one hardcoded 50% black.
-        .bg(paint_color(palette.scrim))
-        .child(child)
-        .text_color(paint_color(palette.foreground))
-}
+// NOTE: the `dialog` / `dialog_overlay` helpers that used to live here were
+// removed as dead code. Pages build their overlays inline (a scrim `div()` plus
+// a `card`), so there was no call site left. Moving those overlays onto GPUI
+// Kit's `Root::open_dialog` is the migration that would replace them; it is not
+// done yet, and until it is, the inline overlays are the only implementation.
 
 pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
-    scroll_area_with_palette(
+    scroll_area_base(
         "scroll-area",
         child,
         &current_render_palette(),
@@ -99,26 +38,6 @@ pub fn scroll_area_with_id(
     )
 }
 
-pub fn scroll_area_with_handle(
-    _app: &mut AhabApp,
-    id: &'static str,
-    child: impl IntoElement,
-    handle: gpui::ScrollHandle,
-) -> Stateful<Div> {
-    scroll_area_base(
-        id,
-        child,
-        &current_render_palette(),
-        ControlState::default(),
-    )
-    .track_scroll(&handle)
-}
-
-/// Scroll container whose direct children are tracked individually by GPUI.
-///
-/// `ScrollHandle::scroll_to_top_of_item` indexes only direct children of the
-/// tracked element. Pages that need stable section anchors should use this
-/// constructor instead of wrapping all sections in one extra `Div`.
 pub fn scroll_area_with_handle_children(
     _app: &mut AhabApp,
     id: &'static str,
@@ -128,15 +47,6 @@ pub fn scroll_area_with_handle_children(
     scroll_area_base_without_child(id, &current_render_palette(), ControlState::default())
         .children(children)
         .track_scroll(&handle)
-}
-
-pub fn scroll_area_with_palette(
-    id: &'static str,
-    child: impl IntoElement,
-    palette: &Palette,
-    state: ControlState,
-) -> Stateful<Div> {
-    scroll_area_base(id, child, palette, state)
 }
 
 fn scroll_area_base(
