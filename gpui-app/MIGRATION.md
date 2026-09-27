@@ -120,15 +120,48 @@ pages/teams/overlay/render.rs:34, 306, 355
 
 ### 做法
 
+`Root::update(window, cx, ...)` 从任何持有 window 的地方都可调用，包括
+`apply_visual_state(&mut self, window, cx)`。
+
+**关键点：`on_ok` / `on_cancel` 拿到的是 `&mut App`，不是
+`Context<AhabApp>`**（`dialog.rs:369,380`），所以回写页面状态要经过
+`WeakEntity`：
+
 ```rust
-Root::update(window, cx, |root, window, cx| {
+let app = cx.entity().downgrade();          // WeakEntity<AhabApp>
+let name = team.name.clone();
+
+self.teams.request_delete(team);            // 状态照旧，供其他逻辑读取
+Root::update(window, cx, move |root, window, cx| {
     root.open_dialog(
-        |dialog, _window, _cx| dialog.title(...).content(...).footer(...),
+        move |dialog, _window, _cx| {
+            let cancel_app = app.clone();
+            let ok_app = app.clone();
+            dialog
+                .title(text("确认删除队伍？", "Delete this team?"))
+                .child(name.clone())
+                .on_cancel(move |_, _, cx| {
+                    let _ = cancel_app.update(cx, |view, cx| {
+                        view.teams.cancel_delete();
+                        cx.notify();
+                    });
+                    true                        // true = 关闭弹窗
+                })
+                .on_ok(move |_, _, cx| {
+                    let _ = ok_app.update(cx, |view, cx| {
+                        let _ = view.teams.confirm_delete();
+                        cx.notify();
+                    });
+                    true
+                })
+        },
         window,
         cx,
     );
 });
 ```
+
+回调返回 `bool`：`true` 关闭弹窗，`false` 保持打开（用于校验失败时）。
 
 ### 陷阱（最严重的一项）
 
