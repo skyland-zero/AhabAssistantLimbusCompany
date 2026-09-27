@@ -201,6 +201,22 @@ impl AhabApp {
                     });
                 }
             }
+            VisualState::TeamsPresetOverwrite => {
+                // The overwrite confirmation only appears when the preset
+                // targets an *existing* team, so the picker has to be opened
+                // against one - `open_preset_picker_for_slot` would take the
+                // empty-slot path and apply the preset without asking.
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_preset_picker_for_team(&team);
+                    if let Some(preset_id) = self.teams.presets.first().map(|p| p.presetId.clone())
+                        && let Ok(false) = self.teams.select_preset(&preset_id)
+                    {
+                        cx.defer_in(window, move |view, window, cx| {
+                            view.open_preset_overwrite_confirmation(window, cx);
+                        });
+                    }
+                }
+            }
             VisualState::TeamsSelect => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);

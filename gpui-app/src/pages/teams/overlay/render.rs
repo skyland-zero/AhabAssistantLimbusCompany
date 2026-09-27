@@ -3,7 +3,7 @@ use gpui::Window;
 
 use crate::components::{Tab, segmented_tab_bar};
 
-use super::preset::{preset_overwrite_overlay, preset_picker_overlay};
+use super::preset::preset_picker_overlay;
 use crate::components::IconName;
 
 pub(crate) fn render_overlay(
@@ -13,9 +13,6 @@ pub(crate) fn render_overlay(
 ) -> Div {
     let language = app.state.settings.language;
     let Some(editor) = app.teams.editor.as_ref() else {
-        if app.teams.preset_overwrite.is_some() {
-            return preset_overwrite_overlay(app, cx, language);
-        }
         if app.teams.preset_picker.is_some() {
             return preset_picker_overlay(app, cx, language);
         }

@@ -60,10 +60,109 @@ impl AhabApp {
         self.clear_team_inputs();
         match self.teams.select_preset(preset_id) {
             Ok(true) => self.save_team_editor(window, cx),
-            Ok(false) => {}
+            // `Ok(false)` means the preset targets an existing team, so
+            // `select_preset` parked the pending overwrite in the state and the
+            // confirmation has to be shown before it is applied.
+            Ok(false) => self.open_preset_overwrite_confirmation(window, cx),
             Err(error) => self.teams.feedback = Some(error),
         }
         cx.notify();
+    }
+
+    /// Confirm replacing an existing team with a built-in preset.
+    ///
+    /// Same shape as the delete and stats-clear confirmations: the flag stays in
+    /// the state so the domain layer can validate it, and the dialog only drives
+    /// the two transitions.
+    pub fn open_preset_overwrite_confirmation(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(overwrite) = self.teams.preset_overwrite.as_ref() else {
+            return;
+        };
+        let target = overwrite.target.clone();
+        let preset_name = overwrite
+            .preset
+            .name
+            .get(self.state.settings.language)
+            .to_owned();
+        let language = self.state.settings.language;
+        let target_label = crate::state::preset_target_label(
+            &crate::state::TeamPresetTarget::Existing(Box::new(target)),
+            language,
+        );
+        let app = cx.entity().downgrade();
+        Root::update(window, cx, move |root, window, cx| {
+            root.open_dialog(
+                move |dialog, _window, _cx| {
+                    dialog
+                        .title(
+                            crate::i18n::paired("确认覆盖编队？", "Overwrite this team?")
+                                .get(language),
+                        )
+                        .content({
+                            let body = match language {
+                                crate::model::Language::ZhCn => {
+                                    format!("{target_label} 将被预设“{preset_name}”完整覆盖。")
+                                }
+                                crate::model::Language::EnUs => format!(
+                                    "{target_label} will be fully replaced by “{preset_name}”."
+                                ),
+                            };
+                            move |content, _window, _cx| content.child(body.clone())
+                        })
+                        .footer({
+                            let cancel = crate::i18n::paired("取消", "Cancel").get(language);
+                            let confirm =
+                                crate::i18n::paired("确认覆盖", "Confirm overwrite").get(language);
+                            let cancel_app = app.clone();
+                            let confirm_app = app.clone();
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_2()
+                                .child(
+                                    crate::components::button(
+                                        "preset-overwrite-cancel",
+                                        cancel,
+                                        crate::components::ButtonVariant::Ghost,
+                                    )
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = cancel_app.update(cx, |view, cx| {
+                                                view.cancel_team_preset_flow(cx)
+                                            });
+                                            Root::update(window, cx, |root, window, cx| {
+                                                root.close_dialog(window, cx)
+                                            });
+                                        },
+                                    ),
+                                )
+                                .child(
+                                    crate::components::button(
+                                        "preset-overwrite-confirm",
+                                        confirm,
+                                        crate::components::ButtonVariant::Destructive,
+                                    )
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = confirm_app.update(cx, |view, cx| {
+                                                view.confirm_team_preset_overwrite(window, cx)
+                                            });
+                                            Root::update(window, cx, |root, window, cx| {
+                                                root.close_dialog(window, cx)
+                                            });
+                                        },
+                                    ),
+                                )
+                        })
+                },
+                window,
+                cx,
+            );
+        });
     }
 
     pub fn cancel_team_preset_flow(&mut self, cx: &mut Context<Self>) {

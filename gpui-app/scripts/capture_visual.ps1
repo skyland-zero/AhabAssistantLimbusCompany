@@ -44,6 +44,7 @@ $statePages = @{
     "teams-advanced-editor" = "teams"
     "teams-delete" = "teams"
     "teams-stats-clear" = "teams"
+    "teams-preset-overwrite" = "teams"
     "teams-select" = "teams"
     "settings-hotkey" = "settings"
     "settings-select" = "settings"

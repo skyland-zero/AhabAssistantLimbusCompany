@@ -239,3 +239,28 @@ pub const SYSTEM_NAMES: [&str; 10] = [
 pub const SYSTEM_LABELS: [&str; 10] = [
     "燃烧", "流血", "震颤", "破裂", "沉潜", "呼吸", "充能", "斩击", "突刺", "打击",
 ];
+
+pub fn preset_target_label(target: &TeamPresetTarget, language: crate::model::Language) -> String {
+    match target {
+        TeamPresetTarget::EmptySlot(number) => match language {
+            crate::model::Language::ZhCn => format!("空槽位 #{number:02}"),
+            crate::model::Language::EnUs => format!("Empty slot #{number:02}"),
+        },
+        TeamPresetTarget::Existing(team) => match language {
+            crate::model::Language::ZhCn => format!(
+                "{}{}",
+                team.name,
+                team_number_from_id(&team.id)
+                    .map(|number| format!("（槽位 #{number:02}）"))
+                    .unwrap_or_default()
+            ),
+            crate::model::Language::EnUs => format!(
+                "{}{}",
+                team.name,
+                team_number_from_id(&team.id)
+                    .map(|number| format!(" (slot #{number:02})"))
+                    .unwrap_or_default()
+            ),
+        },
+    }
+}

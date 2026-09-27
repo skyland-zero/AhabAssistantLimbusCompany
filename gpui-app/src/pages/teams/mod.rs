@@ -34,8 +34,8 @@ use crate::{
     i18n::paired as text,
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPreset, TeamPurpose, team_number_from_id},
     state::{
-        MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamPresetTarget,
-        TeamSelect, TeamSlot, TeamsState,
+        MirrorBool, MirrorU8, SYSTEM_NAMES, TeamEditorTab, TeamFilter, TeamSelect, TeamSlot,
+        TeamsState,
     },
 };
 
