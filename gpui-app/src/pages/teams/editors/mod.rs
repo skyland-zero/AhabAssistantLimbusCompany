@@ -14,4 +14,4 @@ pub(super) use combat::combat_editor;
 pub(super) use shop::shop_editor;
 pub(super) use starlight::starlight_editor;
 pub(super) use strategy::strategy_editor;
-pub(super) use team_stats::{team_stats_clear_overlay, team_stats_editor};
+pub(super) use team_stats::team_stats_editor;

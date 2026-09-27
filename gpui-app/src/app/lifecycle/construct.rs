@@ -187,6 +187,20 @@ impl AhabApp {
                     });
                 }
             }
+            VisualState::TeamsStatsClear => {
+                // Needs the editor open on the stats tab, then the same deferred
+                // open the delete state uses: pushing a Root dialog while the
+                // frame is being built does not land in that frame.
+                if let Some(team) = self.teams.teams.first().cloned() {
+                    self.teams.open_edit(&team);
+                    self.create_team_inputs(window, cx);
+                    self.teams
+                        .set_editor_tab(crate::state::TeamEditorTab::Starlight);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_clear_stats_confirmation(window, cx);
+                    });
+                }
+            }
             VisualState::TeamsSelect => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);

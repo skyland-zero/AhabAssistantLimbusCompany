@@ -248,6 +248,7 @@ enum VisualState {
     TeamsStarlightEditor,
     TeamsAdvancedEditor,
     TeamsDelete,
+    TeamsStatsClear,
     TeamsSelect,
     SettingsHotkey,
     SettingsSelect,
@@ -271,6 +272,7 @@ impl VisualState {
             "teams-starlight-editor" => Self::TeamsStarlightEditor,
             "teams-advanced-editor" => Self::TeamsAdvancedEditor,
             "teams-delete" => Self::TeamsDelete,
+            "teams-stats-clear" => Self::TeamsStatsClear,
             "teams-select" => Self::TeamsSelect,
             "settings-hotkey" => Self::SettingsHotkey,
             "settings-select" => Self::SettingsSelect,
@@ -295,6 +297,7 @@ impl VisualState {
             | Self::TeamsStarlightEditor
             | Self::TeamsAdvancedEditor
             | Self::TeamsDelete
+            | Self::TeamsStatsClear
             | Self::TeamsSelect => Page::Teams,
             Self::SettingsHotkey | Self::SettingsSelect | Self::SettingsLatest => Page::Settings,
             Self::ToolboxRunning => Page::Toolbox,

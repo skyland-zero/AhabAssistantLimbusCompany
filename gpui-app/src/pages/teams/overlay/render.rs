@@ -308,15 +308,6 @@ pub(crate) fn render_overlay(
     }));
     surface = surface.child(dialog_body);
 
-    if app
-        .teams
-        .editor
-        .as_ref()
-        .is_some_and(|editor| editor.stats_clear_confirmation)
-    {
-        surface = surface.child(editors::team_stats_clear_overlay(app, cx, language));
-    }
-
     div()
         .absolute()
         .top_0()

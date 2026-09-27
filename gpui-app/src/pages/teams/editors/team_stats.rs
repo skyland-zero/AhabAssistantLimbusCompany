@@ -1,7 +1,5 @@
 use super::*;
 
-use gpui::AnyElement;
-
 use crate::model::{TeamStats, TeamStatsBucket};
 
 fn duration_label(seconds: f64, language: Language) -> String {
@@ -107,11 +105,13 @@ pub(crate) fn team_stats_editor(
     .py_0();
     if can_act {
         clear = clear
-            .on_click(cx.listener(|view, _, _, cx| view.request_clear_team_stats(cx)))
+            .on_click(
+                cx.listener(|view, _, window, cx| view.open_clear_stats_confirmation(window, cx)),
+            )
             .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
                 if team_activation_key(event) {
                     window.prevent_default();
-                    view.request_clear_team_stats(cx);
+                    view.open_clear_stats_confirmation(window, cx);
                 }
             }));
     } else {
@@ -177,109 +177,4 @@ pub(crate) fn team_stats_editor(
                 div().into_any_element()
             }),
     )
-}
-
-pub(crate) fn team_stats_clear_overlay(
-    _app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
-    language: Language,
-) -> AnyElement {
-    let palette = current_render_palette();
-    let clear_layer = div()
-        .id("team-stats-clear-layer")
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .p_4()
-        .bg(rgba(0x00000080))
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.cancel_clear_team_stats(cx);
-            cx.stop_propagation();
-        }));
-
-    let mut cancel = button(
-        "team-stats-clear-cancel",
-        text("取消", "Cancel").get(language),
-        ButtonVariant::Ghost,
-    )
-    .h(px(32.))
-    .px_3()
-    .py_0()
-    .on_click(cx.listener(|view, _, _, cx| {
-        view.cancel_clear_team_stats(cx);
-    }));
-    cancel = cancel.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if team_activation_key(event) {
-            window.prevent_default();
-            view.cancel_clear_team_stats(cx);
-        }
-    }));
-
-    let mut confirm = button(
-        "team-stats-clear-confirm",
-        text("清除", "Clear").get(language),
-        ButtonVariant::Destructive,
-    )
-    .h(px(32.))
-    .px_3()
-    .py_0()
-    .on_click(cx.listener(|view, _, _, cx| {
-        view.confirm_clear_team_stats(cx);
-    }));
-    confirm = confirm.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if team_activation_key(event) {
-            window.prevent_default();
-            view.confirm_clear_team_stats(cx);
-        }
-    }));
-
-    let dialog = div()
-        .id("team-stats-clear-dialog")
-        .w(px(400.))
-        .max_w_full()
-        .child(
-            card(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .p_4()
-                    .child(
-                        div()
-                            .text_size(px(14.))
-                            .text_color(palette_rgb(palette.foreground))
-                            .child(
-                                text("确认清除队伍统计？", "Clear team statistics?").get(language),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(palette_rgb(palette.muted_foreground))
-                            .child(
-                                text(
-                                    "该操作只清除历史次数和用时，不能撤销。",
-                                    "This only clears historical runs and times and cannot be undone.",
-                                )
-                                .get(language),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .child(cancel)
-                            .child(confirm),
-                    ),
-            )
-            .w_full(),
-        )
-        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
-    clear_layer.child(dialog).into_any_element()
 }

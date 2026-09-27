@@ -43,6 +43,7 @@ $statePages = @{
     "teams-starlight-editor" = "teams"
     "teams-advanced-editor" = "teams"
     "teams-delete" = "teams"
+    "teams-stats-clear" = "teams"
     "teams-select" = "teams"
     "settings-hotkey" = "settings"
     "settings-select" = "settings"
