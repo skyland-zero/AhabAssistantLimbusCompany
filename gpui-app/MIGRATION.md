@@ -130,11 +130,12 @@ settings-select` 会拍到关闭状态的控件。
 另外 `on_ok` / `on_cancel` 拿到的是 `&mut App` 而非 `Context<AhabApp>`，
 回写状态要经 `WeakEntity::update`。
 
-### 已完成：一个内容面板
+### 已完成：两个内容面板
 
 | 提交 | 内容 | 尺寸 |
 |---|---|---|
 | `faa3de24` | 预设选择器 | 右侧 55% |
+| `993f0546` | 镜牢统计明细 | 右侧 60% |
 
 ### 内容面板的关键约束：**sheet builder 跑在宿主 render 内部**
 
@@ -149,19 +150,29 @@ cannot update ahab_gpui_app::app::AhabApp while it is already being updated
 三个确认弹窗没撞上这个坑**纯属侥幸** —— 它们的 builder 只捕获
 `WeakEntity`，留到点击回调里才用，那时 render 早已结束。
 
-**解法是快照**：在打开 sheet 的地方（此时不在 render）把卡片需要的字符串
-全部解析好（`PresetPickerEntry`：已本地化的名称、已解析的罪人显示名），
-`preset_picker_body` 于是退化成「快照 + 一个 `WeakEntity`」的纯函数，
-卡片用普通闭包而非 `cx.listener`（没有 `Context<AhabApp>` 可监听）。
+**解法是快照**：在打开 sheet 的地方（此时不在 render）把内容需要的字符串
+全部解析好。`preset_picker_body` / `mirror_history_body` 于是都是
+「快照 + 可选 `WeakEntity`」的纯函数，卡片用普通闭包而非 `cx.listener`。
 
-**判断余下面板能否走 sheet 的依据**：内容能否用「打开那一刻的快照」表达。
+### 快照模型的边界：**数据必须在打开那一刻就绪**
 
-| 面板 | 可行？ |
-|---|---|
-| 日常统计明细 | 可以 —— 只读列表 |
-| 镜牢统计明细 | 可以 —— 只读列表 |
-| 结束动作编辑器 | 可能 —— 取决于开关是否有独立 entity |
-| 队伍编辑器 | **难** —— 内含 `InputState` 实体与标签页，快照要连实体句柄一起存 |
+这是决定性的一条，余下面板卡在这里：
+
+- **异步加载的数据不适合。** 镜牢查看器的记录来自启动时的后台拉取，
+  而 sheet 只在打开瞬间取一次快照 —— 于是**不存在**「记录已到 + sheet 仍开着」
+  的那一帧。试过三种办法，都失败：
+  - 固定 400ms 延迟：数据还没到就开了；
+  - 轮询到有数据再开：**更糟** —— 一旦轮询落败，拍到的是一张普通主页截图，
+    看起来通过、实际什么都没验证；
+  - 往 mock 里播一条记录：没进到 UI，已回退，不留未经验证的夹具数据。
+- **日常统计明细是同一个问题**（`open_stats_details` 自己发请求），
+  所以它**保持内联遮罩**，没有迁到 sheet。
+- **队伍编辑器含 `InputState` 实体**，快照要连实体句柄一起存，是更大的工程。
+
+**正确解法不是加长 sleep，而是用 entity 支撑的视图**：sheet 的
+`.child(...)` 放一个实现了 `Render` 的 `Entity<View>`，该视图的 render
+在 `AhabApp::render` 返回之后才跑，因此可以安全 `app.read(cx)`，再用
+`cx.observe` 跟随数据更新。这是余下三个面板该走的路。
 
 ### 副作用（顺带清理）
 
@@ -169,12 +180,12 @@ cannot update ahab_gpui_app::app::AhabApp while it is already being updated
 builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个调用点同步更新。
 `mirror_history_body` 也被同一次改动带出未使用的 `app` 参数。
 
-### 剩余：四个内容面板
+### 剩余：三个内容面板
 
 ```
-pages/home/stats/details.rs     日常 / 镜牢统计明细（640×520）
-pages/home/completion_editor.rs 结束动作编辑器（512）
-pages/teams/overlay/render.rs   队伍编辑器（680）
+pages/home/stats/details.rs     日常统计明细（异步数据，需 entity 视图）
+pages/home/completion_editor.rs 结束动作编辑器
+pages/teams/overlay/render.rs   队伍编辑器（含 InputState 实体）
 ```
 
 ### 视觉状态覆盖
