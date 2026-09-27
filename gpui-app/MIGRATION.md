@@ -98,92 +98,65 @@ settings-select` 会拍到关闭状态的控件。
 
 ---
 
-## 2. Root 弹窗（9 处遮罩）
+## 2. Root 弹窗
 
-### 迁移点
+### 已完成：三个"确认/取消"型
 
-`bg(rgba(0x00000080))` 的遮罩共 9 处：
+| 提交 | 内容 |
+|---|---|
+| `ec750ffc` | 删除队伍确认 |
+| `f7d5fe8d` | 清除历史统计数据确认 |
+| `93332c9d` | 覆盖预设确认 |
+
+三者共用同一形态（见 `open_delete_confirmation` / `open_clear_stats_confirmation` /
+`open_preset_overwrite_confirmation`）：状态标志留在 state 层供领域校验，
+弹窗只驱动两个转移。**新增确认时照抄其中一个即可。**
+
+### 踩过的四个坑（都已解决，别再踩一遍）
+
+**1. `Root` 只托管 dialog 层，不渲染它。** 它自己的 `Render` 只画
+文本选择、tooltip、菜单三层；`render_dialog_layer` 是**应用必须自己放置**的
+公开方法。少了这一行，`open_dialog` 会推到一个没人绘制的实体上 ——
+弹窗创建成功、不报错、永远不出现。已在 `AhabApp::render` 接好。
+
+**2. 该层需要绝对定位的包裹。** 它本身只是 `div()`，作为 flex 列的子元素
+会走正常布局流，`size_full()` 的遮罩会以一个高度为 0 的盒子为基准。
+
+**3. 渲染帧内打开不生效。** `apply_visual_state` 在 `AhabApp::render` 里跑，
+帧内推入 Root 层的弹窗不会进入该帧。用 `cx.defer_in` 推迟。
+
+**4. `Dialog` 不自带 OK/Cancel。** `render_ok` / `render_cancel` 只被
+`AlertDialog` 调用，普通 `Dialog` 是内容容器，动作行要用 `.footer(...)` 自建。
+另外 `on_ok` / `on_cancel` 拿到的是 `&mut App` 而非 `Context<AhabApp>`，
+回写状态要经 `WeakEntity::update`。
+
+### 剩余：五个内容面板
 
 ```
-pages/home/completion_editor.rs:233
-pages/home/stats/details.rs:125, 242
-pages/teams/editors/team_stats.rs:199
-pages/teams/overlay/preset.rs:198, 329
-pages/teams/overlay/render.rs:34, 306, 355
+pages/home/completion_editor.rs:233   结束动作编辑器
+pages/home/stats/details.rs:125       日常统计明细
+pages/home/stats/details.rs:242       镜牢统计明细
+pages/teams/overlay/preset.rs:198     预设选择器
+pages/teams/overlay/render.rs:274     队伍编辑器
 ```
 
-### 收益
+这些**不是确认框，而是内容面板**，所以不该照抄上面的形态：
 
-每处都手写了：遮罩、点击外部关闭、`capture_key_down` 捕获 Esc、
-`stop_propagation` 阻止穿透。**当前完全没有焦点捕获**（WCAG 要求），
-`Root::open_dialog` 提供焦点捕获、Esc、层叠、动画。
+- 队伍编辑器（`render.rs:274`）和预设选择器都是带滚动内容与多标签的
+  大面板，更贴 `Sheet`（侧栏）或保持整页遮罩，用 `Dialog` 会得到一个
+  被 `margin_top = 视口/10` 推到屏幕上方、且宽度受限于 448px 的盒子。
+- 两个统计明细面板同理，是"查看器"而非"确认"。
 
-### 做法
+**建议**：先看 `gpui_component::sheet` 的能力，或明确接受它们继续用内联
+遮罩（它们是页面内容，不是模态确认）。不要为了"迁完"而把它们塞进
+`Dialog`。
 
-`Root::update(window, cx, ...)` 从任何持有 window 的地方都可调用，包括
-`apply_visual_state(&mut self, window, cx)`。
+### 视觉状态覆盖
 
-**关键点：`on_ok` / `on_cancel` 拿到的是 `&mut App`，不是
-`Context<AhabApp>`**（`dialog.rs:369,380`），所以回写页面状态要经过
-`WeakEntity`：
-
-```rust
-let app = cx.entity().downgrade();          // WeakEntity<AhabApp>
-let name = team.name.clone();
-
-self.teams.request_delete(team);            // 状态照旧，供其他逻辑读取
-Root::update(window, cx, move |root, window, cx| {
-    root.open_dialog(
-        move |dialog, _window, _cx| {
-            let cancel_app = app.clone();
-            let ok_app = app.clone();
-            dialog
-                .title(text("确认删除队伍？", "Delete this team?"))
-                .child(name.clone())
-                .on_cancel(move |_, _, cx| {
-                    let _ = cancel_app.update(cx, |view, cx| {
-                        view.teams.cancel_delete();
-                        cx.notify();
-                    });
-                    true                        // true = 关闭弹窗
-                })
-                .on_ok(move |_, _, cx| {
-                    let _ = ok_app.update(cx, |view, cx| {
-                        let _ = view.teams.confirm_delete();
-                        cx.notify();
-                    });
-                    true
-                })
-        },
-        window,
-        cx,
-    );
-});
-```
-
-回调返回 `bool`：`true` 关闭弹窗，`false` 保持打开（用于校验失败时）。
-
-### 陷阱（最严重的一项）
-
-**视觉回归套件依赖声明式状态。** `AHAB_VISUAL_STATE=teams-delete` 是通过
-`self.teams.request_delete(team)` 设置状态来显示遮罩的
-（`app/lifecycle/construct.rs`）。改成命令式 `open_dialog` 后，
-**恢复状态不会再显示弹窗**，`capture_visual.ps1 -States teams-delete` 等
-用例会失败。
-
-所以迁移必须同时更新 `apply_visual_state` 里的对应分支去调用
-`open_dialog`，并且：
-
-- **不要在 render 里做"flag → 弹窗"的同步副作用** —— 在渲染帧内打开弹窗
-  需要 `window.refresh()`，会多推一帧；这与为 TextInput 移除的坏味道同类。
-- 应当在**事件处理里**推入弹窗，在弹窗的 `on_close`/`on_cancel` 里清 flag。
-
-### 顺序建议
-
-从 `teams/overlay/render.rs` 的删除确认开始（单一 flag：`delete_target`，
-开/关路径清晰），跑通后再推广。
-
----
+`teams-delete`、`teams-stats-clear`、`teams-preset-overwrite` 三个状态已接入
+`capture_visual.ps1`。加状态时注意：**状态必须真的走到弹窗那条分支**。
+`teams-preset-overwrite` 第一次写成了空槽位路径，截图拍到一个没有弹窗的
+正常页面 —— 看起来通过，实际什么都没验证。
 
 ## 3. 滚动区（有意保留，除非改变取舍）
 
