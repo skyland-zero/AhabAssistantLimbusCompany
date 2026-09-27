@@ -1,7 +1,12 @@
+use gpui::AnyElement;
+
 use super::*;
 
 use crate::app::AhabApp;
-use crate::components::IconName;
+use gpui_component::Sizable as _;
+use gpui_component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
+use gpui_component::skeleton::Skeleton;
+use gpui_component::spinner::Spinner;
 
 pub fn dialog(title: impl Into<String>, body: impl IntoElement, actions: impl IntoElement) -> Div {
     dialog_with_palette(
@@ -162,68 +167,63 @@ fn scroll_area_base_without_child(
 
 pub fn empty_state(title: impl Into<String>, detail: impl Into<String>) -> Div {
     let palette = current_render_palette();
-    // Each decoration language gets its own empty-state marker: the limbus
-    // skin stamps its wax seal, the archive skin leaves a ruled blank, and
-    // the flat skins stay plain. No skin invents text or geometry that would
-    // shift the surrounding layout.
-    let mut root = div()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap_2()
-        .p_6()
-        .text_color(paint_color(palette.muted_foreground));
-    match palette.decor {
-        Decor::LimbusFrame => {
-            root = root.child(
-                gpui::img(crate::assets::image_source(crate::assets::theme(
-                    crate::assets::ThemeAsset::Seal,
-                )))
-                .w(px(72.))
-                .h(px(72.))
-                .opacity(0.85),
-            );
-        }
-        Decor::Archive => {
-            root = root.child(
-                div()
-                    .w(px(64.))
-                    .h(px(2.))
-                    .bg(paint_color(palette.decor_line))
-                    .opacity(0.5),
-            );
-        }
-        Decor::Glass => {
-            root = root.child(
-                div()
-                    .w(px(44.))
-                    .h(px(44.))
-                    .skin_rounded(&palette, true)
-                    .border_1()
-                    .border_color(paint_color(palette.hilite))
-                    .bg(paint_color(palette.secondary)),
-            );
-        }
-        Decor::Mist => {
-            root = root.child(
-                div()
-                    .w(px(28.))
-                    .h(px(2.))
-                    .bg(paint_color(palette.decor_line))
-                    .opacity(0.7),
-            );
-        }
-        Decor::Plain => {}
+    let mut header = EmptyHeader::new()
+        .title(EmptyTitle::new().child(title.into()))
+        .description(EmptyDescription::new().child(detail.into()));
+    if let Some(marker) = skin_empty_marker(&palette) {
+        header = header.media(EmptyMedia::new().child(marker));
     }
-    root.child(
-        div()
-            .text_color(paint_color(palette.foreground))
-            .child(title.into()),
-    )
-    .child(detail.into())
+    // `Empty` sets a dashed border *style* but no border width, so nothing is
+    // painted and the skins keep their own border language (Limbus is square
+    // and borderless, Archive uses hairlines).
+    div().child(Empty::new().header(header))
 }
 
+/// The per-skin marker that stands in for an illustration.
+///
+/// Each decoration language gets its own: Limbus stamps its wax seal, Archive
+/// leaves a ruled blank, Glass a raised chip, Mist a thin bar, and the flat
+/// skins nothing at all. No skin invents text or geometry that would shift the
+/// surrounding layout.
+fn skin_empty_marker(palette: &Palette) -> Option<AnyElement> {
+    let marker = match palette.decor {
+        Decor::LimbusFrame => gpui::img(crate::assets::image_source(crate::assets::theme(
+            crate::assets::ThemeAsset::Seal,
+        )))
+        .w(px(72.))
+        .h(px(72.))
+        .opacity(0.85)
+        .into_any_element(),
+        Decor::Archive => div()
+            .w(px(64.))
+            .h(px(2.))
+            .bg(paint_color(palette.decor_line))
+            .opacity(0.5)
+            .into_any_element(),
+        Decor::Glass => div()
+            .w(px(44.))
+            .h(px(44.))
+            .skin_rounded(palette, true)
+            .border_1()
+            .border_color(paint_color(palette.hilite))
+            .bg(paint_color(palette.secondary))
+            .into_any_element(),
+        Decor::Mist => div()
+            .w(px(28.))
+            .h(px(2.))
+            .bg(paint_color(palette.decor_line))
+            .opacity(0.7)
+            .into_any_element(),
+        Decor::Plain => return None,
+    };
+    Some(marker)
+}
+
+/// A spinner with its label.
+///
+/// GPUI Kit's `Spinner` drives its rotation through `with_animation`, so the
+/// indicator is a real animation instead of a static glyph. The return type
+/// stays `Div` so call sites are unaffected.
 pub fn loading(label: impl Into<String>) -> Div {
     let palette = current_render_palette();
     div()
@@ -231,20 +231,27 @@ pub fn loading(label: impl Into<String>) -> Div {
         .items_center()
         .gap_2()
         .text_color(paint_color(palette.muted_foreground))
-        .child(icon_at(
-            IconName::LoaderCircle,
-            px(14.),
-            paint_color(palette.brand),
-        ))
+        .child(
+            Spinner::new()
+                .with_size(px(14.))
+                .color(palette_hsla(palette.brand)),
+        )
         .child(label.into())
 }
 
+/// A pulsing placeholder.
+///
+/// GPUI Kit's `Skeleton` owns the animation and reads `theme.skeleton`, which
+/// the bridge derives from `Palette::muted`, so the skin still controls the
+/// fill. Only the size and radius are overridden.
 pub fn skeleton(width: gpui::Pixels, height: gpui::Pixels) -> Div {
-    div()
-        .w(width)
-        .h(height)
-        .skin_rounded(&current_render_palette(), false)
-        .bg(paint_color(current_render_palette().muted))
+    let palette = current_render_palette();
+    div().w(width).h(height).child(
+        Skeleton::new()
+            .w_full()
+            .h_full()
+            .rounded(px(palette.shape.radius_sm as f32)),
+    )
 }
 
 /// The design-system lane intentionally keeps palette construction independent
