@@ -181,7 +181,7 @@ pub(crate) fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<A
         );
     }
     root.child(
-        scroll_area_with_id(app, "teams-list-scroll", div().w_full().child(cards))
+        scroll_area_with_id("teams-list-scroll", div().w_full().child(cards))
             .flex_1()
             .min_h_0(),
     )

@@ -249,6 +249,7 @@ enum VisualState {
     TeamsAdvancedEditor,
     TeamsDelete,
     TeamsStatsClear,
+    TeamsPresetPicker,
     TeamsPresetOverwrite,
     TeamsSelect,
     SettingsHotkey,
@@ -274,6 +275,7 @@ impl VisualState {
             "teams-advanced-editor" => Self::TeamsAdvancedEditor,
             "teams-delete" => Self::TeamsDelete,
             "teams-stats-clear" => Self::TeamsStatsClear,
+            "teams-preset-picker" => Self::TeamsPresetPicker,
             "teams-preset-overwrite" => Self::TeamsPresetOverwrite,
             "teams-select" => Self::TeamsSelect,
             "settings-hotkey" => Self::SettingsHotkey,
@@ -300,6 +302,7 @@ impl VisualState {
             | Self::TeamsAdvancedEditor
             | Self::TeamsDelete
             | Self::TeamsStatsClear
+            | Self::TeamsPresetPicker
             | Self::TeamsPresetOverwrite
             | Self::TeamsSelect => Page::Teams,
             Self::SettingsHotkey | Self::SettingsSelect | Self::SettingsLatest => Page::Settings,

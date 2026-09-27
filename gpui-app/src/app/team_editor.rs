@@ -1,5 +1,5 @@
 use gpui::{AppContext, ClipboardItem, Context, ParentElement as _, Styled as _, Window, div};
-use gpui_component::Root;
+use gpui_component::{Root, WindowExt as _};
 
 use super::AhabApp;
 use crate::{
@@ -39,16 +39,81 @@ impl AhabApp {
         cx.notify();
     }
 
-    pub fn open_team_preset_picker_for_slot(&mut self, number: u32, cx: &mut Context<Self>) {
+    pub fn open_team_preset_picker_for_slot(
+        &mut self,
+        number: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.teams.open_preset_picker_for_slot(number);
         self.clear_team_inputs();
+        self.open_team_preset_picker_sheet(window, cx);
         cx.notify();
     }
 
-    pub fn open_team_preset_picker_for_team(&mut self, team: &TeamDetail, cx: &mut Context<Self>) {
+    pub fn open_team_preset_picker_for_team(
+        &mut self,
+        team: &TeamDetail,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.teams.open_preset_picker_for_team(team);
         self.clear_team_inputs();
+        self.open_team_preset_picker_sheet(window, cx);
         cx.notify();
+    }
+
+    /// Opens the built-in preset catalog as a side sheet.
+    ///
+    /// The picker used to be a centred modal card; as a sheet it keeps the same
+    /// two-step flow (`cancel_team_preset_flow` / `select_team_preset`) but the
+    /// scrim, the click-outside dismissal and the Escape handling all become the
+    /// sheet's job, which is why the hand-written ones are gone.
+    fn open_team_preset_picker_sheet(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let language = self.state.settings.language;
+        let title = crate::i18n::paired("选择预设编队", "Choose a team preset").get(language);
+        // Snapshot taken here, while the app is not being rendered: the sheet's
+        // builder runs inside `AhabApp::render`, so it can neither read nor
+        // update the app and would panic trying.
+        let target_label = self
+            .teams
+            .preset_picker
+            .as_ref()
+            .map(|picker| crate::state::preset_target_label(&picker.target, language))
+            .unwrap_or_default();
+        let entries: Vec<crate::pages::PresetPickerEntry> = self
+            .teams
+            .presets
+            .iter()
+            .map(|preset| crate::pages::PresetPickerEntry::new(preset, self, language))
+            .collect();
+        let app = cx.entity().downgrade();
+        let body_app = app.clone();
+        let close_app = app.clone();
+        window.open_sheet(cx, move |sheet, _window, _cx| {
+            let body = crate::pages::preset_picker_body(&entries, body_app.clone(), language);
+            sheet
+                .title(
+                    div().flex().flex_col().gap_1().child(title).child(
+                        div()
+                            .text_size(gpui::px(11.))
+                            .text_color(crate::components::style::palette_rgb(
+                                crate::components::style::current_render_palette().muted_foreground,
+                            ))
+                            .child(target_label.clone()),
+                    ),
+                )
+                .size(gpui::relative(0.55))
+                .on_close({
+                    // Cloned per call: the sheet builder is `Fn`, so the callback
+                    // cannot take the captured handle by move.
+                    let close_app = close_app.clone();
+                    move |_, _, cx| {
+                        let _ = close_app.update(cx, |view, cx| view.cancel_team_preset_flow(cx));
+                    }
+                })
+                .child(body)
+        });
     }
 
     pub fn select_team_preset(

@@ -217,6 +217,13 @@ impl AhabApp {
                     }
                 }
             }
+            VisualState::TeamsPresetPicker => {
+                // Deferred like the dialog states: and the sheet is opened on
+                // Root, which cannot be mutated while this frame is being built.
+                cx.defer_in(window, move |view, window, cx| {
+                    view.open_team_preset_picker_for_slot(1, window, cx);
+                });
+            }
             VisualState::TeamsSelect => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);

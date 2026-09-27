@@ -77,14 +77,14 @@ pub(super) fn team_card(
     .px_2()
     .py_0()
     .text_size(px(10.))
-    .on_click(cx.listener(move |view, _, _, cx| {
-        view.open_team_preset_picker_for_team(&overwrite_team, cx);
+    .on_click(cx.listener(move |view, _, window, cx| {
+        view.open_team_preset_picker_for_team(&overwrite_team, window, cx);
     }));
     overwrite =
         overwrite.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
             if team_activation_key(event) {
                 window.prevent_default();
-                view.open_team_preset_picker_for_team(&overwrite_team_for_key, cx);
+                view.open_team_preset_picker_for_team(&overwrite_team_for_key, window, cx);
             }
         }));
 
@@ -277,14 +277,14 @@ pub(super) fn empty_slot_card(
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(IconName::Copy, 13., current_render_palette().brand))
         .child(text("从预设编队选择", "Choose preset").get(language))
-        .on_click(cx.listener(move |view, _, _, cx| {
-            view.open_team_preset_picker_for_slot(number, cx);
+        .on_click(cx.listener(move |view, _, window, cx| {
+            view.open_team_preset_picker_for_slot(number, window, cx);
         }));
     choose_preset =
         choose_preset.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
             if team_activation_key(event) {
                 window.prevent_default();
-                view.open_team_preset_picker_for_slot(number, cx);
+                view.open_team_preset_picker_for_slot(number, window, cx);
             }
         }));
 

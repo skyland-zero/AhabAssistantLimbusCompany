@@ -81,7 +81,6 @@ pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>
     ];
 
     let task_list = scroll_area_with_id(
-        app,
         "home-task-scroll",
         div().flex().flex_col().gap_2().pb_2().children(task_cards),
     )

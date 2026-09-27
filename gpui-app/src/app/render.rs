@@ -187,6 +187,10 @@ impl Render for AhabApp {
                     .inset_0()
                     .children(Root::render_dialog_layer(window, cx)),
             )
+            // Same story as the dialog layer above: `Root::render_sheet_layer`
+            // is a public method the application has to place, and the sheet is
+            // pushed onto an entity nothing else draws.
+            .children(Root::render_sheet_layer(window, cx))
             .child(shell::toast_layer(self.toast.as_ref(), palette))
     }
 }

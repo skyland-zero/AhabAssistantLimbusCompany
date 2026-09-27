@@ -10,7 +10,10 @@ mod overlay;
 mod shared;
 
 pub(super) use list::render;
+// `preset_picker_body` is also the app layer's sheet body, so it has to
+// reach past `pages`; `render_overlay` stays page-local.
 pub(super) use overlay::render_overlay;
+pub(crate) use overlay::{PresetPickerEntry, preset_picker_body};
 use shared::*;
 
 use std::rc::Rc;

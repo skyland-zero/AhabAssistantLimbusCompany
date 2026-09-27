@@ -34,11 +34,10 @@ pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
 
 /// Scroll container with a caller-provided stable GPUI id for repeated lists.
 /// GPUI owns the complete native wheel and trackpad scrolling path.
-pub fn scroll_area_with_id(
-    _app: &mut AhabApp,
-    id: &'static str,
-    child: impl IntoElement,
-) -> Stateful<Div> {
+/// The `app` parameter this used to take was never read; it is gone so that a
+/// `Root` sheet's builder, which cannot borrow the app, can still use the
+/// scroll styling.
+pub fn scroll_area_with_id(id: &'static str, child: impl IntoElement) -> Stateful<Div> {
     scroll_area_base(
         id,
         child,

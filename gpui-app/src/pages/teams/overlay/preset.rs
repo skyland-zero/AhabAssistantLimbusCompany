@@ -1,20 +1,50 @@
-use crate::state::preset_target_label;
+use gpui::WeakEntity;
 
 use super::*;
 
-pub(super) fn preset_card(
-    preset: TeamPreset,
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
-    language: Language,
-) -> Div {
-    let preset_id = preset.presetId.clone();
-    let preset_id_for_key = preset_id.clone();
+/// Everything one preset card renders, snapshotted when the sheet opens.
+///
+/// The picker lives on a `Root` sheet, and a sheet's builder runs *inside* the
+/// owner's render pass, so it can neither read nor update `AhabApp` - doing so
+/// panics with "cannot update ... while it is already being updated". The sheet
+/// therefore renders from this snapshot, and the only live handle it holds is a
+/// `WeakEntity` whose `update` runs later, when a card is actually clicked.
+pub(crate) struct PresetPickerEntry {
+    preset_id: String,
+    name: String,
+    description: String,
+    floor_hint: String,
+    route_name: String,
+    sinners: Vec<String>,
+}
+
+impl PresetPickerEntry {
+    pub(crate) fn new(preset: &TeamPreset, app: &AhabApp, language: Language) -> Self {
+        Self {
+            preset_id: preset.presetId.clone(),
+            name: preset.name.get(language).to_owned(),
+            description: preset.description.get(language).to_owned(),
+            floor_hint: preset.floorHint.get(language).to_owned(),
+            route_name: preset.routeName.get(language).to_owned(),
+            sinners: preset
+                .team
+                .sinners
+                .iter()
+                .take(12)
+                .map(|sinner| app.teams.sinner_name(sinner))
+                .collect(),
+        }
+    }
+}
+
+fn preset_card(entry: PresetPickerEntry, app: WeakEntity<AhabApp>) -> Div {
     let palette = current_render_palette();
     let mut sinner_list = div().flex().flex_wrap().gap_1();
-    for sinner in preset.team.sinners.iter().take(12) {
-        sinner_list = sinner_list.child(badge(app.teams.sinner_name(sinner), BadgeTone::Neutral));
+    for sinner in &entry.sinners {
+        sinner_list = sinner_list.child(badge(sinner.clone(), BadgeTone::Neutral));
     }
+    let select_app = app.clone();
+    let preset_id = entry.preset_id.clone();
     let mut control = card(
         div()
             .flex()
@@ -25,25 +55,25 @@ pub(super) fn preset_card(
                     .text_size(px(14.))
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .text_color(palette_rgb(palette.foreground))
-                    .child(preset.name.get(language).to_owned()),
+                    .child(entry.name),
             )
             .child(
                 div()
                     .text_size(px(11.))
                     .text_color(palette_rgb(palette.muted_foreground))
-                    .child(preset.description.get(language).to_owned()),
+                    .child(entry.description),
             )
             .child(
                 div()
                     .text_size(px(10.))
                     .text_color(palette_rgb(palette.muted_foreground))
-                    .child(preset.floorHint.get(language).to_owned()),
+                    .child(entry.floor_hint),
             )
             .child(
                 div()
                     .text_size(px(10.))
                     .text_color(palette_rgb(palette.brand))
-                    .child(preset.routeName.get(language).to_owned()),
+                    .child(entry.route_name),
             )
             .child(sinner_list),
     )
@@ -61,36 +91,48 @@ pub(super) fn preset_card(
             .bg(palette_rgb(current_render_palette().accent_surface))
             .border_color(palette_rgb(current_render_palette().brand))
     })
-    .on_click(cx.listener(move |view, _, window, cx| {
-        view.select_team_preset(&preset_id, window, cx);
-    }));
-    control = control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+    .on_click({
+        let app = select_app.clone();
+        let preset_id = preset_id.clone();
+        move |_, window, cx| {
+            let _ = app.update(cx, |view, cx| {
+                view.select_team_preset(&preset_id, window, cx)
+            });
+        }
+    });
+    control = control.on_key_down(move |event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.select_team_preset(&preset_id_for_key, window, cx);
+            let _ = select_app.update(cx, |view, cx| {
+                view.select_team_preset(&preset_id, window, cx)
+            });
         }
-    }));
+    });
     div().w_full().child(control)
 }
 
-pub(super) fn preset_picker_overlay(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+/// The preset catalog as a plain grid, ready to hand to a `Sheet`.
+pub(crate) fn preset_picker_body(
+    entries: &[PresetPickerEntry],
+    app: WeakEntity<AhabApp>,
     language: Language,
 ) -> Div {
-    let Some(picker) = app.teams.preset_picker.as_ref() else {
-        return div();
-    };
-    let target_label = preset_target_label(&picker.target, language);
-    let palette = current_render_palette();
-    let presets = app.teams.presets.clone();
     let mut preset_grid = div().w_full().grid().grid_cols(2).gap_4();
-    for preset in presets {
-        preset_grid = preset_grid.child(preset_card(preset, app, cx, language));
+    for entry in entries {
+        preset_grid = preset_grid.child(preset_card(
+            PresetPickerEntry {
+                preset_id: entry.preset_id.clone(),
+                name: entry.name.clone(),
+                description: entry.description.clone(),
+                floor_hint: entry.floor_hint.clone(),
+                route_name: entry.route_name.clone(),
+                sinners: entry.sinners.clone(),
+            },
+            app.clone(),
+        ));
     }
-    let content: gpui::Stateful<Div> = if app.teams.presets.is_empty() {
+    let content = if entries.is_empty() {
         scroll_area_with_id(
-            app,
             "team-preset-picker-scroll",
             empty_state(
                 text("暂无内置预设", "No built-in presets").get(language),
@@ -104,91 +146,12 @@ pub(super) fn preset_picker_overlay(
             .min_h(px(220.)),
         )
     } else {
-        scroll_area_with_id(app, "team-preset-picker-scroll", preset_grid)
+        scroll_area_with_id("team-preset-picker-scroll", preset_grid)
     };
-    let mut close = button(
-        "team-preset-cancel",
-        text("取消", "Cancel").get(language),
-        ButtonVariant::Ghost,
-    )
-    .h(px(32.))
-    .px_3()
-    .py_0()
-    .on_click(cx.listener(|view, _, _, cx| {
-        view.cancel_team_preset_flow(cx);
-    }));
-    close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if team_activation_key(event) {
-            window.prevent_default();
-            view.cancel_team_preset_flow(cx);
-        }
-    }));
-    let dialog = card(
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div().flex().items_center().justify_between().gap_3().child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(
-                            div()
-                                .text_size(px(16.))
-                                .text_color(palette_rgb(palette.foreground))
-                                .child(text("选择预设编队", "Choose a team preset").get(language)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(11.))
-                                .text_color(palette_rgb(palette.muted_foreground))
-                                .child(target_label),
-                        ),
-                ),
-            )
-            .child(content.flex_1().min_h_0())
-            .child(div().flex().justify_end().child(close)),
-    )
-    .id("team-preset-dialog")
-    .w(px(760.))
-    .h(px(620.))
-    .max_w_full()
-    .max_h(relative(0.94))
-    .min_h_0()
-    .overflow_hidden()
-    .p_5()
-    .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
-
-    let mut surface = div()
-        .id("team-preset-overlay")
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .p_4()
-        .bg(rgba(0x00000080))
-        .child(dialog)
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.cancel_team_preset_flow(cx);
-        }));
-    surface = surface.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if event.keystroke.key.eq_ignore_ascii_case("escape") {
-            window.prevent_default();
-            cx.stop_propagation();
-            view.cancel_team_preset_flow(cx);
-        }
-    }));
     div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
-        .child(surface)
+        .flex()
+        .flex_col()
+        .gap_3()
+        .w_full()
+        .child(content.flex_1().min_h_0())
 }

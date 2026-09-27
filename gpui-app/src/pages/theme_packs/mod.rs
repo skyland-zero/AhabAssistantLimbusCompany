@@ -254,7 +254,7 @@ pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>
         );
     }
     root.child(
-        scroll_area_with_id(app, "theme-packs-scroll", div().w_full().child(list))
+        scroll_area_with_id("theme-packs-scroll", div().w_full().child(list))
             .flex_1()
             .min_h_0(),
     )

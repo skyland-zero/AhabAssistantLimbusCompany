@@ -212,7 +212,7 @@ pub(crate) fn mirror_details_overlay(
         )
         .child(close);
 
-    let body = mirror_history_body(app, &records, language);
+    let body = mirror_history_body(&records, language);
     let dialog = div()
         .id("stats-mirror-dialog")
         .w(px(820.0))
@@ -262,7 +262,6 @@ pub(crate) fn mirror_details_overlay(
 }
 
 pub(crate) fn mirror_history_body(
-    app: &mut AhabApp,
     records: &[MirrorCompletionStats],
     language: Language,
 ) -> gpui::AnyElement {
@@ -288,7 +287,7 @@ pub(crate) fn mirror_history_body(
     for (index, record) in records.iter().enumerate() {
         list = list.child(mirror_history_row(index + 1, record, language));
     }
-    scroll_area_with_id(app, "stats-mirror-scroll", list)
+    scroll_area_with_id("stats-mirror-scroll", list)
         .flex_1()
         .min_h_0()
         .into_any_element()
@@ -389,7 +388,7 @@ pub(crate) fn daily_details_body(
             .child(text("暂无每日数据", "No daily data").get(language))
             .into_any_element()
     } else {
-        scroll_area_with_id(app, "stats-daily-scroll", table)
+        scroll_area_with_id("stats-daily-scroll", table)
             .flex_1()
             .min_h_0()
             .into_any_element()

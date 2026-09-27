@@ -164,7 +164,7 @@ pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>
     }
 
     page_root().child(page_toolbar(toolbar)).child(
-        scroll_area_with_id(app, "resources-scroll", content)
+        scroll_area_with_id("resources-scroll", content)
             .flex_1()
             .min_h_0(),
     )
