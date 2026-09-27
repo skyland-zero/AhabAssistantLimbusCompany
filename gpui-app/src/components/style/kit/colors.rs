@@ -77,7 +77,6 @@ pub(super) fn colors(p: Palette) -> gpui_component::ThemeColor {
     let popover = palette_hsla(p.popover);
     let popover_foreground = palette_hsla(p.popover_foreground);
     let shadcn_primary = palette_hsla(p.primary);
-    let shadcn_primary_foreground = palette_hsla(p.primary_foreground);
     let secondary = palette_hsla(p.secondary);
     let secondary_foreground = palette_hsla(p.secondary_foreground);
     let muted = palette_hsla(p.muted);
@@ -245,11 +244,28 @@ pub(super) fn colors(p: Palette) -> gpui_component::ThemeColor {
         sidebar_primary: brand,
         sidebar_primary_foreground: brand_foreground,
         // ---- form + scrollbar chrome ---------------------------------------
-        // The switch and the slider are the two controls the app keeps on the
-        // shadcn neutral instead of the accent (see `controls/switch.rs`,
-        // which offers `switch_accent` for the Home cards as an override).
-        switch: shadcn_primary,
-        switch_thumb: shadcn_primary_foreground,
+        // GPUI Kit draws the checked track from `primary` (which maps to the
+        // accent) and the unchecked one from `switch`; it draws the thumb from
+        // a *single* `switch_thumb` regardless of state. That one-thumb model
+        // is the binding constraint here: the knob has to stay legible on both
+        // the unchecked track and the checked accent track.
+        //
+        // The app's old switch picked a thumb per state (`primary_foreground`
+        // when on, `foreground`/`background` when off), which cannot be
+        // expressed, and its light scheme shipped a 1.27:1 knob. The pair below
+        // was found by exhaustively scoring every palette token against both
+        // tracks on all 60 skin/scheme/accent combinations:
+        //
+        //   knob on the unchecked track (worst)  4.67:1
+        //   knob on the neutral `primary` track 12.85:1
+        //   knob on the accent track (worst)     2.50:1
+        //
+        // A mid-grey track with the page background as the knob is the only
+        // shape that keeps the knob visible in both states; the remaining
+        // 2.50:1 is on Limbus light (pale knob on dark brass) and is asserted
+        // with its bound in `switch_knob_stays_visible_on_both_tracks`.
+        switch: muted_foreground,
+        switch_thumb: background,
         slider_bar: shadcn_primary,
         slider_thumb: shadcn_primary,
         progress_bar: brand,

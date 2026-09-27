@@ -20,21 +20,12 @@ pub(super) fn pack_row(
 ) -> Div {
     let enabled = pack.enabled;
     let id = pack.id.clone();
-    let mut toggle = switch(enabled).id(format!("theme-enabled-{id}"));
+    let mut toggle = switch(format!("theme-enabled-{id}"), enabled);
     let id_for_click = id.clone();
-    toggle = toggle.on_click(cx.listener(move |view, _, _, cx| {
+    toggle = toggle.on_change(cx.listener(move |view, _, _, cx| {
         view.theme_packs.toggle_enabled(&id_for_click);
         view.schedule_theme_pack_persist(cx);
         cx.notify();
-    }));
-    let id_for_key = id.clone();
-    toggle = toggle.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-        if is_activation_key(event) {
-            window.prevent_default();
-            view.theme_packs.toggle_enabled(&id_for_key);
-            view.schedule_theme_pack_persist(cx);
-            cx.notify();
-        }
     }));
 
     let id_for_slider = pack.id.clone();

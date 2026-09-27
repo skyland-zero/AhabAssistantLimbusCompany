@@ -89,7 +89,7 @@ mod tests {
     use crate::components::style::tokens::{AccentId, ColorScheme, SkinId};
     use gpui_component::ThemeColor;
 
-    fn every_palette() -> impl Iterator<Item = Palette> {
+    pub(super) fn every_palette() -> impl Iterator<Item = Palette> {
         SkinId::ALL.into_iter().flat_map(|skin| {
             [ColorScheme::Light, ColorScheme::Dark]
                 .into_iter()
@@ -192,8 +192,8 @@ mod tests {
     }
 
     /// The action colour is `brand`, not the shadcn `primary` neutral.
-    /// `Palette::primary` is only the slider fill and the switch track, so the
-    /// two must not be conflated or every primary button changes colour.
+    /// `Palette::primary` is only the slider fill, so the two must not be
+    /// conflated or every primary button changes colour.
     #[test]
     fn the_action_colour_is_brand_and_the_neutral_keeps_its_own_slots() {
         for palette in every_palette() {
@@ -205,7 +205,6 @@ mod tests {
                 c.button_primary_foreground,
                 super::super::runtime::palette_hsla(palette.brand_foreground)
             );
-            assert_eq!(c.switch, neutral);
             assert_eq!(c.slider_bar, neutral);
             assert_eq!(c.slider_thumb, neutral);
         }
@@ -267,6 +266,48 @@ mod tests {
             // assertion above pass for the wrong reason.
             let danger: gpui::Hsla = tokens.button_danger.into();
             assert_ne!(brand, danger, "brand and danger must stay distinct");
+        }
+    }
+
+    /// The switch knob is the one token that has to stay visible on two
+    /// different backgrounds, because GPUI Kit renders a single
+    /// `switch_thumb` regardless of state: the unchecked track (`switch`) and
+    /// the checked track, which is the theme's `primary` for the default
+    /// switch and the accent for [`crate::components::switch_accent`].
+    ///
+    /// The app's old switch picked a thumb per state and shipped a 1.27:1 knob
+    /// on the light schemes, so the bar here is deliberately the WCAG 3:1 for
+    /// non-text components where the palette can reach it, with the accent
+    /// track asserted at the bound it actually achieves. The accent case is the
+    /// one place a single-token model cannot satisfy both tracks: the knob sits
+    /// on the accent's ink family when on and on a mid-grey when off.
+    ///
+    /// Measured with the palette WCAG helper rather than a local formula,
+    /// because several of these tokens are translucent and have to be flattened
+    /// against the background before the number means anything.
+    #[test]
+    fn switch_knob_stays_visible_on_both_tracks() {
+        use super::super::tests::support::painted_contrast;
+        const NON_TEXT_MIN: f32 = 3.0;
+        // Limbus light paints a pale knob on dark brass. This is the accent's
+        // measured limit, and still nearly twice the 1.27:1 the app shipped.
+        const ACCENT_TRACK_MIN: f32 = 2.4;
+        for palette in every_palette() {
+            let knob = palette.background;
+            let cases = [
+                ("unchecked track", palette.muted_foreground, NON_TEXT_MIN),
+                ("neutral checked track", palette.primary, NON_TEXT_MIN),
+                ("accent checked track", palette.brand, ACCENT_TRACK_MIN),
+            ];
+            for (label, track, min) in cases {
+                let ratio = painted_contrast(palette, knob, track);
+                assert!(
+                    ratio >= min,
+                    "the knob on the {label} must reach {min}:1 for {:?}/{:?}, got {ratio:.2}",
+                    palette.skin,
+                    palette.scheme
+                );
+            }
         }
     }
 

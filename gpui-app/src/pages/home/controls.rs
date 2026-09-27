@@ -224,27 +224,20 @@ pub(super) fn task_option_switch<F>(
     busy: bool,
     cx: &mut Context<AhabApp>,
     action: F,
-) -> gpui::Stateful<Div>
+) -> Switch
 where
     F: Fn(&mut HomeState) + 'static,
 {
-    let mut control = switch(value).id(id);
+    let mut control = switch(id, value);
     if !busy {
         let action = Rc::new(action);
-        let click_action = action.clone();
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            click_action(&mut view.home);
+        // GPUI Kit's switch routes pointer and keyboard activation through one
+        // callback, so the hand-rolled `on_key_down` is gone.
+        control = control.on_change(cx.listener(move |view, _, _, cx| {
+            action(&mut view.home);
             cx.stop_propagation();
             cx.notify();
         }));
-        control =
-            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if is_activation_key(event) {
-                    window.prevent_default();
-                    action(&mut view.home);
-                    cx.notify();
-                }
-            }));
     } else {
         control = control.opacity(0.45).cursor_not_allowed();
     }

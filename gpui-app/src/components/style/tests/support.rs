@@ -17,7 +17,7 @@ pub(super) fn channel(value: u8) -> f32 {
     }
 }
 
-pub(super) fn srgb(token: ColorToken) -> (f32, f32, f32) {
+pub(crate) fn srgb(token: ColorToken) -> (f32, f32, f32) {
     let hex = token.rgb_hex();
     (
         channel(((hex >> 16) & 0xff) as u8),
@@ -26,13 +26,13 @@ pub(super) fn srgb(token: ColorToken) -> (f32, f32, f32) {
     )
 }
 
-pub(super) fn luminance(token: ColorToken) -> f32 {
+pub(crate) fn luminance(token: ColorToken) -> f32 {
     let (r, g, b) = srgb(token);
     0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 /// Composite `over` onto `under`, honouring `over`'s alpha.
-pub(super) fn flatten(over: ColorToken, under: ColorToken) -> ColorToken {
+pub(crate) fn flatten(over: ColorToken, under: ColorToken) -> ColorToken {
     if over.alpha() == 0xff {
         return over;
     }
@@ -48,7 +48,7 @@ pub(super) fn flatten(over: ColorToken, under: ColorToken) -> ColorToken {
     ColorToken::rgb((mix(16) << 16) | (mix(8) << 8) | mix(0))
 }
 
-pub(super) fn contrast(a: ColorToken, b: ColorToken) -> f32 {
+pub(crate) fn contrast(a: ColorToken, b: ColorToken) -> f32 {
     let (light, dark) = {
         let (la, lb) = (luminance(a), luminance(b));
         if la >= lb { (la, lb) } else { (lb, la) }
@@ -58,13 +58,13 @@ pub(super) fn contrast(a: ColorToken, b: ColorToken) -> f32 {
 
 /// Contrast of a text token against a surface token, both resolved against
 /// the page background first so translucent skins are measured as painted.
-pub(super) fn painted_contrast(palette: Palette, text: ColorToken, surface: ColorToken) -> f32 {
+pub(crate) fn painted_contrast(palette: Palette, text: ColorToken, surface: ColorToken) -> f32 {
     let ground = flatten(surface, palette.background);
     contrast(flatten(text, ground), ground)
 }
 
 /// Every skin/scheme/accent combination, for exhaustive sweeps.
-pub(super) fn all_palettes() -> Vec<Palette> {
+pub(crate) fn all_palettes() -> Vec<Palette> {
     let mut palettes = Vec::new();
     for skin in SkinId::ALL {
         for scheme in [ColorScheme::Light, ColorScheme::Dark] {
@@ -76,7 +76,7 @@ pub(super) fn all_palettes() -> Vec<Palette> {
     palettes
 }
 
-pub(super) fn label(palette: Palette) -> String {
+pub(crate) fn label(palette: Palette) -> String {
     format!(
         "{}/{}/{:?}",
         palette.skin.as_str(),

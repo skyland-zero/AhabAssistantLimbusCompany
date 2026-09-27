@@ -1,85 +1,49 @@
+use gpui::ElementId;
+use gpui_component::Disableable as _;
+pub use gpui_component::switch::Switch;
+
 use super::*;
 
-/// A compact on/off control. State changes are supplied by the caller (usually
-/// an Entity); this helper only renders the current state.
-pub fn switch(checked: bool) -> Div {
-    switch_with_palette(checked, &current_render_palette(), ControlState::default())
-}
-
-/// Accent-colored switch used by Home's task cards. The default switch keeps
-/// the shadcn/Radix primary color so Settings and Theme Packs match the web UI.
-pub fn switch_accent(checked: bool) -> Div {
+/// A compact on/off control.
+///
+/// State changes are supplied by the caller (usually an `Entity`); this helper
+/// only renders the current state. GPUI Kit's switch routes both pointer and
+/// keyboard activation through one `on_change` callback, so call sites no
+/// longer hand-roll an `on_key_down` next to every `on_click`.
+pub fn switch(id: impl Into<ElementId>, checked: bool) -> Switch {
     let palette = current_render_palette();
-    switch_with_track(
-        checked,
-        &palette,
-        ControlState::default(),
-        palette.brand,
-        palette.brand_hover,
-    )
+    // GPUI Kit draws the checked track from the theme's `primary`, which the
+    // bridge maps to the accent. The default switch stays on the shadcn/Radix
+    // neutral so Settings and Theme Packs match the web UI, so it overrides the
+    // fill explicitly instead of inheriting the accent.
+    switch_with_palette(id, checked, &palette, ControlState::default())
+        .color(palette_hsla(palette.primary))
 }
 
-pub fn switch_with_palette(checked: bool, palette: &Palette, state: ControlState) -> Div {
-    switch_with_track(checked, palette, state, palette.primary, palette.primary)
+/// Accent-coloured switch used by Home's task cards.
+///
+/// The default switch keeps the shadcn/Radix primary colour so Settings and
+/// Theme Packs match the web UI; this variant overrides the checked fill with
+/// the skin's accent.
+pub fn switch_accent(id: impl Into<ElementId>, checked: bool) -> Switch {
+    let palette = current_render_palette();
+    switch_with_palette(id, checked, &palette, ControlState::default())
+        .color(palette_hsla(palette.brand))
 }
 
-fn switch_with_track(
+pub fn switch_with_palette(
+    id: impl Into<ElementId>,
     checked: bool,
-    palette: &Palette,
+    _palette: &Palette,
     state: ControlState,
-    checked_track: ColorToken,
-    checked_hover: ColorToken,
-) -> Div {
-    let track = if checked {
-        checked_track
-    } else {
-        palette.input
-    };
-    let thumb = if checked {
-        palette.primary_foreground
-    } else if matches!(palette.scheme, style::ColorScheme::Dark) {
-        palette.foreground
-    } else {
-        palette.background
-    };
-    let hover_track = if checked {
-        checked_hover
-    } else {
-        palette.accent_surface
-    };
-    let focus_ring = palette.ring;
-
-    let mut control = div()
-        .flex()
-        .items_center()
-        .w(px(36.))
-        .h(px(20.))
-        .p(px(1.))
-        .rounded_full()
-        .border_1()
-        .border_color(paint_color(palette.border))
-        .bg(paint_color(track));
-    if checked {
-        control = control.justify_end();
-    }
-    if state.focused {
-        control = control.border_color(paint_color(palette.ring));
-    }
+) -> Switch {
+    // The track and thumb colours come from the projected theme: the unchecked
+    // track is `switch` and the thumb is `switch_thumb`. The checked track is
+    // `theme.primary` unless the caller overrides it with `.color(...)`.
+    let control = Switch::new(id).checked(checked).disabled(state.is_inert());
     if state.is_inert() {
-        control = control.opacity(0.5);
+        control.opacity(0.5)
     } else {
-        let hover_track = paint_color(hover_track);
-        control = control
-            .tab_index(0)
-            .focus_visible(move |style| style.border_color(paint_color(focus_ring)))
-            .cursor_pointer()
-            .hover(move |style| style.bg(hover_track));
+        control
     }
-    control.child(
-        div()
-            .w(px(16.))
-            .h(px(16.))
-            .rounded_full()
-            .bg(paint_color(thumb)),
-    )
 }

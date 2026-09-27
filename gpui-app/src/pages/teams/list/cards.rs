@@ -19,7 +19,6 @@ pub(super) fn team_card(
     let overwrite_team = team.clone();
     let overwrite_team_for_key = overwrite_team.clone();
     let toggle_team = team.clone();
-    let toggle_team_for_key = toggle_team.clone();
     let toggle_target = !team.enabled;
     let toggle_pending = app.teams.team_toggle_busy();
 
@@ -90,21 +89,13 @@ pub(super) fn team_card(
             }
         }));
 
-    let mut enabled_switch = switch(team.enabled).id(format!("toggle-team-{team_id}"));
+    let mut enabled_switch = switch(format!("toggle-team-{team_id}"), team.enabled);
     if toggle_pending {
         enabled_switch = enabled_switch.opacity(0.5);
     } else if !is_luxcavation {
-        enabled_switch = enabled_switch.on_click(cx.listener(move |view, _, _, cx| {
+        enabled_switch = enabled_switch.on_change(cx.listener(move |view, _, _, cx| {
             view.set_team_enabled(&toggle_team, toggle_target, cx);
         }));
-        enabled_switch = enabled_switch.on_key_down(cx.listener(
-            move |view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.set_team_enabled(&toggle_team_for_key, toggle_target, cx);
-                }
-            },
-        ));
     }
     let enabled_control = if is_luxcavation {
         div()

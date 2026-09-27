@@ -34,5 +34,7 @@ pub use tokens::{
     ShadowLevel, Shape, SkinId,
 };
 
+// Visible to the crate in test builds so the GPUI Kit bridge can reuse the
+// WCAG helpers instead of growing a second contrast implementation.
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

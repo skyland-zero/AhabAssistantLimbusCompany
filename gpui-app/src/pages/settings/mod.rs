@@ -18,9 +18,9 @@ use crate::{
         ACCENT_PRESETS, ColorScheme, FONT_SM, GREEN, current_render_palette, skin_rounded,
     },
     components::{
-        ButtonVariant, TextInput, action_button, button, card, card_header, is_activation_key,
-        page_root, palette_rgb, render_rgb as rgb, scroll_area_with_handle_children, svg_icon,
-        switch, themed_divider,
+        ButtonVariant, Switch, TextInput, action_button, button, card, card_header,
+        is_activation_key, page_root, palette_rgb, render_rgb as rgb,
+        scroll_area_with_handle_children, svg_icon, switch, themed_divider,
     },
     i18n::{Localized, paired as text},
     model::{Language, ThemeMode, UpdateSource},
@@ -249,18 +249,10 @@ fn setting_switch(
     field: SystemBool,
     value: bool,
     id: &'static str,
-) -> gpui::Stateful<Div> {
-    let mut control = switch(value).id(id);
-    control = control.on_click(cx.listener(move |view, _, _, cx| {
+) -> Switch {
+    switch(id, value).on_change(cx.listener(move |view, _, _, cx| {
         view.settings_page.set_system_bool(field, !value);
         cx.notify();
-    }));
-    control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-        if is_activation_key(event) {
-            window.prevent_default();
-            view.settings_page.set_system_bool(field, !value);
-            cx.notify();
-        }
     }))
 }
 

@@ -219,9 +219,8 @@ pub(crate) fn basic_editor(
         config.fixed_team_use,
         "basic-fixed-team",
     );
-    let enabled_switch = switch(team.enabled)
-        .id("team-enabled")
-        .on_click(cx.listener(|view, _, _, cx| {
+    let enabled_switch =
+        switch("team-enabled", team.enabled).on_change(cx.listener(|view, _, _, cx| {
             let enabled = view
                 .teams
                 .editor
@@ -230,19 +229,6 @@ pub(crate) fn basic_editor(
                 .unwrap_or(true);
             view.teams.set_editor_enabled(enabled);
             cx.notify();
-        }))
-        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-            if team_activation_key(event) {
-                window.prevent_default();
-                let enabled = view
-                    .teams
-                    .editor
-                    .as_ref()
-                    .map(|editor| !editor.team.enabled)
-                    .unwrap_or(true);
-                view.teams.set_editor_enabled(enabled);
-                cx.notify();
-            }
         }));
 
     let mut clear_sinners = button(

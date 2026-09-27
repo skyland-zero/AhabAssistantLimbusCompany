@@ -37,19 +37,14 @@ pub(super) fn task_card_with_toggle(
 ) -> Div {
     let task = spec.task;
     let enabled = spec.enabled;
-    let mut toggle = switch_accent(enabled).id(task_id(task));
+    let mut toggle = switch_accent(task_id(task), enabled);
     if !busy {
-        toggle = toggle.on_click(cx.listener(move |view, _, _, cx| {
+        // GPUI Kit's switch already handles Space/Enter, so one `on_change`
+        // replaces the paired `on_click` + `on_key_down`.
+        toggle = toggle.on_change(cx.listener(move |view, _, _, cx| {
             view.home.toggle_task(task);
             cx.stop_propagation();
             cx.notify();
-        }));
-        toggle = toggle.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-            if is_activation_key(event) {
-                window.prevent_default();
-                view.home.toggle_task(task);
-                cx.notify();
-            }
         }));
     } else {
         toggle = toggle.opacity(0.45).cursor_not_allowed();
@@ -60,7 +55,7 @@ pub(super) fn task_card_with_toggle(
 pub(super) fn task_card(
     cx: &mut Context<AhabApp>,
     spec: TaskCardSpec,
-    toggle: Option<gpui::Stateful<Div>>,
+    toggle: Option<Switch>,
 ) -> Div {
     let TaskCardSpec {
         task,
@@ -232,7 +227,7 @@ pub(super) fn detail_switch(
     cx: &mut Context<AhabApp>,
     busy: bool,
     id: &'static str,
-) -> gpui::Stateful<Div> {
+) -> Switch {
     task_option_switch("", checked, id, busy, cx, move |home| {
         home.toggle_detail(task);
     })

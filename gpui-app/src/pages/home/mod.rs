@@ -34,7 +34,7 @@ use crate::{
         ACCENT, AhabApp, BACKGROUND, BORDER, BackendPhase, SURFACE, SURFACE_HOVER, TEXT, TEXT_MUTED,
     },
     components::{
-        BadgeTone, ButtonVariant, ShapeExt, apply_card_shadow, badge, button, card,
+        BadgeTone, ButtonVariant, ShapeExt, Switch, apply_card_shadow, badge, button, card,
         current_render_palette, is_activation_key, palette_rgb, render_rgb as rgb,
         render_rgba as rgba, scroll_area, scroll_area_with_id, select_keyboard_index,
         select_option, select_options_state, select_popup, select_trigger, settings_grid,

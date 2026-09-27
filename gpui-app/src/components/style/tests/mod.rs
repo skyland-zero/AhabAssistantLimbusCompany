@@ -2,7 +2,7 @@
 
 mod contrast;
 mod scale;
-mod support;
+pub(crate) mod support;
 
 use super::*;
 

@@ -26,7 +26,7 @@ use crate::{
     assets::{self, Asset, SinnerAsset, StatusEffectAsset},
     components::style::{ColorToken, current_render_palette},
     components::{
-        BadgeTone, ButtonVariant, badge, button, card, empty_state,
+        BadgeTone, ButtonVariant, Switch, badge, button, card, empty_state,
         is_activation_key as team_activation_key, loading, page_root, page_toolbar, palette_rgb,
         render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_keyboard_index,
         select_option, select_options_state, select_popup, select_trigger, settings_grid,
@@ -141,18 +141,10 @@ fn mirror_switch(
     field: MirrorBool,
     value: bool,
     id: impl Into<String>,
-) -> gpui::Stateful<Div> {
-    let mut control = switch(value).id(id.into());
-    control = control.on_click(cx.listener(move |view, _, _, cx| {
+) -> Switch {
+    switch(id.into(), value).on_change(cx.listener(move |view, _, _, cx| {
         view.teams.set_mirror_bool(field, !value);
         cx.notify();
-    }));
-    control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-        if team_activation_key(event) {
-            window.prevent_default();
-            view.teams.set_mirror_bool(field, !value);
-            cx.notify();
-        }
     }))
 }
 

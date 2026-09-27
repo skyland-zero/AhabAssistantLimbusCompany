@@ -20,6 +20,6 @@ pub use select::{
 #[allow(unused_imports)]
 pub use slider::{normalize_slider, slider, slider_with_palette};
 #[allow(unused_imports)]
-pub use switch::{switch, switch_accent, switch_with_palette};
+pub use switch::{Switch, switch, switch_accent, switch_with_palette};
 #[allow(unused_imports)]
 pub use tabs::{tab_surface_with_palette, tabs, tabs_with_palette};

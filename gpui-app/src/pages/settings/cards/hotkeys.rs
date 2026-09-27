@@ -7,18 +7,10 @@ pub fn hotkey_card(
     language: Language,
 ) -> Div {
     let enabled = hotkey.enabled;
-    let enable = switch(enabled)
-        .id("settings-hotkey-enabled")
-        .on_click(cx.listener(move |view, _, _, cx| {
+    let enable =
+        switch("settings-hotkey-enabled", enabled).on_change(cx.listener(move |view, _, _, cx| {
             view.settings_page.set_hotkeys_enabled(!enabled);
             cx.notify();
-        }))
-        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-            if is_activation_key(event) {
-                window.prevent_default();
-                view.settings_page.set_hotkeys_enabled(!enabled);
-                cx.notify();
-            }
         }));
     let body = div()
         .flex()
