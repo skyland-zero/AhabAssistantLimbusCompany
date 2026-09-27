@@ -1,10 +1,52 @@
-# GPUI Kit 迁移：剩余工作
+# GPUI Kit 迁移：进度与剩余工作
 
-本文档记录尚未迁移到 GPUI Kit 的三项，以及每项的确切做法和已知陷阱。
-分析结论来自实际尝试，不是推测。
+本文档既记录已完成的部分，也给出剩下几项的确切做法与已知陷阱。
+分析结论全部来自实际尝试（或标注为「尚未实测」），不是推测。
 
-已完成的部分见 git 历史（`feat/gpui-kit-migration` 分支）；组件层、
-图标、主题桥接、TextInput 均已迁移并通过视觉验证。
+**接手方式**：先看「当前进度」与「下次开工顺序」两节，然后按顺序做。
+每一步做完照「验证清单」跑一遍，弹窗类改动补一个 `VisualState` 截图。
+
+---
+
+## 当前进度（截至 `0a39016e`，24 个提交）
+
+分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`，已推送 `fork`。
+工作区干净，195 测试通过，clippy / rustfmt 干净，应用可启动。
+
+| 项 | 状态 |
+|---|---|
+| 框架切换：gpui 源码 → `gpui-pre 0.3.6` + `gpui-component 0.6.6` | 完成 |
+| 主题桥接 `Palette` → `ThemeColor` + `ThemeTokens` | 完成 |
+| 按钮/徽章、开关、图标、加载态、标签页、文本输入 | 完成 |
+| `window` 穿透进页面 render | 完成 |
+| 三个确认弹窗 → `Root` dialog | 完成（有截图）|
+| 预设选择器、镜牢明细 → `Root` sheet | 完成（有截图）|
+| Select（设置页 3 处）| **阻断**，见第 1 节末尾 |
+| 日常统计明细 | 未迁移（异步数据，见 2.5）|
+| 结束动作编辑器 | 未迁移 |
+| 队伍编辑器 | 未迁移（含 `InputState` 实体）|
+
+### 下次开工顺序
+
+1. **先验证 2.5 节的 entity 视图方案能否成立**（那是余下三个面板的共同解法，
+   一个 `app.read(cx)` 的小实验就能定生死）。
+2. 按改动量从小到大套用：日常统计明细 → 结束动作编辑器 → 队伍编辑器。
+3. Select 的阻断是**取舍问题，需要你拍板**，不是技术难题。
+
+### 每次改完的验证清单
+
+```sh
+cargo +nightly-2026-08-26 fmt --check
+cargo +nightly-2026-08-26 clippy --all-targets    # 必须 0 警告
+cargo +nightly-2026-08-26 test                    # 195 测试
+cargo +nightly-2026-08-26 build
+AHAB_BACKEND=mock timeout 12 ./target/debug/ahab-gpui-app.exe   # exit 124 = 正常
+```
+
+截图验证见文末「视觉验证」节。**弹窗/侧栏类改动必须补一个 `VisualState`，
+否则无法区分「能用」与「静默不出现」。**
+
+---
 
 ## 已经打好的地基
 
@@ -169,10 +211,59 @@ cannot update ahab_gpui_app::app::AhabApp while it is already being updated
   所以它**保持内联遮罩**，没有迁到 sheet。
 - **队伍编辑器含 `InputState` 实体**，快照要连实体句柄一起存，是更大的工程。
 
-**正确解法不是加长 sleep，而是用 entity 支撑的视图**：sheet 的
-`.child(...)` 放一个实现了 `Render` 的 `Entity<View>`，该视图的 render
-在 `AhabApp::render` 返回之后才跑，因此可以安全 `app.read(cx)`，再用
-`cx.observe` 跟随数据更新。这是余下三个面板该走的路。
+**正确解法不是加长 sleep，而是用 entity 支撑的视图** —— 具体做法见 2.5。
+
+### 2.5 余下三个面板的解法：entity 支撑的视图
+
+快照模型的边界（见上）意味着余下三个面板必须换方案。**不是加长 sleep。**
+
+原理：`Render` 返回的元素是在 `AhabApp::render` **返回之后**才由窗口绘制的，
+所以子视图的 `render` 不在 `AhabApp` 的借用期内，可以安全读它：
+
+```rust
+struct DailyDetailsView {
+    app: WeakEntity<AhabApp>,
+}
+
+impl Render for DailyDetailsView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // 安全：AhabApp 的 render 已返回
+        let Some(app) = self.app.upgrade() else {
+            return div();
+        };
+        let (data, selected, language) = {
+            let app = app.read(cx);
+            (
+                app.home.daily_stats.clone(),
+                app.home.stats_selected_date.clone(),
+                app.state.settings.language,
+            )
+        };
+        crate::pages::daily_details_body(&data, selected.as_deref(), language)
+    }
+}
+```
+
+打开时把视图实体放进 sheet，并**在打开处**建立监听（视图自己拿不到 `Context`）：
+
+```rust
+let view = cx.new(DailyDetailsView::new);
+let observe = cx.observe(&view, |_, _, cx| cx.notify());   // 数据到达后重绘
+let close = cx.entity().downgrade();
+window.open_sheet(cx, move |sheet, _, _| {
+    let _ = observe.clone();
+    sheet
+        .title(...)
+        .size(gpui::relative(0.6))
+        .on_close(move |_, _, cx| { /* close */ })
+        .child(view.clone())
+});
+```
+
+**必须先验证的一件事**：子视图 render 期间 `app.read(cx)` 确实不 panic。
+上面的推导（子视图在父视图 render 返回后才绘制）是**推理，尚未实测**。
+如果 panic，退回「轮询到有数据再开 sheet」，但那样**必须断言 sheet 真的开了**
+—— 轮询落败时会拍到一张普通主页截图，看上去通过、实际什么都没验证。
 
 ### 副作用（顺带清理）
 
@@ -180,20 +271,37 @@ cannot update ahab_gpui_app::app::AhabApp while it is already being updated
 builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个调用点同步更新。
 `mirror_history_body` 也被同一次改动带出未使用的 `app` 参数。
 
-### 剩余：三个内容面板
+### 剩余：三个内容面板（做法见 2.5）
 
 ```
-pages/home/stats/details.rs     日常统计明细（异步数据，需 entity 视图）
-pages/home/completion_editor.rs 结束动作编辑器
-pages/teams/overlay/render.rs   队伍编辑器（含 InputState 实体）
+pages/home/stats/details.rs:4    日常统计明细  异步数据
+pages/home/completion_editor.rs  结束动作编辑器
+pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
 ```
+
+建议顺序：日常统计明细（能验证 2.5 的方案）→ 结束动作编辑器 → 队伍编辑器。
 
 ### 视觉状态覆盖
 
-`teams-delete`、`teams-stats-clear`、`teams-preset-overwrite` 三个状态已接入
-`capture_visual.ps1`。加状态时注意：**状态必须真的走到弹窗那条分支**。
-`teams-preset-overwrite` 第一次写成了空槽位路径，截图拍到一个没有弹窗的
-正常页面 —— 看起来通过，实际什么都没验证。
+| 状态 | 覆盖 |
+|---|---|
+| `teams-delete` | 删除队伍确认 dialog |
+| `teams-stats-clear` | 清空统计确认 dialog |
+| `teams-preset-overwrite` | 覆盖预设确认 dialog |
+| `teams-preset-picker` | 预设选择器 sheet |
+| `home-mirror-details` | 镜牢明细 sheet（**仅空状态**，见 2.5）|
+
+加状态的铁律：**状态必须真的走到那条分支**。两次踩中：
+
+- `teams-preset-overwrite` 第一次用了空槽位路径，`select_preset` 直接应用预设
+  而不弹确认 —— 拍到一张没有弹窗的正常页面；
+- `home-mirror-details` 的轮询版本落败时，拍到一张普通主页截图。
+
+两次都是**看起来通过、实际什么都没验证**。加完状态要问自己：这张图里
+有没有一个「只有走对分支才会出现」的东西？没有就再加。
+
+另外：弹窗/侧栏都要 `cx.defer_in` 打开（渲染帧内推 Root 不生效），
+且 `Root` 的 dialog / sheet 层需要**应用自己放置**（`app/render.rs` 已接）。
 
 ## 3. 滚动区（有意保留，除非改变取舍）
 
