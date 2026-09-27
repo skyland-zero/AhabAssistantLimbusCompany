@@ -34,14 +34,6 @@ pub fn icon_at(name: impl Into<Icon>, size: Pixels, color: Rgba) -> Icon {
     Icon::new(name).with_size(size).text_color(color)
 }
 
-pub fn chevron_down(color: Rgba) -> Icon {
-    icon_at(IconName::ChevronDown, px(14.), color)
-}
-
-pub fn loader_circle(color: Rgba) -> Icon {
-    icon_at(IconName::LoaderCircle, px(14.), color)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

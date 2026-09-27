@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use gpui::{BoxShadow, Hsla, Pixels, Styled, hsla, px};
+use gpui::{BoxShadow, Hsla, Styled, hsla, px};
 
 use super::{ColorToken, Palette, ShadowLevel};
 
@@ -284,12 +284,6 @@ pub const RADIUS_XL: f32 = 12.0;
 /// Named once here and shared by the app root and the GPUI Kit theme bridge so
 /// a font switch cannot leave half the widgets on a different family.
 pub const UI_FONT_FAMILY: &str = "Segoe UI";
-
-/// Convenience re-export so page code can pull a size without importing
-/// `Pixels` helpers directly.
-pub fn px_value(value: f32) -> Pixels {
-    px(value)
-}
 
 #[cfg(test)]
 mod tests {

@@ -172,11 +172,3 @@ pub fn skeleton(width: gpui::Pixels, height: gpui::Pixels) -> Div {
             .rounded(px(palette.shape.radius_sm as f32)),
     )
 }
-
-/// The design-system lane intentionally keeps palette construction independent
-/// from the root `theme` module, so old pages can compile before the root is
-/// rewired. This helper makes the canonical accent parser available to callers
-/// that only import components.
-pub fn parse_accent_id(id: &str) -> AccentId {
-    AccentId::parse(id)
-}

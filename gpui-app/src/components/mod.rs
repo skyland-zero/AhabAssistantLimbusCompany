@@ -35,7 +35,7 @@ pub use text_input::TextInput;
 
 use gpui::{Div, Rgba, Stateful, div, prelude::*, px};
 
-use style::{AccentId, ColorToken, Palette};
+use style::{ColorToken, Palette};
 
 fn paint_color(token: ColorToken) -> Rgba {
     gpui::rgba(token.rgba_hex())
@@ -58,19 +58,11 @@ mod tests {
     }
 
     #[test]
-    fn number_stepper_normalization_is_bounded() {
-        assert_eq!(clamp_number(-2, 0, 5), 0);
-        assert_eq!(clamp_number(3, 0, 5), 3);
-        assert_eq!(clamp_number(9, 0, 5), 5);
-        assert_eq!(clamp_number(9, 5, 0), 5);
-    }
-
-    #[test]
     fn controls_have_stable_defaults_and_accents() {
         assert_eq!(ButtonVariant::default(), ButtonVariant::Default);
         assert_eq!(BadgeTone::default(), BadgeTone::Neutral);
         assert!(ControlState::loading().is_inert());
-        assert_eq!(parse_accent_id("violet"), AccentId::Violet);
+        assert_eq!(AccentId::parse("violet"), AccentId::Violet);
     }
 
     #[test]

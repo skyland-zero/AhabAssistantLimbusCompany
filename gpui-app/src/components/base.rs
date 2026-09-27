@@ -95,16 +95,6 @@ pub fn button(
     button_inner(id.into(), label.into(), variant, ControlState::default())
 }
 
-/// [`button`] with an explicit disabled/loading state.
-pub fn button_with_state(
-    id: impl Into<ElementId>,
-    label: impl Into<SharedString>,
-    variant: ButtonVariant,
-    state: ControlState,
-) -> Button {
-    button_inner(id.into(), label.into(), variant, state)
-}
-
 fn button_inner(
     id: ElementId,
     label: SharedString,

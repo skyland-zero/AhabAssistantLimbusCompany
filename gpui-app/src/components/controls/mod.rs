@@ -4,14 +4,11 @@
 use super::style::ShapeExt;
 use super::*;
 
-mod inputs;
 mod select;
 mod slider;
 mod switch;
 mod tabs;
 
-#[allow(unused_imports)]
-pub use inputs::{clamp_number, number_stepper, text_input, text_input_with_palette};
 #[allow(unused_imports)]
 pub use select::{
     select, select_keyboard_index, select_option, select_options_state, select_popup,
