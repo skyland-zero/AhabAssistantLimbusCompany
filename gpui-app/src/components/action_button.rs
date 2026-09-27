@@ -1,8 +1,8 @@
-use gpui::{ElementId, SharedString, Svg, prelude::*, px};
+use gpui::{ElementId, SharedString, prelude::*, px};
 
 use gpui_component::button::Button;
 
-use super::{ButtonVariant, button};
+use super::{ButtonVariant, Icon, button};
 
 /// Compact action button shared by page toolbars and card actions.
 ///
@@ -12,7 +12,7 @@ pub fn action_button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
     variant: ButtonVariant,
-    icon: Option<Svg>,
+    icon: Option<Icon>,
     height: f32,
 ) -> Button {
     let mut control = button(id, label, variant)

@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 fn observe_gift_label(gift: &str, language: Language) -> String {
     match gift {
@@ -46,7 +47,7 @@ pub(crate) fn advanced_editor(
             .rounded_md()
             .cursor_pointer()
             .child(icon(
-                ICON_CLOSE,
+                IconName::X,
                 12.,
                 current_render_palette().muted_foreground,
             ))
@@ -162,7 +163,11 @@ pub(crate) fn advanced_editor(
         .hover(|style| style.bg(palette_rgb(current_render_palette().accent_surface)))
         .text_size(px(11.))
         .text_color(palette_rgb(current_render_palette().brand))
-        .child(icon(ICON_PASTE, 14., current_render_palette().brand))
+        .child(icon(
+            IconName::ClipboardPaste,
+            14.,
+            current_render_palette().brand,
+        ))
         .child(text("粘贴 / 导入 JSON", "Paste / Import JSON").get(language));
     import_toggle = import_toggle
         .on_click(cx.listener(|view, _, _, cx| {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(super) fn team_card(
     app: &mut AhabApp,
@@ -33,7 +34,7 @@ pub(super) fn team_card(
         .cursor_pointer()
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(
-            ICON_EDIT,
+            IconName::Pencil,
             16.,
             current_render_palette().muted_foreground,
         ))
@@ -56,7 +57,7 @@ pub(super) fn team_card(
         .tab_index(0)
         .cursor_pointer()
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
-        .child(icon(ICON_TRASH, 16., current_render_palette().danger))
+        .child(icon(IconName::Trash, 16., current_render_palette().danger))
         .on_click(cx.listener(move |view, _, _, cx| {
             view.teams.request_delete(delete_team.clone());
             cx.notify();
@@ -154,7 +155,11 @@ pub(super) fn team_card(
                 .items_center()
                 .gap_1()
                 .text_color(rgb(crate::app::ACCENT))
-                .child(icon(ICON_SPARKLES, 13., current_render_palette().brand))
+                .child(icon(
+                    IconName::Sparkles,
+                    13.,
+                    current_render_palette().brand,
+                ))
                 .child(text("已配星光", "Starlight ready").get(language)),
         );
     }
@@ -244,7 +249,7 @@ pub(super) fn empty_slot_card(
         .text_size(px(11.))
         .text_color(palette_rgb(current_render_palette().brand))
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
-        .child(icon(ICON_PLUS, 13., current_render_palette().brand))
+        .child(icon(IconName::Plus, 13., current_render_palette().brand))
         .child(text("新建", "Create").get(language))
         .on_click(cx.listener(move |view, _, _, cx| {
             view.open_new_team_for_slot(number, cx);
@@ -272,7 +277,7 @@ pub(super) fn empty_slot_card(
         .text_size(px(11.))
         .text_color(palette_rgb(current_render_palette().brand))
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
-        .child(icon(ICON_COPY, 13., current_render_palette().brand))
+        .child(icon(IconName::Copy, 13., current_render_palette().brand))
         .child(text("从预设编队选择", "Choose preset").get(language))
         .on_click(cx.listener(move |view, _, _, cx| {
             view.open_team_preset_picker_for_slot(number, cx);

@@ -10,16 +10,13 @@ use crate::{
     app::{ACCENT, AhabApp, BORDER, TEXT, TEXT_MUTED},
     components::style::GREEN,
     components::{
-        BadgeTone, ButtonVariant, action_button, badge, card, empty_state, is_activation_key,
-        loading, page_root, page_toolbar, render_rgb as rgb, scroll_area_with_id, settings_grid,
-        svg_icon,
+        BadgeTone, ButtonVariant, IconName, action_button, badge, card, empty_state,
+        is_activation_key, loading, page_root, page_toolbar, render_rgb as rgb,
+        scroll_area_with_id, settings_grid, svg_icon,
     },
     i18n::paired as text,
     model::{Language, ResourceGroup},
 };
-
-const ICON_REFRESH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>"#;
-const ICON_SEARCH_CHECK: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 2 2 4-4"/></svg>"#;
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
@@ -31,7 +28,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         "resources-check",
         text("检查更新", "Check for Updates").get(language),
         ButtonVariant::Outline,
-        Some(svg_icon(ICON_SEARCH_CHECK, 14., TEXT)),
+        Some(svg_icon(IconName::SearchCheck, 14., TEXT)),
         28.,
     );
     check = check
@@ -64,7 +61,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         "resources-sync",
         text("立即同步", "Sync Now").get(language),
         ButtonVariant::Default,
-        Some(svg_icon(ICON_REFRESH, 14., TEXT)),
+        Some(svg_icon(IconName::RefreshCw, 14., TEXT)),
         28.,
     );
     if progress.is_none() {
@@ -99,7 +96,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let progress_badge: Option<AnyElement> = progress.map(|value| {
         let mut status = badge("", BadgeTone::Accent);
         status = status
-            .child(svg_icon(ICON_REFRESH, 12., ACCENT))
+            .child(svg_icon(IconName::RefreshCw, 12., ACCENT))
             .child(format!(
                 "{} {}%",
                 text("同步中…", "Syncing…").get(language),

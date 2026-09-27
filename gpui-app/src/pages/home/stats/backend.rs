@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
     let language = snapshot.language;
@@ -94,7 +95,7 @@ pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<Ah
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(action_icon(ICON_RADIO, 14., ACCENT))
+                .child(action_icon(IconName::Radio, 14., ACCENT))
                 .child(
                     div()
                         .text_size(px(12.))
@@ -130,7 +131,7 @@ pub(crate) fn backend_status_card(snapshot: &StatsSnapshot, root: &WeakEntity<Ah
         .py_0()
         .gap_1()
         .text_size(px(11.))
-        .child(action_icon(ICON_REFRESH, 12., ACCENT));
+        .child(action_icon(IconName::RefreshCw, 12., ACCENT));
         let root = root.clone();
         retry = retry.on_click(move |_, _, cx| {
             if let Some(root) = root.upgrade() {

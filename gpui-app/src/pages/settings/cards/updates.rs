@@ -2,6 +2,7 @@ use super::*;
 
 use gpui::deferred;
 
+use crate::components::IconName;
 use crate::{
     components::{select_option, select_popup, select_trigger},
     state::SettingsSelect,
@@ -100,7 +101,7 @@ pub fn update_card(
         "settings-check-update",
         text("检查更新", "Check for Updates").get(language),
         ButtonVariant::Outline,
-        Some(svg_icon(ICON_SEARCH_CHECK, 14., TEXT)),
+        Some(svg_icon(IconName::SearchCheck, 14., TEXT)),
         28.,
     );
     check = check
@@ -196,7 +197,7 @@ pub fn about_card(_app: &mut AhabApp, cx: &mut Context<AhabApp>, language: Langu
         "settings-open-repo",
         "GitHub",
         ButtonVariant::Ghost,
-        Some(svg_icon(ICON_EXTERNAL_LINK, 12., TEXT_MUTED)),
+        Some(svg_icon(IconName::ExternalLink, 12., TEXT_MUTED)),
         28.,
     );
     repo = repo

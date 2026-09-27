@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(crate) fn starlight_editor(
     app: &mut AhabApp,
@@ -68,7 +69,11 @@ pub(crate) fn starlight_editor(
         .bg(palette_rgb(current_render_palette().brand_light))
         .text_size(px(11.))
         .text_color(palette_rgb(current_render_palette().brand))
-        .child(icon(ICON_SPARKLES, 13., current_render_palette().brand))
+        .child(icon(
+            IconName::Sparkles,
+            13.,
+            current_render_palette().brand,
+        ))
         .child(starlight_cost_label(app.teams.starlight_cost(), language));
     let quick_card = editor_card(
         div()
@@ -127,7 +132,11 @@ pub(crate) fn starlight_editor(
             .gap_1()
             .text_size(px(10.))
             .text_color(rgb(TEXT_MUTED))
-            .child(icon(ICON_SPARKLES, 11., current_render_palette().brand))
+            .child(icon(
+                IconName::Sparkles,
+                11.,
+                current_render_palette().brand,
+            ))
             .child(starlight_points_label(cost, language));
         items = items.child(editor_card(
             div()

@@ -10,17 +10,15 @@ use crate::{
     app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
     components::style::current_render_palette,
     components::{
-        ButtonVariant, action_button, card, empty_state, is_activation_key, page_root,
+        ButtonVariant, IconName, action_button, card, empty_state, is_activation_key, page_root,
         page_toolbar, palette_rgb, render_rgb as rgb, scroll_area_with_id, svg_icon, switch,
     },
     i18n::paired as text,
     model::{Language, ThemePack},
 };
 
-mod icons;
 mod rows;
 
-use icons::{ICON_ALERT, ICON_RESET, ICON_SORT};
 use rows::pack_row;
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
@@ -38,7 +36,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         } else {
             ButtonVariant::Outline
         },
-        Some(svg_icon(ICON_SORT, 14., ACCENT)),
+        Some(svg_icon(IconName::ArrowUpDown, 14., ACCENT)),
         28.,
     );
     sort = sort
@@ -132,7 +130,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         "theme-reset",
         text("恢复默认权重", "Reset Weights").get(language),
         ButtonVariant::Ghost,
-        Some(svg_icon(ICON_RESET, 14., TEXT_MUTED)),
+        Some(svg_icon(IconName::RotateCcw, 14., TEXT_MUTED)),
         28.,
     );
     reset = reset
@@ -203,7 +201,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
                     .text_size(px(12.))
                     .text_color(palette_rgb(current_render_palette().warning))
                     .child(svg_icon(
-                        ICON_ALERT,
+                        IconName::TriangleAlert,
                         14.,
                         current_render_palette().warning.rgb_hex(),
                     ))

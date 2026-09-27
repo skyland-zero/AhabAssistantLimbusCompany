@@ -22,7 +22,7 @@ pub use action_button::action_button;
 pub use base::*;
 pub use chrome::*;
 pub use controls::*;
-pub use icon::{svg_icon, svg_icon_bytes};
+pub use icon::{Icon, IconName, icon_at, svg_icon, svg_icon_colored};
 pub use keyboard::is_activation_key;
 pub use layout::{page_root, page_toolbar, settings_grid};
 pub use overlays::*;
@@ -35,7 +35,6 @@ pub use text_input::TextInput;
 
 use gpui::{Div, Rgba, Stateful, div, prelude::*, px};
 
-use icon::{Icon, icon};
 use style::{AccentId, ColorToken, Palette};
 
 fn paint_color(token: ColorToken) -> Rgba {

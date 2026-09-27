@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(crate) fn current_run_card(snapshot: &StatsSnapshot) -> Div {
     let language = snapshot.language;
@@ -75,7 +76,7 @@ pub(crate) fn current_run_card(snapshot: &StatsSnapshot) -> Div {
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(action_icon(ICON_PLAY, 14., ACCENT))
+                .child(action_icon(IconName::Play, 14., ACCENT))
                 .child(
                     div()
                         .text_size(px(12.))

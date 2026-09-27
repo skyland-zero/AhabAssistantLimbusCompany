@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::app::AhabApp;
+use crate::components::IconName;
 
 pub fn dialog(title: impl Into<String>, body: impl IntoElement, actions: impl IntoElement) -> Div {
     dialog_with_palette(
@@ -230,8 +231,8 @@ pub fn loading(label: impl Into<String>) -> Div {
         .items_center()
         .gap_2()
         .text_color(paint_color(palette.muted_foreground))
-        .child(icon(
-            Icon::LoaderCircle,
+        .child(icon_at(
+            IconName::LoaderCircle,
             px(14.),
             paint_color(palette.brand),
         ))

@@ -1,6 +1,7 @@
 use super::*;
 
 use super::preset::{preset_overwrite_overlay, preset_picker_overlay};
+use crate::components::IconName;
 
 pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
@@ -121,7 +122,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .hover(|style| style.bg(palette_rgb(current_render_palette().accent_surface)))
         .text_size(px(11.))
         .text_color(palette_rgb(palette.brand))
-        .child(icon(ICON_COPY, 14., palette.brand))
+        .child(icon(IconName::Copy, 14., palette.brand))
         .child(text("复制 JSON", "Copy JSON").get(language))
         .on_click(cx.listener(|view, _, _, cx| view.copy_team_json(cx)));
     copy = copy.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {

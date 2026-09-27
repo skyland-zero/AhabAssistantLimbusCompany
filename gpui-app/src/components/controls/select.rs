@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 /// Select surface. Menu ownership and keyboard navigation stay with the page;
 /// this primitive provides the field, focus ring, loading state, and a real
@@ -50,8 +51,8 @@ pub fn select_with_palette(
 
     let mut value = div().flex().items_center().gap_2();
     if state.loading {
-        value = value.child(icon(
-            Icon::LoaderCircle,
+        value = value.child(icon_at(
+            IconName::LoaderCircle,
             px(14.),
             paint_color(palette.muted_foreground),
         ));
@@ -64,11 +65,18 @@ pub fn select_with_palette(
                 .text_color(paint_color(palette.muted_foreground))
                 .child(label.into()),
         )
-        .child(div().flex().items_center().gap_2().child(value).child(icon(
-            Icon::ChevronDown,
-            px(14.),
-            paint_color(palette.muted_foreground),
-        )))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(value)
+                .child(icon_at(
+                    IconName::ChevronDown,
+                    px(14.),
+                    paint_color(palette.muted_foreground),
+                )),
+        )
 }
 
 /// Render a Select trigger. The owning page controls whether a popup is
@@ -101,8 +109,8 @@ pub fn select_trigger(label: impl Into<String>, open: bool, palette: &Palette) -
     }
     trigger
         .child(div().min_w_0().truncate().child(label.into()))
-        .child(icon(
-            Icon::ChevronDown,
+        .child(icon_at(
+            IconName::ChevronDown,
             px(13.),
             paint_color(palette.muted_foreground),
         ))

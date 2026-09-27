@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
@@ -81,7 +82,7 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .text_color(palette_rgb(current_render_palette().brand_foreground))
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(
-            ICON_PLUS,
+            IconName::Plus,
             14.,
             current_render_palette().brand_foreground,
         ))

@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 #[allow(dead_code)]
 pub(super) fn task_header(
@@ -154,7 +155,7 @@ pub(super) fn task_counter(
         .w(px(26.))
         .h(px(26.))
         .p_0()
-        .child(action_icon(ICON_MINUS, 13., TEXT));
+        .child(action_icon(IconName::Minus, 13., TEXT));
     if !busy && current > min {
         let click_action = action.clone();
         let key_action = action.clone();
@@ -179,7 +180,7 @@ pub(super) fn task_counter(
         .w(px(26.))
         .h(px(26.))
         .p_0()
-        .child(action_icon(ICON_PLUS, 13., TEXT));
+        .child(action_icon(IconName::Plus, 13., TEXT));
     if !busy && current < max {
         let click_action = action.clone();
         let key_action = action.clone();

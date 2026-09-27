@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use crate::components::IconName;
 use gpui::{
     Context, MouseButton, MouseDownEvent, Render, ScrollHandle, ScrollWheelEvent, WeakEntity,
     Window, point,
@@ -98,7 +99,7 @@ impl Render for LogPanelView {
             .gap(px(4.0))
             .text_size(px(12.))
             .text_color(rgb(TEXT_MUTED))
-            .child(action_icon(ICON_TRASH, 14., TEXT_MUTED))
+            .child(action_icon(IconName::Trash, 14., TEXT_MUTED))
             .child(text("清空", "Clear").get(language));
         clear_logs = clear_logs.on_click(move |_, _, cx| {
             if let Some(root) = root.upgrade() {
@@ -123,7 +124,7 @@ impl Render for LogPanelView {
                     .items_center()
                     .gap_2()
                     .child(super::panel::panel_heading(
-                        ICON_SCROLL_TEXT,
+                        IconName::ScrollText,
                         text("运行日志", "Execution Logs").get(language),
                     ))
                     .child(badge(self.logs.len().to_string(), BadgeTone::Neutral)),
@@ -247,8 +248,8 @@ fn render_log_scrollbar(
 
 fn log_marker(level: LogLevel, color: u32) -> gpui::AnyElement {
     match level {
-        LogLevel::Error => action_icon(ICON_ALERT_CIRCLE, 12., color).into_any_element(),
-        LogLevel::Warn => action_icon(ICON_ALERT_TRIANGLE, 12., color).into_any_element(),
+        LogLevel::Error => action_icon(IconName::CircleAlert, 12., color).into_any_element(),
+        LogLevel::Warn => action_icon(IconName::TriangleAlert, 12., color).into_any_element(),
         LogLevel::Debug | LogLevel::Info => div()
             .mt(px(5.))
             .w(px(5.))

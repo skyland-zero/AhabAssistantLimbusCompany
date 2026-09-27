@@ -2,6 +2,7 @@ use super::*;
 
 use gpui::AnyElement;
 
+use crate::components::IconName;
 use crate::components::frame_corner_brackets;
 use crate::pages::home::{apply_card_shadow, shape_rounded};
 
@@ -143,9 +144,9 @@ pub(super) fn task_card(
                 .text_color(rgb(TEXT_MUTED))
                 .child(action_icon(
                     if expanded {
-                        ICON_CHEVRON_UP
+                        IconName::ChevronUp
                     } else {
-                        ICON_CHEVRON_DOWN
+                        IconName::ChevronDown
                     },
                     14.,
                     TEXT_MUTED,
@@ -208,7 +209,7 @@ pub(super) fn task_icon(label: &'static str, executing: bool) -> Div {
                     .text_size(px(9.5))
                     .child(label),
             )
-            .child(action_icon(ICON_SLIDERS, 16., color));
+            .child(action_icon(IconName::SlidersHorizontal, 16., color));
     }
 
     div()
@@ -218,7 +219,7 @@ pub(super) fn task_icon(label: &'static str, executing: bool) -> Div {
         .items_center()
         .justify_center()
         .text_color(rgb(color))
-        .child(action_icon(task_icon_data(label), 16., color))
+        .child(action_icon(task_icon_name(label), 16., color))
 }
 
 pub(super) fn detail_switch(

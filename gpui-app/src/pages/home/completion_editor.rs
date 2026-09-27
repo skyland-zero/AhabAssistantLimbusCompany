@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(super) fn after_completion_editor(
     app: &mut AhabApp,
@@ -97,7 +98,7 @@ pub(super) fn after_completion_editor(
         .w(px(32.))
         .h(px(32.))
         .px_0()
-        .child(action_icon(ICON_X, 16., TEXT_MUTED));
+        .child(action_icon(IconName::X, 16., TEXT_MUTED));
     close = close.on_click(cx.listener(|view, _, _, cx| {
         view.home.set_after_completion_open(false);
         cx.notify();

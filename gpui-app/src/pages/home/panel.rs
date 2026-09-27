@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use gpui::{Context, Image, ImageFormat, ObjectFit, Render, RenderImage, Window, img};
 
+use crate::components::{Icon, IconName};
 use crate::{
     model::{Language, PreviewStatus, ScreenshotFrame},
     state::HomeState,
@@ -202,11 +203,11 @@ impl Render for PreviewView {
                 .border_dashed()
                 .border_color(rgb(SURFACE_HOVER))
                 .text_color(rgb(TEXT_MUTED))
-                .child(
-                    div()
-                        .opacity(0.25)
-                        .child(action_icon(ICON_MONITOR_PLAY, 32., TEXT_MUTED)),
-                )
+                .child(div().opacity(0.25).child(action_icon(
+                    IconName::MonitorPlay,
+                    32.,
+                    TEXT_MUTED,
+                )))
                 .child(detail);
         }
 
@@ -217,7 +218,7 @@ impl Render for PreviewView {
             .items_center()
             .px(px(10.0))
             .child(panel_heading(
-                ICON_MONITOR_PLAY,
+                IconName::MonitorPlay,
                 text("实时画面", "Live Screen").get(language),
             ));
 
@@ -373,14 +374,14 @@ pub(super) fn panel_card(child: impl IntoElement) -> Div {
     surface
 }
 
-pub(super) fn panel_heading(icon_data: &'static [u8], title: &'static str) -> Div {
+pub(super) fn panel_heading(name: impl Into<Icon>, title: &'static str) -> Div {
     div()
         .flex()
         .items_center()
         .gap_2()
         .text_size(px(12.))
         .text_color(rgb(TEXT_MUTED))
-        .child(action_icon(icon_data, 14., TEXT_MUTED))
+        .child(action_icon(name, 14., TEXT_MUTED))
         .child(title)
 }
 

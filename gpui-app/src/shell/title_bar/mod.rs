@@ -12,7 +12,7 @@ use crate::{
 mod icons;
 mod status_dot;
 
-use icons::{Icon, icon};
+use icons::{ShellIcon, icon};
 pub(crate) use status_dot::StatusDot;
 
 const TITLEBAR_HEIGHT: f32 = 40.0;
@@ -102,9 +102,9 @@ pub fn title_bar(
 
     let theme_mode = app.state.settings.themeMode;
     let (theme_icon, theme_key) = match theme_mode {
-        ThemeMode::Light => (Icon::Sun, I18nKey::ThemeLight),
-        ThemeMode::Dark => (Icon::Moon, I18nKey::ThemeDark),
-        ThemeMode::System => (Icon::Monitor, I18nKey::ThemeSystem),
+        ThemeMode::Light => (ShellIcon::Sun, I18nKey::ThemeLight),
+        ThemeMode::Dark => (ShellIcon::Moon, I18nKey::ThemeDark),
+        ThemeMode::System => (ShellIcon::Monitor, I18nKey::ThemeSystem),
     };
     let theme_label = i18n::text(language, theme_key);
     let mut theme_button = utility_button("titlebar-theme-toggle", theme_label, 6, palette);
@@ -134,7 +134,7 @@ pub fn title_bar(
         7,
         palette,
     );
-    settings_button = settings_button.child(icon(Icon::Settings, 14.).text_color(rgb(
+    settings_button = settings_button.child(icon(ShellIcon::Settings, 14.).text_color(rgb(
         if settings_active {
             palette.brand.rgb_hex()
         } else {
@@ -166,7 +166,7 @@ pub fn title_bar(
             window_button(WindowButtonConfig {
                 id: "titlebar-minimize",
                 label: i18n::text(language, I18nKey::TitlebarMinimize),
-                icon_kind: Icon::Minus,
+                icon_kind: ShellIcon::Minus,
                 area: WindowControlArea::Min,
                 enabled: window.is_minimizable(),
                 platform_supported: window.window_controls().minimize,
@@ -181,9 +181,9 @@ pub fn title_bar(
                     i18n::text(language, I18nKey::TitlebarMaximize)
                 },
                 icon_kind: if window.is_maximized() {
-                    Icon::Restore
+                    ShellIcon::Restore
                 } else {
-                    Icon::Square
+                    ShellIcon::Square
                 },
                 area: WindowControlArea::Max,
                 enabled: window.is_resizable(),
@@ -194,7 +194,7 @@ pub fn title_bar(
             window_button(WindowButtonConfig {
                 id: "titlebar-close",
                 label: i18n::text(language, I18nKey::TitlebarClose),
-                icon_kind: Icon::Close,
+                icon_kind: ShellIcon::Close,
                 area: WindowControlArea::Close,
                 enabled: true,
                 platform_supported: true,
@@ -325,7 +325,7 @@ fn utility_button(
 struct WindowButtonConfig {
     id: &'static str,
     label: &'static str,
-    icon_kind: Icon,
+    icon_kind: ShellIcon,
     area: WindowControlArea,
     enabled: bool,
     platform_supported: bool,
@@ -405,15 +405,15 @@ fn window_button(config: WindowButtonConfig) -> impl IntoElement {
     })))
 }
 
-fn page_icon(page: Page) -> Icon {
+fn page_icon(page: Page) -> ShellIcon {
     match page {
-        Page::Home => Icon::Home,
-        Page::Teams => Icon::Users,
-        Page::ThemePacks => Icon::Palette,
-        Page::Toolbox => Icon::Wrench,
-        Page::Resources => Icon::Package,
-        Page::Help => Icon::Help,
-        Page::Settings => Icon::Settings,
+        Page::Home => ShellIcon::Home,
+        Page::Teams => ShellIcon::Users,
+        Page::ThemePacks => ShellIcon::Palette,
+        Page::Toolbox => ShellIcon::Wrench,
+        Page::Resources => ShellIcon::Package,
+        Page::Help => ShellIcon::Help,
+        Page::Settings => ShellIcon::Settings,
     }
 }
 

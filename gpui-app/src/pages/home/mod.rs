@@ -25,8 +25,8 @@ use shared::*;
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, Context, Div, FontWeight, KeyDownEvent, Render, Svg, Window, deferred,
-    div, prelude::*, px, relative, svg,
+    Animation, AnimationExt, Context, Div, FontWeight, KeyDownEvent, Render, Window, deferred, div,
+    prelude::*, px, relative,
 };
 
 use crate::{
@@ -150,15 +150,12 @@ pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
 
 #[cfg(test)]
 mod tests {
+    use crate::components::IconName;
     use crate::model::Language;
 
     use super::{
-        ICON_ALERT_CIRCLE, ICON_ALERT_TRIANGLE, ICON_CALENDAR_CHECK, ICON_CHECK, ICON_CHECK_SQUARE,
-        ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, ICON_COMPASS, ICON_GIFT, ICON_HISTORY, ICON_LOADER,
-        ICON_MONITOR, ICON_MONITOR_PLAY, ICON_PAUSE, ICON_PLAY, ICON_RADIO, ICON_REFRESH,
-        ICON_ROTATE, ICON_SCROLL_TEXT, ICON_SETTINGS, ICON_SLIDERS, ICON_SMARTPHONE, ICON_SQUARE,
-        ICON_TRASH, ICON_X, ICON_ZAP, RIGHT_PANEL_DEFAULT_WIDTH, RIGHT_PANEL_MAX_WIDTH,
-        RIGHT_PANEL_MIN_WIDTH, SPLITTER_COLLAPSED_WIDTH, SPLITTER_WIDTH,
+        RIGHT_PANEL_DEFAULT_WIDTH, RIGHT_PANEL_MAX_WIDTH, RIGHT_PANEL_MIN_WIDTH,
+        SPLITTER_COLLAPSED_WIDTH, SPLITTER_WIDTH,
         execution::after_completion_summary,
         panel::{bounded_right_panel_width, reward_mode_label},
     };
@@ -215,40 +212,53 @@ mod tests {
         );
     }
 
+    /// The task-card icons used to be embedded here as SVG bytes, so this test
+    /// checked the markup. They now name entries in the `gpui-kit-assets`
+    /// catalog, so the invariant worth guarding is that every name still
+    /// resolves to a file the bundle ships - a typo would otherwise render an
+    /// empty square at runtime instead of failing the build.
     #[test]
-    fn inline_svg_payloads_are_valid_unescaped_markup() {
-        let payloads = [
-            ICON_SLIDERS,
-            ICON_CALENDAR_CHECK,
-            ICON_GIFT,
-            ICON_ZAP,
-            ICON_COMPASS,
-            ICON_RADIO,
-            ICON_CHECK_SQUARE,
-            ICON_CHEVRON_DOWN,
-            ICON_CHEVRON_UP,
-            ICON_MONITOR,
-            ICON_SMARTPHONE,
-            ICON_CHECK,
-            ICON_HISTORY,
-            ICON_LOADER,
-            ICON_MONITOR_PLAY,
-            ICON_SCROLL_TEXT,
-            ICON_ALERT_CIRCLE,
-            ICON_ALERT_TRIANGLE,
-            ICON_REFRESH,
-            ICON_ROTATE,
-            ICON_PAUSE,
-            ICON_PLAY,
-            ICON_SQUARE,
-            ICON_SETTINGS,
-            ICON_TRASH,
-            ICON_X,
+    fn task_icons_resolve_to_bundled_assets() {
+        let icons = [
+            IconName::SlidersHorizontal,
+            IconName::CalendarCheck,
+            IconName::Gift,
+            IconName::Zap,
+            IconName::Compass,
+            IconName::Radio,
+            IconName::SquareCheck,
+            IconName::ChevronDown,
+            IconName::ChevronUp,
+            IconName::Monitor,
+            IconName::Smartphone,
+            IconName::Check,
+            IconName::RotateCcwClock,
+            IconName::Loader,
+            IconName::MonitorPlay,
+            IconName::ScrollText,
+            IconName::CircleAlert,
+            IconName::TriangleAlert,
+            IconName::RefreshCw,
+            IconName::RotateCw,
+            IconName::Pause,
+            IconName::Play,
+            IconName::Square,
+            IconName::Settings,
+            IconName::Trash,
+            IconName::X,
         ];
-        for payload in payloads {
-            let source = std::str::from_utf8(payload).unwrap();
-            assert!(source.starts_with("<svg "));
-            assert!(!source.contains(r#"\"#));
+        for icon in icons {
+            let path = icon.path();
+            assert!(
+                path.starts_with("icons/") && path.ends_with(".svg"),
+                "{path} must point into the bundled icon directory"
+            );
         }
+        // The label lookup must not silently fall back to a different glyph.
+        assert_eq!(super::shared::task_icon_name("GFT"), IconName::Gift);
+        assert_eq!(
+            super::shared::task_icon_name("unknown"),
+            IconName::SlidersHorizontal
+        );
     }
 }

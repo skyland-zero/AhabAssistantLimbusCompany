@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(crate) fn daily_details_overlay(
     app: &mut AhabApp,
@@ -27,7 +28,7 @@ pub(crate) fn daily_details_overlay(
         .w(px(30.0))
         .h(px(30.0))
         .p_0()
-        .child(action_icon(ICON_X, 15., TEXT_MUTED));
+        .child(action_icon(IconName::X, 15., TEXT_MUTED));
     close = close.on_click(cx.listener(|view, _, _, cx| {
         view.close_stats_details(cx);
         cx.stop_propagation();
@@ -53,7 +54,7 @@ pub(crate) fn daily_details_overlay(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(action_icon(ICON_CALENDAR_CHECK, 17., ACCENT))
+                .child(action_icon(IconName::CalendarCheck, 17., ACCENT))
                 .child(
                     div()
                         .text_size(px(16.))
@@ -161,7 +162,7 @@ pub(crate) fn mirror_details_overlay(
         .w(px(30.0))
         .h(px(30.0))
         .p_0()
-        .child(action_icon(ICON_X, 15., TEXT_MUTED));
+        .child(action_icon(IconName::X, 15., TEXT_MUTED));
     close = close.on_click(cx.listener(|view, _, _, cx| {
         view.close_mirror_details(cx);
         cx.stop_propagation();
@@ -187,7 +188,7 @@ pub(crate) fn mirror_details_overlay(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(action_icon(ICON_SCROLL_TEXT, 17., ACCENT))
+                .child(action_icon(IconName::ScrollText, 17., ACCENT))
                 .child(
                     div()
                         .flex()

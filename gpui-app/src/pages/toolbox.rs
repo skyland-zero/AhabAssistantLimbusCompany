@@ -5,7 +5,8 @@
 //! Tool actions continue to use `ToolboxState`, so this page stays on the
 //! canonical sidecar IPC boundary.
 
-use gpui::{Context, Div, Svg, div, prelude::*, px, svg};
+use crate::components::{Icon, IconName};
+use gpui::{Context, Div, div, prelude::*, px};
 
 use crate::{
     app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
@@ -17,14 +18,6 @@ use crate::{
     i18n::{Localized, paired as text},
     model::{Language, ToolId},
 };
-
-const ICON_CROSSHAIR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>"#;
-const ICON_PILL: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m10.5 20.5 9-9a4.95 4.95 0 0 0-7-7l-9 9a4.95 4.95 0 0 0 7 7Z"/><path d="m8.5 8.5 7 7"/><path d="M7 13h.01"/><path d="M11 17h.01"/></svg>"#;
-const ICON_CAMERA: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>"#;
-const ICON_MONITOR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>"#;
-const ICON_ROTATE_CCW: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>"#;
-const ICON_PLAY: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>"#;
-const ICON_STOP: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>"#;
 
 #[derive(Clone, Copy)]
 enum ToolIcon {
@@ -147,7 +140,7 @@ fn tool_card(
             "tool-action-resolution-set",
             text("修改 1080P", "Set 1080P").get(language),
             ButtonVariant::Default,
-            Some(brand_icon(ICON_MONITOR, 14.)),
+            Some(brand_icon(IconName::Monitor, 14.)),
             32.,
         )
         .flex_1()
@@ -167,7 +160,7 @@ fn tool_card(
             "tool-action-resolution-reset",
             text("还原默认", "Restore").get(language),
             ButtonVariant::Outline,
-            Some(svg_icon(ICON_ROTATE_CCW, 14., TEXT)),
+            Some(svg_icon(IconName::RotateCcw, 14., TEXT)),
             32.,
         )
         .flex_1()
@@ -196,7 +189,7 @@ fn tool_card(
                 action_id.clone(),
                 text("运行", "Run").get(language),
                 ButtonVariant::Outline,
-                Some(svg_icon(ICON_CAMERA, 16., TEXT)),
+                Some(svg_icon(IconName::Camera, 16., TEXT)),
                 32.,
             )
         } else if running {
@@ -204,7 +197,7 @@ fn tool_card(
                 action_id.clone(),
                 text("停止", "Stop").get(language),
                 ButtonVariant::Outline,
-                Some(svg_icon(ICON_STOP, 16., TEXT)),
+                Some(svg_icon(IconName::Square, 16., TEXT)),
                 32.,
             )
             .text_color(rgb(DANGER))
@@ -213,7 +206,7 @@ fn tool_card(
                 action_id,
                 text("运行", "Run").get(language),
                 ButtonVariant::Default,
-                Some(brand_icon(ICON_PLAY, 16.)),
+                Some(brand_icon(IconName::Play, 16.)),
                 32.,
             )
         }
@@ -285,7 +278,7 @@ fn tool_card(
                 .items_center()
                 .justify_between()
                 .w_full()
-                .child(svg_icon(tool_icon_path(tool.icon), 20., ACCENT))
+                .child(svg_icon(tool_icon(tool.icon), 20., ACCENT))
                 .child(status),
         )
         .child(
@@ -311,19 +304,20 @@ fn tool_card(
     card(body).p_0().w_full()
 }
 
-fn brand_icon(data: &'static str, size: f32) -> Svg {
-    svg()
-        .data(data.as_bytes())
-        .size(px(size))
-        .text_color(palette_rgb(current_render_palette().brand_foreground))
+fn brand_icon(name: impl Into<Icon>, size: f32) -> Icon {
+    crate::components::svg_icon_colored(
+        name,
+        size,
+        palette_rgb(current_render_palette().brand_foreground),
+    )
 }
 
-fn tool_icon_path(icon: ToolIcon) -> &'static str {
+fn tool_icon(icon: ToolIcon) -> IconName {
     match icon {
-        ToolIcon::Crosshair => ICON_CROSSHAIR,
-        ToolIcon::Pill => ICON_PILL,
-        ToolIcon::Camera => ICON_CAMERA,
-        ToolIcon::Monitor => ICON_MONITOR,
+        ToolIcon::Crosshair => IconName::Crosshair,
+        ToolIcon::Pill => IconName::Pill,
+        ToolIcon::Camera => IconName::Camera,
+        ToolIcon::Monitor => IconName::Monitor,
     }
 }
 

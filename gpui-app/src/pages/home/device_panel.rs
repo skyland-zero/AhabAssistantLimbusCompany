@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
@@ -34,9 +35,9 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
     let is_scanning = app.home.is_scanning_devices;
 
     let trigger_icon = match selected_device.map(|d| d.kind()) {
-        Some(crate::model::DeviceKind::PcWindow) => ICON_MONITOR,
-        Some(crate::model::DeviceKind::MumuEmulator) => ICON_SMARTPHONE,
-        _ => ICON_RADIO,
+        Some(crate::model::DeviceKind::PcWindow) => IconName::Monitor,
+        Some(crate::model::DeviceKind::MumuEmulator) => IconName::Smartphone,
+        _ => IconName::Radio,
     };
 
     let selected_name = selected_device
@@ -86,9 +87,9 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
         )
         .child(action_icon(
             if is_open {
-                ICON_CHEVRON_UP
+                IconName::ChevronUp
             } else {
-                ICON_CHEVRON_DOWN
+                IconName::ChevronDown
             },
             14.,
             TEXT_MUTED,
@@ -109,21 +110,19 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
     }
 
     let refresh_icon: gpui::AnyElement = if is_scanning {
-        action_icon(ICON_LOADER, 14., ACCENT)
+        action_icon(IconName::Loader, 14., ACCENT)
             .with_animation(
                 "device-refresh-spin",
                 Animation::new(Duration::from_millis(700))
                     .repeat()
                     .with_max_fps(12.0),
                 |svg, progress| {
-                    svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
-                        progress,
-                    )))
+                    svg.transform(gpui::Transformation::rotate(gpui::percentage(progress)))
                 },
             )
             .into_any_element()
     } else {
-        action_icon(ICON_REFRESH, 14., TEXT_MUTED).into_any_element()
+        action_icon(IconName::RefreshCw, 14., TEXT_MUTED).into_any_element()
     };
 
     let mut refresh = button("device-refresh", "", ButtonVariant::Icon)
@@ -152,7 +151,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
         .h(px(30.0))
         .p_0()
         .gap_0()
-        .child(action_icon(ICON_X, 14., TEXT_MUTED));
+        .child(action_icon(IconName::X, 14., TEXT_MUTED));
     if app.home.device_status == ConnectionStatus::Connected {
         disconnect = disconnect.on_click(cx.listener(|view, _, _, cx| {
             view.disconnect_device(cx);
@@ -215,9 +214,9 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                 let is_selected = selected_id_popup.as_deref() == Some(&dev_id);
 
                 let item_icon = match dev_kind {
-                    crate::model::DeviceKind::PcWindow => ICON_MONITOR,
-                    crate::model::DeviceKind::MumuEmulator => ICON_SMARTPHONE,
-                    crate::model::DeviceKind::AdbGeneric => ICON_RADIO,
+                    crate::model::DeviceKind::PcWindow => IconName::Monitor,
+                    crate::model::DeviceKind::MumuEmulator => IconName::Smartphone,
+                    crate::model::DeviceKind::AdbGeneric => IconName::Radio,
                 };
 
                 let click_id = dev_id.clone();
@@ -301,12 +300,16 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                             .bg(palette_rgb(palette.warning_light))
                             .text_size(px(9.5))
                             .text_color(palette_rgb(palette.warning))
-                            .child(action_icon(ICON_HISTORY, 10., palette.warning.rgb_hex()))
+                            .child(action_icon(
+                                IconName::RotateCcwClock,
+                                10.,
+                                palette.warning.rgb_hex(),
+                            ))
                             .child(text("上次", "Last").get(language)),
                     );
                 }
                 if is_selected {
-                    right_content = right_content.child(action_icon(ICON_CHECK, 14., ACCENT));
+                    right_content = right_content.child(action_icon(IconName::Check, 14., ACCENT));
                 }
 
                 item = item.child(left_content).child(right_content);
@@ -333,7 +336,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
         .border_color(rgba(0))
         .px_3()
         .child(super::panel::panel_heading(
-            ICON_MONITOR,
+            IconName::Monitor,
             text("设备连接", "Device Connection").get(language),
         ))
         .child(badge(connection_status.0, connection_status.1));
@@ -367,7 +370,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                     .gap_2()
                     .min_w_0()
                     .child(action_icon(
-                        ICON_ALERT_CIRCLE,
+                        IconName::CircleAlert,
                         13.,
                         palette.danger.rgb_hex(),
                     ))
@@ -385,7 +388,7 @@ pub(super) fn connection_card(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> D
                     .h(px(20.0))
                     .p_0()
                     .gap_0()
-                    .child(action_icon(ICON_X, 12., palette.danger.rgb_hex()))
+                    .child(action_icon(IconName::X, 12., palette.danger.rgb_hex()))
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.home.dismiss_device_error();
                         cx.stop_propagation();

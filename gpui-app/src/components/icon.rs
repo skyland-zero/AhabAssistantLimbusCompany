@@ -1,78 +1,66 @@
 #![allow(dead_code)]
 
-//! Small inline Lucide-compatible icons used by reusable controls.
+//! Icon rendering on top of GPUI Kit's bundled Lucide set.
 //!
-//! GPUI does not have a browser DOM in which to mount the Lucide React
-//! components. These paths keep the same SVG viewBox/stroke contract while
-//! allowing controls to render the icon from embedded bytes. No Unicode or
-//! emoji glyph is used as an icon fallback.
+//! The app used to embed its own Lucide-compatible SVG bytes per icon, which
+//! meant every new glyph was a hand-copied path. `gpui-kit-assets` already
+//! ships the full Lucide catalog (1830 icons) generated into [`IconName`], so
+//! this module is now just the size/colour adapter: call sites name an icon,
+//! and the bundle supplies the artwork.
+//!
+//! The helpers keep taking the legacy RGB tag rather than an `Hsla`, because
+//! pages resolve their colours through the render palette and the icon has to
+//! follow the same token as the text beside it.
 
-use gpui::{Pixels, Rgba, Styled, Svg, px, svg};
+use gpui::{Pixels, Rgba, Styled as _, px};
+pub use gpui_component::Icon;
+use gpui_component::Sizable as _;
+pub use gpui_component_assets::IconName;
 
 use super::style::render_rgb;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Icon {
-    ChevronDown,
-    LoaderCircle,
-    Check,
-    X,
+/// Render a bundled icon at a fixed square size using a legacy RGB token.
+pub fn svg_icon(name: impl Into<Icon>, size: f32, color: u32) -> Icon {
+    icon_at(name, px(size), render_rgb(color))
 }
 
-impl Icon {
-    const fn data(self) -> &'static [u8] {
-        match self {
-            Self::ChevronDown => {
-                br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>"#
-            }
-            Self::LoaderCircle => {
-                br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>"#
-            }
-            Self::Check => {
-                br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>"#
-            }
-            Self::X => {
-                br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>"#
-            }
-        }
-    }
+/// [`svg_icon`] for a colour already resolved to `Rgba`.
+pub fn svg_icon_colored(name: impl Into<Icon>, size: f32, color: Rgba) -> Icon {
+    icon_at(name, px(size), color)
 }
 
-/// Render an embedded Lucide path at a fixed square size.
-pub fn icon(kind: Icon, size: Pixels, color: Rgba) -> Svg {
-    svg().data(kind.data()).w(size).h(size).text_color(color)
+/// Render at an explicit `Pixels` size.
+pub fn icon_at(name: impl Into<Icon>, size: Pixels, color: Rgba) -> Icon {
+    Icon::new(name).with_size(size).text_color(color)
 }
 
-/// Render a page-owned SVG string using the active render palette for legacy
-/// RGB tokens.
-pub fn svg_icon(data: &'static str, size: f32, color: u32) -> Svg {
-    svg()
-        .data(data.as_bytes())
-        .size(px(size))
-        .text_color(render_rgb(color))
+pub fn chevron_down(color: Rgba) -> Icon {
+    icon_at(IconName::ChevronDown, px(14.), color)
 }
 
-/// Render a page-owned SVG byte slice when the source is declared as bytes.
-pub fn svg_icon_bytes(data: &'static [u8], size: f32, color: Rgba) -> Svg {
-    svg().data(data).w(px(size)).h(px(size)).text_color(color)
-}
-
-pub fn chevron_down(color: Rgba) -> Svg {
-    icon(Icon::ChevronDown, px(14.), color)
-}
-
-pub fn loader_circle(color: Rgba) -> Svg {
-    icon(Icon::LoaderCircle, px(14.), color)
+pub fn loader_circle(color: Rgba) -> Icon {
+    icon_at(IconName::LoaderCircle, px(14.), color)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Every icon the UI names must exist in the bundled catalog, so a typo
+    /// fails the build here rather than rendering an empty square.
     #[test]
-    fn icon_paths_use_the_lucide_viewbox() {
-        let source = std::str::from_utf8(Icon::ChevronDown.data()).unwrap();
-        assert!(source.contains("viewBox=\"0 0 24 24\""));
-        assert!(source.contains("stroke=\"currentColor\""));
+    fn named_icons_resolve_to_a_bundled_path() {
+        for name in [
+            IconName::ChevronDown,
+            IconName::LoaderCircle,
+            IconName::Check,
+            IconName::X,
+        ] {
+            let path = name.path();
+            assert!(
+                path.starts_with("icons/") && path.ends_with(".svg"),
+                "{path} must point at the bundled icon directory"
+            );
+        }
     }
 }

@@ -6,6 +6,7 @@ mod assets;
 mod components;
 mod i18n;
 mod ipc;
+mod kit_assets;
 mod model;
 mod pages;
 mod shell;
@@ -17,7 +18,6 @@ use gpui::{
     WindowDecorations, WindowOptions, actions, px, size,
 };
 use gpui_component::Root;
-use gpui_component_assets::Assets as ComponentAssets;
 use gpui_platform::application;
 
 use app::AhabApp;
@@ -71,11 +71,11 @@ fn main() {
     #[cfg(target_os = "windows")]
     shell::start_tray();
 
-    // The component bundle supplies the Lucide SVGs GPUI Kit widgets draw.
-    // The app's own artwork stays embedded via `include_bytes!` in `assets`,
-    // so this source is additive and cannot shadow it.
+    // `kit_assets::AppAssets` supplies the Lucide SVGs both the app and GPUI
+    // Kit's widgets draw. The app's own artwork stays embedded via
+    // `include_bytes!` in `assets`, so this source is additive.
     application()
-        .with_assets(ComponentAssets)
+        .with_assets(kit_assets::AppAssets)
         .run(|cx: &mut App| {
             cx.set_app_identity("com.kiyi671.ahab-gpui-app", shell::NATIVE_APP_TITLE);
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);

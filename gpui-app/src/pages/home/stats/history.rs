@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 pub(crate) fn combined_history_card(snapshot: &StatsSnapshot, root: &WeakEntity<AhabApp>) -> Div {
     let language = snapshot.language;
@@ -46,7 +47,7 @@ pub(crate) fn period_summary_section(
     .py_0()
     .gap_1()
     .text_size(px(10.))
-    .child(action_icon(ICON_CALENDAR_CHECK, 11., ACCENT));
+    .child(action_icon(IconName::CalendarCheck, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -69,7 +70,7 @@ pub(crate) fn period_summary_section(
                 .flex()
                 .items_center()
                 .gap_1p5()
-                .child(action_icon(ICON_HISTORY, 13., ACCENT))
+                .child(action_icon(IconName::RotateCcwClock, 13., ACCENT))
                 .child(div().text_size(px(11.)).text_color(rgb(TEXT_MUTED)).child(
                     text("周期统计 (今日/本周)", "Period Stats (Today/Week)").get(language),
                 )),
@@ -164,7 +165,7 @@ pub(crate) fn recent_mirror_section(
     .py_0()
     .gap_1()
     .text_size(px(10.))
-    .child(action_icon(ICON_SCROLL_TEXT, 11., ACCENT));
+    .child(action_icon(IconName::ScrollText, 11., ACCENT));
     let root_for_details = root.clone();
     details = details.on_click(move |_, _, cx| {
         if let Some(root) = root_for_details.upgrade() {
@@ -236,7 +237,7 @@ pub(crate) fn recent_mirror_section(
                 .flex()
                 .items_center()
                 .gap_1p5()
-                .child(action_icon(ICON_COMPASS, 13., ACCENT))
+                .child(action_icon(IconName::Compass, 13., ACCENT))
                 .child(
                     div()
                         .text_size(px(11.))

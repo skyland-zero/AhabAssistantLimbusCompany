@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::IconName;
 
 fn can_pause_or_resume(state: ExecutionState) -> bool {
     matches!(state, ExecutionState::Running | ExecutionState::Paused)
@@ -22,14 +23,14 @@ pub(super) fn execution_toolbar(
         .px(px(10.0))
         .gap(px(4.0))
         .text_size(px(12.))
-        .child(action_icon(ICON_CHECK_SQUARE, 14., TEXT))
+        .child(action_icon(IconName::SquareCheck, 14., TEXT))
         .child(text("全选", "Select All").get(language));
     let mut clear_all = button("clear-all", "", ButtonVariant::Outline)
         .h(px(32.0))
         .px(px(10.0))
         .gap(px(4.0))
         .text_size(px(12.))
-        .child(action_icon(ICON_ROTATE, 14., TEXT_MUTED))
+        .child(action_icon(IconName::RotateCw, 14., TEXT_MUTED))
         .child(
             div()
                 .text_color(rgb(TEXT_MUTED))
@@ -74,7 +75,7 @@ pub(super) fn execution_toolbar(
         .px(px(10.0))
         .gap(px(6.0))
         .text_size(px(12.))
-        .child(action_icon(ICON_SLIDERS, 14., ACCENT))
+        .child(action_icon(IconName::SlidersHorizontal, 14., ACCENT))
         .child(
             div()
                 .min_w_0()
@@ -103,13 +104,13 @@ pub(super) fn execution_toolbar(
 
     let (pause_icon, pause_label, pause_icon_color) = if state == ExecutionState::Paused {
         (
-            ICON_PLAY,
+            IconName::Play,
             text("继续", "Resume").get(language),
             palette.success.rgb_hex(),
         )
     } else if is_stop_pending(state) {
         (
-            ICON_LOADER,
+            IconName::Loader,
             if state == ExecutionState::Restoring {
                 text("恢复中", "Restoring").get(language)
             } else {
@@ -119,7 +120,7 @@ pub(super) fn execution_toolbar(
         )
     } else {
         (
-            ICON_PAUSE,
+            IconName::Pause,
             text("暂停", "Pause").get(language),
             palette.warning.rgb_hex(),
         )
@@ -152,7 +153,7 @@ pub(super) fn execution_toolbar(
 
     let (run_icon, run_label, run_variant) = if is_stop_pending(state) {
         (
-            ICON_LOADER,
+            IconName::Loader,
             if state == ExecutionState::Restoring {
                 text("正在恢复设备", "Restoring device").get(language)
             } else {
@@ -161,9 +162,9 @@ pub(super) fn execution_toolbar(
             ButtonVariant::Destructive,
         )
     } else if busy {
-        (ICON_SQUARE, "Stop!", ButtonVariant::Destructive)
+        (IconName::Square, "Stop!", ButtonVariant::Destructive)
     } else {
-        (ICON_PLAY, "Link Start!", ButtonVariant::Default)
+        (IconName::Play, "Link Start!", ButtonVariant::Default)
     };
     let run_icon_element: gpui::AnyElement = if is_stop_pending(state) {
         brand_action_icon(run_icon, 14.)
@@ -173,9 +174,7 @@ pub(super) fn execution_toolbar(
                     .repeat()
                     .with_max_fps(12.0),
                 |svg, progress| {
-                    svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
-                        progress,
-                    )))
+                    svg.transform(gpui::Transformation::rotate(gpui::percentage(progress)))
                 },
             )
             .into_any_element()
