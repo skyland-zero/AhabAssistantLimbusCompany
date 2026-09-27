@@ -42,8 +42,6 @@ const SETTINGS_SECTIONS: [Localized; 7] = [
 ];
 
 pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
-    app.ensure_settings_input(cx);
-
     let language = app.state.settings.language;
     let theme = app.state.settings.themeMode;
     let accent = app.state.settings.accentId.clone();

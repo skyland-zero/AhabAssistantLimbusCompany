@@ -84,7 +84,6 @@ fn main() {
             gpui_component::init(cx);
             cx.on_action(|_: &Quit, cx| cx.quit());
             cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-            cx.bind_keys(components::text_input::key_bindings());
 
             let bounds = Bounds::centered(None, size(px(820.), px(680.)), cx);
             match cx.open_window(

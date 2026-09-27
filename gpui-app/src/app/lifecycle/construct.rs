@@ -1,3 +1,5 @@
+use gpui::Window;
+
 use super::*;
 
 fn runtime_client() -> BackendClient {
@@ -108,7 +110,7 @@ impl AhabApp {
         app
     }
 
-    pub(crate) fn apply_visual_state(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn apply_visual_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(state) = self.visual_state.take() else {
             return;
         };
@@ -138,20 +140,20 @@ impl AhabApp {
             VisualState::TeamsEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
+                    self.create_team_inputs(window, cx);
                 }
             }
             VisualState::TeamsShopEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
+                    self.create_team_inputs(window, cx);
                     self.teams.set_editor_tab(crate::state::TeamEditorTab::Shop);
                 }
             }
             VisualState::TeamsCombatEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
+                    self.create_team_inputs(window, cx);
                     self.teams
                         .set_editor_tab(crate::state::TeamEditorTab::Combat);
                 }
@@ -159,7 +161,7 @@ impl AhabApp {
             VisualState::TeamsStarlightEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
+                    self.create_team_inputs(window, cx);
                     self.teams
                         .set_editor_tab(crate::state::TeamEditorTab::Starlight);
                 }
@@ -167,7 +169,7 @@ impl AhabApp {
             VisualState::TeamsAdvancedEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
+                    self.create_team_inputs(window, cx);
                     self.teams
                         .set_editor_tab(crate::state::TeamEditorTab::Advanced);
                 }
@@ -180,7 +182,7 @@ impl AhabApp {
             VisualState::TeamsSelect => {
                 if let Some(team) = self.teams.teams.first().cloned() {
                     self.teams.open_edit(&team);
-                    self.create_team_inputs(cx);
+                    self.create_team_inputs(window, cx);
                     self.teams.open_select = Some(crate::state::TeamSelect::Purpose);
                 }
             }

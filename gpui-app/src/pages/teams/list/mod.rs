@@ -87,11 +87,11 @@ pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
             current_render_palette().brand_foreground,
         ))
         .child(text("新建队伍", "New Team").get(language))
-        .on_click(cx.listener(|view, _, _, cx| view.open_new_team(cx)));
+        .on_click(cx.listener(|view, _, window, cx| view.open_new_team(window, cx)));
     new_team = new_team.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.open_new_team(cx);
+            view.open_new_team(window, cx);
         }
     }));
 

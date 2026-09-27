@@ -1,195 +1,87 @@
-//! Native, entity-backed text input used by the GPUI forms.
+//! Entity-backed text input used by the GPUI forms.
 //!
-//! GPUI deliberately leaves text editing policy to the application. This
-//! control keeps the entity model, editing commands, IME bridge, and custom
-//! element renderer in separate files while preserving the original public
-//! `TextInput` API.
+//! This used to be a hand-written control: a custom `Element` to shape and
+//! paint the text, an `EntityInputHandler` implementation for the IME bridge,
+//! and a separate editing-command module - 884 lines whose behaviour GPUI Kit's
+//! `Input` already provides, including UTF-16 selection, IME composition,
+//! clipboard, masked entry and the platform's text-input configuration.
+//!
+//! What remains is a thin, deliberately narrow wrapper. The type keeps the
+//! `TextInput` name so `Entity<TextInput>` stays the handle pages pass around,
+//! and it exposes only the operations this app actually calls: read the value
+//! and replace it. `gpui_component::init` installs the input key bindings, so
+//! the app no longer binds them itself.
+//!
+//! # Palette
+//!
+//! There is no palette argument any more. `Input` reads its colours from the
+//! projected theme, which `components::style::kit` derives from the active
+//! `Palette`, so a skin or accent change reaches every input without the app
+//! pushing a new palette into each entity.
 
-#![allow(dead_code)]
-
-mod editing;
-mod element;
-mod input_handler;
-
-use std::ops::Range;
-
-use gpui::{
-    App, Bounds, ClipboardItem, Context, FocusHandle, KeyBinding, ShapedLine, SharedString, Window,
-    actions,
-};
-
-use super::style::{ColorToken, Palette, current_render_palette};
-
-fn paint_color(token: ColorToken) -> gpui::Rgba {
-    gpui::rgba(token.rgba_hex())
-}
-
-// These actions are bound once by main.rs and listened to by every input
-// entity. Keeping them in the reusable control makes keyboard behavior the
-// same in the team editor and in future settings/help inputs.
-actions!(
-    text_input,
-    [
-        Backspace,
-        Delete,
-        Left,
-        Right,
-        SelectLeft,
-        SelectRight,
-        SelectAll,
-        Home,
-        End,
-        Paste,
-        Cut,
-        Copy,
-    ]
-);
+use gpui::{App, AppContext as _, Context, Entity, IntoElement, Render, Window};
+use gpui_component::input::{Input, InputState};
 
 pub struct TextInput {
-    focus_handle: FocusHandle,
-    content: SharedString,
-    placeholder: SharedString,
-    selected_range: Range<usize>,
-    selection_reversed: bool,
-    marked_range: Option<Range<usize>>,
-    last_layout: Option<ShapedLine>,
-    last_bounds: Option<Bounds<gpui::Pixels>>,
-    is_selecting: bool,
-    palette: Palette,
-    disabled: bool,
-    masked: bool,
+    state: Entity<InputState>,
 }
 
 impl TextInput {
+    /// A single-line input holding `content`, showing `placeholder` when empty.
     pub fn new(
-        content: impl Into<SharedString>,
-        placeholder: impl Into<SharedString>,
+        content: impl Into<gpui::SharedString>,
+        placeholder: impl Into<gpui::SharedString>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::new_with_palette(content, placeholder, current_render_palette(), cx)
+        Self::build(content, placeholder, false, window, cx)
     }
 
-    /// Construct an input using the palette derived from the root settings.
-    /// The palette is copied into the entity so a root theme update can call
-    /// [`Self::set_palette`] and immediately repaint this seam.
-    pub fn new_with_palette(
-        content: impl Into<SharedString>,
-        placeholder: impl Into<SharedString>,
-        palette: Palette,
+    /// [`Self::new`] with the value masked, for credentials.
+    pub fn new_masked(
+        content: impl Into<gpui::SharedString>,
+        placeholder: impl Into<gpui::SharedString>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::new_with_palette_and_mask(content, placeholder, palette, false, cx)
+        Self::build(content, placeholder, true, window, cx)
     }
 
-    /// Construct an input that stores the real value but paints asterisks.
-    /// The mask keeps one byte per source byte so cursor and selection offsets
-    /// remain valid for the ASCII credentials used by settings forms.
-    pub fn new_masked_with_palette(
-        content: impl Into<SharedString>,
-        placeholder: impl Into<SharedString>,
-        palette: Palette,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        Self::new_with_palette_and_mask(content, placeholder, palette, true, cx)
-    }
-
-    fn new_with_palette_and_mask(
-        content: impl Into<SharedString>,
-        placeholder: impl Into<SharedString>,
-        palette: Palette,
+    fn build(
+        content: impl Into<gpui::SharedString>,
+        placeholder: impl Into<gpui::SharedString>,
         masked: bool,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let content = content.into();
-        let end = content.len();
-        Self {
-            focus_handle: cx.focus_handle(),
-            content,
-            placeholder: placeholder.into(),
-            selected_range: end..end,
-            selection_reversed: false,
-            marked_range: None,
-            last_layout: None,
-            last_bounds: None,
-            is_selecting: false,
-            palette,
-            disabled: false,
-            masked,
-        }
+        let state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(placeholder)
+                .default_value(content)
+                .masked(masked)
+        });
+        Self { state }
     }
 
-    pub fn text(&self) -> String {
-        self.content.to_string()
+    /// The current value as an owned string.
+    pub fn text(&self, cx: &App) -> String {
+        self.state.read(cx).value().to_string()
     }
 
-    pub fn set_text(&mut self, text: impl Into<SharedString>) {
-        self.content = text.into();
-        let end = self.content.len();
-        self.selected_range = end..end;
-        self.selection_reversed = false;
-        self.marked_range = None;
-        self.last_layout = None;
-        self.last_bounds = None;
-    }
-
-    pub fn set_palette(&mut self, palette: Palette) {
-        self.palette = palette;
-        self.last_layout = None;
-    }
-
-    pub fn palette(&self) -> Palette {
-        self.palette
-    }
-
-    pub fn set_disabled(&mut self, disabled: bool) {
-        self.disabled = disabled;
-        self.is_selecting = false;
-    }
-
-    pub fn is_disabled(&self) -> bool {
-        self.disabled
+    /// Replace the whole value, leaving the caret at the end.
+    pub fn set_text(
+        &mut self,
+        text: impl Into<gpui::SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state
+            .update(cx, |state, cx| state.set_value(text, window, cx));
     }
 }
 
-// Keep this import available to callers that want to bind the standard input
-// actions without knowing the macro-generated module details.
-pub fn key_bindings() -> [KeyBinding; 12] {
-    [
-        KeyBinding::new("backspace", Backspace, None),
-        KeyBinding::new("delete", Delete, None),
-        KeyBinding::new("left", Left, None),
-        KeyBinding::new("right", Right, None),
-        KeyBinding::new("shift-left", SelectLeft, None),
-        KeyBinding::new("shift-right", SelectRight, None),
-        KeyBinding::new("secondary-a", SelectAll, None),
-        KeyBinding::new("secondary-v", Paste, None),
-        KeyBinding::new("secondary-c", Copy, None),
-        KeyBinding::new("secondary-x", Cut, None),
-        KeyBinding::new("home", Home, None),
-        KeyBinding::new("end", End, None),
-    ]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::key_bindings;
-    use gpui::AsKeystroke;
-
-    #[test]
-    fn standard_key_bindings_cover_the_input_actions() {
-        let bindings = key_bindings();
-        assert_eq!(bindings.len(), 12);
-        for (binding, key) in bindings[6..10].iter().zip(["a", "v", "c", "x"]) {
-            let keystroke = binding
-                .keystrokes()
-                .first()
-                .expect("standard input binding has one keystroke")
-                .as_keystroke();
-            assert_eq!(keystroke.key, key);
-            #[cfg(target_os = "macos")]
-            assert!(keystroke.modifiers.platform);
-            #[cfg(not(target_os = "macos"))]
-            assert!(keystroke.modifiers.control);
-        }
+impl Render for TextInput {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        Input::new(&self.state)
     }
 }

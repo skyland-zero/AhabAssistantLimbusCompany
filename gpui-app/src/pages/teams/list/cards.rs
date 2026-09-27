@@ -38,13 +38,13 @@ pub(super) fn team_card(
             16.,
             current_render_palette().muted_foreground,
         ))
-        .on_click(cx.listener(move |view, _, _, cx| {
-            view.open_existing_team(&edit_team, cx);
+        .on_click(cx.listener(move |view, _, window, cx| {
+            view.open_existing_team(&edit_team, window, cx);
         }));
     edit = edit.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.open_existing_team(&edit_team_for_key, cx);
+            view.open_existing_team(&edit_team_for_key, window, cx);
         }
     }));
     let mut delete = div()
@@ -251,13 +251,13 @@ pub(super) fn empty_slot_card(
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(IconName::Plus, 13., current_render_palette().brand))
         .child(text("新建", "Create").get(language))
-        .on_click(cx.listener(move |view, _, _, cx| {
-            view.open_new_team_for_slot(number, cx);
+        .on_click(cx.listener(move |view, _, window, cx| {
+            view.open_new_team_for_slot(number, window, cx);
         }));
     create = create.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.open_new_team_for_slot(number, cx);
+            view.open_new_team_for_slot(number, window, cx);
         }
     }));
 

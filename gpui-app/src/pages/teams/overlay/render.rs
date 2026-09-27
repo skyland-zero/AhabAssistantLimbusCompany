@@ -115,11 +115,11 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .text_color(palette_rgb(palette.brand))
         .child(icon(IconName::Copy, 14., palette.brand))
         .child(text("复制 JSON", "Copy JSON").get(language))
-        .on_click(cx.listener(|view, _, _, cx| view.copy_team_json(cx)));
+        .on_click(cx.listener(|view, _, window, cx| view.copy_team_json(window, cx)));
     copy = copy.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.copy_team_json(cx);
+            view.copy_team_json(window, cx);
         }
     }));
 
@@ -142,7 +142,7 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
         .team_inputs
         .name
         .as_ref()
-        .map(|input| input.read(cx).text())
+        .map(|input| input.read(cx).text(cx))
         .unwrap_or_else(|| team.name.clone());
     let can_save = !current_name.trim().is_empty() && !app.teams.saving;
     let mut save = button(
@@ -155,11 +155,11 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
     .py_0();
     if can_save {
         save = save
-            .on_click(cx.listener(|view, _, _, cx| view.save_team_editor(cx)))
+            .on_click(cx.listener(|view, _, window, cx| view.save_team_editor(window, cx)))
             .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
                 if team_activation_key(event) {
                     window.prevent_default();
-                    view.save_team_editor(cx);
+                    view.save_team_editor(window, cx);
                 }
             }));
     } else {

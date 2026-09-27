@@ -103,6 +103,9 @@ impl PreviewControlState {
 impl AhabApp {
     pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.window_minimized = shell::is_window_minimized(window);
+        // Built here because `InputState` needs a window; doing it lazily from a
+        // page render would create entities during a render pass.
+        self.ensure_settings_input(window, cx);
         self.window_subscriptions
             .push(cx.observe_window_activation(window, |view, window, cx| {
                 view.update_window_state(window, cx)

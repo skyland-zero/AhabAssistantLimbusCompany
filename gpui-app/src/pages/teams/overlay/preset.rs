@@ -84,13 +84,13 @@ pub(super) fn preset_card(
             .bg(palette_rgb(current_render_palette().accent_surface))
             .border_color(palette_rgb(current_render_palette().brand))
     })
-    .on_click(cx.listener(move |view, _, _, cx| {
-        view.select_team_preset(&preset_id, cx);
+    .on_click(cx.listener(move |view, _, window, cx| {
+        view.select_team_preset(&preset_id, window, cx);
     }));
     control = control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.select_team_preset(&preset_id_for_key, cx);
+            view.select_team_preset(&preset_id_for_key, window, cx);
         }
     }));
     div().w_full().child(control)
@@ -256,13 +256,13 @@ pub(super) fn preset_overwrite_overlay(
     .h(px(32.))
     .px_3()
     .py_0()
-    .on_click(cx.listener(|view, _, _, cx| {
-        view.confirm_team_preset_overwrite(cx);
+    .on_click(cx.listener(|view, _, window, cx| {
+        view.confirm_team_preset_overwrite(window, cx);
     }));
     confirm = confirm.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.confirm_team_preset_overwrite(cx);
+            view.confirm_team_preset_overwrite(window, cx);
         }
     }));
     let dialog = card(

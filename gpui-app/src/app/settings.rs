@@ -4,16 +4,22 @@ use super::AhabApp;
 use crate::{components::TextInput, model::Language};
 
 impl AhabApp {
-    pub fn ensure_settings_input(&mut self, cx: &mut Context<Self>) {
-        let palette = crate::components::style::current_render_palette();
+    /// Create the settings text inputs.
+    ///
+    /// Called from `attach_window` rather than from `render`: GPUI Kit's
+    /// `InputState` needs a window to build, and creating entities during a
+    /// render pass was a side effect the old hand-written input did not have.
+    pub fn ensure_settings_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.settings_inputs.cdk.is_none() {
             let cdk = self.settings_page.system.mirrorchyan_cdk.clone();
             let placeholder = match self.state.settings.language {
                 Language::ZhCn => "Mirror 酱 CDK（可选）",
                 Language::EnUs => "Mirror-Chyan CDK (optional)",
             };
-            self.settings_inputs.cdk =
-                Some(cx.new(move |cx| TextInput::new_with_palette(cdk, placeholder, palette, cx)));
+            self.settings_inputs.cdk = Some(cx.new({
+                let window = &mut *window;
+                move |cx| TextInput::new(cdk, placeholder, window, cx)
+            }));
         }
         if self.settings_inputs.wxpusher_spt.is_none() {
             let spt = self.settings_page.system.wxpusher_spt.clone();
@@ -21,23 +27,23 @@ impl AhabApp {
                 Language::ZhCn => "WxPusher SPT（可选）",
                 Language::EnUs => "WxPusher SPT (optional)",
             };
-            self.settings_inputs.wxpusher_spt =
-                Some(cx.new(move |cx| {
-                    TextInput::new_masked_with_palette(spt, placeholder, palette, cx)
-                }));
+            self.settings_inputs.wxpusher_spt = Some(cx.new({
+                let window = &mut *window;
+                move |cx| TextInput::new_masked(spt, placeholder, window, cx)
+            }));
         }
     }
 
     pub fn save_settings_cdk(&mut self, cx: &mut Context<Self>) {
         if let Some(input) = self.settings_inputs.cdk.as_ref() {
-            self.settings_page.set_cdk(input.read(cx).text());
+            self.settings_page.set_cdk(input.read(cx).text(cx));
         }
         cx.notify();
     }
 
     pub fn save_settings_wxpusher_spt(&mut self, cx: &mut Context<Self>) {
         if let Some(input) = self.settings_inputs.wxpusher_spt.as_ref() {
-            self.settings_page.set_wxpusher_spt(input.read(cx).text());
+            self.settings_page.set_wxpusher_spt(input.read(cx).text(cx));
         }
         cx.notify();
     }

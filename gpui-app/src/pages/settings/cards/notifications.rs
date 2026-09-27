@@ -35,7 +35,7 @@ pub fn notification_card(
     .on_click(cx.listener(move |view, _, _, cx| {
         let spt = test_input
             .as_ref()
-            .map(|input| input.read(cx).text())
+            .map(|input| input.read(cx).text(cx))
             .unwrap_or_default();
         view.settings_page.test_notification(spt);
         cx.notify();
@@ -45,7 +45,7 @@ pub fn notification_card(
             window.prevent_default();
             let spt = key_input
                 .as_ref()
-                .map(|input| input.read(cx).text())
+                .map(|input| input.read(cx).text(cx))
                 .unwrap_or_default();
             view.settings_page.test_notification(spt);
             cx.notify();

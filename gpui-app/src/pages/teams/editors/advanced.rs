@@ -104,11 +104,11 @@ pub(crate) fn advanced_editor(
     .h(px(34.))
     .px_3()
     .py_0()
-    .on_click(cx.listener(|view, _, _, cx| view.add_team_observe_gift(cx)));
+    .on_click(cx.listener(|view, _, window, cx| view.add_team_observe_gift(window, cx)));
     add_observe = add_observe.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.add_team_observe_gift(cx);
+            view.add_team_observe_gift(window, cx);
         }
     }));
     let observe_field = observe_input
@@ -121,7 +121,7 @@ pub(crate) fn advanced_editor(
                     if event.keystroke.key.eq_ignore_ascii_case("enter") {
                         window.prevent_default();
                         cx.stop_propagation();
-                        view.add_team_observe_gift(cx);
+                        view.add_team_observe_gift(window, cx);
                     }
                 }))
                 .into_any_element()
@@ -243,12 +243,14 @@ pub(crate) fn advanced_editor(
                         .h(px(28.))
                         .px_3()
                         .py_0()
-                        .on_click(cx.listener(|view, _, _, cx| view.import_team_json(cx)));
+                        .on_click(
+                            cx.listener(|view, _, window, cx| view.import_team_json(window, cx)),
+                        );
                         import = import.on_key_down(cx.listener(
                             |view, event: &KeyDownEvent, window, cx| {
                                 if team_activation_key(event) {
                                     window.prevent_default();
-                                    view.import_team_json(cx);
+                                    view.import_team_json(window, cx);
                                 }
                             },
                         ));

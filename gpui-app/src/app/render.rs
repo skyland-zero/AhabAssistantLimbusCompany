@@ -61,24 +61,6 @@ impl AhabApp {
         );
         crate::theme::palette_for_settings(&self.state.settings, system_is_dark)
     }
-
-    fn sync_input_palettes(&mut self, palette: Palette, cx: &mut Context<Self>) {
-        for input in [
-            self.team_inputs.name.as_ref(),
-            self.team_inputs.code.as_ref(),
-            self.team_inputs.observe.as_ref(),
-            self.team_inputs.json.as_ref(),
-            self.team_inputs.keyword_refresh.as_ref(),
-            self.team_inputs.normal_refresh.as_ref(),
-            self.settings_inputs.cdk.as_ref(),
-            self.settings_inputs.wxpusher_spt.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            input.update(cx, |input, _| input.set_palette(palette));
-        }
-    }
 }
 
 /// Full-window background artwork for skins that layer texture underneath the
@@ -155,8 +137,7 @@ impl Render for AhabApp {
         // skin or accent switch is visible in the very same frame. `None` for
         // the window keeps this from asking for a re-render from inside one.
         crate::components::style::sync_kit_theme(palette, None, cx);
-        self.apply_visual_state(cx);
-        self.sync_input_palettes(palette, cx);
+        self.apply_visual_state(window, cx);
         let page = pages::render(current_page, self, cx)
             .relative()
             .flex_1()
