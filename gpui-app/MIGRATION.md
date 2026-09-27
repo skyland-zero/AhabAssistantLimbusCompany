@@ -58,7 +58,27 @@ let state = window
     .clone();
 ```
 
-### 陷阱（已验证）
+### 阻断点（已实测，必须先解决）
+
+**`SelectState` 无法程序化打开下拉。** `select.rs:431` 的
+`fn set_open` 是私有的（无 `pub`），`is_open()` 只有 getter。
+
+这直接阻断迁移：`AHAB_VISUAL_STATE=settings-select` 正是靠
+`settings_page.open_select = Some(SettingsSelect::UpdateSource)`
+（`app/lifecycle/construct.rs:193`）来展开下拉并截图。换成 GPUI Kit 的
+`Select` 后**该视觉状态无法复现**，`capture_visual.ps1 -States
+settings-select` 会拍到关闭状态的控件。
+
+三选一：
+
+1. 接受丢失该状态的覆盖，重新建立基线（需要明确同意 —— 这是用测试覆盖
+   换组件替换）；
+2. 向 longbridge/gpui-kit 提 issue 请求公开 `set_open`；
+3. 暂时保留自研 select。
+
+**在解决之前不要开始这项迁移。** 我实测到这里，已回滚。
+
+### 其余陷阱（已验证）
 
 1. **订阅会泄漏。** `Select` 通过 `SelectState` 实体上的
    `SelectEvent::Confirm(Option<Value>)` 上报选择（`select.rs:70`），页面用
