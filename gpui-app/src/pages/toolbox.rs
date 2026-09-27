@@ -6,7 +6,7 @@
 //! canonical sidecar IPC boundary.
 
 use crate::components::{Icon, IconName};
-use gpui::{Context, Div, div, prelude::*, px};
+use gpui::{Context, Div, Window, div, prelude::*, px};
 
 use crate::{
     app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
@@ -74,7 +74,7 @@ const TOOLS: [ToolMeta; 4] = [
     },
 ];
 
-pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let feedback = app.toolbox.feedback.clone();
     let cards: Vec<Div> = TOOLS

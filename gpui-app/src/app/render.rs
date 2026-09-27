@@ -138,7 +138,7 @@ impl Render for AhabApp {
         // the window keeps this from asking for a re-render from inside one.
         crate::components::style::sync_kit_theme(palette, None, cx);
         self.apply_visual_state(window, cx);
-        let page = pages::render(current_page, self, cx)
+        let page = pages::render(current_page, self, window, cx)
             .relative()
             .flex_1()
             .min_w_0()
@@ -169,7 +169,7 @@ impl Render for AhabApp {
                     .overflow_hidden()
                     .child(page),
             )
-            .child(pages::render_overlay(current_page, self, cx))
+            .child(pages::render_overlay(current_page, self, window, cx))
             .child(shell::toast_layer(self.toast.as_ref(), palette))
     }
 }

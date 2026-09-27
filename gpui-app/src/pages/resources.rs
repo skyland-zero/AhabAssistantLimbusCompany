@@ -4,7 +4,7 @@
 //! grid, and explicit synchronization progress, success, warning, loading,
 //! and empty states.
 
-use gpui::{AnyElement, Context, Div, div, prelude::*, px, relative};
+use gpui::{AnyElement, Context, Div, Window, div, prelude::*, px, relative};
 
 use crate::{
     app::{ACCENT, AhabApp, BORDER, TEXT, TEXT_MUTED},
@@ -18,7 +18,7 @@ use crate::{
     model::{Language, ResourceGroup},
 };
 
-pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let progress = app.resources.sync_progress;
     let feedback = app.resources.feedback.clone();

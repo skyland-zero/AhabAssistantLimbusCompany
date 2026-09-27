@@ -8,26 +8,36 @@ mod toolbox;
 
 pub(crate) use home::HomeViewRefs;
 
-use gpui::{Context, Div};
+use gpui::{Context, Div, Window};
 
 use crate::app::{AhabApp, Page};
 
-pub fn render(page: Page, app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(
+    page: Page,
+    app: &mut AhabApp,
+    window: &mut Window,
+    cx: &mut Context<AhabApp>,
+) -> Div {
     match page {
-        Page::Home => home::render(app, cx),
-        Page::Teams => teams::render(app, cx),
-        Page::ThemePacks => theme_packs::render(app, cx),
-        Page::Toolbox => toolbox::render(app, cx),
-        Page::Resources => resources::render(app, cx),
-        Page::Settings => settings::render(app, cx),
-        Page::Help => help::render(app, cx),
+        Page::Home => home::render(app, window, cx),
+        Page::Teams => teams::render(app, window, cx),
+        Page::ThemePacks => theme_packs::render(app, window, cx),
+        Page::Toolbox => toolbox::render(app, window, cx),
+        Page::Resources => resources::render(app, window, cx),
+        Page::Settings => settings::render(app, window, cx),
+        Page::Help => help::render(app, window, cx),
     }
 }
 
-pub fn render_overlay(page: Page, app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render_overlay(
+    page: Page,
+    app: &mut AhabApp,
+    window: &mut Window,
+    cx: &mut Context<AhabApp>,
+) -> Div {
     match page {
-        Page::Home => home::render_overlay(app, cx),
-        Page::Teams => teams::render_overlay(app, cx),
+        Page::Home => home::render_overlay(app, window, cx),
+        Page::Teams => teams::render_overlay(app, window, cx),
         _ => gpui::div(),
     }
 }

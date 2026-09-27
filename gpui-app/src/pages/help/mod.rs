@@ -7,7 +7,9 @@
 
 use std::process::Command;
 
-use gpui::{Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, point, prelude::*, px};
+use gpui::{
+    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, Window, div, point, prelude::*, px,
+};
 
 use crate::{
     app::{ACCENT, AhabApp, BORDER, SURFACE, TEXT, TEXT_MUTED},
@@ -27,7 +29,7 @@ use parser::{HelpBlock, InlinePart, parse_help, parse_inline};
 
 const HELP_SCROLL_ID: &str = "help-document-scroll";
 
-pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let source = String::from_utf8_lossy(assets::help(language).embedded());
     // The React page hides the document's single H1. Omitting it here also

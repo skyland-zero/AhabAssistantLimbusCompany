@@ -1,7 +1,8 @@
 use super::*;
 use crate::components::IconName;
+use gpui::Window;
 
-pub(crate) fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub(crate) fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let filter = app.teams.filter;
 

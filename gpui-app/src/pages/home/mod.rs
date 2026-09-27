@@ -48,7 +48,7 @@ use crate::{
     state::{DailyCounter, HomeSelect, HomeState, MirrorOption, TaskOptionsTab},
 };
 
-pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     app.ensure_home_views(cx);
     let busy = app.home.is_busy();
     let execution_state = app.home.execution.state;
@@ -132,7 +132,7 @@ pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
         .child(right)
 }
 
-pub fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render_overlay(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     div()
         .absolute()
         .top_0()

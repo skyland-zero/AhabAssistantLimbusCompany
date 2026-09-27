@@ -9,7 +9,8 @@ mod cards;
 use std::process::Command;
 
 use gpui::{
-    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, div, prelude::*, px, rgb as gpui_rgb,
+    Context, Div, FontWeight, KeyDownEvent, ScrollWheelEvent, Window, div, prelude::*, px,
+    rgb as gpui_rgb,
 };
 
 use crate::{
@@ -41,7 +42,7 @@ const SETTINGS_SECTIONS: [Localized; 7] = [
     text("关于", "About"),
 ];
 
-pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let theme = app.state.settings.themeMode;
     let accent = app.state.settings.accentId.clone();

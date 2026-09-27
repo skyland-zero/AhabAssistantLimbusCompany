@@ -4,7 +4,7 @@
 //! and a single independently scrolling list.
 //! The page deliberately keeps all mutations in `ThemePacksState`.
 
-use gpui::{Context, Div, KeyDownEvent, div, prelude::*, px};
+use gpui::{Context, Div, KeyDownEvent, Window, div, prelude::*, px};
 
 use crate::{
     app::{ACCENT, AhabApp, TEXT, TEXT_MUTED},
@@ -21,7 +21,7 @@ mod rows;
 
 use rows::pack_row;
 
-pub fn render(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
     let language = app.state.settings.language;
     let sort_by_weight = app.theme_packs.sort_by_weight;
     let total_weight = app.theme_packs.total_weight();

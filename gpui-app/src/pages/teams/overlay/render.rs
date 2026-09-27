@@ -1,11 +1,16 @@
 use super::*;
+use gpui::Window;
 
 use crate::components::{Tab, segmented_tab_bar};
 
 use super::preset::{preset_overwrite_overlay, preset_picker_overlay};
 use crate::components::IconName;
 
-pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Div {
+pub(crate) fn render_overlay(
+    app: &mut AhabApp,
+    _window: &mut Window,
+    cx: &mut Context<AhabApp>,
+) -> Div {
     let language = app.state.settings.language;
     let Some(editor) = app.teams.editor.as_ref() else {
         if app.teams.preset_overwrite.is_some() {
