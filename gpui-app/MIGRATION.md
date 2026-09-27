@@ -130,26 +130,52 @@ settings-select` 会拍到关闭状态的控件。
 另外 `on_ok` / `on_cancel` 拿到的是 `&mut App` 而非 `Context<AhabApp>`，
 回写状态要经 `WeakEntity::update`。
 
-### 剩余：五个内容面板
+### 已完成：一个内容面板
+
+| 提交 | 内容 | 尺寸 |
+|---|---|---|
+| `faa3de24` | 预设选择器 | 右侧 55% |
+
+### 内容面板的关键约束：**sheet builder 跑在宿主 render 内部**
+
+`Root::render_sheet_layer` 会在 `AhabApp::render` **仍在栈上时**调用 builder。
+所以 builder 里既不能 `update` 也不能 `read` 宿主：
 
 ```
-pages/home/completion_editor.rs:233   结束动作编辑器
-pages/home/stats/details.rs:125       日常统计明细
-pages/home/stats/details.rs:242       镜牢统计明细
-pages/teams/overlay/preset.rs:198     预设选择器
-pages/teams/overlay/render.rs:274     队伍编辑器
+panicked at gpui-pre/src/app/entity_map.rs:
+cannot update ahab_gpui_app::app::AhabApp while it is already being updated
 ```
 
-这些**不是确认框，而是内容面板**，所以不该照抄上面的形态：
+三个确认弹窗没撞上这个坑**纯属侥幸** —— 它们的 builder 只捕获
+`WeakEntity`，留到点击回调里才用，那时 render 早已结束。
 
-- 队伍编辑器（`render.rs:274`）和预设选择器都是带滚动内容与多标签的
-  大面板，更贴 `Sheet`（侧栏）或保持整页遮罩，用 `Dialog` 会得到一个
-  被 `margin_top = 视口/10` 推到屏幕上方、且宽度受限于 448px 的盒子。
-- 两个统计明细面板同理，是"查看器"而非"确认"。
+**解法是快照**：在打开 sheet 的地方（此时不在 render）把卡片需要的字符串
+全部解析好（`PresetPickerEntry`：已本地化的名称、已解析的罪人显示名），
+`preset_picker_body` 于是退化成「快照 + 一个 `WeakEntity`」的纯函数，
+卡片用普通闭包而非 `cx.listener`（没有 `Context<AhabApp>` 可监听）。
 
-**建议**：先看 `gpui_component::sheet` 的能力，或明确接受它们继续用内联
-遮罩（它们是页面内容，不是模态确认）。不要为了"迁完"而把它们塞进
-`Dialog`。
+**判断余下面板能否走 sheet 的依据**：内容能否用「打开那一刻的快照」表达。
+
+| 面板 | 可行？ |
+|---|---|
+| 日常统计明细 | 可以 —— 只读列表 |
+| 镜牢统计明细 | 可以 —— 只读列表 |
+| 结束动作编辑器 | 可能 —— 取决于开关是否有独立 entity |
+| 队伍编辑器 | **难** —— 内含 `InputState` 实体与标签页，快照要连实体句柄一起存 |
+
+### 副作用（顺带清理）
+
+`scroll_area_with_id` 的 `&mut AhabApp` 参数从未被读取（形参写作 `_app`）。
+builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个调用点同步更新。
+`mirror_history_body` 也被同一次改动带出未使用的 `app` 参数。
+
+### 剩余：四个内容面板
+
+```
+pages/home/stats/details.rs     日常 / 镜牢统计明细（640×520）
+pages/home/completion_editor.rs 结束动作编辑器（512）
+pages/teams/overlay/render.rs   队伍编辑器（680）
+```
 
 ### 视觉状态覆盖
 
