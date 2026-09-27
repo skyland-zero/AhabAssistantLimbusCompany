@@ -14,6 +14,15 @@ use gpui_component::spinner::Spinner;
 // Kit's `Root::open_dialog` is the migration that would replace them; it is not
 // done yet, and until it is, the inline overlays are the only implementation.
 
+// NOTE: these scroll areas are deliberately kept. GPUI already draws a native
+// scrollbar and `.scrollbar_width(...)` / `.track_scroll(...)` already style
+// and track it, so GPUI Kit's `Scrollable` would be cosmetic. It also owns its
+// `ScrollHandle` in the window's keyed state, which would take the handle away
+// from the help page - that page drives the table of contents with
+// `scroll_to_top_of_item()` and tracks the active section through
+// `top_item()`, so handing the handle to the element would be a functional
+// regression in exchange for a different scrollbar look.
+
 pub fn scroll_area(child: impl IntoElement) -> Stateful<Div> {
     scroll_area_base(
         "scroll-area",
