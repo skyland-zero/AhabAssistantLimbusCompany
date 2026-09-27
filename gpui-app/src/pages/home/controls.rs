@@ -68,45 +68,23 @@ pub(super) fn options_tabs(
     language: Language,
     cx: &mut Context<AhabApp>,
 ) -> Div {
-    let palette = current_render_palette();
-    let mut tabs = div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .p(px(2.))
-        .rounded_md()
-        .bg(palette_rgb(palette.muted));
-
-    for (tab, label) in [
-        (TaskOptionsTab::General, text("常规设置", "General")),
-        (TaskOptionsTab::Advanced, text("高级设置", "Advanced")),
-    ] {
-        let active = selected == tab;
-        let hover = palette_rgb(palette.accent_surface);
-        let foreground = palette_rgb(palette.foreground);
-        let mut control = tab_surface_with_palette(active, &palette)
-            .id(format!("home-options-{task:?}-{tab:?}"))
-            .tab_index(0)
-            .cursor_pointer()
-            .hover(move |style| style.bg(hover).text_color(foreground))
-            .child(label.get(language));
-
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.set_options_tab(task, tab);
-            cx.stop_propagation();
-            cx.notify();
-        }));
-        control =
-            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if is_activation_key(event) {
-                    window.prevent_default();
-                    view.home.set_options_tab(task, tab);
-                    cx.notify();
-                }
-            }));
-        tabs = tabs.child(control);
-    }
-    tabs
+    const ORDER: [TaskOptionsTab; 2] = [TaskOptionsTab::General, TaskOptionsTab::Advanced];
+    let index = ORDER.iter().position(|tab| *tab == selected).unwrap_or(0);
+    // One `on_click` replaces the per-tab `on_click` + `on_key_down` pair the
+    // segmented control used to hand-roll: `TabBar` routes pointer and keyboard
+    // activation through this single callback.
+    div().child(
+        segmented_tab_bar(format!("home-options-{task:?}"), index)
+            .on_click(cx.listener(move |view, index: &usize, _, cx| {
+                view.home.set_options_tab(task, ORDER[*index]);
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .children([
+                Tab::new().label(text("常规设置", "General").get(language)),
+                Tab::new().label(text("高级设置", "Advanced").get(language)),
+            ]),
+    )
 }
 
 pub(super) fn daily_counter(

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::components::{Tab, segmented_tab_bar};
+
 use super::preset::{preset_overwrite_overlay, preset_picker_overlay};
 use crate::components::IconName;
 
@@ -58,52 +60,41 @@ pub(crate) fn render_overlay(app: &mut AhabApp, cx: &mut Context<AhabApp>) -> Di
     let starlight_cost = app.teams.starlight_cost();
     let palette = current_render_palette();
 
-    let mut tabs = div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .flex_wrap()
-        .p(px(2.))
-        .rounded_md()
-        .bg(palette_rgb(palette.muted));
-    for candidate in TeamEditorTab::ALL {
-        if !candidate.is_available(team.purpose) {
-            continue;
-        }
-        let active = candidate == tab;
-        let hover = palette_rgb(palette.accent_surface);
-        let foreground = palette_rgb(palette.foreground);
-        let mut control = tab_surface_with_palette(active, &palette)
-            .id(format!("team-editor-tab-{candidate:?}"))
-            .gap_1()
-            .cursor_pointer()
-            .hover(move |style| style.bg(hover).text_color(foreground));
-        control = control.child(editor_tab_label(candidate, language));
-        if candidate == TeamEditorTab::Starlight && starlight_cost > 0 {
-            control = control.child(
-                div()
-                    .px_1()
-                    .rounded_md()
-                    .bg(palette_rgb(current_render_palette().brand_light))
-                    .text_size(px(10.))
-                    .text_color(palette_rgb(current_render_palette().brand))
-                    .child(starlight_cost.to_string()),
-            );
-        }
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
-            view.teams.set_editor_tab(candidate);
-            cx.notify();
-        }));
-        control =
-            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.teams.set_editor_tab(candidate);
+    // Only the tabs this purpose offers are shown, so the bar is built from
+    // the filtered list and the click handler maps the index back through it.
+    let available: Vec<TeamEditorTab> = TeamEditorTab::ALL
+        .into_iter()
+        .filter(|candidate| candidate.is_available(team.purpose))
+        .collect();
+    let index = available.iter().position(|c| *c == tab).unwrap_or(0);
+    let tabs: Vec<Tab> = available
+        .iter()
+        .map(|candidate| {
+            let mut element = Tab::new().label(editor_tab_label(*candidate, language));
+            if *candidate == TeamEditorTab::Starlight && starlight_cost > 0 {
+                element = element.suffix(
+                    div()
+                        .px_1()
+                        .rounded_md()
+                        .bg(palette_rgb(current_render_palette().brand_light))
+                        .text_size(px(10.))
+                        .text_color(palette_rgb(current_render_palette().brand))
+                        .child(starlight_cost.to_string()),
+                );
+            }
+            element
+        })
+        .collect();
+    let tabs = div().child(
+        segmented_tab_bar("team-editor-tabs", index)
+            .on_click(cx.listener(move |view, index: &usize, _, cx| {
+                if let Some(candidate) = available.get(*index) {
+                    view.teams.set_editor_tab(*candidate);
                     cx.notify();
                 }
-            }));
-        tabs = tabs.child(control);
-    }
+            }))
+            .children(tabs),
+    );
 
     let mut copy = div()
         .id("team-copy-json")

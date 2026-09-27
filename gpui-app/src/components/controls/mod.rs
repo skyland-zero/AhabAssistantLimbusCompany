@@ -1,7 +1,7 @@
 //! Reusable state-free controls. Pages own the model and event handlers;
 //! these modules only render the shared visual primitives.
 
-use super::style::{FONT_MD, ShapeExt};
+use super::style::ShapeExt;
 use super::*;
 
 mod inputs;
@@ -22,4 +22,4 @@ pub use slider::{normalize_slider, slider, slider_with_palette};
 #[allow(unused_imports)]
 pub use switch::{Switch, switch, switch_accent, switch_with_palette};
 #[allow(unused_imports)]
-pub use tabs::{tab_surface_with_palette, tabs, tabs_with_palette};
+pub use tabs::{Tab, TabBar, segmented_tab_bar};
