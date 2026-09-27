@@ -1,3 +1,14 @@
+//! A stateless bounded slider.
+//!
+//! GPUI Kit's `Slider` takes an `Entity<SliderState>`, so each row would need
+//! its own entity holding the value. The theme-pack page owns weights in
+//! `ThemePacksState` and can replace all of them at once ("Reset Weights"), so
+//! that entity would be a second copy of the same value that every wholesale
+//! change has to remember to re-sync - the duplicated-state pattern AGENTS.md
+//! section 4 rules out. The slider is therefore kept stateless: the page owns
+//! the value and supplies pointer, drag and keyboard updates, and the renderer
+//! only paints the current snapshot.
+
 use super::*;
 
 /// Render a bounded slider. Use [`normalize_slider`] for the model value
