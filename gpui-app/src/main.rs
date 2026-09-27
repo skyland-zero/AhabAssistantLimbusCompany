@@ -16,6 +16,8 @@ use gpui::{
     App, AppContext, Bounds, KeyBinding, TextRenderingMode, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, actions, px, size,
 };
+use gpui_component::Root;
+use gpui_component_assets::Assets as ComponentAssets;
 use gpui_platform::application;
 
 use app::AhabApp;
@@ -69,55 +71,67 @@ fn main() {
     #[cfg(target_os = "windows")]
     shell::start_tray();
 
-    application().run(|cx: &mut App| {
-        cx.set_app_identity("com.kiyi671.ahab-gpui-app", shell::NATIVE_APP_TITLE);
-        cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
-        cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-        cx.bind_keys(components::text_input::key_bindings());
+    // The component bundle supplies the Lucide SVGs GPUI Kit widgets draw.
+    // The app's own artwork stays embedded via `include_bytes!` in `assets`,
+    // so this source is additive and cannot shadow it.
+    application()
+        .with_assets(ComponentAssets)
+        .run(|cx: &mut App| {
+            cx.set_app_identity("com.kiyi671.ahab-gpui-app", shell::NATIVE_APP_TITLE);
+            cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
+            // GPUI Kit owns widget state (overlays, menus, input focus rings), so
+            // it has to be installed before the first window opens.
+            gpui_component::init(cx);
+            cx.on_action(|_: &Quit, cx| cx.quit());
+            cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+            cx.bind_keys(components::text_input::key_bindings());
 
-        let bounds = Bounds::centered(None, size(px(820.), px(680.)), cx);
-        match cx.open_window(
-            WindowOptions {
-                // `appears_transparent` hides the native Windows titlebar while
-                // retaining the platform window controls and resize frame.
-                titlebar: Some(TitlebarOptions {
-                    title: Some(shell::NATIVE_APP_TITLE.into()),
-                    appears_transparent: true,
+            let bounds = Bounds::centered(None, size(px(820.), px(680.)), cx);
+            match cx.open_window(
+                WindowOptions {
+                    // `appears_transparent` hides the native Windows titlebar while
+                    // retaining the platform window controls and resize frame.
+                    titlebar: Some(TitlebarOptions {
+                        title: Some(shell::NATIVE_APP_TITLE.into()),
+                        appears_transparent: true,
+                        ..Default::default()
+                    }),
+                    app_id: Some("com.kiyi671.ahab-gpui-app".into()),
+                    focus: true,
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_min_size: Some(size(px(800.), px(560.))),
+                    // Client-side decorations are the GPUI equivalent of a
+                    // borderless/self-drawn window on platforms that support them.
+                    window_decorations: Some(WindowDecorations::Client),
                     ..Default::default()
-                }),
-                app_id: Some("com.kiyi671.ahab-gpui-app".into()),
-                focus: true,
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(800.), px(560.))),
-                // Client-side decorations are the GPUI equivalent of a
-                // borderless/self-drawn window on platforms that support them.
-                window_decorations: Some(WindowDecorations::Client),
-                ..Default::default()
-            },
-            |window, cx| {
-                #[cfg(target_os = "windows")]
-                configure_windows_window(window);
+                },
+                |window, cx| {
+                    #[cfg(target_os = "windows")]
+                    configure_windows_window(window);
 
-                cx.new(|cx| {
-                    let mut app = AhabApp::new();
-                    app.attach_window(window, cx);
-                    app.start_event_pump(window, cx);
-                    app.start_stats_ticker(cx);
-                    cx.on_next_frame(window, |view, _window, cx| {
-                        view.start_backend_bootstrap(cx);
+                    // GPUI Kit requires `Root` to be the first view in the window:
+                    // it hosts the dialog, sheet, notification and tooltip layers.
+                    // The app keeps owning its own window content underneath.
+                    let view = cx.new(|cx| {
+                        let mut app = AhabApp::new();
+                        app.attach_window(window, cx);
+                        app.start_event_pump(window, cx);
+                        app.start_stats_ticker(cx);
+                        cx.on_next_frame(window, |view, _window, cx| {
+                            view.start_backend_bootstrap(cx);
+                        });
+                        app
                     });
-                    app
-                })
-            },
-        ) {
-            Ok(_) => {}
-            Err(error) => {
-                eprintln!("failed to open GPUI window: {error}");
-                return;
+                    cx.new(|cx| Root::new(view, window, cx))
+                },
+            ) {
+                Ok(_) => {}
+                Err(error) => {
+                    eprintln!("failed to open GPUI window: {error}");
+                    return;
+                }
             }
-        }
 
-        cx.activate(true);
-    });
+            cx.activate(true);
+        });
 }

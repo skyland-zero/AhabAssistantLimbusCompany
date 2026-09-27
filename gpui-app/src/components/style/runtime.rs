@@ -279,6 +279,12 @@ pub const RADIUS_MD: f32 = 6.0;
 pub const RADIUS_LG: f32 = 8.0;
 pub const RADIUS_XL: f32 = 12.0;
 
+/// The single UI font family for the window.
+///
+/// Named once here and shared by the app root and the GPUI Kit theme bridge so
+/// a font switch cannot leave half the widgets on a different family.
+pub const UI_FONT_FAMILY: &str = "Segoe UI";
+
 /// Convenience re-export so page code can pull a size without importing
 /// `Pixels` helpers directly.
 pub fn px_value(value: f32) -> Pixels {

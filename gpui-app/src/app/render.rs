@@ -151,6 +151,10 @@ impl Render for AhabApp {
         let current_page = self.current_page;
         let palette = self.palette_for_window(window);
         crate::components::style::set_current_render_palette(palette);
+        // Project the skin onto GPUI Kit's theme before any child renders so a
+        // skin or accent switch is visible in the very same frame. `None` for
+        // the window keeps this from asking for a re-render from inside one.
+        crate::components::style::sync_kit_theme(palette, None, cx);
         self.apply_visual_state(cx);
         self.sync_input_palettes(palette, cx);
         let page = pages::render(current_page, self, cx)
@@ -171,7 +175,7 @@ impl Render for AhabApp {
             .flex_col()
             .bg(rgb(palette.background.rgb_hex()))
             .text_color(rgb(palette.foreground.rgb_hex()))
-            .font_family("Segoe UI")
+            .font_family(crate::components::style::UI_FONT_FAMILY)
             .child(skin_background(palette))
             .child(shell::title_bar(window, current_page, self, palette, cx))
             .child(
