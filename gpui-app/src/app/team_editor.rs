@@ -1,4 +1,5 @@
-use gpui::{AppContext, ClipboardItem, Context, Window};
+use gpui::{AppContext, ClipboardItem, Context, ParentElement as _, Styled as _, Window, div};
+use gpui_component::Root;
 
 use super::AhabApp;
 use crate::{
@@ -280,6 +281,106 @@ impl AhabApp {
             self.teams.feedback = Some(error);
         }
         cx.notify();
+    }
+
+    /// Ask to delete a team and open the confirmation as a Root dialog.
+    ///
+    /// The dialog lives in GPUI Kit's `Root` layer instead of the page overlay,
+    /// which is what gives it focus trapping, Esc handling and correct stacking
+    /// above the team editor. `delete_target` is still set, because the rest of
+    /// the team state reads it to know a deletion is pending.
+    pub fn open_delete_confirmation(
+        &mut self,
+        team: TeamDetail,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let name = team.name.clone();
+        self.teams.request_delete(team);
+        let language = self.state.settings.language;
+        let app = cx.entity().downgrade();
+        Root::update(window, cx, move |root, window, cx| {
+            root.open_dialog(
+                // The builder is `Fn`, not `FnOnce`: it can run again whenever
+                // the dialog re-renders, so the captures are cloned per call
+                // rather than moved out.
+                move |dialog, _window, _cx| {
+                    let name = name.clone();
+                    let cancel_app = app.clone();
+                    let confirm_app = app.clone();
+                    // `on_ok` / `on_cancel` receive a plain `&mut App` rather than
+                    // a `Context<AhabApp>`, so the state write goes through the
+                    // weak handle; its `update` hands back the `Context<AhabApp>`
+                    // the domain methods need.
+                    dialog
+                        .title(
+                            crate::i18n::paired("确认删除队伍？", "Delete this team?")
+                                .get(language),
+                        )
+                        .content(move |content, _window, _cx| content.child(name.clone()))
+                        // `Dialog` renders no OK/Cancel buttons of its own -
+                        // `render_ok` / `render_cancel` are only wired up by
+                        // `AlertDialog` - so the action row is supplied here.
+                        .footer({
+                            let cancel = crate::i18n::paired("取消", "Cancel").get(language);
+                            let confirm = crate::i18n::paired("删除", "Delete").get(language);
+                            let cancel_app = app.clone();
+                            let confirm_app = app.clone();
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_2()
+                                .child(
+                                    crate::components::button(
+                                        "delete-dialog-cancel",
+                                        cancel,
+                                        crate::components::ButtonVariant::Ghost,
+                                    )
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = cancel_app.update(cx, |view, cx| {
+                                                view.teams.cancel_delete();
+                                                cx.notify();
+                                            });
+                                            Root::update(window, cx, |root, window, cx| {
+                                                root.close_dialog(window, cx)
+                                            });
+                                        },
+                                    ),
+                                )
+                                .child(
+                                    crate::components::button(
+                                        "delete-dialog-confirm",
+                                        confirm,
+                                        crate::components::ButtonVariant::Destructive,
+                                    )
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = confirm_app
+                                                .update(cx, |view, cx| view.confirm_delete(cx));
+                                            Root::update(window, cx, |root, window, cx| {
+                                                root.close_dialog(window, cx)
+                                            });
+                                        },
+                                    ),
+                                )
+                        })
+                        .on_cancel(move |_, _, cx| {
+                            let _ = cancel_app.update(cx, |view, cx| {
+                                view.teams.cancel_delete();
+                                cx.notify();
+                            });
+                            true
+                        })
+                        .on_ok(move |_, _, cx| {
+                            let _ = confirm_app.update(cx, |view, cx| view.confirm_delete(cx));
+                            true
+                        })
+                },
+                window,
+                cx,
+            );
+        });
     }
 
     pub fn copy_team_json(&mut self, window: &mut Window, cx: &mut Context<Self>) {

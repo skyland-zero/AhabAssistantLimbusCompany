@@ -175,8 +175,16 @@ impl AhabApp {
                 }
             }
             VisualState::TeamsDelete => {
+                // The confirmation is a Root dialog now, so setting
+                // `delete_target` alone would leave the capture showing a page
+                // with no dialog on it. The visual state has to open it too -
+                // and it has to do so *after* this frame, because pushing to
+                // Root's layer while the frame is being built does not land in
+                // the frame the caller is about to present.
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.request_delete(team);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_delete_confirmation(team, window, cx);
+                    });
                 }
             }
             VisualState::TeamsSelect => {

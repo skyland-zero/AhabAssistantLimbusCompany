@@ -19,39 +19,7 @@ pub(crate) fn render_overlay(
         if app.teams.preset_picker.is_some() {
             return preset_picker_overlay(app, cx, language);
         }
-        if app.teams.delete_target.is_none() {
-            return div();
-        }
-
-        let mut surface = div()
-            .id("team-delete-overlay")
-            .relative()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p_4()
-            .bg(rgba(0x00000080));
-        surface = surface.on_click(cx.listener(|view, _, _, cx| {
-            view.teams.cancel_delete();
-            cx.notify();
-        }));
-        surface =
-            surface.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.key.eq_ignore_ascii_case("escape") {
-                    window.prevent_default();
-                    cx.stop_propagation();
-                    view.teams.cancel_delete();
-                    cx.notify();
-                }
-            }));
-        return div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom_0()
-            .child(surface.child(delete_confirmation(app, cx, language)));
+        return div();
     };
 
     let team = editor.team.clone();
@@ -339,23 +307,6 @@ pub(crate) fn render_overlay(
         }
     }));
     surface = surface.child(dialog_body);
-
-    if app.teams.delete_target.is_some() {
-        let delete_layer = div()
-            .id("team-delete-layer")
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p_4()
-            .bg(rgba(0x00000080))
-            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
-        surface = surface.child(delete_layer.child(delete_confirmation(app, cx, language)));
-    }
 
     if app
         .teams

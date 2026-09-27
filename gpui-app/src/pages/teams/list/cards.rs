@@ -58,15 +58,13 @@ pub(super) fn team_card(
         .cursor_pointer()
         .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
         .child(icon(IconName::Trash, 16., current_render_palette().danger))
-        .on_click(cx.listener(move |view, _, _, cx| {
-            view.teams.request_delete(delete_team.clone());
-            cx.notify();
+        .on_click(cx.listener(move |view, _, window, cx| {
+            view.open_delete_confirmation(delete_team.clone(), window, cx);
         }));
     delete = delete.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
         if team_activation_key(event) {
             window.prevent_default();
-            view.teams.request_delete(delete_team_for_key.clone());
-            cx.notify();
+            view.open_delete_confirmation(delete_team_for_key.clone(), window, cx);
         }
     }));
 
