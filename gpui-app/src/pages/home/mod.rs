@@ -16,6 +16,7 @@ mod task_details;
 mod tasks;
 mod views;
 
+pub(crate) use completion_editor::AfterCompletionView;
 pub(crate) use stats::{DailyDetailsView, mirror_history_body};
 pub(crate) use views::HomeViewRefs;
 
@@ -130,22 +131,6 @@ pub fn render(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>
         .child(left_panel)
         .child(splitter)
         .child(right)
-}
-
-pub fn render_overlay(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<AhabApp>) -> Div {
-    div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
-        // The daily-stats details no longer live here: they are a `Root` sheet
-        // with an entity-backed body (`DailyDetailsView`).
-        .child(execution::after_completion_editor(
-            app,
-            cx,
-            app.home.is_busy(),
-        ))
 }
 
 #[cfg(test)]

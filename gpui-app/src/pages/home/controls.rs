@@ -1,6 +1,8 @@
 use super::*;
 use crate::components::IconName;
 
+use gpui::WeakEntity;
+
 #[allow(dead_code)]
 pub(super) fn task_header(
     state: ExecutionState,
@@ -207,16 +209,41 @@ pub(super) fn task_option_switch<F>(
 where
     F: Fn(&mut HomeState) + 'static,
 {
+    task_option_switch_for_view(_label, value, id, busy, &cx.entity().downgrade(), action)
+}
+
+/// The same switch, driven through a handle on the app instead of `cx`.
+///
+/// A `Root` dialog or sheet body is a child view: GPUI renders it outside
+/// `AhabApp`'s borrow, so it has no `Context<AhabApp>` to build a
+/// `cx.listener` from. Everything below goes through `WeakEntity::update`, which
+/// also serves the `Context` entry point above, so both share one body.
+pub(super) fn task_option_switch_for_view<F>(
+    _label: &'static str,
+    value: bool,
+    id: &'static str,
+    busy: bool,
+    root: &WeakEntity<AhabApp>,
+    action: F,
+) -> Switch
+where
+    F: Fn(&mut HomeState) + 'static,
+{
     let mut control = switch(id, value);
     if !busy {
         let action = Rc::new(action);
+        let host = root.clone();
         // GPUI Kit's switch routes pointer and keyboard activation through one
         // callback, so the hand-rolled `on_key_down` is gone.
-        control = control.on_change(cx.listener(move |view, _, _, cx| {
-            action(&mut view.home);
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        control = control.on_change(move |_, _, cx| {
+            if let Some(root) = host.upgrade() {
+                root.update(cx, |view, cx| {
+                    action(&mut view.home);
+                    cx.stop_propagation();
+                    cx.notify();
+                });
+            }
+        });
     } else {
         control = control.opacity(0.45).cursor_not_allowed();
     }
@@ -226,6 +253,22 @@ where
 pub(super) fn home_select(
     app: &AhabApp,
     cx: &mut Context<AhabApp>,
+    config: HomeSelectConfig,
+) -> Div {
+    home_select_for_view(
+        &cx.entity().downgrade(),
+        app.home.is_select_open(config.select),
+        config,
+    )
+}
+
+/// The same select for callers that only hold a handle on the app - see
+/// `task_option_switch_for_view` for why a `Root` child view needs that. `open`
+/// is `HomeState::is_select_open` for this select, passed in because the caller
+/// already read the state it renders from.
+pub(super) fn home_select_for_view(
+    root: &WeakEntity<AhabApp>,
+    open: bool,
     config: HomeSelectConfig,
 ) -> Div {
     let HomeSelectConfig {
@@ -238,7 +281,6 @@ pub(super) fn home_select(
         on_change,
     } = config;
     let (selected_label, values) = select_options_state(&options, &current);
-    let open = app.home.is_select_open(select);
     let palette = crate::components::style::current_render_palette();
     let mut trigger = select_trigger(selected_label, open, &palette)
         .id(id.clone())
@@ -247,54 +289,66 @@ pub(super) fn home_select(
     if disabled {
         trigger = trigger.opacity(0.5).cursor_not_allowed();
     } else {
-        trigger = trigger.on_click(cx.listener(move |view, _, _, cx| {
-            if open {
-                view.home.close_select();
-            } else {
-                view.home.toggle_select(select);
+        let host = root.clone();
+        trigger = trigger.on_click(move |_, _, cx| {
+            if let Some(root) = host.upgrade() {
+                root.update(cx, |view, cx| {
+                    if open {
+                        view.home.close_select();
+                    } else {
+                        view.home.toggle_select(select);
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                });
             }
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        });
         let key_change = on_change.clone();
         let key_values = values.clone();
         let key_current = current.clone();
-        trigger =
-            trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                let key = event.keystroke.key.to_ascii_lowercase();
-                if key == "escape" {
-                    window.prevent_default();
-                    view.home.close_select();
-                    cx.notify();
-                    return;
-                }
-                if matches!(key.as_str(), "enter" | "space") {
-                    window.prevent_default();
-                    view.home.toggle_select(select);
-                    cx.notify();
-                    return;
-                }
-
-                let current_index = key_values
-                    .iter()
-                    .position(|candidate| candidate == &key_current)
-                    .unwrap_or(0);
-                let next_index = select_keyboard_index(&key, current_index, key_values.len(), open);
-                if let Some(next_index) = next_index
-                    && let Some(value) = key_values.get(next_index)
-                {
-                    window.prevent_default();
-                    if matches!(key.as_str(), "down" | "arrowdown" | "up" | "arrowup") && !open {
-                        view.home.toggle_select(select);
-                    } else {
-                        key_change(&mut view.home, value.clone());
-                        if !open {
-                            view.home.close_select();
-                        }
+        let host = root.clone();
+        trigger = trigger.on_key_down(move |event: &KeyDownEvent, window, cx| {
+            if let Some(root) = host.upgrade() {
+                let window = &mut *window;
+                root.update(cx, |view, cx| {
+                    let key = event.keystroke.key.to_ascii_lowercase();
+                    if key == "escape" {
+                        window.prevent_default();
+                        view.home.close_select();
+                        cx.notify();
+                        return;
                     }
-                    cx.notify();
-                }
-            }));
+                    if matches!(key.as_str(), "enter" | "space") {
+                        window.prevent_default();
+                        view.home.toggle_select(select);
+                        cx.notify();
+                        return;
+                    }
+
+                    let current_index = key_values
+                        .iter()
+                        .position(|candidate| candidate == &key_current)
+                        .unwrap_or(0);
+                    let next_index =
+                        select_keyboard_index(&key, current_index, key_values.len(), open);
+                    if let Some(next_index) = next_index
+                        && let Some(value) = key_values.get(next_index)
+                    {
+                        window.prevent_default();
+                        if matches!(key.as_str(), "down" | "arrowdown" | "up" | "arrowup") && !open
+                        {
+                            view.home.toggle_select(select);
+                        } else {
+                            key_change(&mut view.home, value.clone());
+                            if !open {
+                                view.home.close_select();
+                            }
+                        }
+                        cx.notify();
+                    }
+                });
+            }
+        });
     }
 
     let mut option_list = div().flex().flex_col().gap_1();
@@ -303,40 +357,56 @@ pub(super) fn home_select(
         let option_id = format!("{id}-option-{value}");
         let click_change = on_change.clone();
         let click_value = value.clone();
+        let host = root.clone();
         let mut option = select_option(option_label, selected, &palette)
             .id(option_id)
-            .on_click(cx.listener(move |view, _, _, cx| {
-                click_change(&mut view.home, click_value.clone());
-                view.home.close_select();
-                cx.stop_propagation();
-                cx.notify();
-            }));
+            .on_click(move |_, _, cx| {
+                if let Some(root) = host.upgrade() {
+                    root.update(cx, |view, cx| {
+                        click_change(&mut view.home, click_value.clone());
+                        view.home.close_select();
+                        cx.stop_propagation();
+                        cx.notify();
+                    });
+                }
+            });
         let key_change = on_change.clone();
         let key_value = value;
-        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-            if is_activation_key(event) {
-                window.prevent_default();
-                key_change(&mut view.home, key_value.clone());
-                view.home.close_select();
-                cx.notify();
-            } else if event.keystroke.key.eq_ignore_ascii_case("escape") {
-                window.prevent_default();
-                view.home.close_select();
-                cx.notify();
+        let host = root.clone();
+        option = option.on_key_down(move |event: &KeyDownEvent, window, cx| {
+            if let Some(root) = host.upgrade() {
+                let window = &mut *window;
+                root.update(cx, |view, cx| {
+                    if is_activation_key(event) {
+                        window.prevent_default();
+                        key_change(&mut view.home, key_value.clone());
+                        view.home.close_select();
+                        cx.notify();
+                    } else if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                        window.prevent_default();
+                        view.home.close_select();
+                        cx.notify();
+                    }
+                });
             }
-        }));
+        });
         option_list = option_list.child(option);
     }
 
-    let mut root = div().relative().w(px(width)).child(trigger);
+    let mut wrapper = div().relative().w(px(width)).child(trigger);
     if open {
+        let host = root.clone();
         let popup = select_popup(option_list, &palette)
             .shadow_sm()
-            .on_mouse_down_out(cx.listener(move |view, _, _, cx| {
-                view.home.close_select();
-                cx.notify();
-            }));
-        root = root.child(deferred(popup).priority(10));
+            .on_mouse_down_out(move |_, _, cx| {
+                if let Some(root) = host.upgrade() {
+                    root.update(cx, |view, cx| {
+                        view.home.close_select();
+                        cx.notify();
+                    });
+                }
+            });
+        wrapper = wrapper.child(deferred(popup).priority(10));
     }
-    root
+    wrapper
 }

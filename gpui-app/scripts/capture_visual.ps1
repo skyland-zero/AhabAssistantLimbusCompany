@@ -39,6 +39,7 @@ $statePages = @{
     "home-running" = "home"
     "home-paused" = "home"
     "home-after-completion" = "home"
+    "home-after-completion-power" = "home"
     "teams-editor" = "teams"
     "teams-shop-editor" = "teams"
     "teams-combat-editor" = "teams"

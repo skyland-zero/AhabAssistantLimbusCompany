@@ -13,6 +13,7 @@ use crate::{
     },
 };
 
+mod after_completion;
 mod device;
 mod interaction;
 mod lifecycle;
@@ -242,6 +243,7 @@ enum VisualState {
     HomeRunning,
     HomePaused,
     HomeAfterCompletion,
+    HomeAfterCompletionPower,
     HomeMirrorDetails,
     HomeDailyDetails,
     TeamsEditor,
@@ -270,6 +272,7 @@ impl VisualState {
             "home-running" => Self::HomeRunning,
             "home-paused" => Self::HomePaused,
             "home-after-completion" => Self::HomeAfterCompletion,
+            "home-after-completion-power" => Self::HomeAfterCompletionPower,
             "home-mirror-details" => Self::HomeMirrorDetails,
             "home-daily-details" => Self::HomeDailyDetails,
             "teams-editor" => Self::TeamsEditor,
@@ -299,6 +302,7 @@ impl VisualState {
             | Self::HomeRunning
             | Self::HomePaused
             | Self::HomeAfterCompletion
+            | Self::HomeAfterCompletionPower
             | Self::HomeMirrorDetails
             | Self::HomeDailyDetails => Page::Home,
             Self::TeamsEditor

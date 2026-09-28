@@ -87,17 +87,15 @@ pub(super) fn execution_toolbar(
         );
     if !busy {
         after_button = after_button
-            .on_click(cx.listener(|view, _, _, cx| {
-                view.home.set_after_completion_open(true);
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.open_after_completion(window, cx);
                 cx.stop_propagation();
-                cx.notify();
             }))
             .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
                 if is_activation_key(event) {
                     window.prevent_default();
-                    view.home.set_after_completion_open(true);
+                    view.open_after_completion(window, cx);
                     cx.stop_propagation();
-                    cx.notify();
                 }
             }));
     }

@@ -1,27 +1,71 @@
 use super::*;
-use crate::components::IconName;
 
-pub(super) fn after_completion_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
-    busy: bool,
-) -> gpui::AnyElement {
-    if !app.home.after_completion_open {
-        return div().into_any_element();
+use gpui::WeakEntity;
+
+/// The after-completion editor body, rendered from a live handle on the app.
+///
+/// Same constraint as `DailyDetailsView`: a `Root` dialog's builder runs inside
+/// `AhabApp::render`, so it cannot read the app - and this editor has to show
+/// the draft changing as the switches are toggled, which a snapshot taken at
+/// open time cannot do. As a child view it is rendered after that borrow has
+/// ended, so it can read the app and repaint itself.
+pub(crate) struct AfterCompletionView {
+    root: WeakEntity<AhabApp>,
+    /// Never dropped: it is what repaints the switches once the app notifies.
+    _app_events: gpui::Subscription,
+}
+
+impl AfterCompletionView {
+    pub(crate) fn new(root: gpui::Entity<AhabApp>, cx: &mut Context<Self>) -> Self {
+        let app_events = cx.observe(&root, |_, _, cx| cx.notify());
+        Self {
+            root: root.downgrade(),
+            _app_events: app_events,
+        }
     }
-    let config = app
-        .home
-        .after_completion_draft
-        .clone()
-        .unwrap_or_else(|| app.home.tasks.afterCompletion.clone());
-    let language = app.state.settings.language;
+}
+
+impl Render for AfterCompletionView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(root) = self.root.upgrade() else {
+            return div().into_any_element();
+        };
+
+        let (config, language, busy, power_open) = {
+            let app = root.read(cx);
+            let config = app
+                .home
+                .after_completion_draft
+                .clone()
+                .unwrap_or_else(|| app.home.tasks.afterCompletion.clone());
+            (
+                config,
+                app.state.settings.language,
+                app.home.is_busy(),
+                app.home.is_select_open(HomeSelect::AfterPowerAction),
+            )
+        };
+
+        after_completion_body(&self.root, &config, language, busy, power_open).into_any_element()
+    }
+}
+
+/// The editor's fields and actions, without the dialog chrome: `Root` supplies
+/// the title, the close button and the Esc handling.
+fn after_completion_body(
+    root: &WeakEntity<AhabApp>,
+    config: &crate::model::AfterCompletionConfig,
+    language: Language,
+    busy: bool,
+    power_open: bool,
+) -> Div {
     let mut exits = div().flex().flex_col().gap_2();
     for action in [
         AfterExitAction::ExitGame,
         AfterExitAction::ExitEmulator,
         AfterExitAction::ExitAalc,
     ] {
-        let control = task_option_switch(
+        let control = task_option_switch_for_view(
             "",
             config.actions.contains(&action),
             match action {
@@ -30,7 +74,7 @@ pub(super) fn after_completion_editor(
                 AfterExitAction::ExitAalc => "after-exit-aalc",
             },
             busy,
-            cx,
+            root,
             move |home| home.toggle_after_completion_draft(action),
         );
         exits = exits.child(
@@ -50,9 +94,9 @@ pub(super) fn after_completion_editor(
         );
     }
 
-    let power = home_select(
-        app,
-        cx,
+    let power = home_select_for_view(
+        root,
+        power_open,
         HomeSelectConfig {
             select: HomeSelect::AfterPowerAction,
             current: super::completion::after_power_key(config.powerAction).to_owned(),
@@ -94,23 +138,6 @@ pub(super) fn after_completion_editor(
         },
     );
 
-    let mut close = button("after-completion-close", "", ButtonVariant::Ghost)
-        .w(px(32.))
-        .h(px(32.))
-        .px_0()
-        .child(action_icon(IconName::X, 16., TEXT_MUTED));
-    close = close.on_click(cx.listener(|view, _, _, cx| {
-        view.home.set_after_completion_open(false);
-        cx.notify();
-    }));
-    close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if is_activation_key(event) {
-            window.prevent_default();
-            view.home.set_after_completion_open(false);
-            cx.notify();
-        }
-    }));
-
     let mut apply_once = button(
         "after-completion-apply-once",
         text("仅本次生效", "Apply Once").get(language),
@@ -121,34 +148,28 @@ pub(super) fn after_completion_editor(
         text("保存为默认", "Save as Default").get(language),
         ButtonVariant::Default,
     );
-    if !busy {
-        apply_once = apply_once.on_click(cx.listener(|view, _, _, cx| {
-            view.home.apply_after_completion(false);
-            cx.notify();
-        }));
-        apply_once =
-            apply_once.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                if is_activation_key(event) {
-                    window.prevent_default();
-                    view.home.apply_after_completion(false);
-                    cx.notify();
-                }
-            }));
-        save_default = save_default.on_click(cx.listener(|view, _, _, cx| {
-            view.home.apply_after_completion(true);
-            cx.notify();
-        }));
-        save_default =
-            save_default.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                if is_activation_key(event) {
-                    window.prevent_default();
-                    view.home.apply_after_completion(true);
-                    cx.notify();
-                }
-            }));
-    } else {
+    if busy {
         apply_once = apply_once.opacity(0.45).cursor_not_allowed();
         save_default = save_default.opacity(0.45).cursor_not_allowed();
+    } else {
+        let apply_host = root.clone();
+        apply_once = apply_once.on_click(move |_, window, cx| {
+            if let Some(root) = apply_host.upgrade() {
+                let window = &mut *window;
+                root.update(cx, move |view, cx| {
+                    view.apply_after_completion(false, window, cx);
+                });
+            }
+        });
+        let save_host = root.clone();
+        save_default = save_default.on_click(move |_, window, cx| {
+            if let Some(root) = save_host.upgrade() {
+                let window = &mut *window;
+                root.update(cx, move |view, cx| {
+                    view.apply_after_completion(true, window, cx);
+                });
+            }
+        });
     }
 
     let exit_group = div()
@@ -183,67 +204,20 @@ pub(super) fn after_completion_editor(
                 .child(text("最终电源动作", "Power Action").get(language)),
         )
         .child(power);
-    let dialog = card(
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(15.))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(16.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(TEXT))
-                            .child(text("结束后操作", "After Completion Actions").get(language)),
-                    )
-                    .child(close),
-            )
-            .child(exits_section)
-            .child(power_section)
-            .child(
-                div()
-                    .flex()
-                    .justify_end()
-                    .gap_2()
-                    .pt_1()
-                    .child(apply_once)
-                    .child(save_default),
-            ),
-    )
-    .p_6()
-    .w(px(512.0))
-    .max_w_full()
-    .id("after-completion-dialog")
-    .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()));
 
-    let mut overlay = div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
+    div()
         .flex()
-        .items_center()
-        .justify_center()
-        .p_4()
-        .bg(rgba(0x00000080))
-        .id("after-completion-overlay")
-        .child(dialog)
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.home.set_after_completion_open(false);
-            cx.notify();
-        }));
-    overlay = overlay.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if event.keystroke.key.eq_ignore_ascii_case("escape") {
-            window.prevent_default();
-            cx.stop_propagation();
-            view.home.set_after_completion_open(false);
-            cx.notify();
-        }
-    }));
-    overlay.into_any_element()
+        .flex_col()
+        .gap(px(15.))
+        .child(exits_section)
+        .child(power_section)
+        .child(
+            div()
+                .flex()
+                .justify_end()
+                .gap_2()
+                .pt_1()
+                .child(apply_once)
+                .child(save_default),
+        )
 }

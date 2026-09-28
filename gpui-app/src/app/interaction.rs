@@ -8,7 +8,12 @@ impl AhabApp {
         self.home.close_select();
         self.teams.close_select();
         self.settings_page.close_select();
-        self.home.set_after_completion_open(false);
+        // The editor is a `Root` dialog now, so leaving it out of the state
+        // alone would leave it on screen over the next page. Guarded because
+        // `close_dialog` pops whatever `Root` has on top.
+        if self.home.after_completion_open {
+            self.close_after_completion(window, cx);
+        }
         self.current_page = page;
         self.reconcile_preview(Some(window), cx);
         cx.notify();

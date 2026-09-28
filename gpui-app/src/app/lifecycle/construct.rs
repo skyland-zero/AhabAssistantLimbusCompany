@@ -145,6 +145,18 @@ impl AhabApp {
                     view.open_stats_details(window, cx);
                 });
             }
+            VisualState::HomeAfterCompletionPower => {
+                // Same capture as above, plus the power-action dropdown opened.
+                // That dropdown is the one control in this dialog whose popup is
+                // `deferred(popup).priority(10)` inside a `Root` dialog body, so
+                // it is the part worth a screenshot. The select has to be opened
+                // *after* the editor: opening the editor closes any open select.
+                cx.defer_in(window, move |view, window, cx| {
+                    view.open_after_completion(window, cx);
+                    view.home.open_select = Some(crate::state::HomeSelect::AfterPowerAction);
+                    cx.notify();
+                });
+            }
             VisualState::HomeSelect => {
                 self.home
                     .expanded_tasks
@@ -159,7 +171,11 @@ impl AhabApp {
                 self.home.pause_or_resume();
             }
             VisualState::HomeAfterCompletion => {
-                self.home.set_after_completion_open(true);
+                // Deferred like the other `Root` layers: pushing onto one while
+                // the frame is being built does not land in that frame.
+                cx.defer_in(window, move |view, window, cx| {
+                    view.open_after_completion(window, cx);
+                });
             }
             VisualState::TeamsEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
