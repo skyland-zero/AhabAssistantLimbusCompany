@@ -8,7 +8,7 @@
 
 ---
 
-## 当前进度（截至 `0dfd2fe4`，26 个提交）
+## 当前进度（截至 `f1204ec8`，28 个提交）
 
 分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`。
 （旧稿写「已推送 `fork`」；这个 clone 的远端叫 `origin`，对应
@@ -24,14 +24,14 @@
 | 三个确认弹窗 → `Root` dialog | 完成（有截图）|
 | 预设选择器、镜牢明细 → `Root` sheet | 完成（有截图）|
 | 日常统计明细 → `Root` sheet（entity 视图）| 完成（有截图）|
+| 结束后操作编辑器 → `Root` dialog（entity 视图）| 完成（有截图）|
 | Select（设置页 3 处）| **阻断**，见第 1 节末尾 |
-| 结束动作编辑器 | 未迁移（无截图状态下仍是内联遮罩）|
 | 队伍编辑器 | 未迁移（含 `InputState` 实体）|
 
 ### 下次开工顺序
 
-1. 日常统计明细已经用 2.5 的 entity 视图做完，方案成立（机制已在源码里核对），
-   照它继续：**结束动作编辑器 → 队伍编辑器**。
+1. 只剩**队伍编辑器**（`pages/teams/overlay/render.rs`）：照 2.5 的 entity 视图做，
+   控件改用下面 2.6 里的 `*_for_view` 变体。它是唯一带 `InputState` 实体的面板。
 2. Select 的阻断是**取舍问题，需要你拍板**，不是技术难题。
 
 ### 每次改完的验证清单
@@ -321,21 +321,57 @@ window.open_sheet(cx, move |sheet, _, _| {
 **顺带的机会**：镜牢明细仍用快照，所以 `home-mirror-details` 只能拍空状态。
 换成 entity 视图就能拍到真实记录，把这条覆盖补上。
 
+### 2.6 已完成：结束后操作编辑器（dialog + entity 视图）
+
+| 内容 | 位置 |
+|---|---|
+| 结束后操作 | 居中 dialog，宽 512 |
+
+从「页面自己的内联遮罩」换成 `Root` dialog：居中模态的外观和原来一致，但
+关闭键、焦点捕获、Esc 都归 `Root` 了。同一批改动里 Home 已经没有任何页面级
+遮罩，`pages/home/render_overlay` 随之下线（`pages::render_overlay` 只剩 Teams 用）。
+
+**这项真正的发现不是 dialog，而是里面两个控件只吃 `Context<AhabApp>`。**
+sheet/dialog 的 body 是子视图，拿不到它，于是一个都换不上去。解法是给两个控件
+各加一个句柄版入口、共用同一份实现：
+
+- `home_select_for_view(root, open, config)` 与 `task_option_switch_for_view(...)`
+- 原入口 `home_select(app, cx, config)` 保留，内部转调 —— 17 个既有调用点**一行未改**
+- `open` 由调用方传入（视图已经从 app 读过 `is_select_open`），这两个封装于是
+  完全不再需要 `&AhabApp`
+
+内部实现把每一个 `cx.listener` 换成 `WeakEntity::update` + 普通闭包。两个陷：
+
+1. **内层闭包不能写 `move`**。外层是 `Fn`，内层若 `move` 会把
+   `key_values` / `key_current` 移出外层闭包，直接编译不过。
+2. **`&mut Window` 要先重借用**（`let window = &mut *window;`）再进内层闭包，
+   否则外层闭包就不再是 `Fn`。
+
+**这是队伍编辑器的前置条件**：它也要在子视图里用 `team_select`，照这个模式加
+一个 `_for_view` 变体即可。
+
+**已实测**：dialog 里的 power select 能展开，且弹层不被 dialog 的
+`overflow_y_scrollbar` 裁掉 —— `deferred(popup).priority(10)` 会逃出容器裁切，
+这本来就是它能用的原因。
+
+**切页要显式关 dialog**（`select_page` → `close_after_completion`）：以前遮罩
+只画在 Home 页，换页自然就消失；`Root` 的弹窗不吃这一套。用
+`after_completion_open` 做守卫，避免 `close_dialog` 弹掉别的 dialog。
+
 ### 副作用（顺带清理）
 
 `scroll_area_with_id` 的 `&mut AhabApp` 参数从未被读取（形参写作 `_app`）。
 builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个调用点同步更新。
 `mirror_history_body` 也被同一次改动带出未使用的 `app` 参数。
 
-### 剩余：两个内容面板（做法见 2.5）
+### 剩余：队伍编辑器（做法见 2.5 / 2.6）
 
 ```
-pages/home/completion_editor.rs  结束动作编辑器
 pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
 ```
 
-两者都改成 entity 视图即可，`DailyDetailsView` 可直接照抄。
-队伍编辑器的差别是 `InputState` 句柄也要一起拿（其实更容易：实体句柄本身就可以直接放进 sheet）。
+照 `AfterCompletionView` 抄：entity 视图 + `*_for_view` 控件变体。
+`InputState` 句柄本身就能直接放进 sheet，比字符串快照更容易。
 
 ### 视觉状态覆盖
 
@@ -346,19 +382,23 @@ pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
 | `teams-preset-overwrite` | 覆盖预设确认 dialog |
 | `teams-preset-picker` | 预设选择器 sheet |
 | `home-mirror-details` | 镜牢明细 sheet（**仅空状态**，见 2.5）|
-| `home-daily-details` | 每日刷本明细 sheet（**真实行**：表格里没有数据只能是 fetch 没回来）|
+| `home-daily-details` | 每日刷本明细 sheet（**真实行**）|
+| `home-after-completion` | 结束后操作 dialog |
+| `home-after-completion-power` | 同上 + 电源动作下拉展开（唯一能证明 select 在 dialog 里可用的状态）|
 
-加状态的铁律：**状态必须真的走到那条分支**。两次踩中：
+加状态的铁律：**状态必须真的走到那条分支**。踩过三次：
 
 - `teams-preset-overwrite` 第一次用了空槽位路径，`select_preset` 直接应用预设
   而不弹确认 —— 拍到一张没有弹窗的正常页面；
-- `home-mirror-details` 的轮询版本落败时，拍到一张普通主页截图。
+- `home-mirror-details` 的轮询版本落败时，拍到一张普通主页截图；
+- `home-after-completion-power` 第一次拍摄时，截图工具的激活兜底点击落在
+  对话框遮罩上，把 dialog 关掉了 —— 又一张「干净主页」。
 
-`home-daily-details` 是正面例子：它的数据是打开后才拉的，所以那几张表格行
-同时证明了「sheet 开了」和「晚到的数据进了 sheet」。
-
-两次都是**看起来通过、实际什么都没验证**。加完状态要问自己：这张图里
+三次都是**看起来通过、实际什么都没验证**。加完状态要问自己：这张图里
 有没有一个「只有走对分支才会出现」的东西？没有就再加。
+
+正面例子两个：`home-daily-details` 的表格行只能是 fetch 回来后渲染的；
+`home-after-completion-power` 的下拉只能由 `open_select` + 子视图重绘产生。
 
 另外：弹窗/侧栏都要 `cx.defer_in` 打开（渲染帧内推 Root 不生效），
 且 `Root` 的 dialog / sheet 层需要**应用自己放置**（`app/render.rs` 已接）。
@@ -408,4 +448,17 @@ pwsh -File gpui-app/scripts/capture_visual.ps1 `
 2026-09-28 的 entity 视图这一步拍到的（`artifacts/` 已被 gitignore）：
 `home-daily-details` 深浅两套主题都有三行真实数据且首行高亮，
 `home-mirror-details` 与改动前一致（仍是空状态），
-`home`（无状态）与 `home-after-completion` 作为 `render_overlay` 的回归对照，均正常。
+`home`（无状态）作为 `render_overlay` 的回归对照，均正常。
+
+**截图工具有一个会伪造成「通过」的兑底点击。** `capture_window.py` 在
+`SetForegroundWindow` 失败时会补一次合成点击（窗口左上角附近，注释说是
+「inert custom title-bar area」）。但 `Root` 的 dialog 遮罩覆盖整窗、默认点外关闭，
+这一击就会把 dialog 关掉，拍到一张干净的主页 —— 看起来通过、实际什么都没验证。
+这是 `home-after-completion-power` 第一次拍到空图的原因，也是它和
+`home-after-completion` 结果不一致的原因（只为激活失败才点击，所以不稳定）。
+
+绕开办法：不走脚本的激活路径，自己 `SetForegroundWindow` 后直接
+`pyautogui.screenshot`（本次拍 power 下拉就是这么干的，那张图里 dialog 和
+五个选项都在，且没被 dialog 的滚动容器裁掉）。要根治的话，给
+`capture_window.py` 加一个「不要兑底点击」的参数即可 —— 跳过点击会让它在
+激活失败时抛错，而不是留下一张假通过图。
