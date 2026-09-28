@@ -1,11 +1,18 @@
-use gpui::{Context, ParentElement as _, Styled as _, Window, div};
+use gpui::{AppContext, Context, ParentElement as _, Styled as _, Window, div};
 use gpui_component::WindowExt as _;
 
 use super::AhabApp;
 use crate::ipc::{RpcGateway, contract::method};
 
 impl AhabApp {
-    pub fn open_stats_details(&mut self, cx: &mut Context<Self>) {
+    /// Opens the daily-stats details as a side sheet.
+    ///
+    /// Unlike the other sheets this one starts a fetch, so its body cannot be a
+    /// snapshot: a snapshot would freeze the "loading" state forever. The body
+    /// is `DailyDetailsView` instead - a child view, which GPUI renders outside
+    /// this entity's borrow, so it can read the app and repaint when the
+    /// response lands.
+    pub fn open_stats_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.home.set_mirror_details_open(false);
         self.home.set_stats_details_open(true);
         self.home.stats_details_loading = true;
@@ -41,6 +48,44 @@ impl AhabApp {
             });
         })
         .detach();
+
+        let language = self.state.settings.language;
+        let app = cx.entity();
+        let view = cx.new(|cx| crate::pages::DailyDetailsView::new(app.clone(), cx));
+        let close_app = app.downgrade();
+        window.open_sheet(cx, move |sheet, _window, _cx| {
+            // Cloned per builder call: the builder is `Fn`, and the closure
+            // below takes ownership of what it closes over.
+            let close_app = close_app.clone();
+            sheet
+                .title(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            gpui_component::Icon::new(crate::components::IconName::CalendarCheck)
+                                .size(gpui::px(17.))
+                                .text_color(crate::components::style::palette_rgb(
+                                    crate::components::style::current_render_palette().brand,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_size(gpui::px(16.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .child(
+                                    crate::i18n::paired("每日刷本明细", "Daily Run Details")
+                                        .get(language),
+                                ),
+                        ),
+                )
+                .size(gpui::relative(0.6))
+                .on_close(move |_, _, cx| {
+                    let _ = close_app.update(cx, |view, cx| view.close_stats_details(cx));
+                })
+                .child(view.clone())
+        });
         cx.notify();
     }
 
@@ -52,10 +97,10 @@ impl AhabApp {
     /// Opens the mirror history as a side sheet.
     ///
     /// The records are snapshotted here, while the app is not being rendered:
-    /// a `Root` sheet's builder runs inside `AhabApp::render` and cannot borrow
+    /// a `Root` sheet's builder runs *inside* `AhabApp::render` and cannot borrow
     /// the app. That is only sound because this viewer's data is already
-    /// loaded - see `open_stats_details`, which has to fetch first and cannot
-    /// use the same trick without losing its loading state.
+    /// loaded - see `open_stats_details`, which has to fetch first and therefore
+    /// uses an entity-backed body instead.
     pub fn open_mirror_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.home.set_stats_details_open(false);
         self.home.set_mirror_details_open(true);

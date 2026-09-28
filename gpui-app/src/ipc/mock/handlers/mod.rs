@@ -93,9 +93,36 @@ impl MockState {
             method::STATS_GET_SUMMARY => Ok(serde_json::to_value(&self.stats).unwrap()),
             method::STATS_GET_DAILY_SUMMARY => Ok(serde_json::to_value(DailyStatsPayload {
                 schemaVersion: 1,
-                dateFrom: String::new(),
-                dateTo: String::new(),
-                days: Vec::new(),
+                dateFrom: "2026-08-29".to_owned(),
+                dateTo: "2026-08-31".to_owned(),
+                // Fixed instead of empty: this payload is only consumed by the
+                // daily-details sheet (`AhabApp::open_stats_details`), and an
+                // empty fixture makes the `home-daily-details` visual state
+                // indistinguishable from "the sheet never rendered". The dates
+                // are literals so captures stay comparable across runs.
+                days: vec![
+                    DailyStatEntry {
+                        date: "2026-08-31".to_owned(),
+                        exp: 4,
+                        thread: 3,
+                        mirror: 2,
+                        total: 9,
+                    },
+                    DailyStatEntry {
+                        date: "2026-08-30".to_owned(),
+                        exp: 6,
+                        thread: 5,
+                        mirror: 1,
+                        total: 12,
+                    },
+                    DailyStatEntry {
+                        date: "2026-08-29".to_owned(),
+                        exp: 2,
+                        thread: 2,
+                        mirror: 0,
+                        total: 4,
+                    },
+                ],
                 updatedAt: 0,
             })
             .unwrap()),

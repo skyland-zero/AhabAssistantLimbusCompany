@@ -49,10 +49,10 @@ pub(crate) fn period_summary_section(
     .text_size(px(10.))
     .child(action_icon(IconName::CalendarCheck, 11., ACCENT));
     let root_for_details = root.clone();
-    details = details.on_click(move |_, _, cx| {
+    details = details.on_click(move |_, window, cx| {
         if let Some(root) = root_for_details.upgrade() {
             root.update(cx, |view, cx| {
-                view.open_stats_details(cx);
+                view.open_stats_details(window, cx);
                 cx.stop_propagation();
             });
         }

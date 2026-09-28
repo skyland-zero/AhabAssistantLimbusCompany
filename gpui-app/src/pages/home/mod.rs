@@ -16,7 +16,7 @@ mod task_details;
 mod tasks;
 mod views;
 
-pub(crate) use stats::mirror_history_body;
+pub(crate) use stats::{DailyDetailsView, mirror_history_body};
 pub(crate) use views::HomeViewRefs;
 
 use cards::*;
@@ -139,7 +139,8 @@ pub fn render_overlay(app: &mut AhabApp, _window: &mut Window, cx: &mut Context<
         .left_0()
         .right_0()
         .bottom_0()
-        .child(stats::daily_details_overlay(app, cx))
+        // The daily-stats details no longer live here: they are a `Root` sheet
+        // with an entity-backed body (`DailyDetailsView`).
         .child(execution::after_completion_editor(
             app,
             cx,

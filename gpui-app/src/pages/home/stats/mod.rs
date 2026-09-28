@@ -25,7 +25,10 @@ mod run;
 #[allow(unused_imports)]
 pub(super) use backend::backend_status_card;
 #[allow(unused_imports)]
-pub(super) use details::{daily_details_body, daily_details_overlay, daily_table_row, daily_value};
+pub(super) use details::{daily_details_body, daily_table_row, daily_value};
+// The daily-stats sheet body is an app-layer view, like `mirror_history_body`.
+#[allow(unused_imports)]
+pub(crate) use details::DailyDetailsView;
 // The mirror viewer's body is the app layer's sheet body, so it has to reach
 // past `pages`; the rest of `details` stays page-local.
 #[allow(unused_imports)]

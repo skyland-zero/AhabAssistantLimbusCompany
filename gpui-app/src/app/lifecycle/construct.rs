@@ -136,6 +136,15 @@ impl AhabApp {
                     view.open_mirror_details(window, cx);
                 });
             }
+            VisualState::HomeDailyDetails => {
+                // Deferred for the same reason as the mirror sheet: the sheet
+                // layer is only drawn from what is on it after the frame being
+                // built. Unlike that one, this capture shows real rows - the
+                // body is an entity, so it repaints when the fetch lands.
+                cx.defer_in(window, move |view, window, cx| {
+                    view.open_stats_details(window, cx);
+                });
+            }
             VisualState::HomeSelect => {
                 self.home
                     .expanded_tasks

@@ -243,6 +243,7 @@ enum VisualState {
     HomePaused,
     HomeAfterCompletion,
     HomeMirrorDetails,
+    HomeDailyDetails,
     TeamsEditor,
     TeamsShopEditor,
     TeamsCombatEditor,
@@ -270,6 +271,7 @@ impl VisualState {
             "home-paused" => Self::HomePaused,
             "home-after-completion" => Self::HomeAfterCompletion,
             "home-mirror-details" => Self::HomeMirrorDetails,
+            "home-daily-details" => Self::HomeDailyDetails,
             "teams-editor" => Self::TeamsEditor,
             "teams-shop-editor" => Self::TeamsShopEditor,
             "teams-combat-editor" => Self::TeamsCombatEditor,
@@ -297,7 +299,8 @@ impl VisualState {
             | Self::HomeRunning
             | Self::HomePaused
             | Self::HomeAfterCompletion
-            | Self::HomeMirrorDetails => Page::Home,
+            | Self::HomeMirrorDetails
+            | Self::HomeDailyDetails => Page::Home,
             Self::TeamsEditor
             | Self::TeamsShopEditor
             | Self::TeamsCombatEditor

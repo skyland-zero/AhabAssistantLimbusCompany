@@ -1,147 +1,99 @@
 use super::*;
-use crate::components::IconName;
 
-pub(crate) fn daily_details_overlay(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
-) -> gpui::AnyElement {
-    if !app.home.stats_details_open {
-        return div().into_any_element();
-    }
+/// The daily-stats sheet body, rendered from a live handle on the app.
+///
+/// A `Root` sheet's builder runs *inside* `AhabApp::render`, so it can neither
+/// read nor update the app (that panics with "cannot update `AhabApp` while it
+/// is already being updated"). `preset_picker_body` works around that with a
+/// snapshot taken when the sheet opens, which only covers data that is already
+/// loaded.
+///
+/// This is the alternative for data that arrives later: a child view. GPUI
+/// calls its `render` while laying out the elements `AhabApp::render` returned,
+/// which is after that call released its borrow of the app - so the app can be
+/// read here, and `_app_events` repaints the body once the fetch lands.
+pub(crate) struct DailyDetailsView {
+    root: WeakEntity<AhabApp>,
+    /// Never dropped: the subscription is what brings the asynchronously
+    /// fetched rows into a sheet that is already on screen.
+    _app_events: gpui::Subscription,
+}
 
-    let language = app.state.settings.language;
-    let palette = current_render_palette();
-    let selected_date = app.home.stats_selected_date.clone();
-    let selected_entry = app
-        .home
-        .daily_stats
-        .as_ref()
-        .and_then(|data| {
-            selected_date
-                .as_deref()
-                .and_then(|date| data.days.iter().find(|day| day.date == date))
-                .or_else(|| data.days.first())
-        })
-        .cloned();
-
-    let mut close = button("stats-daily-close", "", ButtonVariant::Icon)
-        .w(px(30.0))
-        .h(px(30.0))
-        .p_0()
-        .child(action_icon(IconName::X, 15., TEXT_MUTED));
-    close = close.on_click(cx.listener(|view, _, _, cx| {
-        view.close_stats_details(cx);
-        cx.stop_propagation();
-    }));
-    close = close.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if is_activation_key(event) {
-            window.prevent_default();
-            view.close_stats_details(cx);
+impl DailyDetailsView {
+    pub(crate) fn new(root: gpui::Entity<AhabApp>, cx: &mut Context<Self>) -> Self {
+        let app_events = cx.observe(&root, |_, _, cx| cx.notify());
+        Self {
+            root: root.downgrade(),
+            _app_events: app_events,
         }
-    }));
+    }
+}
 
-    let header = div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .px(px(18.0))
-        .py(px(12.0))
-        .border_b_1()
-        .border_color(rgb(BORDER))
-        .child(
+impl Render for DailyDetailsView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(root) = self.root.upgrade() else {
+            return div().into_any_element();
+        };
+
+        // Copied out in one borrow so the rows below are built while holding
+        // nothing: `daily_details_body` needs the handle, not the app.
+        let (language, loading, error, data, selected) = {
+            let app = root.read(cx);
+            let language = app.state.settings.language;
+            let loading = app.home.stats_details_loading;
+            let error = app.home.stats_details_error.clone();
+            let data = app.home.daily_stats.clone();
+            let selected = data.as_ref().and_then(|data| {
+                app.home
+                    .stats_selected_date
+                    .as_deref()
+                    .and_then(|date| data.days.iter().find(|day| day.date == date))
+                    .or_else(|| data.days.first())
+                    .cloned()
+            });
+            (language, loading, error, data, selected)
+        };
+
+        let body = if loading {
             div()
+                .flex_1()
                 .flex()
                 .items_center()
-                .gap_2()
-                .child(action_icon(IconName::CalendarCheck, 17., ACCENT))
-                .child(
-                    div()
-                        .text_size(px(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(TEXT))
-                        .child(text("每日刷本明细", "Daily Run Details").get(language)),
-                ),
-        )
-        .child(close);
+                .justify_center()
+                .text_size(px(12.))
+                .text_color(rgb(TEXT_MUTED))
+                .child(text("正在加载每日统计…", "Loading daily statistics…").get(language))
+        } else if let Some(error) = error {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(12.))
+                .text_color(palette_rgb(current_render_palette().danger))
+                .child(error)
+        } else if let Some(data) = data {
+            daily_details_body(&self.root, &data, selected.as_ref(), language)
+        } else {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(12.))
+                .text_color(rgb(TEXT_MUTED))
+                .child(text("暂无每日统计", "No daily statistics yet").get(language))
+        };
 
-    let body = if app.home.stats_details_loading {
         div()
-            .flex_1()
             .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(12.))
-            .text_color(rgb(TEXT_MUTED))
-            .child(text("正在加载每日统计…", "Loading daily statistics…").get(language))
-    } else if let Some(error) = app.home.stats_details_error.clone() {
-        div()
+            .flex_col()
+            .w_full()
             .flex_1()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(12.))
-            .text_color(palette_rgb(palette.danger))
-            .child(error)
-    } else if let Some(data) = app.home.daily_stats.clone() {
-        daily_details_body(app, cx, &data, selected_entry.as_ref())
-    } else {
-        div()
-            .flex_1()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(12.))
-            .text_color(rgb(TEXT_MUTED))
-            .child(text("暂无每日统计", "No daily statistics yet").get(language))
-    };
-
-    let dialog = div()
-        .id("stats-daily-dialog")
-        .w(px(640.0))
-        .h(px(520.0))
-        .max_w_full()
-        .max_h(relative(0.94))
-        .min_h_0()
-        .overflow_hidden()
-        .flex()
-        .flex_col()
-        .rounded_lg()
-        .border_1()
-        .border_color(rgb(BORDER))
-        .bg(rgb(SURFACE))
-        .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
-        .child(header)
-        .child(body);
-
-    let mut surface = div()
-        .id("stats-daily-overlay")
-        .relative()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .p_4()
-        .bg(rgba(0x00000080))
-        .on_click(cx.listener(|view, _, _, cx| {
-            view.close_stats_details(cx);
-        }));
-    surface = surface.capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if event.keystroke.key.eq_ignore_ascii_case("escape") {
-            window.prevent_default();
-            cx.stop_propagation();
-            view.close_stats_details(cx);
-        }
-    }));
-
-    div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .bottom_0()
-        .child(surface.child(dialog))
-        .into_any_element()
+            .min_h_0()
+            .child(body)
+            .into_any_element()
+    }
 }
 
 pub(crate) fn mirror_history_body(
@@ -177,12 +129,11 @@ pub(crate) fn mirror_history_body(
 }
 
 pub(crate) fn daily_details_body(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
     data: &crate::model::DailyStatsPayload,
     selected: Option<&DailyStatEntry>,
+    language: Language,
 ) -> Div {
-    let language = app.state.settings.language;
     let selected = selected.cloned().unwrap_or_default();
     let summary = div()
         .flex_none()
@@ -253,11 +204,19 @@ pub(crate) fn daily_details_body(
         } else {
             row = row.hover(|style| style.bg(rgba((SURFACE_HOVER << 8) | 0x45)));
         }
-        row = row.on_click(cx.listener(move |view, _, _, cx| {
-            view.home.select_stats_date(date.clone());
-            cx.stop_propagation();
-            cx.notify();
-        }));
+        // A plain closure, not `cx.listener`: this body is built from a view
+        // that only holds a weak handle on the app.
+        let row_root = root.clone();
+        row = row.on_click(move |_, _, cx| {
+            let date = date.clone();
+            if let Some(root) = row_root.upgrade() {
+                root.update(cx, |view, cx| {
+                    view.home.select_stats_date(date);
+                    cx.stop_propagation();
+                    cx.notify();
+                });
+            }
+        });
         table = table.child(row);
     }
     let table_body: gpui::AnyElement = if data.days.is_empty() {
