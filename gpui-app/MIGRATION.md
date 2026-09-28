@@ -8,10 +8,12 @@
 
 ---
 
-## 当前进度（截至 `0a39016e`，24 个提交）
+## 当前进度（截至 `0dfd2fe4`，26 个提交）
 
-分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`，已推送 `fork`。
-工作区干净，195 测试通过，clippy / rustfmt 干净，应用可启动。
+分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`。
+（旧稿写「已推送 `fork`」；这个 clone 的远端叫 `origin`，对应
+`origin/feat/gpui-kit-migration`。）工作区干净，195 测试通过，clippy / rustfmt 干净，
+应用可启动。
 
 | 项 | 状态 |
 |---|---|
@@ -21,17 +23,16 @@
 | `window` 穿透进页面 render | 完成 |
 | 三个确认弹窗 → `Root` dialog | 完成（有截图）|
 | 预设选择器、镜牢明细 → `Root` sheet | 完成（有截图）|
+| 日常统计明细 → `Root` sheet（entity 视图）| 完成（有截图）|
 | Select（设置页 3 处）| **阻断**，见第 1 节末尾 |
-| 日常统计明细 | 未迁移（异步数据，见 2.5）|
-| 结束动作编辑器 | 未迁移 |
+| 结束动作编辑器 | 未迁移（无截图状态下仍是内联遮罩）|
 | 队伍编辑器 | 未迁移（含 `InputState` 实体）|
 
 ### 下次开工顺序
 
-1. **先验证 2.5 节的 entity 视图方案能否成立**（那是余下三个面板的共同解法，
-   一个 `app.read(cx)` 的小实验就能定生死）。
-2. 按改动量从小到大套用：日常统计明细 → 结束动作编辑器 → 队伍编辑器。
-3. Select 的阻断是**取舍问题，需要你拍板**，不是技术难题。
+1. 日常统计明细已经用 2.5 的 entity 视图做完，方案成立（机制已在源码里核对），
+   照它继续：**结束动作编辑器 → 队伍编辑器**。
+2. Select 的阻断是**取舍问题，需要你拍板**，不是技术难题。
 
 ### 每次改完的验证清单
 
@@ -42,6 +43,24 @@ cargo +nightly-2026-08-26 test                    # 195 测试
 cargo +nightly-2026-08-26 build
 AHAB_BACKEND=mock timeout 12 ./target/debug/ahab-gpui-app.exe   # exit 124 = 正常
 ```
+
+**本机环境的两个坑**（2026-09-28 实测，踩过的：）
+
+1. **cargo 直连 crates.io 会卡在 `Updating crates.io index`** —— 代理会
+   `transfer too slow` 反复重试，加 `CARGO_HTTP_TIMEOUT` 反而让它一次挂 5 分钟。
+   走 rsproxy 镜像即可（不需要改配置文件）：
+
+   ```sh
+   cargo build --config 'source.crates-io.replace-with="rsproxy"' \
+               --config 'source.rsproxy.registry="sparse+https://rsproxy.cn/index/"'
+   ```
+   注意：换 source 会让 cargo 用另一个 registry 目录，**中途切回默认源等于重新编译全部依赖**。
+2. **截图脚本缺 `pyautogui`**（`capture_window.py` 需要它，报错只是 ModuleNotFoundError）。
+   直连 PyPI 会被代理的 SSL 打断，用国内镜像装：
+
+   ```sh
+   HTTPS_PROXY= HTTP_PROXY= pip install pyautogui -i https://pypi.tuna.tsinghua.edu.cn/simple
+   ```
 
 截图验证见文末「视觉验证」节。**弹窗/侧栏类改动必须补一个 `VisualState`，
 否则无法区分「能用」与「静默不出现」。**
@@ -207,63 +226,100 @@ cannot update ahab_gpui_app::app::AhabApp while it is already being updated
   - 轮询到有数据再开：**更糟** —— 一旦轮询落败，拍到的是一张普通主页截图，
     看起来通过、实际什么都没验证；
   - 往 mock 里播一条记录：没进到 UI，已回退，不留未经验证的夹具数据。
-- **日常统计明细是同一个问题**（`open_stats_details` 自己发请求），
-  所以它**保持内联遮罩**，没有迁到 sheet。
-- **队伍编辑器含 `InputState` 实体**，快照要连实体句柄一起存，是更大的工程。
+- **日常统计明细是同一个问题**（`open_stats_details` 自己发请求），已按 2.5 迁走。
+- **队伍编辑器含 `InputState` 实体**，entity 视图也要把实体句柄一起传，是更大的工程。
 
-**正确解法不是加长 sleep，而是用 entity 支撑的视图** —— 具体做法见 2.5。
+**正确解法不是加长 sleep，而是用 entity 支撑的视图** —— 见 2.5。
 
-### 2.5 余下三个面板的解法：entity 支撑的视图
+### 2.5 entity 支撑的视图（已落地，机制已核对）
 
-快照模型的边界（见上）意味着余下三个面板必须换方案。**不是加长 sleep。**
+快照模型的边界（见上）意味着这类面板必须换方案。**不是加长 sleep。**
 
-原理：`Render` 返回的元素是在 `AhabApp::render` **返回之后**才由窗口绘制的，
-所以子视图的 `render` 不在 `AhabApp` 的借用期内，可以安全读它：
+**为什么成立**（在 `gpui-pre 0.3.6` 源码里核对，不再是推理）：
+`ViewElement::request_layout` → `request_layout_view`（`src/view.rs:422`）先调
+`let mut element = render(window, cx)`，那一步返回即释放该实体的 lease，**之后**才
+`element.request_layout(window, cx)` 递归布局子元素。子视图的 `render` 就发生在那次递归里，
+所以它跑在父级借用期之外，`app.read(cx)` 合法。
+
+对照：sheet 的 builder 由 `Root::render_sheet_layer`（`gpui-component/src/root.rs:215`）
+在 `AhabApp::render` **内部同步**调用，那时 lease 还握着，所以读写 app 必 panic。
+「builder 不能碰 app」与「子视图可以读 app」来自同一份源码的两条不同路径，
+两者已经被实测各自证实一次。
+
+样板实现：`DailyDetailsView`（`pages/home/stats/details.rs`）。
 
 ```rust
-struct DailyDetailsView {
-    app: WeakEntity<AhabApp>,
+pub(crate) struct DailyDetailsView {
+    root: WeakEntity<AhabApp>,
+    // 不能丢：订阅是「数据晚到也能进到已打开的 sheet」的唯一来源
+    _app_events: gpui::Subscription,
+}
+
+impl DailyDetailsView {
+    pub(crate) fn new(root: Entity<AhabApp>, cx: &mut Context<Self>) -> Self {
+        let app_events = cx.observe(&root, |_, _, cx| cx.notify());
+        Self { root: root.downgrade(), _app_events: app_events }
+    }
 }
 
 impl Render for DailyDetailsView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // 安全：AhabApp 的 render 已返回
-        let Some(app) = self.app.upgrade() else {
-            return div();
+        let Some(root) = self.root.upgrade() else {
+            return div().into_any_element();
         };
-        let (data, selected, language) = {
-            let app = app.read(cx);
-            (
-                app.home.daily_stats.clone(),
-                app.home.stats_selected_date.clone(),
-                app.state.settings.language,
-            )
-        };
-        crate::pages::daily_details_body(&data, selected.as_deref(), language)
+        let app = root.read(cx);   // 安全：见上面的机制
+        // …拷出所需字段，再交给纯函数 body
     }
 }
 ```
 
-打开时把视图实体放进 sheet，并**在打开处**建立监听（视图自己拿不到 `Context`）：
+打开处（`AhabApp::open_stats_details`）：
 
 ```rust
-let view = cx.new(DailyDetailsView::new);
-let observe = cx.observe(&view, |_, _, cx| cx.notify());   // 数据到达后重绘
-let close = cx.entity().downgrade();
+let app = cx.entity();
+let view = cx.new(|cx| DailyDetailsView::new(app.clone(), cx));
 window.open_sheet(cx, move |sheet, _, _| {
-    let _ = observe.clone();
+    let close_app = close_app.clone();   // builder 是 Fn，每次调用都要重新 clone
     sheet
         .title(...)
         .size(gpui::relative(0.6))
-        .on_close(move |_, _, cx| { /* close */ })
+        .on_close(move |_, _, cx| {
+            let _ = close_app.update(cx, |v, cx| v.close_stats_details(cx));
+        })
         .child(view.clone())
 });
 ```
 
-**必须先验证的一件事**：子视图 render 期间 `app.read(cx)` 确实不 panic。
-上面的推导（子视图在父视图 render 返回后才绘制）是**推理，尚未实测**。
-如果 panic，退回「轮询到有数据再开 sheet」，但那样**必须断言 sheet 真的开了**
-—— 轮询落败时会拍到一张普通主页截图，看上去通过、实际什么都没验证。
+三条要点：
+
+1. **订阅必须存在视图里**（`_app_events`）。`Context::observe` 返回的 `Subscription`
+   一 drop 就退订；暂存到局部变量会被立即丢掉，而且**不会报错** —— 只表现为
+   「sheet 一直停在加载中」。视图持有 `Entity<AhabApp>` 才能在 `new` 里订阅，
+   所以 `new` 收强句柄、内部转弱。
+2. **`WeakEntity::update` + 普通闭包**替代 `cx.listener`：子视图拿不到
+   `Context<AhabApp>`，body 里的点击写成
+   `move |_, _, cx| { if let Some(root) = row_root.upgrade() { root.update(cx, |view, cx| { … }) } }`。
+   `daily_details_body` 已改成这个形态（去掉了 `&mut AhabApp` 参数）。
+3. **观察 app 等于任意 app notify 都重绘**。当前面板小、只在打开时存在，可以接受；
+   要省的话在闭包里比较快照，只在相关字段变化时 `cx.notify()`（像 `StatsView::sync_snapshot`）。
+
+#### 实测到什么程度
+
+- **已实测**：`AHAB_VISUAL_STATE=home-daily-details` 能拍到 sheet，内容是从活的 app
+  读出来的（标题、汇总卡、表头、行都在）。子视图 render 里 `app.read(cx)` **不 panic** ——
+  2.5 的生死题答案是「成立」。
+- **已实测**：`app.read` 之外，`apply_daily_stats` 的默认选中行也生效了
+  （截图里第一行有高亮底色）。
+- **尚未实测**：数据在 sheet 打开**之后**才到的重绘。`_app_events` 就是为它存在的，
+  但截图分不出「第一帧就有数据」和「后面重绘进来的」—— mock 的 `request_async` 走
+  `ready_receiver`（`ipc/backend.rs:226`），几乎肯定在第一帧之前就绪。
+  要实测得给 mock 加延迟，或者接真实 sidecar。
+- **已改夹具**：mock 的 `stats.getDailySummary` 原本固定返回 `days: []`，
+  于是这个状态只能拍到空表——和「sheet 根本没渲染」长得一模一样。现改为三条固定日期，
+  该 payload 只有这个 sheet 消费，不会渗到别的页面。
+
+**顺带的机会**：镜牢明细仍用快照，所以 `home-mirror-details` 只能拍空状态。
+换成 entity 视图就能拍到真实记录，把这条覆盖补上。
 
 ### 副作用（顺带清理）
 
@@ -271,15 +327,15 @@ window.open_sheet(cx, move |sheet, _, _| {
 builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个调用点同步更新。
 `mirror_history_body` 也被同一次改动带出未使用的 `app` 参数。
 
-### 剩余：三个内容面板（做法见 2.5）
+### 剩余：两个内容面板（做法见 2.5）
 
 ```
-pages/home/stats/details.rs:4    日常统计明细  异步数据
 pages/home/completion_editor.rs  结束动作编辑器
 pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
 ```
 
-建议顺序：日常统计明细（能验证 2.5 的方案）→ 结束动作编辑器 → 队伍编辑器。
+两者都改成 entity 视图即可，`DailyDetailsView` 可直接照抄。
+队伍编辑器的差别是 `InputState` 句柄也要一起拿（其实更容易：实体句柄本身就可以直接放进 sheet）。
 
 ### 视觉状态覆盖
 
@@ -290,12 +346,16 @@ pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
 | `teams-preset-overwrite` | 覆盖预设确认 dialog |
 | `teams-preset-picker` | 预设选择器 sheet |
 | `home-mirror-details` | 镜牢明细 sheet（**仅空状态**，见 2.5）|
+| `home-daily-details` | 每日刷本明细 sheet（**真实行**：表格里没有数据只能是 fetch 没回来）|
 
 加状态的铁律：**状态必须真的走到那条分支**。两次踩中：
 
 - `teams-preset-overwrite` 第一次用了空槽位路径，`select_preset` 直接应用预设
   而不弹确认 —— 拍到一张没有弹窗的正常页面；
 - `home-mirror-details` 的轮询版本落败时，拍到一张普通主页截图。
+
+`home-daily-details` 是正面例子：它的数据是打开后才拉的，所以那几张表格行
+同时证明了「sheet 开了」和「晚到的数据进了 sheet」。
 
 两次都是**看起来通过、实际什么都没验证**。加完状态要问自己：这张图里
 有没有一个「只有走对分支才会出现」的东西？没有就再加。
@@ -334,3 +394,18 @@ pwsh -File gpui-app/scripts/capture_visual.ps1 `
 纯重构应当是 **0.00% 显著差异**（`thread the window` 那次就是）。
 有差异时先用颜色直方图判断是布局变化还是抗锯齿噪声 —— 直接数"非零差异
 像素"会把 ±1 的抗锯齿噪声算进去，曾让我误判过一次 15% 的"差异"。
+
+只拍一两个状态时用 `-States`（它会接管页面选择，不必再传 `-Pages`）：
+
+```powershell
+pwsh -File gpui-app/scripts/capture_visual.ps1 `
+  -Executable gpui-app/target/debug/ahab-gpui-app.exe `
+  -OutputDirectory artifacts/visual/daily-details -Sizes 900x680 `
+  -Languages zh-CN -Themes dark -Skins default `
+  -States home-daily-details,home-mirror-details
+```
+
+2026-09-28 的 entity 视图这一步拍到的（`artifacts/` 已被 gitignore）：
+`home-daily-details` 深浅两套主题都有三行真实数据且首行高亮，
+`home-mirror-details` 与改动前一致（仍是空状态），
+`home`（无状态）与 `home-after-completion` 作为 `render_overlay` 的回归对照，均正常。
