@@ -8,7 +8,7 @@
 
 ---
 
-## 当前进度（截至 `f1204ec8`，28 个提交）
+## 当前进度（截至 `6db4e6d9`，30 个提交）
 
 分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`。
 （旧稿写「已推送 `fork`」；这个 clone 的远端叫 `origin`，对应
@@ -25,14 +25,17 @@
 | 预设选择器、镜牢明细 → `Root` sheet | 完成（有截图）|
 | 日常统计明细 → `Root` sheet（entity 视图）| 完成（有截图）|
 | 结束后操作编辑器 → `Root` dialog（entity 视图）| 完成（有截图）|
+| 队伍编辑器 → `Root` dialog（entity 视图）| 完成（有截图）|
 | Select（设置页 3 处）| **阻断**，见第 1 节末尾 |
-| 队伍编辑器 | 未迁移（含 `InputState` 实体）|
+
+页面自己画的遮罩已经一个不剩（`pages::render_overlay` 已删除）。
 
 ### 下次开工顺序
 
-1. 只剩**队伍编辑器**（`pages/teams/overlay/render.rs`）：照 2.5 的 entity 视图做，
-   控件改用下面 2.6 里的 `*_for_view` 变体。它是唯一带 `InputState` 实体的面板。
-2. Select 的阻断是**取舍问题，需要你拍板**，不是技术难题。
+1. **只剩 Select 一项需要你拍板**（三个选项在第 1 节末尾）。
+2. 两个可选收尾（都不阻塞）：把镜牢明细也换成 entity 视图，以补上
+   `home-mirror-details` 只能拍空状态的缺口；以及给截图工具加一个
+   「不要兜底点击」的开关（见「视觉验证」末）。
 
 ### 每次改完的验证清单
 
@@ -358,20 +361,68 @@ sheet/dialog 的 body 是子视图，拿不到它，于是一个都换不上去�
 只画在 Home 页，换页自然就消失；`Root` 的弹窗不吃这一套。用
 `after_completion_open` 做守卫，避免 `close_dialog` 弹掉别的 dialog。
 
+### 2.7 已完成：队伍编辑器（dialog + entity 视图，35 处控件改造）
+
+| 内容 | 位置 |
+|---|---|
+| 队伍编辑器（5 个标签页）| 居中 dialog，宽 680，正文高度固定 520 |
+
+这是最大的一块：编辑器本身 300 行，但它带着 5 个标签页的整套表单
+（`editors/*` 共 29 个 `cx.listener`，加 `teams/mod.rs` 里的 `team_select` / `mirror_switch`），
+它们全部只吃 `Context<AhabApp>`。
+
+**解法是把 2.6 的手工改造提炼成一个通用桥：**
+`components/bridge.rs::app_listener`：
+
+```rust
+pub fn app_listener<E, F>(root: &WeakEntity<AhabApp>, handler: F)
+    -> impl Fn(&E, &mut Window, &mut App) + 'static
+where F: Fn(&mut AhabApp, &E, &mut Window, &mut Context<AhabApp>) + 'static;
+```
+
+`cx.listener(handler)` 与 `app_listener(root, handler)` 的**闭包体完全一样**，
+所以 35 处改造是纯机械的（`cx.listener(` → `app_listener(root, ` + 把 `root` 往下传）。
+两个坑已在 helper 里处理掉，调用方不用知道：`&mut Window` 的重借用，
+以及 handler 必须按共享引用调用（否则外层闭包不再是 `Fn`）。
+
+**新的两个设计点：**
+
+1. **body 自己把 dialog 关掉。** 保存成功后是异步完成路径调的
+   `apply_saved_team`，那里**没有 window**，无法调 `Root::close_dialog`。
+   所以 `TeamEditorView` 发现 `teams.editor` 为 `None` 时就
+   `cx.defer_in(window, ...)` 请求一关，下一帧执行（那时不在 `Root` 的布局期间）。
+2. **`TeamsState::editor_dialog_open` 是幂等开关。** `close_dialog` 弹的是**栈顶**，
+   不是「我这个 dialog」，而 dialog 会从两个方向被关（`Root` 自己，以及上面的 body）。
+   没有这个标志，`on_close` 之后 body 还会再请求关一次，就把**下面那个** dialog 弹掉。
+
+**视觉状态有顺序要求**：`teams-stats-clear` 要「编辑器在下、确认在上」，
+两个 dialog 必须在**同一次** deferred 回调里按序 push
+（先 `open_existing_team` + 设 tab，再 `open_clear_stats_confirmation`）。
+分开 defer 顺序就不确定了。
+
+**正文高度写死 520。** dialog 高度是内容撑的，不写死会随标签页高低跳。
+
+**顺带清掉最后一处遗留**：`pages::render_overlay` 连同 Home/Teams 的页面遮罩
+一起删除，`app/render.rs` 里那一行也去掉了。至此页面不再自画任何遮罩。
+
 ### 副作用（顺带清理）
 
 `scroll_area_with_id` 的 `&mut AhabApp` 参数从未被读取（形参写作 `_app`）。
 builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个调用点同步更新。
 `mirror_history_body` 也被同一次改动带出未使用的 `app` 参数。
 
-### 剩余：队伍编辑器（做法见 2.5 / 2.6）
+### 剩余：无（只差 Select 的取舍）
 
 ```
-pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
+无待迁移面板。页面遮罩已全部移除。
 ```
 
-照 `AfterCompletionView` 抄：entity 视图 + `*_for_view` 控件变体。
-`InputState` 句柄本身就能直接放进 sheet，比字符串快照更容易。
+可以做的收尾：
+
+1. 镜牢明细换成 entity 视图（每前用的是快照，所以 `home-mirror-details`
+   只能拍空状态）；`TeamEditorView` 是最好的模板 —— 它是唯一一个
+   渲染完整活表单（含 `InputState` 实体）的 body。
+2. 截图工具的两个假通过问题（兜底点击、拍到别的窗口），见文末。
 
 ### 视觉状态覆盖
 
@@ -385,6 +436,9 @@ pages/teams/overlay/render.rs    队伍编辑器    含 InputState 实体
 | `home-daily-details` | 每日刷本明细 sheet（**真实行**）|
 | `home-after-completion` | 结束后操作 dialog |
 | `home-after-completion-power` | 同上 + 电源动作下拉展开（唯一能证明 select 在 dialog 里可用的状态）|
+| `teams-editor` / `teams-shop-editor` / `teams-combat-editor` / `teams-starlight-editor` / `teams-advanced-editor` | 队伍编辑器的 5 个标签页（dialog + 完整活表单）|
+| `teams-stats-clear` | 编辑器 + **叠在它上面的**清空确认（两个 dialog 的堆叠顺序）|
+| `teams-delete` / `teams-preset-overwrite` | 列表页的确认 dialog（编辑器改造后仍需保留的回归对照）|
 
 加状态的铁律：**状态必须真的走到那条分支**。踩过三次：
 
@@ -449,16 +503,20 @@ pwsh -File gpui-app/scripts/capture_visual.ps1 `
 `home-daily-details` 深浅两套主题都有三行真实数据且首行高亮，
 `home-mirror-details` 与改动前一致（仍是空状态），
 `home`（无状态）作为 `render_overlay` 的回归对照，均正常。
+队伍编辑器那一步的 12 张在 `artifacts/visual/team-editor-dialog/`。
 
-**截图工具有一个会伪造成「通过」的兑底点击。** `capture_window.py` 在
-`SetForegroundWindow` 失败时会补一次合成点击（窗口左上角附近，注释说是
-「inert custom title-bar area」）。但 `Root` 的 dialog 遮罩覆盖整窗、默认点外关闭，
-这一击就会把 dialog 关掉，拍到一张干净的主页 —— 看起来通过、实际什么都没验证。
-这是 `home-after-completion-power` 第一次拍到空图的原因，也是它和
-`home-after-completion` 结果不一致的原因（只为激活失败才点击，所以不稳定）。
+**截图工具有三种会误导人的失败模式**（2026-09-28 全部遇到过，下单前先看图）：
 
-绕开办法：不走脚本的激活路径，自己 `SetForegroundWindow` 后直接
-`pyautogui.screenshot`（本次拍 power 下拉就是这么干的，那张图里 dialog 和
-五个选项都在，且没被 dialog 的滚动容器裁掉）。要根治的话，给
-`capture_window.py` 加一个「不要兑底点击」的参数即可 —— 跳过点击会让它在
-激活失败时抛错，而不是留下一张假通过图。
+| 现象 | 看起来像 | 原因 |
+|---|---|---|
+| 拍到**干净主页** | 通过 | `capture_window.py` 在 `SetForegroundWindow` 失败时会补一次合成点击（窗口左上角附近）。`Root` 的 dialog 遮罩覆盖整窗、默认点外关闭，这一击就把 dialog 关掉了 |
+| 拍到**另一个应用** | 通过（图像很"丰富"，更难认）| 脚本截的是**屏幕上一块区域**。自己的窗口被别的窗口盖住时（本次是微信），截到的就是那个窗口，**而脚本照样打印 captured、退出码 0** |
+| `TimeoutError` /「capture failed」| 代码坏了 | 窗口没起来，或 30s 内没能找到并激活。本次是临时脚本给 `APPDATA` 传了 MSYS 风格路径 `/tmp/...`，应用起不到主窗口 —— 与代码无关，但当时看着很像崩溃 |
+
+前两种就是 `home-after-completion-power` 第一张空图、以及随后一整批图全是别的
+窗口的原因。判据仍是那条：**图里有没有一个「只有走对分支才会出现」的东西。**
+
+本次因此改用一份临时脚本（在 `/tmp`，未入库）：`SetWindowPos(HWND_TOPMOST)`
+拉置顶（拍完还原）+ 不点击 + 直接 `pyautogui.screenshot`，逐张目视核对内容。
+要入库的话，给 `capture_window.py` 加两个参数就是正解：「不兜底点击」与
+「拍前拉置顶」—— 跳过点击会让激活失败变成抛错，而不是留下一张假通过图。
