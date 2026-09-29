@@ -168,6 +168,14 @@ pub struct TeamsState {
     pub presets: Vec<TeamPreset>,
     pub filter: TeamFilter,
     pub editor: Option<TeamEditorState>,
+    /// True while the editor's `Root` dialog is on screen.
+    ///
+    /// The dialog is taken down from two directions: `Root` itself (the X, Esc,
+    /// or the overlay) and the editor body, which notices that a save landed and
+    /// cleared `editor`. The body needs this flag to stay idempotent - once
+    /// `Root` has closed the dialog, asking it to close again would pop whatever
+    /// dialog is beneath.
+    pub editor_dialog_open: bool,
     pub delete_target: Option<TeamDetail>,
     pub preset_picker: Option<TeamPresetPickerState>,
     pub preset_overwrite: Option<TeamPresetOverwriteState>,

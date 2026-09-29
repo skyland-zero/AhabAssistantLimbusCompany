@@ -1,9 +1,11 @@
 use super::*;
 use crate::components::IconName;
 
+use gpui::WeakEntity;
+
 pub(crate) fn starlight_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
@@ -15,8 +17,8 @@ pub(crate) fn starlight_editor(
             .child(control_row(
                 text("使用开局星光", "Use Starting Starlight").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::UseStarlight,
                     config.use_starlight,
                     "starlight-enabled",
@@ -45,17 +47,20 @@ pub(crate) fn starlight_editor(
         .px_2()
         .py_0();
         control = control
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(app_listener(root, move |view, _, _, cx| {
                 view.teams.set_all_starlight(level);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.teams.set_all_starlight(level);
-                    cx.notify();
-                }
-            }));
+            .on_key_down(app_listener(
+                root,
+                move |view, event: &KeyDownEvent, window, cx| {
+                    if team_activation_key(event) {
+                        window.prevent_default();
+                        view.teams.set_all_starlight(level);
+                        cx.notify();
+                    }
+                },
+            ));
         quick = quick.child(control);
     }
 
@@ -113,17 +118,20 @@ pub(crate) fn starlight_editor(
             .px_2()
             .py_0();
             control = control
-                .on_click(cx.listener(move |view, _, _, cx| {
+                .on_click(app_listener(root, move |view, _, _, cx| {
                     view.teams.set_starlight_level(index, candidate);
                     cx.notify();
                 }))
-                .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                    if team_activation_key(event) {
-                        window.prevent_default();
-                        view.teams.set_starlight_level(index, candidate);
-                        cx.notify();
-                    }
-                }));
+                .on_key_down(app_listener(
+                    root,
+                    move |view, event: &KeyDownEvent, window, cx| {
+                        if team_activation_key(event) {
+                            window.prevent_default();
+                            view.teams.set_starlight_level(index, candidate);
+                            cx.notify();
+                        }
+                    },
+                ));
             levels = levels.child(control);
         }
         let cost = div()

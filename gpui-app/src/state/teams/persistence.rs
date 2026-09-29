@@ -26,6 +26,7 @@ impl TeamsState {
             presets: Vec::new(),
             filter: TeamFilter::All,
             editor: None,
+            editor_dialog_open: false,
             delete_target: None,
             preset_picker: None,
             preset_overwrite: None,

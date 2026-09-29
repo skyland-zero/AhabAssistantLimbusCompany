@@ -1,8 +1,10 @@
 use super::*;
 
+use gpui::WeakEntity;
+
 fn strategy_select(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     select: TeamSelect,
     current: u8,
     options: Vec<(String, String)>,
@@ -10,8 +12,8 @@ fn strategy_select(
     field: MirrorU8,
 ) -> Div {
     team_select(
+        root,
         app,
-        cx,
         TeamSelectConfig {
             select,
             current: current.to_string(),
@@ -28,8 +30,8 @@ fn strategy_select(
 }
 
 pub(crate) fn strategy_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
@@ -71,8 +73,8 @@ pub(crate) fn strategy_editor(
             .child(control_row(
                 text("奖励卡优先度", "Reward Card Priority").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::RewardCards,
                     config.reward_cards,
                     "shop-reward-cards",
@@ -80,8 +82,8 @@ pub(crate) fn strategy_editor(
             ))
             .child(if config.reward_cards {
                 strategy_select(
+                    root,
                     app,
-                    cx,
                     TeamSelect::RewardCards,
                     config.reward_cards_select,
                     reward_options,
@@ -102,8 +104,8 @@ pub(crate) fn strategy_editor(
             .child(control_row(
                 text("自定义购物策略", "Custom Shopping Strategy").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::ShoppingStrategy,
                     config.shopping_strategy,
                     "shop-custom-shopping-strategy",
@@ -111,8 +113,8 @@ pub(crate) fn strategy_editor(
             ))
             .child(if config.shopping_strategy {
                 strategy_select(
+                    root,
                     app,
-                    cx,
                     TeamSelect::ShoppingStrategy,
                     config.shopping_strategy_select,
                     shopping_options,
@@ -133,8 +135,8 @@ pub(crate) fn strategy_editor(
             .child(control_row(
                 text("自选开局饰品", "Custom Starting Gifts").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::OpeningItems,
                     config.opening_items,
                     "shop-opening-items",
@@ -145,8 +147,8 @@ pub(crate) fn strategy_editor(
                     control_row(
                         text("饰品体系", "Gift System").get(language),
                         strategy_select(
+                            root,
                             app,
-                            cx,
                             TeamSelect::OpeningItemsSystem,
                             config.opening_items_system,
                             opening_system_options,
@@ -157,8 +159,8 @@ pub(crate) fn strategy_editor(
                     control_row(
                         text("选择顺序", "Selection Order").get(language),
                         strategy_select(
+                            root,
                             app,
-                            cx,
                             TeamSelect::OpeningItemsOrder,
                             config.opening_items_select,
                             opening_order_options,

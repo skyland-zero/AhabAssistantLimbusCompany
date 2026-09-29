@@ -9,6 +9,7 @@
 
 pub mod action_button;
 pub mod base;
+pub mod bridge;
 pub mod chrome;
 pub mod controls;
 pub mod icon;
@@ -20,6 +21,7 @@ pub mod text_input;
 
 pub use action_button::action_button;
 pub use base::*;
+pub use bridge::app_listener;
 pub use chrome::*;
 pub use controls::*;
 pub use icon::{Icon, IconName, icon_at, svg_icon, svg_icon_colored};

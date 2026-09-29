@@ -170,7 +170,9 @@ impl Render for AhabApp {
                     .overflow_hidden()
                     .child(page),
             )
-            .child(pages::render_overlay(current_page, self, window, cx))
+            // No page overlay is left: what the pages used to draw on top of
+            // themselves (daily details, after-completion, the team editor) are
+            // `Root` layers now, placed below.
             // `Root` hosts the dialog layer but does not render it: its own
             // `Render` only draws the text-selection, tooltip and menu layers,
             // and the dialog/sheet/notification layers are public methods the

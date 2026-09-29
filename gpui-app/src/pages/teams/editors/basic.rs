@@ -1,8 +1,10 @@
 use super::*;
 
+use gpui::WeakEntity;
+
 pub(crate) fn basic_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     team: &TeamDetail,
     config: &TeamMirrorConfig,
     language: Language,
@@ -24,8 +26,8 @@ pub(crate) fn basic_editor(
     };
 
     let purpose = team_select(
+        root,
         app,
-        cx,
         TeamSelectConfig {
             select: TeamSelect::Purpose,
             current: purpose_key(team.purpose).to_owned(),
@@ -66,19 +68,22 @@ pub(crate) fn basic_editor(
         let system_name = (*name).to_owned();
         let system_name_for_key = system_name.clone();
         control = control
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(app_listener(root, move |view, _, _, cx| {
                 view.teams
                     .set_editor_scheme(system_name.clone(), index as u8);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.teams
-                        .set_editor_scheme(system_name_for_key.clone(), index as u8);
-                    cx.notify();
-                }
-            }));
+            .on_key_down(app_listener(
+                root,
+                move |view, event: &KeyDownEvent, window, cx| {
+                    if team_activation_key(event) {
+                        window.prevent_default();
+                        view.teams
+                            .set_editor_scheme(system_name_for_key.clone(), index as u8);
+                        cx.notify();
+                    }
+                },
+            ));
         systems = systems.child(control);
     }
     let systems_field = if is_luxcavation {
@@ -145,18 +150,20 @@ pub(crate) fn basic_editor(
             }))
             .cursor_pointer()
             .focus_visible(|style| style.border_color(palette_rgb(current_render_palette().ring)))
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(app_listener(root, move |view, _, _, cx| {
                 view.teams.toggle_sinner(&id);
                 cx.notify();
             }));
-        control =
-            control.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+        control = control.on_key_down(app_listener(
+            root,
+            move |view, event: &KeyDownEvent, window, cx| {
                 if team_activation_key(event) {
                     window.prevent_default();
                     view.teams.toggle_sinner(&key_id);
                     cx.notify();
                 }
-            }));
+            },
+        ));
         control = control.child(
             div()
                 .relative()
@@ -206,21 +213,21 @@ pub(crate) fn basic_editor(
     };
 
     let team_code_switch = mirror_switch(
+        root,
         app,
-        cx,
         MirrorBool::UseTeamCode,
         config.use_team_code,
         "basic-use-team-code",
     );
     let fixed_switch = mirror_switch(
+        root,
         app,
-        cx,
         MirrorBool::FixedTeamUse,
         config.fixed_team_use,
         "basic-fixed-team",
     );
     let enabled_switch =
-        switch("team-enabled", team.enabled).on_change(cx.listener(|view, _, _, cx| {
+        switch("team-enabled", team.enabled).on_change(app_listener(root, |view, _, _, cx| {
             let enabled = view
                 .teams
                 .editor
@@ -236,7 +243,7 @@ pub(crate) fn basic_editor(
         text("清空人格", "Clear Sinners").get(language),
         ButtonVariant::Ghost,
     );
-    clear_sinners = clear_sinners.on_click(cx.listener(|view, _, _, cx| {
+    clear_sinners = clear_sinners.on_click(app_listener(root, |view, _, _, cx| {
         view.teams.clear_sinners();
         cx.notify();
     }));
@@ -273,8 +280,8 @@ pub(crate) fn basic_editor(
             ))
             .child(if config.fixed_team_use {
                 team_select(
+                    root,
                     app,
-                    cx,
                     TeamSelectConfig {
                         select: TeamSelect::FixedTeamUse,
                         current: config.fixed_team_use_select.to_string(),

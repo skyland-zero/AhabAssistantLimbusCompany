@@ -30,18 +30,4 @@ pub fn render(
 }
 
 pub(crate) use home::{AfterCompletionView, DailyDetailsView, mirror_history_body};
-pub(crate) use teams::{PresetPickerEntry, preset_picker_body};
-
-pub fn render_overlay(
-    page: Page,
-    app: &mut AhabApp,
-    window: &mut Window,
-    cx: &mut Context<AhabApp>,
-) -> Div {
-    match page {
-        // Home has no page overlay left: the daily details and the
-        // after-completion editor are both `Root` layers now.
-        Page::Teams => teams::render_overlay(app, window, cx),
-        _ => gpui::div(),
-    }
-}
+pub(crate) use teams::{PresetPickerEntry, TeamEditorView, preset_picker_body};

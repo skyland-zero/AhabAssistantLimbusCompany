@@ -178,40 +178,51 @@ impl AhabApp {
                 });
             }
             VisualState::TeamsEditor => {
+                // The editor is a `Root` dialog now, so this has to push it the
+                // way the confirmations below do: from after this frame.
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(window, cx);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_existing_team(&team, window, cx);
+                    });
                 }
             }
             VisualState::TeamsShopEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(window, cx);
-                    self.teams.set_editor_tab(crate::state::TeamEditorTab::Shop);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_existing_team(&team, window, cx);
+                        view.teams.set_editor_tab(crate::state::TeamEditorTab::Shop);
+                        cx.notify();
+                    });
                 }
             }
             VisualState::TeamsCombatEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(window, cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Combat);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_existing_team(&team, window, cx);
+                        view.teams
+                            .set_editor_tab(crate::state::TeamEditorTab::Combat);
+                        cx.notify();
+                    });
                 }
             }
             VisualState::TeamsStarlightEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(window, cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Starlight);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_existing_team(&team, window, cx);
+                        view.teams
+                            .set_editor_tab(crate::state::TeamEditorTab::Starlight);
+                        cx.notify();
+                    });
                 }
             }
             VisualState::TeamsAdvancedEditor => {
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(window, cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Advanced);
+                    cx.defer_in(window, move |view, window, cx| {
+                        view.open_existing_team(&team, window, cx);
+                        view.teams
+                            .set_editor_tab(crate::state::TeamEditorTab::Advanced);
+                        cx.notify();
+                    });
                 }
             }
             VisualState::TeamsDelete => {
@@ -228,15 +239,14 @@ impl AhabApp {
                 }
             }
             VisualState::TeamsStatsClear => {
-                // Needs the editor open on the stats tab, then the same deferred
-                // open the delete state uses: pushing a Root dialog while the
-                // frame is being built does not land in that frame.
+                // Needs the editor open on the stats tab *and* the confirmation
+                // on top of it. Both go onto `Root`'s dialog stack in this turn,
+                // in that order, so the confirmation is the top one.
                 if let Some(team) = self.teams.teams.first().cloned() {
-                    self.teams.open_edit(&team);
-                    self.create_team_inputs(window, cx);
-                    self.teams
-                        .set_editor_tab(crate::state::TeamEditorTab::Starlight);
                     cx.defer_in(window, move |view, window, cx| {
+                        view.open_existing_team(&team, window, cx);
+                        view.teams
+                            .set_editor_tab(crate::state::TeamEditorTab::Starlight);
                         view.open_clear_stats_confirmation(window, cx);
                     });
                 }

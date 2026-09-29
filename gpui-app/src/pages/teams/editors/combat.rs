@@ -1,8 +1,10 @@
 use super::*;
 
+use gpui::WeakEntity;
+
 pub(crate) fn combat_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
@@ -11,8 +13,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("第二体系", "Secondary System").get(language),
                 team_select(
+                    root,
                     app,
-                    cx,
                     TeamSelectConfig {
                         select: TeamSelect::SecondSystem,
                         current: config.second_system_select.to_string(),
@@ -36,8 +38,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("起始楼层", "Start Floor").get(language),
                 team_select(
+                    root,
                     app,
-                    cx,
                     TeamSelectConfig {
                         select: TeamSelect::SecondSystemFloor,
                         current: config.second_system_setting.to_string(),
@@ -62,8 +64,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("四级合成", "Fuse Tier 4").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::SecondSystemFuseIv,
                     config.second_system_fuse_IV,
                     "combat-fuse-iv",
@@ -72,8 +74,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("购买饰品", "Buy Gifts").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::SecondSystemBuy,
                     config.second_system_buy,
                     "combat-buy",
@@ -82,8 +84,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("选择奖励", "Select Rewards").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::SecondSystemSelectReward,
                     config.second_system_select_reward,
                     "combat-reward",
@@ -92,8 +94,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("升级饰品", "Upgrade Gifts").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::SecondSystemPowerUp,
                     config.second_system_power_up,
                     "combat-power-up",
@@ -118,8 +120,8 @@ pub(crate) fn combat_editor(
             .child(control_row(
                 text("启用第二体系", "Enable Second System").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::SecondSystem,
                     config.second_system,
                     "combat-second-system",
@@ -132,8 +134,8 @@ pub(crate) fn combat_editor(
         control_row(
             text("避免三技能", "Avoid Skill 3").get(language),
             mirror_switch(
+                root,
                 app,
-                cx,
                 MirrorBool::AvoidSkill3,
                 config.avoid_skill_3,
                 "combat-avoid-skill-3",
@@ -142,8 +144,8 @@ pub(crate) fn combat_editor(
         control_row(
             text("优先三技能", "Prioritize Skill 3").get(language),
             mirror_switch(
+                root,
                 app,
-                cx,
                 MirrorBool::PrioritizeSkill3,
                 config.prioritize_skill_3,
                 "combat-prioritize-skill-3",
@@ -152,8 +154,8 @@ pub(crate) fn combat_editor(
         control_row(
             text("每层重新编队", "Re-form Team Each Floor").get(language),
             mirror_switch(
+                root,
                 app,
-                cx,
                 MirrorBool::ReformationEachFloor,
                 config.re_formation_each_floor,
                 "combat-reformation",
@@ -162,8 +164,8 @@ pub(crate) fn combat_editor(
         control_row(
             text("启用伤害P", "Use Damage P").get(language),
             mirror_switch(
+                root,
                 app,
-                cx,
                 MirrorBool::UseDamageP,
                 config.use_damage_p,
                 "combat-damage-p",
@@ -185,8 +187,8 @@ pub(crate) fn combat_editor(
         control_row(
             text("首回合防御", "Defend in Round 1").get(language),
             mirror_switch(
+                root,
                 app,
-                cx,
                 MirrorBool::DefenseFirstRound,
                 config.defense_first_round,
                 "combat-defense-first",
@@ -195,8 +197,8 @@ pub(crate) fn combat_editor(
         control_row(
             text("良秀单通防御", "Solo Ryoshu Defense").get(language),
             mirror_switch(
+                root,
                 app,
-                cx,
                 MirrorBool::DefenseForSolo,
                 config.defense_for_solo,
                 "combat-defense-solo",
@@ -207,8 +209,8 @@ pub(crate) fn combat_editor(
         defense_items.push(control_row(
             text("防御回合", "Defense Turns").get(language),
             team_select(
+                root,
                 app,
-                cx,
                 TeamSelectConfig {
                     select: TeamSelect::DefenseTurns,
                     current: config.defense_for_solo_turns.to_string(),
@@ -246,8 +248,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("替换目标", "Replacement Target").get(language),
                 team_select(
+                    root,
                     app,
-                    cx,
                     TeamSelectConfig {
                         select: TeamSelect::SkillReplacementSelect,
                         current: config.skill_replacement_select.to_string(),
@@ -272,8 +274,8 @@ pub(crate) fn combat_editor(
             control_row(
                 text("替换模式", "Replacement Mode").get(language),
                 team_select(
+                    root,
                     app,
-                    cx,
                     TeamSelectConfig {
                         select: TeamSelect::SkillReplacementMode,
                         current: config.skill_replacement_mode.to_string(),
@@ -307,8 +309,8 @@ pub(crate) fn combat_editor(
             .child(control_row(
                 text("启用技能替换", "Enable Skill Replacement").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::SkillReplacement,
                     config.skill_replacement,
                     "combat-skill-replacement",

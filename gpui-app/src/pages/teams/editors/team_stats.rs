@@ -2,6 +2,8 @@ use super::*;
 
 use crate::model::{TeamStats, TeamStatsBucket};
 
+use gpui::WeakEntity;
+
 fn duration_label(seconds: f64, language: Language) -> String {
     if seconds <= 0.0 {
         return text("暂无", "—").get(language).to_owned();
@@ -60,8 +62,8 @@ fn stats_bucket_rows(
 }
 
 pub(crate) fn team_stats_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     language: Language,
 ) -> Div {
     let Some(editor) = app.teams.editor.as_ref() else {
@@ -84,13 +86,18 @@ pub(crate) fn team_stats_editor(
     .py_0();
     if can_act {
         refresh = refresh
-            .on_click(cx.listener(|view, _, _, cx| view.refresh_team_stats(cx)))
-            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.refresh_team_stats(cx);
-                }
-            }));
+            .on_click(app_listener(root, |view, _, _, cx| {
+                view.refresh_team_stats(cx)
+            }))
+            .on_key_down(app_listener(
+                root,
+                |view, event: &KeyDownEvent, window, cx| {
+                    if team_activation_key(event) {
+                        window.prevent_default();
+                        view.refresh_team_stats(cx);
+                    }
+                },
+            ));
     } else {
         refresh = refresh.opacity(0.5).cursor_default();
     }
@@ -105,15 +112,18 @@ pub(crate) fn team_stats_editor(
     .py_0();
     if can_act {
         clear = clear
-            .on_click(
-                cx.listener(|view, _, window, cx| view.open_clear_stats_confirmation(window, cx)),
-            )
-            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.open_clear_stats_confirmation(window, cx);
-                }
-            }));
+            .on_click(app_listener(root, |view, _, window, cx| {
+                view.open_clear_stats_confirmation(window, cx)
+            }))
+            .on_key_down(app_listener(
+                root,
+                |view, event: &KeyDownEvent, window, cx| {
+                    if team_activation_key(event) {
+                        window.prevent_default();
+                        view.open_clear_stats_confirmation(window, cx);
+                    }
+                },
+            ));
     } else {
         clear = clear.opacity(0.5).cursor_default();
     }

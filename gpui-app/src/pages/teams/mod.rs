@@ -10,17 +10,16 @@ mod overlay;
 mod shared;
 
 pub(super) use list::render;
-// `preset_picker_body` is also the app layer's sheet body, so it has to
-// reach past `pages`; `render_overlay` stays page-local.
-pub(super) use overlay::render_overlay;
-pub(crate) use overlay::{PresetPickerEntry, preset_picker_body};
+// `preset_picker_body` and the editor body are also the app layer's sheet and
+// dialog bodies, so they have to reach past `pages`.
+pub(crate) use overlay::{PresetPickerEntry, TeamEditorView, preset_picker_body};
 use shared::*;
 
 use std::rc::Rc;
 
 use gpui::{
-    Context, Div, ElementId, ImageSource, KeyDownEvent, SharedString, deferred, div, img,
-    prelude::*, px, relative,
+    Context, Div, ElementId, ImageSource, KeyDownEvent, SharedString, WeakEntity, deferred, div,
+    img, prelude::*, px,
 };
 use gpui_component::button::Button;
 
@@ -29,10 +28,10 @@ use crate::{
     assets::{self, Asset, SinnerAsset, StatusEffectAsset},
     components::style::{ColorToken, current_render_palette},
     components::{
-        BadgeTone, ButtonVariant, Switch, badge, button, card, empty_state,
+        BadgeTone, ButtonVariant, Switch, app_listener, badge, button, card, empty_state,
         is_activation_key as team_activation_key, loading, page_root, page_toolbar, palette_rgb,
-        render_rgb as rgb, render_rgba as rgba, scroll_area_with_id, select_keyboard_index,
-        select_option, select_options_state, select_popup, select_trigger, settings_grid, switch,
+        render_rgb as rgb, scroll_area_with_id, select_keyboard_index, select_option,
+        select_options_state, select_popup, select_trigger, settings_grid, switch,
     },
     i18n::paired as text,
     model::{Language, TeamDetail, TeamMirrorConfig, TeamPreset, TeamPurpose, team_number_from_id},
@@ -43,13 +42,13 @@ use crate::{
 };
 
 fn mirror_switch(
-    _app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    _app: &AhabApp,
     field: MirrorBool,
     value: bool,
     id: impl Into<String>,
 ) -> Switch {
-    switch(id.into(), value).on_change(cx.listener(move |view, _, _, cx| {
+    switch(id.into(), value).on_change(app_listener(root, move |view, _, _, cx| {
         view.teams.set_mirror_bool(field, !value);
         cx.notify();
     }))
@@ -66,7 +65,7 @@ struct TeamSelectConfig {
     on_change: TeamSelectChange,
 }
 
-fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfig) -> Div {
+fn team_select(root: &WeakEntity<AhabApp>, app: &AhabApp, config: TeamSelectConfig) -> Div {
     let TeamSelectConfig {
         select,
         current,
@@ -91,7 +90,7 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
             trigger = trigger.border_color(palette_rgb(palette.brand));
         }
     }
-    trigger = trigger.on_click(cx.listener(move |view, _, _, cx| {
+    trigger = trigger.on_click(app_listener(root, move |view, _, _, cx| {
         if open {
             view.teams.close_select();
         } else {
@@ -103,41 +102,44 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
     let key_change = on_change.clone();
     let key_values = values.clone();
     let key_current = current.clone();
-    trigger = trigger.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-        let key = event.keystroke.key.to_ascii_lowercase();
-        if key == "escape" {
-            window.prevent_default();
-            view.teams.close_select();
-            cx.notify();
-            return;
-        }
-        if matches!(key.as_str(), "enter" | "space") {
-            window.prevent_default();
-            view.teams.toggle_select(select);
-            cx.notify();
-            return;
-        }
-
-        let current_index = key_values
-            .iter()
-            .position(|candidate| candidate == &key_current)
-            .unwrap_or(0);
-        let next_index = select_keyboard_index(&key, current_index, key_values.len(), open);
-        if let Some(next_index) = next_index
-            && let Some(value) = key_values.get(next_index)
-        {
-            window.prevent_default();
-            if matches!(key.as_str(), "down" | "arrowdown" | "up" | "arrowup") && !open {
-                view.teams.toggle_select(select);
-            } else {
-                key_change(&mut view.teams, value.clone());
-                if !open {
-                    view.teams.close_select();
-                }
+    trigger = trigger.on_key_down(app_listener(
+        root,
+        move |view, event: &KeyDownEvent, window, cx| {
+            let key = event.keystroke.key.to_ascii_lowercase();
+            if key == "escape" {
+                window.prevent_default();
+                view.teams.close_select();
+                cx.notify();
+                return;
             }
-            cx.notify();
-        }
-    }));
+            if matches!(key.as_str(), "enter" | "space") {
+                window.prevent_default();
+                view.teams.toggle_select(select);
+                cx.notify();
+                return;
+            }
+
+            let current_index = key_values
+                .iter()
+                .position(|candidate| candidate == &key_current)
+                .unwrap_or(0);
+            let next_index = select_keyboard_index(&key, current_index, key_values.len(), open);
+            if let Some(next_index) = next_index
+                && let Some(value) = key_values.get(next_index)
+            {
+                window.prevent_default();
+                if matches!(key.as_str(), "down" | "arrowdown" | "up" | "arrowup") && !open {
+                    view.teams.toggle_select(select);
+                } else {
+                    key_change(&mut view.teams, value.clone());
+                    if !open {
+                        view.teams.close_select();
+                    }
+                }
+                cx.notify();
+            }
+        },
+    ));
 
     let mut option_list = div().flex().flex_col().gap_1();
     for (value, option_label) in options {
@@ -147,7 +149,7 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
         let click_value = value.clone();
         let mut option = select_option(option_label, selected, &palette)
             .id(option_id)
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(app_listener(root, move |view, _, _, cx| {
                 click_change(&mut view.teams, click_value.clone());
                 view.teams.close_select();
                 cx.stop_propagation();
@@ -161,22 +163,26 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
         }
         let key_change = on_change.clone();
         let key_value = value;
-        option = option.on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-            if team_activation_key(event) {
-                window.prevent_default();
-                key_change(&mut view.teams, key_value.clone());
-                view.teams.close_select();
-                cx.notify();
-            } else if event.keystroke.key.eq_ignore_ascii_case("escape") {
-                window.prevent_default();
-                view.teams.close_select();
-                cx.notify();
-            }
-        }));
+        option = option.on_key_down(app_listener(
+            root,
+            move |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    key_change(&mut view.teams, key_value.clone());
+                    view.teams.close_select();
+                    cx.notify();
+                } else if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                    window.prevent_default();
+                    view.teams.close_select();
+                    cx.notify();
+                }
+            },
+        ));
         option_list = option_list.child(option);
     }
 
-    let mut root = div().relative().w(px(width)).child(trigger);
+    // Renamed from `root`: the app handle parameter above now owns that name.
+    let mut wrapper = div().relative().w(px(width)).child(trigger);
     if open {
         // The editor content lives inside a scrolling element. Defer the menu
         // paint so the popup is composited above the following form sections
@@ -184,13 +190,13 @@ fn team_select(app: &AhabApp, cx: &mut Context<AhabApp>, config: TeamSelectConfi
         // order), matching the floating SelectContent used by the React UI.
         let popup = select_popup(option_list, &palette)
             .shadow_sm()
-            .on_mouse_down_out(cx.listener(move |view, _, _, cx| {
+            .on_mouse_down_out(app_listener(root, move |view, _, _, cx| {
                 view.teams.close_select();
                 cx.notify();
             }));
-        root = root.child(deferred(popup).priority(10));
+        wrapper = wrapper.child(deferred(popup).priority(10));
     }
-    root
+    wrapper
 }
 
 fn editor_section_title(title: impl Into<String>) -> Div {

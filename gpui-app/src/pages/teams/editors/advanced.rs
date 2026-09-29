@@ -1,6 +1,8 @@
 use super::*;
 use crate::components::IconName;
 
+use gpui::WeakEntity;
+
 fn observe_gift_label(gift: &str, language: Language) -> String {
     match gift {
         crate::model::SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID => {
@@ -13,23 +15,23 @@ fn observe_gift_label(gift: &str, language: Language) -> String {
 }
 
 pub(crate) fn advanced_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
     let observe_input = app.team_inputs.observe.clone();
     let json_input = app.team_inputs.json.clone();
     let observe_switch = mirror_switch(
+        root,
         app,
-        cx,
         MirrorBool::ObserveEgoGift,
         config.observe_ego_gift,
         "advanced-observe-ego",
     );
     let custom_weight = mirror_switch(
+        root,
         app,
-        cx,
         MirrorBool::UseCustomThemeWeight,
         config.use_custom_theme_pack_weight,
         "advanced-theme-weight",
@@ -51,7 +53,7 @@ pub(crate) fn advanced_editor(
                 12.,
                 current_render_palette().muted_foreground,
             ))
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(app_listener(root, move |view, _, _, cx| {
                 view.teams.remove_observe_gift(&gift_for_remove);
                 cx.notify();
             }));
@@ -83,18 +85,20 @@ pub(crate) fn advanced_editor(
     .h(px(30.))
     .px_2()
     .py_0()
-    .on_click(cx.listener(|view, _, _, cx| {
+    .on_click(app_listener(root, |view, _, _, cx| {
         view.teams.add_spiderweb_entangled_in_red();
         cx.notify();
     }));
-    spiderweb_preset =
-        spiderweb_preset.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+    spiderweb_preset = spiderweb_preset.on_key_down(app_listener(
+        root,
+        |view, event: &KeyDownEvent, window, cx| {
             if team_activation_key(event) {
                 window.prevent_default();
                 view.teams.add_spiderweb_entangled_in_red();
                 cx.notify();
             }
-        }));
+        },
+    ));
 
     let mut add_observe = button(
         "advanced-add-observe",
@@ -104,26 +108,34 @@ pub(crate) fn advanced_editor(
     .h(px(34.))
     .px_3()
     .py_0()
-    .on_click(cx.listener(|view, _, window, cx| view.add_team_observe_gift(window, cx)));
-    add_observe = add_observe.on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-        if team_activation_key(event) {
-            window.prevent_default();
-            view.add_team_observe_gift(window, cx);
-        }
+    .on_click(app_listener(root, |view, _, window, cx| {
+        view.add_team_observe_gift(window, cx)
     }));
+    add_observe = add_observe.on_key_down(app_listener(
+        root,
+        |view, event: &KeyDownEvent, window, cx| {
+            if team_activation_key(event) {
+                window.prevent_default();
+                view.add_team_observe_gift(window, cx);
+            }
+        },
+    ));
     let observe_field = observe_input
         .map(|input| {
             div()
                 .flex_1()
                 .min_w_0()
                 .child(input)
-                .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                    if event.keystroke.key.eq_ignore_ascii_case("enter") {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        view.add_team_observe_gift(window, cx);
-                    }
-                }))
+                .on_key_down(app_listener(
+                    root,
+                    |view, event: &KeyDownEvent, window, cx| {
+                        if event.keystroke.key.eq_ignore_ascii_case("enter") {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            view.add_team_observe_gift(window, cx);
+                        }
+                    },
+                ))
                 .into_any_element()
         })
         .unwrap_or_else(|| div().into_any_element());
@@ -170,21 +182,24 @@ pub(crate) fn advanced_editor(
         ))
         .child(text("粘贴 / 导入 JSON", "Paste / Import JSON").get(language));
     import_toggle = import_toggle
-        .on_click(cx.listener(|view, _, _, cx| {
+        .on_click(app_listener(root, |view, _, _, cx| {
             if let Some(editor) = view.teams.editor.as_mut() {
                 editor.json_import_open = !editor.json_import_open;
             }
             cx.notify();
         }))
-        .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-            if team_activation_key(event) {
-                window.prevent_default();
-                if let Some(editor) = view.teams.editor.as_mut() {
-                    editor.json_import_open = !editor.json_import_open;
+        .on_key_down(app_listener(
+            root,
+            |view, event: &KeyDownEvent, window, cx| {
+                if team_activation_key(event) {
+                    window.prevent_default();
+                    if let Some(editor) = view.teams.editor.as_mut() {
+                        editor.json_import_open = !editor.json_import_open;
+                    }
+                    cx.notify();
                 }
-                cx.notify();
-            }
-        }));
+            },
+        ));
     let json_panel = if app
         .teams
         .editor
@@ -215,13 +230,14 @@ pub(crate) fn advanced_editor(
                         .h(px(28.))
                         .px_3()
                         .py_0()
-                        .on_click(cx.listener(|view, _, _, cx| {
+                        .on_click(app_listener(root, |view, _, _, cx| {
                             if let Some(editor) = view.teams.editor.as_mut() {
                                 editor.json_import_open = false;
                             }
                             cx.notify();
                         }));
-                        close = close.on_key_down(cx.listener(
+                        close = close.on_key_down(app_listener(
+                            root,
                             |view, event: &KeyDownEvent, window, cx| {
                                 if team_activation_key(event) {
                                     window.prevent_default();
@@ -243,10 +259,11 @@ pub(crate) fn advanced_editor(
                         .h(px(28.))
                         .px_3()
                         .py_0()
-                        .on_click(
-                            cx.listener(|view, _, window, cx| view.import_team_json(window, cx)),
-                        );
-                        import = import.on_key_down(cx.listener(
+                        .on_click(app_listener(root, |view, _, window, cx| {
+                            view.import_team_json(window, cx)
+                        }));
+                        import = import.on_key_down(app_listener(
+                            root,
                             |view, event: &KeyDownEvent, window, cx| {
                                 if team_activation_key(event) {
                                     window.prevent_default();

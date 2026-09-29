@@ -1,8 +1,10 @@
 use super::*;
 
+use gpui::WeakEntity;
+
 pub(crate) fn shop_editor(
-    app: &mut AhabApp,
-    cx: &mut Context<AhabApp>,
+    root: &WeakEntity<AhabApp>,
+    app: &AhabApp,
     config: &TeamMirrorConfig,
     language: Language,
 ) -> Div {
@@ -11,7 +13,7 @@ pub(crate) fn shop_editor(
         let selected = discard_value(&config.discard_systems, index);
         let mut control =
             system_choice(index, selected, true, language).id(format!("discard-system-{name}"));
-        control = control.on_click(cx.listener(move |view, _, _, cx| {
+        control = control.on_click(app_listener(root, move |view, _, _, cx| {
             view.teams.toggle_discard_system(index);
             cx.notify();
         }));
@@ -49,7 +51,7 @@ pub(crate) fn shop_editor(
     for (index, (label, field, value)) in restrictions.into_iter().enumerate() {
         restriction_items.push(control_row(
             label.get(language),
-            mirror_switch(app, cx, field, value, format!("shop-restriction-{index}")),
+            mirror_switch(root, app, field, value, format!("shop-restriction-{index}")),
         ));
     }
     let restriction_rows = editor_option_grid(restriction_items);
@@ -85,7 +87,7 @@ pub(crate) fn shop_editor(
     for (index, (label, field, value)) in fusions.into_iter().enumerate() {
         fusion_items.push(control_row(
             label.get(language),
-            mirror_switch(app, cx, field, value, format!("fusion-{index}")),
+            mirror_switch(root, app, field, value, format!("fusion-{index}")),
         ));
     }
     let fusion_rows = editor_option_grid(fusion_items);
@@ -98,8 +100,8 @@ pub(crate) fn shop_editor(
             .child(control_row(
                 text("四级饰品后执行策略", "After Tier 4 Fusion").get(language),
                 mirror_switch(
+                    root,
                     app,
-                    cx,
                     MirrorBool::AfterLevelIv,
                     config.after_level_IV,
                     "shop-after-level-iv",
@@ -107,8 +109,8 @@ pub(crate) fn shop_editor(
             ))
             .child(if config.after_level_IV {
                 team_select(
+                    root,
                     app,
-                    cx,
                     TeamSelectConfig {
                         select: TeamSelect::AfterLevelIv,
                         current: config.after_level_IV_select.to_string(),
@@ -185,17 +187,20 @@ pub(crate) fn shop_editor(
         .px_3()
         .py_0();
         control = control
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(app_listener(root, move |view, _, _, cx| {
                 view.teams.toggle_ignore_shop(floor);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if team_activation_key(event) {
-                    window.prevent_default();
-                    view.teams.toggle_ignore_shop(floor);
-                    cx.notify();
-                }
-            }));
+            .on_key_down(app_listener(
+                root,
+                move |view, event: &KeyDownEvent, window, cx| {
+                    if team_activation_key(event) {
+                        window.prevent_default();
+                        view.teams.toggle_ignore_shop(floor);
+                        cx.notify();
+                    }
+                },
+            ));
         floors = floors.child(control);
     }
     let ignore = editor_card(
@@ -212,8 +217,8 @@ pub(crate) fn shop_editor(
     let shop_strategy = field_block(
         text("商店策略", "Shop Strategy").get(language),
         team_select(
+            root,
             app,
-            cx,
             TeamSelectConfig {
                 select: TeamSelect::ShopStrategy,
                 current: config.shop_strategy.to_string(),
@@ -275,7 +280,7 @@ pub(crate) fn shop_editor(
         .flex()
         .flex_col()
         .gap_4()
-        .child(strategy_editor(app, cx, config, language))
+        .child(strategy_editor(root, app, config, language))
         .child(shop_strategy)
         .child(discard_card)
         .child(restrictions_card)

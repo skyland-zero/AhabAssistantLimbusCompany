@@ -13,7 +13,7 @@ impl AhabApp {
     pub fn open_new_team(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.teams.open_new();
         self.create_team_inputs(window, cx);
-        cx.notify();
+        self.show_team_editor(window, cx);
     }
 
     pub fn open_existing_team(
@@ -25,7 +25,7 @@ impl AhabApp {
         self.teams.open_edit(team);
         self.create_team_inputs(window, cx);
         self.refresh_team_stats(cx);
-        cx.notify();
+        self.show_team_editor(window, cx);
     }
 
     pub fn open_new_team_for_slot(
@@ -36,6 +36,79 @@ impl AhabApp {
     ) {
         self.teams.open_new_for_slot(number);
         self.create_team_inputs(window, cx);
+        self.show_team_editor(window, cx);
+    }
+
+    /// Shows the team editor as a `Root` dialog.
+    ///
+    /// The dialog supplies the centering, the close button, the focus trap and
+    /// Esc, all of which the page overlay used to reimplement. Its body is
+    /// `TeamEditorView`: a dialog builder runs inside `AhabApp::render` and
+    /// cannot read the app, while the editor's tabs, switches and inputs all
+    /// render live state.
+    ///
+    /// Split from the three `open_*_team` methods because a capture has to push
+    /// a confirmation on top of this same dialog in the same turn.
+    pub fn show_team_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let language = self.state.settings.language;
+        let is_new = self
+            .teams
+            .editor
+            .as_ref()
+            .is_none_or(|editor| editor.team.id.is_empty());
+        let title = if is_new {
+            crate::i18n::paired("新建队伍", "New Team")
+        } else {
+            crate::i18n::paired("编辑队伍", "Edit Team")
+        };
+        let subtitle = crate::i18n::paired(
+            "保存前所有修改只存在于当前编辑器",
+            "Changes stay in this editor until Save",
+        );
+
+        self.teams.editor_dialog_open = true;
+        let app = cx.entity();
+        let view = cx.new(|cx| crate::pages::TeamEditorView::new(app.clone(), cx));
+        let close_app = app.downgrade();
+        Root::update(window, cx, move |root, window, cx| {
+            root.open_dialog(
+                // `Fn`, not `FnOnce`: the builder runs again on every render of
+                // the dialog layer, so captures are cloned per call.
+                move |dialog, _window, _cx| {
+                    let close_app = close_app.clone();
+                    dialog
+                        .title(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(gpui::px(1.0))
+                                .child(
+                                    div()
+                                        .text_size(gpui::px(16.))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .child(title.get(language)),
+                                )
+                                .child(
+                                    div().text_size(gpui::px(10.)).child(subtitle.get(language)),
+                                ),
+                        )
+                        .w(gpui::px(680.))
+                        // Closing through `Root` - the X, Esc or the overlay -
+                        // drops the draft, which is what the state setters do.
+                        // The dialog is already going away here, so this must
+                        // not ask `Root` to close it again.
+                        .on_close(move |_, _, cx| {
+                            let _ = close_app.update(cx, |view, cx| view.dismiss_team_editor(cx));
+                        })
+                        .content({
+                            let view = view.clone();
+                            move |content, _window, _cx| content.child(view.clone())
+                        })
+                },
+                window,
+                cx,
+            )
+        });
         cx.notify();
     }
 
@@ -319,12 +392,29 @@ impl AhabApp {
         cx.notify();
     }
 
+    /// The editor's Cancel button.
+    ///
+    /// Refuses while a save is in flight, the way the overlay did - the draft is
+    /// what the response is about. The dialog itself is not closed here: the body
+    /// takes it down as soon as it sees `editor` is gone, which keeps `Root`'s
+    /// "close the top dialog" out of this method's hands.
     pub fn close_team_editor(&mut self, cx: &mut Context<Self>) {
         if self.teams.saving {
             self.teams.feedback = Some("队伍正在保存，请等待后端响应".to_owned());
             cx.notify();
             return;
         }
+        self.teams.close_editor();
+        self.clear_team_inputs();
+        cx.notify();
+    }
+
+    /// Clears the editor state without touching the dialog layer.
+    ///
+    /// This is the `on_close` path: `Root` is already taking the dialog down, so
+    /// asking it to close again would pop whatever dialog is beneath.
+    pub fn dismiss_team_editor(&mut self, cx: &mut Context<Self>) {
+        self.teams.editor_dialog_open = false;
         self.teams.close_editor();
         self.clear_team_inputs();
         cx.notify();
