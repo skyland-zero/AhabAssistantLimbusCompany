@@ -1,10 +1,13 @@
 # GPUI Kit 迁移：进度与剩余工作
 
-本文档既记录已完成的部分，也给出剩下几项的确切做法与已知陷阱。
+本文档既记录已完成的部分，也给出剩下那一项的确切做法与已知陷阱。
 分析结论全部来自实际尝试（或标注为「尚未实测」），不是推测。
 
-**接手方式**：先看「当前进度」与「下次开工顺序」两节，然后按顺序做。
-每一步做完照「验证清单」跑一遍，弹窗类改动补一个 `VisualState` 截图。
+**接手方式**：先看「当前进度」与「下次开工顺序」两节。
+只剩 Select 一项、且它是取舍而不是技术问题；其余章节的价值在于**已踩过的坑**：
+每一节的陷阱都是实际撞过并已解决的（弹窗 builder 不能读 app、子视图却可以、
+静态控件需要句柄、截图工具的三种假象）。每次改完照「验证清单」跑一遍，
+弹窗/侧栏类改动补一个 `VisualState` 截图。
 
 ---
 
@@ -73,7 +76,7 @@ AHAB_BACKEND=mock timeout 12 ./target/debug/ahab-gpui-app.exe   # exit 124 = 正
 ## 已经打好的地基
 
 **页面 render 已能拿到 `window`。** `pages::render(page, app, window, cx)`。
-这是下面三项的共同前置条件，已完成（提交 `effd0f58`，视觉 0.00% 差异）。
+这是后来三个 entity 视图面板的共同前置条件，已完成（提交 `effd0f58`，视觉 0.00% 差异）。
 
 **主题桥接已就位。** `components/style/kit/` 把 `Palette` 投影到
 `ThemeColor` + `ThemeTokens`。GPUI Kit 控件自动跟随皮肤，页面**不需要**
@@ -83,19 +86,36 @@ AHAB_BACKEND=mock timeout 12 ./target/debug/ahab-gpui-app.exe   # exit 124 = 正
 50 个图标与 GPUI Kit 的默认包。**未嵌入的图标会静默渲染成空白**，无报错
 无日志 —— `every_referenced_icon_is_embedded` 会扫源码发现。
 
+**entity 视图 + `app_listener` 是打通剩余面板的钥匙。** 见 2.5（为何子视图能读 app）
+与 2.7（如何把只吃 `Context<AhabApp>` 的控件改造成句柄驱动）。两个新面板
+（`AfterCompletionView` / `TeamEditorView`）都是照这个模式做的，队伍编辑器那份
+连 `InputState` 实体一起渲染，是现成模板。
+
+**页面遵罩已清零。** 页面不再给自己画遵罩，`pages::render_overlay` 已删除；
+所有弹层都归 `Root` 的 dialog / sheet 层。新增弹窗照「已完成：三个确认/取消型」
+那一节的形态抄。
+
 ---
 
-## 1. Select（3 处，推荐先做）
+## 1. Select（3 处）—— 迁移的最后一项，需要拍板
 
 ### 迁移点
 
-| 文件 | 函数 |
-|---|---|
-| `pages/home/controls.rs` | `home_select` |
-| `pages/settings/cards/updates.rs` | `update_card` 内的更新源选择 |
-| `pages/teams/mod.rs` | `team_select` |
+| 文件 | 函数 | 调用点 |
+|---|---|---|
+| `pages/home/controls.rs` | `home_select` | 6（其中 `daily_team_select` 只是它的一层包装）|
+| `pages/teams/mod.rs` | `team_select` | 10（全在队伍编辑器的 5 个标签页里）|
+| `pages/settings/cards/updates.rs` | `update_card` 内的更新源选择 | 1 —— **没有封装**，直接在 `updates.rs` 里拼 `select_trigger` + `select_popup`，迁移时不要漏 |
 
-43 个调用点全部经由这三个封装，**不需要动**。
+（旧稿写「43 个调用点经由这三个封装」，与现状不符：实测是 6 + 10 + 1。
+`components/` 里的 `select_trigger` / `select_popup` / `select_option` 是共用外观，
+不算调用点。）
+
+**调用点本身不用动**，但两个封装现在各有两副面孔（见 2.7）：
+`home_select(app, cx, config)` / `home_select_for_view(root, open, config)`，
+`team_select(root, app, config)`。换成 GPUI Kit 的 `Select` 时两副都要覆盖，
+或者干脆合并成只吃 `(root, window, …)` 的单一版本 —— 子视图的 `render` 本来就
+拿得到 `window`，而 `use_keyed_state` 正需要它。
 
 ### 好消息：委托不用自己写
 
@@ -194,7 +214,7 @@ settings-select` 会拍到关闭状态的控件。
 另外 `on_ok` / `on_cancel` 拿到的是 `&mut App` 而非 `Context<AhabApp>`，
 回写状态要经 `WeakEntity::update`。
 
-### 已完成：两个内容面板
+### 已完成：两个内容面板（快照式）
 
 | 提交 | 内容 | 尺寸 |
 |---|---|---|
@@ -339,7 +359,10 @@ sheet/dialog 的 body 是子视图，拿不到它，于是一个都换不上去�
 各加一个句柄版入口、共用同一份实现：
 
 - `home_select_for_view(root, open, config)` 与 `task_option_switch_for_view(...)`
-- 原入口 `home_select(app, cx, config)` 保留，内部转调 —— 17 个既有调用点**一行未改**
+- 原入口 `home_select(app, cx, config)` 保留，内部转调 —— 改动当时 **17 个**
+  既有调用点（7 + 10）一行未改。之后结束动作编辑器自己也在子视图里，把
+  `home_select` 的其中一个调用点换成了 `_for_view` 变体，所以今天看到的
+  数字会少一个，不是回归。
 - `open` 由调用方传入（视图已经从 app 读过 `is_select_open`），这两个封装于是
   完全不再需要 `&AhabApp`
 
@@ -419,7 +442,7 @@ builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个�
 
 可以做的收尾：
 
-1. 镜牢明细换成 entity 视图（每前用的是快照，所以 `home-mirror-details`
+1. 镜牢明细换成 entity 视图（它用的是快照，所以 `home-mirror-details`
    只能拍空状态）；`TeamEditorView` 是最好的模板 —— 它是唯一一个
    渲染完整活表单（含 `InputState` 实体）的 body。
 2. 截图工具的两个假通过问题（兜底点击、拍到别的窗口），见文末。
@@ -428,17 +451,16 @@ builder 借不到 app 才让这个死参数变成障碍，现已删除，8 个�
 
 | 状态 | 覆盖 |
 |---|---|
-| `teams-delete` | 删除队伍确认 dialog |
-| `teams-stats-clear` | 清空统计确认 dialog |
-| `teams-preset-overwrite` | 覆盖预设确认 dialog |
+| `teams-delete` | 删除队伍确认 dialog（列表页）|
+| `teams-stats-clear` | 编辑器 + **叠在它上面的**清空确认（两个 dialog 的堆叠顺序）|
+| `teams-preset-overwrite` | 覆盖预设确认 dialog（列表页）|
 | `teams-preset-picker` | 预设选择器 sheet |
+| `teams-editor` / `teams-shop-editor` / `teams-combat-editor` / `teams-starlight-editor` / `teams-advanced-editor` | 队伍编辑器的 5 个标签页（dialog + 完整活表单，含 `InputState`）|
 | `home-mirror-details` | 镜牢明细 sheet（**仅空状态**，见 2.5）|
 | `home-daily-details` | 每日刷本明细 sheet（**真实行**）|
 | `home-after-completion` | 结束后操作 dialog |
 | `home-after-completion-power` | 同上 + 电源动作下拉展开（唯一能证明 select 在 dialog 里可用的状态）|
-| `teams-editor` / `teams-shop-editor` / `teams-combat-editor` / `teams-starlight-editor` / `teams-advanced-editor` | 队伍编辑器的 5 个标签页（dialog + 完整活表单）|
-| `teams-stats-clear` | 编辑器 + **叠在它上面的**清空确认（两个 dialog 的堆叠顺序）|
-| `teams-delete` / `teams-preset-overwrite` | 列表页的确认 dialog（编辑器改造后仍需保留的回归对照）|
+| `home-select` / `teams-select` / `settings-select` | **Select 迁移的阻断点**（第 1 节）：`SelectState::set_open` 是私有的，这三个状态用 GPUI Kit 的 `Select` 复现不了 |
 
 加状态的铁律：**状态必须真的走到那条分支**。踩过三次：
 
