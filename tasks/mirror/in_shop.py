@@ -14,6 +14,22 @@ from tasks.mirror import fusion_result, must_be_abandoned, must_purchase
 from utils.image_utils import ImageUtils
 
 
+def skill_replacement_mode_sequence(mode: int) -> tuple[int, ...]:
+    """返回技能替换模式对应的执行顺序。
+
+    0=1→3，1=2→3，2=1→2；
+    3=全换3（先2→3，再1→3）；4=全换3（先1→3，再2→3）。
+    非法值回退到 1→3。
+    """
+    if mode in (0, 1, 2):
+        return (mode,)
+    if mode == 3:
+        return (1, 0)
+    if mode == 4:
+        return (0, 1)
+    return (0,)
+
+
 class Shop:
     def __init__(self, team_setting: TeamSetting):
         self.system = all_systems[team_setting.team_system]  # 队伍体系
@@ -1600,6 +1616,28 @@ class Shop:
         self.fuse_aggressive_switch = False
         log.info("合成四级，切换到非激进模式")
 
+    def _replace_selected_skill(self):
+        """按配置顺序执行技能替换；每次重新识别，避免购买后点击旧坐标。"""
+        for mode in skill_replacement_mode_sequence(self.skill_replacement_mode):
+            coins = auto.find_element(
+                "mirror/shop/skill_replacement_coins.png",
+                find_type="image_with_multiple_targets",
+                take_screenshot=True,
+            )
+            # 购买成功关闭界面或识别不完整时停止，不猜测选项位置。
+            if not coins or len(coins) != 3:
+                return
+            coins = sorted(coins, key=lambda x: x[0])
+            select_mode = 2 - mode
+            auto.mouse_click(coins[select_mode][0], coins[select_mode][1])
+            sleep(0.5)
+            auto.click_element("mirror/shop/skill_replacement_confirm_assets.png")
+            auto.click_element("mirror/shop/skill_replacement_confirm_assets.png")
+            # 检测游戏是否异常，若异常则重启游戏
+            if retry() is False:
+                raise self.RestartGame()
+            sleep(0.5)
+
     def id_skill_replacement(self, image_path):
         """
         处理普通技能替换选项。识别指定模块位置的技能替换区域，
@@ -1630,22 +1668,7 @@ class Shop:
             if auto.find_language_text(sinner_zh, sinner_en, my_crop=bbox):
                 auto.mouse_click(module_position[0], module_position[1] - 100 * my_scale)
                 sleep(0.5)
-                coins = auto.find_element(
-                    "mirror/shop/skill_replacement_coins.png",
-                    find_type="image_with_multiple_targets",
-                    take_screenshot=True,
-                )
-                if len(coins) != 3:
-                    return
-                coins = sorted(coins, key=lambda x: x[0])
-                select_mode = 3 - self.skill_replacement_mode - 1
-                auto.mouse_click(coins[select_mode][0], coins[select_mode][1])
-                sleep(0.5)
-                auto.click_element("mirror/shop/skill_replacement_confirm_assets.png")
-                auto.click_element("mirror/shop/skill_replacement_confirm_assets.png")
-                # 检测游戏是否异常，若异常则重启游戏
-                if retry() is False:
-                    raise self.RestartGame()
+                self._replace_selected_skill()
 
     def selected_id_skill_replacement(self, image_path):
         """
@@ -1684,21 +1707,7 @@ class Shop:
             sleep(0.5)
             auto.mouse_click(sinner_x[i], sinner_y)
             sleep(0.5)
-            coins = auto.find_element(
-                "mirror/shop/skill_replacement_coins.png",
-                find_type="image_with_multiple_targets",
-                take_screenshot=True,
-            )
-            if len(coins) != 3:
-                continue
-            coins = sorted(coins, key=lambda x: x[0])
-            select_mode = 3 - self.skill_replacement_mode - 1
-            auto.mouse_click(coins[select_mode][0], coins[select_mode][1])
-            sleep(0.5)
-            auto.click_element("mirror/shop/skill_replacement_confirm_assets.png")
-            auto.click_element("mirror/shop/skill_replacement_confirm_assets.png")
-            if retry() is False:
-                raise self.RestartGame()
+            self._replace_selected_skill()
         # 如果所有优先罪人都没有技能可替换，则点击返回按钮退出该界面
         auto.click_element("mirror/shop/ID_skill_replace_search_return_assets.png")
 
@@ -1720,6 +1729,8 @@ class Shop:
                 0: "1→3",
                 1: "2→3",
                 2: "1→2",
+                3: "全换3（先2→3）",
+                4: "全换3（先1→3）",
             }.get(self.skill_replacement_mode, "1→3")
             log.warning(
                 f"当前技能替换界面仅支持全局模式，攻略目标为{target}；"

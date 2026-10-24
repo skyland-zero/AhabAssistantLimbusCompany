@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from tasks.mirror.in_shop import Shop
+from tasks.mirror.in_shop import Shop, skill_replacement_mode_sequence
 
 
 def test_route_gift_matching_skips_positions_outside_the_current_frame(monkeypatch) -> None:
@@ -18,3 +18,13 @@ def test_route_gift_matching_skips_positions_outside_the_current_frame(monkeypat
     monkeypatch.setattr("tasks.mirror.in_shop.auto.screenshot", Image.new("L", (1920, 1080)), raising=False)
 
     assert shop._route_gift_id_at_position((2032.25, 459.25), hover=True) is None
+
+
+def test_skill_replacement_mode_sequence_covers_all_modes() -> None:
+    assert skill_replacement_mode_sequence(0) == (0,)
+    assert skill_replacement_mode_sequence(1) == (1,)
+    assert skill_replacement_mode_sequence(2) == (2,)
+    assert skill_replacement_mode_sequence(3) == (1, 0)
+    assert skill_replacement_mode_sequence(4) == (0, 1)
+    assert skill_replacement_mode_sequence(99) == (0,)
+
