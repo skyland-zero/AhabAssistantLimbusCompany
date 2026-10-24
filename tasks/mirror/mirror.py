@@ -53,6 +53,8 @@ from tasks.mirror.vision_regions import mirror_ego_gift_card_crop
 from tasks.teams.team_formation import check_team, load_team_code_in_game, select_battle_team, team_formation
 from utils.image_utils import ImageUtils
 
+MIRROR_FLOOR_DETECT_MAX_ATTEMPTS = 2
+
 MIRROR_SINNER_IDS = (
     "yi_sang",
     "faust",
@@ -195,6 +197,7 @@ class Mirror:
         self.floor = 0
         self._last_pub_floor: tuple[int, int] | None = None
         self.get_floor_num = True
+        self.floor_detect_attempts = 0
         # Keep the legacy attribute as a compatibility view for integrations;
         # the route runtime owns its size and completion rule.
         self.floor_times = self.plan_runtime.floor_times
@@ -217,6 +220,21 @@ class Mirror:
         if self.is_entering_node:
             self.is_entering_node = False
             self.entering_node_time = 0.0
+
+    def _should_detect_floor(self) -> bool:
+        """本层是否还允许尝试识别楼层。"""
+        return self.get_floor_num and self.floor_detect_attempts < MIRROR_FLOOR_DETECT_MAX_ATTEMPTS
+
+    def _record_floor_detection(self, success: bool) -> None:
+        """记录一次楼层识别结果；成功后本层不再重试。"""
+        if success:
+            self.floor_detect_attempts = MIRROR_FLOOR_DETECT_MAX_ATTEMPTS
+        else:
+            self.floor_detect_attempts += 1
+
+    def _reset_floor_detection(self) -> None:
+        """进入新楼层时恢复楼层识别额度。"""
+        self.floor_detect_attempts = 0
 
     def _publish_floor(self, force: bool = False) -> None:
         """Push the current 1-based floor to the GPUI console.
@@ -583,6 +601,7 @@ class Mirror:
         self.floor = next_floor
         self._publish_floor()
         self.get_floor_num = True
+        self._reset_floor_detection()
         log.info(f"困难镜牢已确认继续，下一段从实际第{next_floor + 1}层开始")
         return True
 
@@ -826,6 +845,7 @@ class Mirror:
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
                 self._clear_entering_node_state()
                 self.mirror_map.reset_path()
+                self._reset_floor_detection()
                 sleep(2)
                 theme_floor = self._theme_pack_selection_floor()
                 if theme_floor is None:
@@ -907,8 +927,8 @@ class Mirror:
                     self._clear_entering_node_state()
                     break
                 retry(screenshot_ready=True)
-                if self.get_floor_num:
-                    self.get_which_floor()
+                if self._should_detect_floor():
+                    self._record_floor_detection(self.get_which_floor())
 
                 if cfg.floor_3_exit and self.floor >= 4:
                     continue
@@ -1966,6 +1986,7 @@ class Mirror:
             self.defense_for_solo_state.reset_for_run()
             self.shop.set_pseudo_solo_active(False)
         self.mirror_map.reset_path()
+        self._reset_floor_detection()
         self.start_time = time.time()
 
     def event_handling(self):
@@ -2443,7 +2464,7 @@ class Mirror:
                 self.get_floor_num = False
                 self.mirror_map.refresh_floor(self.floor)
                 self._publish_floor()
-                return
+                return True
             except MirrorPlanProgressError as error:
                 log.debug(f"静默楼层 {absolute_floor} 与进度冲突，回退弹窗: {error}")
             except Exception as error:
@@ -2518,3 +2539,5 @@ class Mirror:
             auto.mouse_action_with_pos((to_window_position[0] - 200 * cfg.set_win_size / 1440, to_window_position[1]))
             self.mirror_map.refresh_floor(self.floor)
             self._publish_floor()
+            return True
+        return False
