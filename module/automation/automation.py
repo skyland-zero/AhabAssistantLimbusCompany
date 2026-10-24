@@ -64,6 +64,7 @@ class Automation(metaclass=SingletonMeta):
 
         self.img_cache = {}
         self._feature_frame_cache = {}
+        self._unavailable_feature_templates: set[str] = set()
         self.last_screenshot_time = 0
         self.last_click_time = 0
         self.model = "clam"
@@ -866,10 +867,14 @@ class Automation(metaclass=SingletonMeta):
             if template is None:
                 raise ValueError("读取图片失败")
             screenshot = self._get_screenshot_array(screenshot_image, gray=True)
+            if not self._is_usable_image(screenshot):
+                return []
             crop_offset = (0, 0)
             if my_crop:
                 crop_offset = (int(round(my_crop[0])), int(round(my_crop[1])))
                 screenshot = ImageUtils.crop(screenshot, my_crop)
+                if not self._is_usable_image(screenshot):
+                    return []
             matches = ImageUtils.match_template_with_multiple_targets(
                 screenshot, template, threshold, min_dist=min_dist
             )
@@ -1188,7 +1193,11 @@ class Automation(metaclass=SingletonMeta):
                 return cached_result
 
             template, template_features = self._load_feature_template(target)
+            if not self._is_usable_image(template):
+                return None
             screenshot = self._get_screenshot_array(screenshot_image, gray=True)
+            if not self._is_usable_image(screenshot):
+                return None
             if cfg.set_win_size < 1440:
                 screenshot = cv2.resize(
                     screenshot,
@@ -1211,6 +1220,8 @@ class Automation(metaclass=SingletonMeta):
                 elif cfg.set_win_size > 1440:
                     pic_crop = [int(i * cfg.set_win_size / 1440) for i in pic_crop]
                 screenshot = ImageUtils.crop(screenshot, pic_crop)
+                if not self._is_usable_image(screenshot):
+                    return None
 
             target_cache_key = (
                 self._current_frame_key(screenshot_image),
@@ -1252,6 +1263,9 @@ class Automation(metaclass=SingletonMeta):
         self.img_cache.clear()
         getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
+        unavailable_templates = getattr(self, "_unavailable_feature_templates", None)
+        if unavailable_templates is not None:
+            unavailable_templates.clear()
         gc.collect()  # 强制垃圾回收，清理内存
         log.debug("图片缓存已清除", stacklevel=2)
 
@@ -1313,6 +1327,12 @@ class Automation(metaclass=SingletonMeta):
 
     def _load_feature_template(self, target: str):
         """Load and precompute ORB descriptors for a feature template."""
+        unavailable_templates = getattr(self, "_unavailable_feature_templates", None)
+        if unavailable_templates is None:
+            unavailable_templates = self._unavailable_feature_templates = set()
+        if target in unavailable_templates:
+            return None, None
+
         cache_key = (
             "feature_template",
             target,
@@ -1326,11 +1346,19 @@ class Automation(metaclass=SingletonMeta):
             return cached["template"], cached["features"]
 
         template = ImageUtils.load_image(target, resize=False)
-        if template is None:
+        if not self._is_usable_image(template):
+            unavailable_templates.add(target)
             return None, None
         features = ImageUtils.feature_descriptors(template)
         self.img_cache[cache_key] = {"template": template, "features": features}
         return template, features
+
+    @staticmethod
+    def _is_usable_image(image) -> bool:
+        """Return True when an image is a non-empty 2D+ numpy array."""
+        if image is None or not isinstance(image, np.ndarray):
+            return False
+        return image.size > 0 and image.ndim >= 2 and 0 not in image.shape[:2]
 
     @staticmethod
     def _is_valid_match(match_val, threshold) -> bool:
@@ -1445,6 +1473,8 @@ class Automation(metaclass=SingletonMeta):
                     return cached_result
 
             screenshot_full = self._get_screenshot_array(screenshot_image, gray=True)
+            if not self._is_usable_image(screenshot_full):
+                return None
             if hasattr(screenshot_full, "shape"):
                 screen_h, screen_w = screenshot_full.shape[:2]
             elif hasattr(screenshot_full, "size"):
@@ -1458,7 +1488,9 @@ class Automation(metaclass=SingletonMeta):
                 crop_x2 = min(screen_w, int(round(my_crop[2])))
                 crop_y2 = min(screen_h, int(round(my_crop[3])))
                 search_region = (crop_x1, crop_y1, crop_x2, crop_y2)
-                screenshot = ImageUtils.crop(screenshot_full, my_crop)
+                screenshot = ImageUtils.crop(screenshot_full, search_region)
+                if not self._is_usable_image(screenshot):
+                    return None
                 is_fullscreen = False
             else:
                 crop_x1, crop_y1 = 0, 0
