@@ -272,6 +272,8 @@ pub(super) fn skill_replacement_mode_label(value: u8, language: Language) -> &'s
         0 => text("1 → 3", "1 → 3").get(language),
         1 => text("2 → 3", "2 → 3").get(language),
         2 => text("1 → 2", "1 → 2").get(language),
+        3 => text("全换 3（先 2→3）", "All 3 (2→3 first)").get(language),
+        4 => text("全换 3（先 1→3）", "All 3 (1→3 first)").get(language),
         _ => text("1 → 3", "1 → 3").get(language),
     }
 }
@@ -384,6 +386,14 @@ mod tests {
         assert_eq!(skill_replacement_mode_label(0, Language::ZhCn), "1 → 3");
         assert_eq!(skill_replacement_mode_label(1, Language::ZhCn), "2 → 3");
         assert_eq!(skill_replacement_mode_label(2, Language::ZhCn), "1 → 2");
+        assert_eq!(
+            skill_replacement_mode_label(3, Language::ZhCn),
+            "全换 3（先 2→3）"
+        );
+        assert_eq!(
+            skill_replacement_mode_label(4, Language::ZhCn),
+            "全换 3（先 1→3）"
+        );
     }
 
     #[test]

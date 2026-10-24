@@ -277,7 +277,7 @@ pub(crate) fn combat_editor(
                     TeamSelectConfig {
                         select: TeamSelect::SkillReplacementMode,
                         current: config.skill_replacement_mode.to_string(),
-                        options: (0..=2)
+                        options: (0..=4)
                             .map(|value| {
                                 (
                                     value.to_string(),
