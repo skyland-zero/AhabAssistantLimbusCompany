@@ -1,3 +1,7 @@
+from pathlib import Path
+
+from PIL import Image
+
 from module.mirror_routes import (
     DEFAULT_ROUTE,
     HOS_RYOSHU_SOLO_ROUTE,
@@ -5,6 +9,9 @@ from module.mirror_routes import (
     get_mirror_route,
     route_target_priority,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_SHARE_ASSETS = REPO_ROOT / "assets" / "images" / "default" / "share"
 
 
 def test_hos_route_switches_stages_at_five_and_ten() -> None:
@@ -103,3 +110,14 @@ def test_spiderweb_normal_farm_route_prioritizes_poise_and_slash_core() -> None:
     assert "old_wooden_doll" not in {
         gift.gift_id for gift in route.gift_targets_for_floor(3)
     }
+
+
+def test_spiderweb_normal_farm_gift_icons_match_repository_template_rules() -> None:
+    route = SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE
+    for gift in route.gifts:
+        asset_path = DEFAULT_SHARE_ASSETS / gift.asset
+        assert asset_path.is_file(), gift.gift_id
+        with Image.open(asset_path) as image:
+            assert image.mode == "RGBA", gift.gift_id
+            assert max(image.size) == 96, gift.gift_id
+            assert image.getbbox() is not None, gift.gift_id
