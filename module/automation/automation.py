@@ -1355,10 +1355,16 @@ class Automation(metaclass=SingletonMeta):
 
     @staticmethod
     def _is_usable_image(image) -> bool:
-        """Return True when an image is a non-empty 2D+ numpy array."""
-        if image is None or not isinstance(image, np.ndarray):
+        """Return True when an image is non-empty and at least two-dimensional."""
+        if image is None:
             return False
-        return image.size > 0 and image.ndim >= 2 and 0 not in image.shape[:2]
+        shape = getattr(image, "shape", None)
+        if shape is not None:
+            return image.size > 0 and len(shape) >= 2 and 0 not in shape[:2]
+        size = getattr(image, "size", None)
+        if isinstance(size, tuple) and len(size) >= 2:
+            return size[0] > 0 and size[1] > 0
+        return False
 
     @staticmethod
     def _is_valid_match(match_val, threshold) -> bool:

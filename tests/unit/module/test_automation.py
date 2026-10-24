@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -145,10 +146,12 @@ def test_wait_for_fresh_frame_true_without_frame_seq_transport() -> None:
 
 def test_is_usable_image_rejects_empty_inputs() -> None:
     assert Automation._is_usable_image(None) is False
-    assert Automation._is_usable_image(Image.new("RGB", (4, 4))) is False
+    assert Automation._is_usable_image(object()) is False
     assert Automation._is_usable_image(np.zeros((0, 4, 3), dtype=np.uint8)) is False
     assert Automation._is_usable_image(np.zeros((4, 0, 3), dtype=np.uint8)) is False
     assert Automation._is_usable_image(np.zeros((4, 4, 3), dtype=np.uint8)) is True
+    assert Automation._is_usable_image(Image.new("RGB", (4, 4))) is True
+    assert Automation._is_usable_image(SimpleNamespace(size=(0, 4))) is False
 
 
 def test_missing_feature_template_is_only_loaded_once(monkeypatch) -> None:
