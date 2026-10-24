@@ -147,6 +147,9 @@ class MirrorMap:
         if re_identify is True:
             self.floor_map, self.floor_nodes = search_road_from_road_map(hard_mode=self.hard_mode)
             if self.floor_map is True and self.floor_nodes is True:
+                # 已通过点击巴士直接进入节点，无路线可缓存；保留 True 会让
+                # 下一次 len() 抛 TypeError。
+                self.floor_map, self.floor_nodes = [], []
                 return True
             if self.floor_map is False:
                 self.floor_map = []
@@ -207,12 +210,19 @@ class MirrorMap:
             sleep(1)
         return None
 
-    def refresh_floor(self, floor):
-        if self.floor == floor:
+    def refresh_floor(self, floor, reset=False):
+        # 卡包页进入新地图时，即使楼层仍未知，也要清空上一层路线。
+        if self.floor == floor and not reset:
             return
         log.debug(f"镜牢地图楼层缓存更新: {self.floor} -> {floor}")
         self.floor = floor
         self.floor_map = []
+        self.floor_nodes = []
+
+    def reset_path(self) -> None:
+        """清空当前层的路线缓存，但不改变楼层号。"""
+        self.floor_map = []
+        self.floor_nodes = []
 
 
 def get_node_weight(x, y):

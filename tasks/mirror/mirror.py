@@ -825,6 +825,7 @@ class Mirror:
             # 选择楼层主题包的情况
             if auto.find_element("mirror/theme_pack/feature_theme_pack_assets.png"):
                 self._clear_entering_node_state()
+                self.mirror_map.reset_path()
                 sleep(2)
                 theme_floor = self._theme_pack_selection_floor()
                 if theme_floor is None:
@@ -1964,6 +1965,7 @@ class Mirror:
         if self.defense_for_solo_state is not None:
             self.defense_for_solo_state.reset_for_run()
             self.shop.set_pseudo_solo_active(False)
+        self.mirror_map.reset_path()
         self.start_time = time.time()
 
     def event_handling(self):

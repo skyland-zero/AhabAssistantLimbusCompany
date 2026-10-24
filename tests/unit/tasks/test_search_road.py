@@ -148,3 +148,40 @@ def test_route_strategy_can_prioritize_fewer_non_boss_combats() -> None:
     assert [node.node_class for node in path] == ["bus", "shop", "event", "boss_battle"]
     assert statistics["non_boss_combat"] == 0
     assert statistics["event"] == 1
+
+
+def test_direct_bus_entry_does_not_cache_true_route(monkeypatch) -> None:
+    mirror_map = search_road.MirrorMap(floor=0)
+    monkeypatch.setattr(search_road, "search_road_from_road_map", lambda **_kwargs: (True, True))
+
+    assert mirror_map.get_next_step() is True
+    assert mirror_map.floor_map == []
+    assert mirror_map.floor_nodes == []
+    # The next call re-identifies instead of calling len(True).
+    assert mirror_map.get_next_step() is True
+
+
+def test_reset_path_clears_the_current_route_only() -> None:
+    mirror_map = search_road.MirrorMap(floor=2)
+    mirror_map.floor_map = ["M"]
+    mirror_map.floor_nodes = [object()]
+    mirror_map.map["floor2"] = [["M"], []]
+
+    mirror_map.reset_path()
+
+    assert mirror_map.floor == 2
+    assert mirror_map.floor_map == []
+    assert mirror_map.floor_nodes == []
+    assert mirror_map.map["floor2"] == [["M"], []]
+
+
+def test_refresh_floor_reset_clears_cache_for_an_unknown_floor() -> None:
+    mirror_map = search_road.MirrorMap(floor=0)
+    mirror_map.floor_map = ["M"]
+    mirror_map.floor_nodes = [object()]
+
+    mirror_map.refresh_floor(0, reset=True)
+
+    assert mirror_map.floor == 0
+    assert mirror_map.floor_map == []
+    assert mirror_map.floor_nodes == []
