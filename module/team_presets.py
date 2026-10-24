@@ -76,6 +76,51 @@ _HOS_RYOSHU_SOLO_SETTING: dict[str, Any] = {
 }
 
 
+_SPIDERWEB_NORMAL_FARM_SETTING: dict[str, Any] = {
+    "purpose": "mirror",
+    "team_system": 4,
+    "sinners_be_select": 10,
+    "chosen_sinners": [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0],
+    # Positions: Ryoshu, Outis, Hong Lu, Rodion, Heathcliff, Yi Sang,
+    # Sinclair, Faust, Ishmael, Don Quixote.
+    "sinner_order": [6, 8, 10, 1, 0, 3, 5, 9, 4, 7, 2, 0],
+    "shop_strategy": 1,
+    "do_not_heal": True,
+    "do_not_buy": False,
+    "do_not_fuse": False,
+    "do_not_sell": True,
+    "do_not_enhance": False,
+    "only_system_fuse": True,
+    "shopping_strategy": True,
+    # Route targets are bought before the generic pass.  Option 0 keeps the
+    # generic pass to mandatory purchases only, so a shop visit stays short.
+    "shopping_strategy_select": 0,
+    "max_keyword_refresh": 0,
+    "max_normal_refresh": 1,
+    "use_starlight": True,
+    "opening_items": True,
+    "opening_items_select": 0,
+    "opening_items_system": 4,
+    "opening_bonus": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+    "observe_ego_gift": True,
+    "observe_ego_gift_selected": [SPIDERWEB_ENTANGLED_IN_RED],
+    "skill_replacement": True,
+    "skill_replacement_select": 0,
+    # Replace both S1 and S2 with S3 when the shop offers the option.
+    "skill_replacement_mode": 3,
+    "reward_cards": True,
+    "reward_cards_select": 3,
+    "defense_for_solo": True,
+    "defense_for_solo_turns": 5,
+    "use_team_code": False,
+    "team_code": "",
+    # Visit floors 1–3, skip the late-floor shops.
+    "ignore_shop": [0, 0, 0, 1, 1],
+    "mirror_route_profile": "spiderweb_family_normal_farm_route",
+    "remark_name": "蜘蛛巢全家桶（普牢速刷）",
+}
+
+
 BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
     BuiltinTeamPreset(
         preset_id="hos_ryoshu_solo_normal",
@@ -162,6 +207,28 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
             "mirror_route_profile": "spiderweb_family_route",
             "remark_name": "蜘蛛巢全家桶",
         },
+    ),
+    BuiltinTeamPreset(
+        preset_id="spiderweb_family_normal_farm",
+        route_id="spiderweb_family_normal_farm_route",
+        name_zh="蜘蛛巢全家桶（普牢速刷）",
+        name_en="House of Spiders Normal Speed Farm",
+        description_zh=(
+            "10 人蜘蛛巢全家桶，良秀首位。普通镜牢默认只进 1–3 层商店："
+            "优先换良秀三技能、购买明镜止水/斩击四级等路线饰品、只合成呼吸四级并强化关键小件；"
+            "4–5 层商店跳过，减少菜单时间。"
+        ),
+        description_en=(
+            "Ten-sinner House of Spiders roster with Ryoshu first. Normal Mirror Dungeons "
+            "visit only floors 1–3 shops: replace Ryoshu's skills with S3, buy route gifts "
+            "such as Clear Mirror, Calm Water and slash tier-IV gifts, fuse poise tier-IV only, "
+            "and enhance key pieces. Floors 4–5 shops are skipped to save menu time."
+        ),
+        floor_hint_zh="适用于普通镜牢，执行 1–5 层；默认只进 1–3 层商店",
+        floor_hint_en="For normal Mirror Dungeons; runs floors 1–5 and visits only floors 1–3 shops",
+        route_name_zh="蜘蛛巢全家桶 普牢速刷路线",
+        route_name_en="House of Spiders Normal Speed Farm Route",
+        setting=_SPIDERWEB_NORMAL_FARM_SETTING,
     ),
 )
 

@@ -1370,7 +1370,7 @@ def test_team_mirror_selectors_use_qt_compatible_ranges() -> None:
                 "shopping_strategy_select": 5,
                 "opening_items_select": 5,
                 "skill_replacement_select": 3,
-                "skill_replacement_mode": 2,
+                "skill_replacement_mode": 4,
             },
         }
     )
@@ -1379,14 +1379,14 @@ def test_team_mirror_selectors_use_qt_compatible_ranges() -> None:
     assert mirror["shopping_strategy_select"] == 5
     assert mirror["opening_items_select"] == 5
     assert mirror["skill_replacement_select"] == 3
-    assert mirror["skill_replacement_mode"] == 2
+    assert mirror["skill_replacement_mode"] == 4
 
     for field, value in (
         ("reward_cards_select", 4),
         ("shopping_strategy_select", 6),
         ("opening_items_select", 6),
         ("skill_replacement_select", 4),
-        ("skill_replacement_mode", 3),
+        ("skill_replacement_mode", 5),
     ):
         with pytest.raises(ValueError):
             app.team_save(
@@ -1408,6 +1408,7 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
         "hos_ryoshu_solo_normal",
         "hos_ryoshu_solo_hard",
         "spiderweb_family",
+        "spiderweb_family_normal_farm",
     ]
     normal, hard = presets[:2]
     assert normal["routeId"] == "hos_ryoshu_solo_route"
@@ -1431,6 +1432,28 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
     assert hard["team"]["mirrorConfig"]["skill_replacement"] is True
     assert normal["team"]["mirrorConfig"]["opening_bonus"] == [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
     assert hard["team"]["mirrorConfig"]["opening_bonus"] == [3] * 10
+
+    spider_farm = presets[3]
+    spider_farm_mirror = spider_farm["team"]["mirrorConfig"]
+    assert spider_farm["routeId"] == "spiderweb_family_normal_farm_route"
+    assert spider_farm_mirror["mirror_route_profile"] == "spiderweb_family_normal_farm_route"
+    assert len(spider_farm["team"]["sinners"]) == 10
+    assert spider_farm["team"]["sinners"][0] == "ryoshu"
+    assert spider_farm_mirror["shop_strategy"] == 1
+    assert spider_farm_mirror["only_system_fuse"] is True
+    assert spider_farm_mirror["do_not_heal"] is True
+    assert spider_farm_mirror["do_not_sell"] is True
+    assert spider_farm_mirror["do_not_buy"] is False
+    assert spider_farm_mirror["do_not_fuse"] is False
+    assert spider_farm_mirror["do_not_enhance"] is False
+    assert spider_farm_mirror["shopping_strategy"] is True
+    assert spider_farm_mirror["shopping_strategy_select"] == 0
+    assert spider_farm_mirror["ignore_shop"] == [False, False, False, True, True]
+    assert spider_farm_mirror["max_keyword_refresh"] == 0
+    assert spider_farm_mirror["max_normal_refresh"] == 1
+    assert spider_farm_mirror["skill_replacement"] is True
+    assert spider_farm_mirror["skill_replacement_mode"] == 3
+    assert spider_farm_mirror["use_team_code"] is False
     app.close()
 
 
@@ -1581,11 +1604,12 @@ def test_team_save_requires_ryoshu_and_two_family_members_for_pseudo_solo() -> N
 def test_builtin_team_preset_merge_preserves_custom_teams_and_queue() -> None:
     config = object.__new__(Config)
     config._defaults = {
-        "team_presets_revision": 4,
+        "team_presets_revision": 5,
         "teams": {
             "2": {"remark_name": "小指良伪单通（普牢）", "team_number": 2},
             "3": {"remark_name": "小指良伪单通（困牢）", "team_number": 3},
             "4": {"remark_name": "蜘蛛巢全家桶", "team_number": 4},
+            "5": {"remark_name": "蜘蛛巢全家桶（普牢速刷）", "team_number": 5},
         },
     }
     loaded = {
@@ -1604,14 +1628,47 @@ def test_builtin_team_preset_merge_preserves_custom_teams_and_queue() -> None:
     assert loaded["teams"]["3"]["remark_name"] == "蜘蛛巢全家桶"
     assert loaded["teams"]["4"]["remark_name"] == "小指良伪单通（普牢）"
     assert loaded["teams"]["5"]["remark_name"] == "小指良伪单通（困牢）"
+    assert loaded["teams"]["6"]["remark_name"] == "蜘蛛巢全家桶（普牢速刷）"
     assert loaded["teams"]["4"]["team_number"] == 4
     assert loaded["teams"]["5"]["team_number"] == 5
+    assert loaded["teams"]["6"]["team_number"] == 6
     assert loaded["teams_active_queue"] == [1, 2]
-    assert loaded["team_presets_revision"] == 4
+    assert loaded["team_presets_revision"] == 5
 
-    removed_after_migration = {"team_presets_revision": 4, "teams": {"1": {"remark_name": "我的队伍"}}}
+    removed_after_migration = {"team_presets_revision": 5, "teams": {"1": {"remark_name": "我的队伍"}}}
     assert config._merge_builtin_team_presets(removed_after_migration) is False
     assert list(removed_after_migration["teams"]) == ["1"]
+
+
+def test_builtin_team_preset_merge_from_revision_four_only_adds_the_new_preset() -> None:
+    config = object.__new__(Config)
+    config._defaults = {
+        "team_presets_revision": 5,
+        "teams": {
+            "2": {"remark_name": "小指良伪单通（普牢）", "team_number": 2},
+            "3": {"remark_name": "小指良伪单通（困牢）", "team_number": 3},
+            "4": {"remark_name": "蜘蛛巢全家桶", "team_number": 4},
+            "5": {"remark_name": "蜘蛛巢全家桶（普牢速刷）", "team_number": 5},
+        },
+    }
+    loaded = {
+        "team_presets_revision": 4,
+        "teams": {
+            "1": {"remark_name": "我的队伍"},
+            "2": {"remark_name": "小指良伪单通（普牢）"},
+        },
+        "teams_active_queue": [1, 2],
+    }
+
+    assert config._merge_builtin_team_presets(loaded) is True
+    assert loaded["teams"]["1"]["remark_name"] == "我的队伍"
+    assert loaded["teams"]["2"]["remark_name"] == "小指良伪单通（普牢）"
+    assert loaded["teams"]["5"]["remark_name"] == "蜘蛛巢全家桶（普牢速刷）"
+    assert loaded["teams"]["5"]["team_number"] == 5
+    assert "3" not in loaded["teams"]
+    assert "4" not in loaded["teams"]
+    assert loaded["teams_active_queue"] == [1, 2]
+    assert loaded["team_presets_revision"] == 5
 
 
 def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> None:

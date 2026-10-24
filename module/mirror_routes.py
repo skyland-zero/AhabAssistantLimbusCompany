@@ -820,6 +820,217 @@ SPIDERWEB_FAMILY_ROUTE = MirrorRouteDefinition(
     summary_en="Keep the existing mirror-gift behavior and Spiderweb-exclusive Gift Search.",
 )
 
+# Normal-mode poise/slash speed route for the full House of Spiders roster.
+# The shop only needs to replace Ryoshu's skills, buy the route targets, fuse
+# poise tier-IV gifts, and enhance the small damage pieces.  Tier-II/III poise
+# gifts are deliberately left unprotected so the generic poise fusion path can
+# consume them while chasing Clear Mirror, Calm Water.
+_SPIDERWEB_NORMAL_GIFTS = (
+    GiftRouteTarget(
+        "clear_mirror_calm_water",
+        ("明镜止水", "明鏡止水"),
+        ("Clear Mirror, Calm Water", "Clear Mirror Calm Water"),
+        1,
+        5,
+        1,
+        required=True,
+    ),
+    GiftRouteTarget(
+        "broken_greatsword",
+        ("破碎的巨剑", "破碎巨剑", "碎裂的巨剑"),
+        ("Broken Greatsword",),
+        3,
+        5,
+        10,
+    ),
+    GiftRouteTarget(
+        "sundered_memory",
+        ("切开的记忆", "切断的记忆", "破碎的记忆"),
+        ("Sundered Memory",),
+        3,
+        5,
+        20,
+    ),
+    GiftRouteTarget(
+        "artistic_sense",
+        ("美感",),
+        ("Artistic Sense",),
+        3,
+        5,
+        30,
+    ),
+    GiftRouteTarget(
+        "nebulizer",
+        ("雾化吸入器", "霧化吸入器", "呼吸器"),
+        ("Nebulizer",),
+        1,
+        5,
+        40,
+        protected=False,
+    ),
+    GiftRouteTarget(
+        "four_leaf_clover",
+        ("四叶草", "四葉草"),
+        ("Four-leaf Clover", "Four Leaf Clover"),
+        1,
+        5,
+        50,
+        protected=False,
+    ),
+    GiftRouteTarget(
+        "endorphin_kit",
+        ("脑啡肽试剂组", "脑啡肽试剂", "內啡肽試劑組"),
+        ("Endorphin Kit",),
+        1,
+        5,
+        60,
+        protected=False,
+    ),
+    GiftRouteTarget(
+        "darkflame_smoking_pipe",
+        ("暗焰烟斗", "黑焰烟斗", "烟斗"),
+        ("Darkflame Smoking Pipe", "Smoking Pipe"),
+        1,
+        5,
+        70,
+    ),
+    GiftRouteTarget(
+        "bloody_gadget",
+        ("鲜血装饰", "鮮血裝飾"),
+        ("Bloody Gadget",),
+        1,
+        5,
+        80,
+    ),
+    GiftRouteTarget(
+        "rusty_commemorative_coin",
+        ("锈蚀的纪念币", "锈蚀纪念币", "鏽蝕的紀念幣"),
+        ("Rusty Commemorative Coin",),
+        1,
+        5,
+        90,
+    ),
+    GiftRouteTarget(
+        "stone_tomb",
+        ("石冢", "石塚"),
+        ("Stone Tomb",),
+        1,
+        2,
+        100,
+    ),
+    GiftRouteTarget(
+        "old_wooden_doll",
+        ("老旧木雕人偶", "老旧的木雕人偶", "老舊的木雕人偶"),
+        ("Old Wooden Doll",),
+        1,
+        2,
+        110,
+        protected=False,
+    ),
+)
+
+SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE = MirrorRouteDefinition(
+    route_id="spiderweb_family_normal_farm_route",
+    name_zh="蜘蛛巢全家桶 普牢速刷路线",
+    name_en="House of Spiders Normal Speed Farm Route",
+    summary_zh=(
+        "普通镜牢 5 层：1–2 层无慈悲/地狱鸡，3–4 层短路卡包，5 层 2 号线；"
+        "商店优先换良秀三技能、买路线饰品、合成呼吸四级并强化关键饰品。"
+    ),
+    summary_en=(
+        "Normal five-floor route: The Unloving/Hell's Chicken on floors 1–2, "
+        "short theme packs on floors 3–4, and Line 2 on floor 5. Shops focus on "
+        "Ryoshu skill replacement, route gifts, poise tier-IV fusion, and key upgrades."
+    ),
+    stages=(
+        MirrorRouteStage(
+            1,
+            2,
+            (
+                "无慈悲",
+                "unloving",
+                "无法去爱",
+                "自动",
+                "automated",
+                "宅邸",
+                "dregs",
+                "地狱鸡",
+                "chick",
+            ),
+            tuple(gift.gift_id for gift in _SPIDERWEB_NORMAL_GIFTS if gift.start_floor <= 2),
+        ),
+        MirrorRouteStage(
+            3,
+            4,
+            (
+                "某个世界",
+                "certain",
+                "肉斩骨断",
+                "骨断",
+                "bones",
+                "堕落的忧郁",
+                "落的忧",
+                "degraded",
+                "沉迷的色欲",
+                "沉迷的",
+                "addict",
+                "憎恶与绝望",
+                "绝望",
+                "Hatred",
+            ),
+            tuple(gift.gift_id for gift in _SPIDERWEB_NORMAL_GIFTS if gift.start_floor <= 4 and gift.end_floor >= 3),
+        ),
+        MirrorRouteStage(
+            5,
+            5,
+            ("2号线", "Line 2", "号线", "line", "4号线", "Line 4"),
+            tuple(gift.gift_id for gift in _SPIDERWEB_NORMAL_GIFTS if gift.end_floor >= 5),
+        ),
+    ),
+    gifts=_SPIDERWEB_NORMAL_GIFTS,
+    floor_counts=(5,),
+    floor_theme_pack_names=(
+        (1, 1, ("unloving", "无慈悲", "无法去爱", "automated", "自动", "dregs", "宅邸")),
+        (2, 2, ("chick", "地狱鸡", "Hell's Chicken")),
+        (
+            3,
+            3,
+            (
+                "certain",
+                "某个世界",
+                "bones",
+                "骨断",
+                "肉斩骨断",
+                "degraded",
+                "落的忧",
+                "堕落的忧郁",
+                "addict",
+                "沉迷的",
+                "沉迷的色欲",
+            ),
+        ),
+        (
+            4,
+            4,
+            (
+                "Hatred",
+                "绝望",
+                "憎恶与绝望",
+                "certain",
+                "某个世界",
+                "bones",
+                "骨断",
+                "degraded",
+                "落的忧",
+                "addict",
+                "沉迷的",
+            ),
+        ),
+        (5, 5, ("line", "号线", "2号线", "Line 2", "4号线", "Line 4")),
+    ),
+    skill_replacement_target_counts=(0, 0, 3),
+)
+
 DEFAULT_ROUTE = MirrorRouteDefinition(
     route_id="",
     name_zh="默认饰品路线",
@@ -829,7 +1040,13 @@ DEFAULT_ROUTE = MirrorRouteDefinition(
 )
 
 ROUTES: dict[str, MirrorRouteDefinition] = {
-    route.route_id: route for route in (HOS_RYOSHU_SOLO_ROUTE, SPIDERWEB_FAMILY_ROUTE, DEFAULT_ROUTE)
+    route.route_id: route
+    for route in (
+        HOS_RYOSHU_SOLO_ROUTE,
+        SPIDERWEB_FAMILY_ROUTE,
+        SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE,
+        DEFAULT_ROUTE,
+    )
 }
 
 # These aliases cover the first development shape of the built-in catalog and
@@ -838,6 +1055,7 @@ ROUTES: dict[str, MirrorRouteDefinition] = {
 ROUTE_ALIASES: dict[str, MirrorRouteDefinition] = {
     "hos_ryoshu_solo": HOS_RYOSHU_SOLO_ROUTE,
     "spiderweb_family": SPIDERWEB_FAMILY_ROUTE,
+    "spiderweb_normal_farm": SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE,
 }
 
 

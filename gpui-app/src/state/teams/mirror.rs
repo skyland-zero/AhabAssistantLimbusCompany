@@ -98,7 +98,7 @@ impl TeamsState {
             MirrorU8::SecondSystemStartFloor => config.second_system_setting = value.min(1),
             MirrorU8::DefenseTurns => config.defense_for_solo_turns = value.clamp(1, 5),
             MirrorU8::SkillReplacementSelect => config.skill_replacement_select = value.min(3),
-            MirrorU8::SkillReplacementMode => config.skill_replacement_mode = value.min(2),
+            MirrorU8::SkillReplacementMode => config.skill_replacement_mode = value.min(4),
             MirrorU8::FixedTeamUseSelect => config.fixed_team_use_select = value.min(2),
         });
     }

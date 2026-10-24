@@ -1,5 +1,5 @@
 config_version: 1781049600 # 配置文件版本号 (时间戳)
-team_presets_revision: 4 # 内置队伍预设迁移版本
+team_presets_revision: 5 # 内置队伍预设迁移版本
 
 # 游戏设置
 game_title_name: LimbusCompany # 游戏窗口标题。
@@ -298,3 +298,41 @@ teams:
     remark_name: 蜘蛛巢全家桶 # 队伍备注名
     use_team_code: true # 使用编队码
     team_code: "H4sIAAAAAAAACg3MQRJAMAxA0UthZ/HTFGE6ZKx6gtS4ALfnHeDpq0QERyQVCXqs5hV9aOE3hTTLBb2bn0ZeuNwr+52yiguPlW1GB6LZn9QzpxZ0eLUJGMcPt8GoUGAAAAA="
+  '5':
+    purpose: mirror # 队伍用途
+    team_system: 4 # 队伍使用的体系
+    team_number: 5 # 使用的队伍序号
+    sinners_be_select: 10 # 有几名罪人被选中
+    chosen_sinners: [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0] # 有哪几名罪人被选中
+    sinner_order: [6, 8, 10, 1, 0, 3, 5, 9, 4, 7, 2, 0] # 罪人被选中的顺序
+    shop_strategy: 1 # 商店策略：保守合成
+    do_not_heal: true # 不治疗
+    do_not_buy: false # 不购买
+    do_not_fuse: false # 不合成
+    do_not_sell: true # 不出售
+    do_not_enhance: false # 不升级
+    only_system_fuse: true # 只合成体系饰品
+    shopping_strategy: true # 自定义购物策略
+    shopping_strategy_select: 0 # 仅购买必买项，路线饰品仍优先购买
+    max_keyword_refresh: 0 # 每次商店访问时定向刷新商品的次数上限
+    max_normal_refresh: 1 # 每次商店访问时普通刷新商品的次数上限
+    use_starlight: true # 开局星光不换钱
+    opening_bonus: [1, 1, 1, 1, 0, 0, 0, 0, 0, 0] # 普牢开局星光：默认前四个一级
+    opening_items: true # 按攻略选择初始饰品
+    opening_items_select: 0 # Cigarette Holder II / Stone Tomb II / Old Wooden Doll II
+    opening_items_system: 4 # 呼吸体系
+    defense_for_solo: true # 小指良伪单通
+    defense_for_solo_turns: 5 # 伪单通防御回合数
+    use_damage_p: false # 自动战斗使用伤害P（关闭则使用胜率P）
+    remark_name: 蜘蛛巢全家桶（普牢速刷） # 队伍备注名
+    observe_ego_gift: true # 观测饰品
+    observe_ego_gift_selected: [spiderweb_entangled_in_red] # 蜘蛛巢专属 Gift Search
+    skill_replacement: true # 启用技能替换
+    skill_replacement_select: 0 # 优先良秀
+    skill_replacement_mode: 3 # 全换3（先2→3）
+    reward_cards: true # 奖励卡优先度
+    reward_cards_select: 3 # 饰品优先
+    ignore_shop: [0, 0, 0, 1, 1] # 只进 1–3 层商店
+    use_team_code: false # 使用编队码
+    team_code: "" # 编队码
+    mirror_route_profile: spiderweb_family_normal_farm_route # 镜牢饰品路线 ID

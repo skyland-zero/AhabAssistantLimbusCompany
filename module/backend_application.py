@@ -156,7 +156,7 @@ TEAM_MIRROR_INT_LIMITS = {
     "second_system_setting": (0, 1),
     "defense_for_solo_turns": (1, 5),
     "skill_replacement_select": (0, 3),
-    "skill_replacement_mode": (0, 2),
+    "skill_replacement_mode": (0, 4),
     "fixed_team_use_select": (0, 2),
     "reward_cards_select": (0, 3),
     "shopping_strategy_select": (0, 5),

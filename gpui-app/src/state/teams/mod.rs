@@ -97,7 +97,7 @@ mod tests {
         assert_eq!(config.opening_items_select, 5);
         assert_eq!(config.opening_items_system, 9);
         assert_eq!(config.skill_replacement_select, 3);
-        assert_eq!(config.skill_replacement_mode, 2);
+        assert_eq!(config.skill_replacement_mode, 4);
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn built_in_presets_have_stable_ids_and_complete_routes() {
         let state = TeamsState::default();
-        assert_eq!(state.presets.len(), 3);
+        assert_eq!(state.presets.len(), 4);
         let normal = state
             .presets
             .iter()
@@ -178,12 +178,34 @@ mod tests {
             .iter()
             .find(|preset| preset.presetId == "hos_ryoshu_solo_hard")
             .unwrap();
+        let spider_farm = state
+            .presets
+            .iter()
+            .find(|preset| preset.presetId == "spiderweb_family_normal_farm")
+            .unwrap();
         assert_eq!(normal.routeId, "hos_ryoshu_solo_route");
         assert_eq!(hard.routeId, "hos_ryoshu_solo_route");
+        assert_eq!(spider_farm.routeId, "spiderweb_family_normal_farm_route");
         assert_eq!(normal.team.sinners.len(), 7);
         assert_eq!(hard.team.sinners.len(), 12);
+        assert_eq!(spider_farm.team.sinners.len(), 10);
         assert_eq!(normal.team.name, "小指良伪单通（普牢）");
         assert_eq!(hard.team.name, "小指良伪单通（困牢）");
+        assert_eq!(spider_farm.team.name, "蜘蛛巢全家桶（普牢速刷）");
+        let spider_farm_config = spider_farm.team.mirrorConfig.as_ref().unwrap();
+        assert_eq!(
+            spider_farm_config.mirror_route_profile,
+            "spiderweb_family_normal_farm_route"
+        );
+        assert_eq!(spider_farm_config.skill_replacement_mode, 3);
+        assert_eq!(
+            spider_farm_config.ignore_shop,
+            vec![false, false, false, true, true]
+        );
+        assert!(spider_farm_config.only_system_fuse);
+        assert!(!spider_farm_config.do_not_buy);
+        assert!(!spider_farm_config.do_not_fuse);
+        assert!(!spider_farm_config.do_not_enhance);
         assert_eq!(
             normal
                 .team

@@ -40,8 +40,22 @@ _BUILTIN_TEAM_PRESET_NAMES = frozenset(
         "小指良伪单通（普牢）",
         "小指良伪单通（困牢）",
         "蜘蛛巢全家桶",
+        "蜘蛛巢全家桶（普牢速刷）",
     }
 )
+
+# Only add presets introduced after the user's saved revision.  This keeps a
+# revision bump from re-adding older built-in teams that the user deleted.
+_TEAM_PRESETS_INTRODUCED_BY_REVISION = {
+    4: frozenset(
+        {
+            "小指良伪单通（普牢）",
+            "小指良伪单通（困牢）",
+            "蜘蛛巢全家桶",
+        }
+    ),
+    5: frozenset({"蜘蛛巢全家桶（普牢速刷）"}),
+}
 
 
 class Config(metaclass=SingletonMeta):
@@ -252,6 +266,10 @@ class Config(metaclass=SingletonMeta):
         if saved_revision >= target_revision:
             return False
 
+        introduced_names: set[str] = set()
+        for revision in range(saved_revision + 1, target_revision + 1):
+            introduced_names.update(_TEAM_PRESETS_INTRODUCED_BY_REVISION.get(revision, ()))
+
         default_teams = self._defaults.get("teams", {}) or {}
         if not isinstance(default_teams, Mapping):
             return False
@@ -284,6 +302,8 @@ class Config(metaclass=SingletonMeta):
                 continue
             preset_name = preset_setting.get("remark_name")
             if not isinstance(preset_name, str) or preset_name not in _BUILTIN_TEAM_PRESET_NAMES:
+                continue
+            if introduced_names and preset_name not in introduced_names:
                 continue
             if preset_name in existing_names:
                 continue

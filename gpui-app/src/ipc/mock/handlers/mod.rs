@@ -258,6 +258,59 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         mirrorConfig: Some(spider_config),
     };
 
+    let spider_farm_config = TeamMirrorConfig {
+        team_system: 4,
+        shop_strategy: 1,
+        reward_cards: true,
+        reward_cards_select: 3,
+        shopping_strategy: true,
+        shopping_strategy_select: 0,
+        opening_items: true,
+        opening_items_select: 0,
+        opening_items_system: 4,
+        do_not_heal: true,
+        do_not_buy: false,
+        do_not_fuse: false,
+        do_not_sell: true,
+        do_not_enhance: false,
+        only_system_fuse: true,
+        ignore_shop: vec![false, false, false, true, true],
+        max_keyword_refresh: 0,
+        max_normal_refresh: 1,
+        skill_replacement: true,
+        skill_replacement_select: 0,
+        skill_replacement_mode: 3,
+        use_starlight: true,
+        opening_bonus: vec![1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+        defense_for_solo: true,
+        use_team_code: false,
+        observe_ego_gift: true,
+        observe_ego_gift_selected: vec![SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID.to_owned()],
+        mirror_route_profile: "spiderweb_family_normal_farm_route".into(),
+        ..TeamMirrorConfig::default()
+    };
+    let spider_farm_team = TeamDetail {
+        schemaVersion: 1,
+        id: String::new(),
+        name: "蜘蛛巢全家桶（普牢速刷）".into(),
+        sinners: vec![
+            "ryoshu".into(),
+            "outis".into(),
+            "hong_lu".into(),
+            "rodion".into(),
+            "heathcliff".into(),
+            "yi_sang".into(),
+            "sinclair".into(),
+            "faust".into(),
+            "ishmael".into(),
+            "don_quixote".into(),
+        ],
+        purpose: TeamPurpose::Mirror,
+        accessoryScheme: "poise".into(),
+        enabled: false,
+        mirrorConfig: Some(spider_farm_config),
+    };
+
     vec![
         TeamPreset {
             presetId: "hos_ryoshu_solo_normal".into(),
@@ -321,6 +374,27 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
                 enUs: "Spiderweb default route".into(),
             },
             team: spider_team,
+        },
+        TeamPreset {
+            presetId: "spiderweb_family_normal_farm".into(),
+            routeId: "spiderweb_family_normal_farm_route".into(),
+            name: LocalizedText {
+                zhCn: "蜘蛛巢全家桶（普牢速刷）".into(),
+                enUs: "House of Spiders Normal Speed Farm".into(),
+            },
+            description: LocalizedText {
+                zhCn: "10 人蜘蛛巢全家桶，良秀首位。普通镜牢默认只进 1–3 层商店：优先换良秀三技能、购买明镜止水/斩击四级等路线饰品、只合成呼吸四级并强化关键小件；4–5 层商店跳过。".into(),
+                enUs: "Ten-sinner House of Spiders roster with Ryoshu first. Normal Mirror Dungeons visit only floors 1–3 shops: replace Ryoshu's skills with S3, buy route gifts such as Clear Mirror, Calm Water and slash tier-IV gifts, fuse poise tier-IV only, and enhance key pieces. Floors 4–5 shops are skipped.".into(),
+            },
+            floorHint: LocalizedText {
+                zhCn: "适用于普通镜牢，执行 1–5 层；默认只进 1–3 层商店".into(),
+                enUs: "For normal Mirror Dungeons; runs floors 1–5 and visits only floors 1–3 shops.".into(),
+            },
+            routeName: LocalizedText {
+                zhCn: "蜘蛛巢全家桶 普牢速刷路线".into(),
+                enUs: "House of Spiders Normal Speed Farm Route".into(),
+            },
+            team: spider_farm_team,
         },
     ]
 }

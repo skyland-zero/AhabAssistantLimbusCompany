@@ -1,6 +1,7 @@
 from module.mirror_routes import (
     DEFAULT_ROUTE,
     HOS_RYOSHU_SOLO_ROUTE,
+    SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE,
     get_mirror_route,
     route_target_priority,
 )
@@ -72,3 +73,33 @@ def test_unknown_route_id_keeps_default_behavior() -> None:
 def test_legacy_route_aliases_resolve_to_independent_route_ids() -> None:
     assert HOS_RYOSHU_SOLO_ROUTE.route_id == "hos_ryoshu_solo_route"
     assert get_mirror_route("hos_ryoshu_solo") is HOS_RYOSHU_SOLO_ROUTE
+    assert get_mirror_route("spiderweb_normal_farm") is SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE
+
+
+def test_spiderweb_normal_farm_route_targets_five_floor_speed_packs() -> None:
+    route = SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE
+    assert route.floor_counts == (5,)
+    assert "unloving" in route.theme_pack_names_for_floor(1)
+    assert "chick" in route.theme_pack_names_for_floor(2)
+    assert route.theme_pack_names_for_floor(3)[0] == "certain"
+    assert route.theme_pack_names_for_floor(4)[0] == "Hatred"
+    assert route.theme_pack_names_for_floor(5)[0] == "line"
+
+
+def test_spiderweb_normal_farm_route_prioritizes_poise_and_slash_core() -> None:
+    route = SPIDERWEB_FAMILY_NORMAL_FARM_ROUTE
+    floor_one = route.gift_targets_for_floor(1)
+    assert floor_one[0].gift_id == "clear_mirror_calm_water"
+    assert route.gift_target("clear_mirror_calm_water").required
+    assert route.gift_target("nebulizer").protected is False
+    assert route.gift_target("four_leaf_clover").protected is False
+    assert route.gift_target("endorphin_kit").protected is False
+    assert route.gift_target("broken_greatsword").protected is True
+    assert route.gift_target("sundered_memory").protected is True
+    assert route.skill_replacement_target_counts == (0, 0, 3)
+    assert "clear_mirror_calm_water" in {
+        gift.gift_id for gift in route.gift_targets_for_floor(5)
+    }
+    assert "old_wooden_doll" not in {
+        gift.gift_id for gift in route.gift_targets_for_floor(3)
+    }
