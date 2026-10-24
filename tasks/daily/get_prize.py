@@ -1,5 +1,6 @@
 from core.execution_control import interruptible_sleep as sleep
 from module.automation import auto
+from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
 from tasks.base import update_model_for_retry
@@ -7,10 +8,20 @@ from tasks.base.retry import retry
 from utils.image_utils import ImageUtils
 
 
+def _mail_fallback_position():
+    """赛季入口识别失败时，返回邮箱按钮下方可点击的位置。"""
+    mail_pos = auto.find_element("home/mail_assets.png")
+    if not mail_pos:
+        return None
+    scale = cfg.set_win_size / 1440
+    return mail_pos[0], mail_pos[1] + 200 * scale
+
+
 @begin_and_finish_time_log(task_name="收取日常/周常", calculate_time=False)
 def get_pass_prize():
     loop_count = 15
     auto.model = "clam"
+    last_try = False
     while True:
         # 自动截图
         if auto.take_screenshot() is None:
@@ -27,7 +38,7 @@ def get_pass_prize():
                 continue
         else:
             season_bbox = ImageUtils.get_bbox(ImageUtils.load_image("home/season_assets.png"))
-            if auto.find_text_element("season", season_bbox):
+            if auto.find_text_element(["season", "seasun"], season_bbox):
                 auto.mouse_click(
                     (season_bbox[0] + season_bbox[2]) / 2,
                     (season_bbox[1] + season_bbox[3]) / 2,
@@ -39,6 +50,13 @@ def get_pass_prize():
         loop_count -= 1
         update_model_for_retry(loop_count, normal_at=10, aggressive_at=5)
         if loop_count < 0:
+            if not last_try:
+                last_try = True
+                mail_position = _mail_fallback_position()
+                if mail_position is not None:
+                    auto.mouse_click(mail_position[0], mail_position[1])
+                    loop_count = 0
+                    continue
             log.error("无法收取日常/周常")
             return
     auto.click_element("pass/weekly_assets.png")
