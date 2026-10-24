@@ -1203,6 +1203,13 @@ class MumuControl(AbstractInput):
                 self._swap_stuck_capture_state()
                 self._pending_screenshot = None
 
+    @staticmethod
+    def _decode_nemu_frame(frame: np.ndarray) -> np.ndarray:
+        """NemuIpc 输出 RGBA；转换为项目统一的 RGB 并翻转成正向。"""
+        rgb = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
+        cv2.flip(rgb, 0, dst=rgb)
+        return rgb
+
     def _capture_display(self):
         """在专用单线程执行器内完成一次原生截图，并与其他 NemuIpc 调用串行。"""
         width = self.width
@@ -1227,9 +1234,7 @@ class MumuControl(AbstractInput):
             raise NemuIpcError("nemu_capture_display failed during screenshot()")
 
         image = np.ctypeslib.as_array(pixels_pointer.contents).reshape((height, width, 4))
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
-        cv2.flip(image, 0, dst=image)
-        return image
+        return self._decode_nemu_frame(image)
 
     def screenshot(self, timeout=0.5):
         """

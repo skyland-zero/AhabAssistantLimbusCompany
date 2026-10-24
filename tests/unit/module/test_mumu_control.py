@@ -5,6 +5,7 @@ import threading
 import time
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 import module.automation.input_handlers.simulator.mumu_control as mumu_module
@@ -259,3 +260,27 @@ def test_mumu_click_releases_touch_when_wait_is_cancelled(monkeypatch) -> None:
     controller.click(10, 20)
 
     assert events == ["down", "up"]
+
+
+def test_nemu_frame_decoder_uses_rgba_channel_order() -> None:
+    frame = np.array([[[255, 0, 0, 255], [0, 255, 0, 255]]], dtype=np.uint8)
+
+    decoded = mumu_module.MumuControl._decode_nemu_frame(frame)
+
+    assert decoded[0, 0].tolist() == [255, 0, 0]
+    assert decoded[0, 1].tolist() == [0, 255, 0]
+
+
+def test_nemu_frame_decoder_flips_vertically() -> None:
+    frame = np.array(
+        [
+            [[10, 20, 30, 255]],
+            [[40, 50, 60, 255]],
+        ],
+        dtype=np.uint8,
+    )
+
+    decoded = mumu_module.MumuControl._decode_nemu_frame(frame)
+
+    assert decoded[0, 0].tolist() == [40, 50, 60]
+    assert decoded[1, 0].tolist() == [10, 20, 30]
