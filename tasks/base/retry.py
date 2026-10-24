@@ -19,6 +19,8 @@ _last_simulator_alive_check_time = 0.0
 # P0止血：重弹窗重检查限频状态（8次未命中后1/3帧+0.8s节流）
 _last_heavy_retry_ts = 0.0
 _heavy_retry_miss_streak = 0
+DEFAULT_TASK_STALL_TIMEOUT = 90
+MIN_TASK_STALL_TIMEOUT = 30
 
 
 def _active_session():
@@ -180,8 +182,19 @@ def kill_game():
         sleep(1)
 
 
-def check_times(start_time, timeout=90, logs=True):
+def get_task_stall_timeout() -> int:
+    """读取页面卡死等待时间，并为异常配置提供安全下限。"""
+    try:
+        configured_timeout = int(cfg.get_value("task_stall_timeout", DEFAULT_TASK_STALL_TIMEOUT))
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_TASK_STALL_TIMEOUT
+    return max(MIN_TASK_STALL_TIMEOUT, configured_timeout)
+
+
+def check_times(start_time, timeout=None, logs=True):
     """检查是否卡死超时，若是则尝试关闭重启游戏"""
+    if timeout is None:
+        timeout = get_task_stall_timeout()
     now_time = time.time()
     if logs and int(now_time - start_time) > 9 and int(now_time - start_time) % 10 == 0:
         log.info(
