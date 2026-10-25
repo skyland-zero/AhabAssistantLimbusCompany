@@ -3232,6 +3232,29 @@ class BackendApplication:
             value = default
         return copy.deepcopy(value) if isinstance(value, (dict, list, set)) else value
 
+    def _active_simulator_height(self) -> int | None:
+        """Return the live emulator display height when one is attached.
+
+        A simulator owns its own display size.  The UI's persisted
+        ``set_win_size`` is a PC-window hint and must not overwrite the value
+        auto-detected from MuMu/ADB, otherwise templates are scaled for a
+        different resolution than the screenshots and every match misses.
+        """
+        try:
+            session = self.device_manager.active_session
+        except Exception:
+            return None
+        if session is None:
+            return None
+        target = getattr(session, "target", None)
+        if getattr(target, "kind", None) not in ("mumu", "adb"):
+            return None
+        controller = getattr(session, "controller", None)
+        height = getattr(controller, "height", 0)
+        if height in (720, 900, 1080, 1440, 1800, 2160):
+            return int(height)
+        return None
+
     def _apply_config_updates(self, updates: Mapping[str, Any]) -> None:
         if not updates:
             return
@@ -3239,6 +3262,15 @@ class BackendApplication:
             for key, value in updates.items():
                 if key == "set_win_position":
                     value = self._canonical_window_position(value)
+                if key == "set_win_size":
+                    detected = self._active_simulator_height()
+                    if detected is not None and detected != value:
+                        log.info(
+                            "忽略 UI 分辨率 %s，使用模拟器分辨率 %s",
+                            value,
+                            detected,
+                        )
+                        value = detected
                 self._validate_config_value(key, value)
                 if hasattr(self.config, "unsaved_set_value"):
                     self.config.unsaved_set_value(key, copy.deepcopy(value), stacklevel=3)

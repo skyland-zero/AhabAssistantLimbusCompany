@@ -1885,6 +1885,39 @@ def test_tool_resolution_set_and_reset(monkeypatch) -> None:
     app.close()
 
 
+def test_tasks_set_config_keeps_simulator_detected_resolution() -> None:
+    class SimulatorController:
+        height = 1440
+
+    manager = DeviceManager()
+    manager._active = DeviceSession(
+        DeviceManager._make_mumu_target(0),
+        SimulatorController(),
+    )
+    app = BackendApplication(
+        manager,
+        version="test",
+        config=FakeConfig(),
+        theme_list=FakeThemeStore(),
+    )
+    try:
+        # The GPUI task config defaults to 1080, but the emulator is 1440.
+        # Applying that stale value would scale every template against the
+        # wrong screenshot height and make all vision matches miss.
+        assert app.tasks_set_config({"set_windows": {"set_win_size": 1080}}) is True
+        assert app.config.values["set_win_size"] == 1440
+
+        # A PC window is not simulator-owned and keeps the requested size.
+        manager._active = DeviceSession(
+            DeviceTarget(DeviceInfo("pc:limbus", "Limbus Company"), "pc"),
+            None,
+        )
+        assert app.tasks_set_config({"set_windows": {"set_win_size": 1080}}) is True
+        assert app.config.values["set_win_size"] == 1080
+    finally:
+        app.close()
+
+
 def test_tasks_set_config_rejects_out_of_range_and_non_finite_numbers() -> None:
     app = make_application()
     try:
