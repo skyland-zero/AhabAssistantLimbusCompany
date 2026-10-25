@@ -1,5 +1,5 @@
 use gpui::{Context, ParentElement as _, Styled as _, Window, div};
-use gpui_component::WindowExt as _;
+use gpui_kit::component::WindowExt as _;
 
 use super::AhabApp;
 use crate::ipc::{RpcGateway, contract::method};
@@ -76,7 +76,7 @@ impl AhabApp {
                         .items_center()
                         .gap_2()
                         .child(
-                            gpui_component::Icon::new(crate::components::IconName::ScrollText)
+                            gpui_kit::component::Icon::new(crate::components::IconName::ScrollText)
                                 .size(gpui::px(17.))
                                 .text_color(crate::components::style::palette_rgb(
                                     crate::components::style::current_render_palette().brand,

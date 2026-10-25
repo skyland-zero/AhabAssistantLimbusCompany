@@ -1,6 +1,6 @@
 use gpui::ElementId;
-use gpui_component::Disableable as _;
-pub use gpui_component::switch::Switch;
+use gpui_kit::component::Disableable as _;
+pub use gpui_kit::component::switch::Switch;
 
 use super::*;
 

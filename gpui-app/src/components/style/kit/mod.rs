@@ -26,7 +26,7 @@
 mod colors;
 
 use gpui::{App, Global, Window, px};
-use gpui_component::{Theme, ThemeMode, ThemeTokens};
+use gpui_kit::component::{Theme, ThemeMode, ThemeTokens};
 
 use super::palette::Palette;
 use super::tokens::ShadowLevel;
@@ -87,7 +87,7 @@ pub fn apply(palette: Palette, window: Option<&mut Window>, cx: &mut App) {
 mod tests {
     use super::*;
     use crate::components::style::tokens::{AccentId, ColorScheme, SkinId};
-    use gpui_component::ThemeColor;
+    use gpui_kit::component::ThemeColor;
 
     pub(super) fn every_palette() -> impl Iterator<Item = Palette> {
         SkinId::ALL.into_iter().flat_map(|skin| {

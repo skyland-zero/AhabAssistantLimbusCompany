@@ -1,7 +1,7 @@
 use gpui::{ElementId, SharedString};
-use gpui_component::Disableable as _;
-use gpui_component::button::{Button, ButtonVariants as _};
-use gpui_component::tag::Tag;
+use gpui_kit::component::Disableable as _;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tag::Tag;
 
 use super::style::FONT_SM;
 use super::*;
@@ -58,8 +58,8 @@ impl ButtonVariant {
     /// `Icon` maps to `Ghost` because the app draws icon buttons on a card
     /// surface, so "same colour as the parent until hover" is the same visual
     /// intent; GPUI Kit then sizes the padding for a label-less button itself.
-    fn kit(self) -> gpui_component::button::ButtonVariant {
-        use gpui_component::button::ButtonVariant as Kit;
+    fn kit(self) -> gpui_kit::component::button::ButtonVariant {
+        use gpui_kit::component::button::ButtonVariant as Kit;
         match self {
             Self::Default => Kit::Primary,
             Self::Outline => Kit::Default,

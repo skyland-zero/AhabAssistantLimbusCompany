@@ -10,7 +10,7 @@
 //! each call site used to carry next to its `on_click`; `TabBar` routes
 //! pointer and keyboard activation through the one callback.
 
-pub use gpui_component::tab::{Tab, TabBar};
+pub use gpui_kit::component::tab::{Tab, TabBar};
 
 use gpui::{ElementId, Styled as _, px};
 

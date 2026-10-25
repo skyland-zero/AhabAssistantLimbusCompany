@@ -4,7 +4,6 @@ use gpui::{
     Animation, AnimationExt, Context, Entity, Render, Window, div, img, linear_color_stop,
     linear_gradient, pattern_slash, prelude::*, px, rgb,
 };
-use gpui_component::Root;
 
 use super::AhabApp;
 use super::HomeInvalidation;
@@ -171,26 +170,9 @@ impl Render for AhabApp {
                     .child(page),
             )
             .child(pages::render_overlay(current_page, self, window, cx))
-            // `Root` hosts the dialog layer but does not render it: its own
-            // `Render` only draws the text-selection, tooltip and menu layers,
-            // and the dialog/sheet/notification layers are public methods the
-            // application has to place itself. Without this line
-            // `Root::open_dialog` pushes onto an entity nothing draws, so the
-            // dialog is created and never appears.
-            // Wrapped in a full-size absolute layer: the dialog layer itself is
-            // a plain `div()` with no positioning, so as a child of this flex
-            // column it would be laid out in flow and its absolutely-positioned
-            // scrim would resolve against a zero-height box.
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .children(Root::render_dialog_layer(window, cx)),
-            )
-            // Same story as the dialog layer above: `Root::render_sheet_layer`
-            // is a public method the application has to place, and the sheet is
-            // pushed onto an entity nothing else draws.
-            .children(Root::render_sheet_layer(window, cx))
+            // Dialog, sheet, notification, menu and tooltip layers are owned by
+            // the Base `Root` that `gpui_kit::open_window` installs. They render
+            // outside this page tree, so the app must not draw them again here.
             .child(shell::toast_layer(self.toast.as_ref(), palette))
     }
 }

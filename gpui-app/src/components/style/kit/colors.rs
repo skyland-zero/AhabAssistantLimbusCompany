@@ -66,8 +66,8 @@ fn active_fill(color: Hsla, dark: bool) -> Hsla {
 }
 
 /// Translate one palette into the full GPUI Kit colour table.
-pub(super) fn colors(p: Palette) -> gpui_component::ThemeColor {
-    use gpui_component::ThemeColor as C;
+pub(super) fn colors(p: Palette) -> gpui_kit::component::ThemeColor {
+    use gpui_kit::component::ThemeColor as C;
     let dark = p.is_dark();
 
     let background = palette_hsla(p.background);
@@ -285,6 +285,7 @@ pub(super) fn colors(p: Palette) -> gpui_component::ThemeColor {
         chart_5: brand_surface,
         chart_bullish: success,
         chart_bearish: danger,
+        chart_grid: border.opacity(0.6),
         // ---- legacy hue ramp ------------------------------------------------
         // Collapsed onto semantics on purpose: pages select meaning, so these
         // names must not become a second palette that skins cannot control.

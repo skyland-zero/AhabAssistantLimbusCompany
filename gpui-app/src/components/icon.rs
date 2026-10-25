@@ -13,9 +13,9 @@
 //! follow the same token as the text beside it.
 
 use gpui::{Pixels, Rgba, Styled as _, px};
-pub use gpui_component::Icon;
-use gpui_component::Sizable as _;
-pub use gpui_component_assets::IconName;
+pub use gpui_kit::assets::IconName;
+pub use gpui_kit::component::Icon;
+use gpui_kit::component::Sizable as _;
 
 use super::style::render_rgb;
 

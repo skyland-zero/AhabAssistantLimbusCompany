@@ -7,8 +7,8 @@
 
 use gpui::Styled as _;
 use gpui::px;
-use gpui_component::{Icon, Sizable as _};
-use gpui_component_assets::IconName;
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{Icon, Sizable as _};
 
 /// Icons the window shell draws. Kept as a small enum so the title bar does not
 /// import the whole catalog and every glyph it uses stays reviewable in one

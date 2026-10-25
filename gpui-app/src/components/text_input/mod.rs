@@ -9,7 +9,7 @@
 //! What remains is a thin, deliberately narrow wrapper. The type keeps the
 //! `TextInput` name so `Entity<TextInput>` stays the handle pages pass around,
 //! and it exposes only the operations this app actually calls: read the value
-//! and replace it. `gpui_component::init` installs the input key bindings, so
+//! and replace it. `gpui_kit::init` installs the input key bindings, so
 //! the app no longer binds them itself.
 //!
 //! # Palette
@@ -20,7 +20,7 @@
 //! pushing a new palette into each entity.
 
 use gpui::{App, AppContext as _, Context, Entity, IntoElement, Render, Window};
-use gpui_component::input::{Input, InputState};
+use gpui_kit::component::input::{Input, InputState};
 
 pub struct TextInput {
     state: Entity<InputState>,
@@ -75,6 +75,7 @@ impl TextInput {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let text: gpui::SharedString = text.into();
         self.state
             .update(cx, |state, cx| state.set_value(text, window, cx));
     }

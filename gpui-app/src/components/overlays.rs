@@ -3,10 +3,10 @@ use gpui::AnyElement;
 use super::*;
 
 use crate::app::AhabApp;
-use gpui_component::Sizable as _;
-use gpui_component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
-use gpui_component::skeleton::Skeleton;
-use gpui_component::spinner::Spinner;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
+use gpui_kit::component::skeleton::Skeleton;
+use gpui_kit::component::spinner::Spinner;
 
 // NOTE: the `dialog` / `dialog_overlay` helpers that used to live here were
 // removed as dead code. Pages build their overlays inline (a scrim `div()` plus

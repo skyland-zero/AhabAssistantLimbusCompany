@@ -1,5 +1,5 @@
 use gpui::{AppContext, ClipboardItem, Context, ParentElement as _, Styled as _, Window, div};
-use gpui_component::{Root, WindowExt as _};
+use gpui_kit::component::WindowExt as _;
 
 use super::AhabApp;
 use crate::{app_inputs::TeamInputs, components::TextInput, model::TeamDetail};
@@ -154,74 +154,56 @@ impl AhabApp {
             language,
         );
         let app = cx.entity().downgrade();
-        Root::update(window, cx, move |root, window, cx| {
-            root.open_dialog(
-                move |dialog, _window, _cx| {
-                    dialog
-                        .title(
-                            crate::i18n::paired("确认覆盖编队？", "Overwrite this team?")
-                                .get(language),
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            dialog
+                .title(crate::i18n::paired("确认覆盖编队？", "Overwrite this team?").get(language))
+                .content({
+                    let body = match language {
+                        crate::model::Language::ZhCn => {
+                            format!("{target_label} 将被预设“{preset_name}”完整覆盖。")
+                        }
+                        crate::model::Language::EnUs => {
+                            format!("{target_label} will be fully replaced by “{preset_name}”.")
+                        }
+                    };
+                    move |content, _window, _cx| content.child(body.clone())
+                })
+                .footer({
+                    let cancel = crate::i18n::paired("取消", "Cancel").get(language);
+                    let confirm =
+                        crate::i18n::paired("确认覆盖", "Confirm overwrite").get(language);
+                    let cancel_app = app.clone();
+                    let confirm_app = app.clone();
+                    div()
+                        .flex()
+                        .justify_end()
+                        .gap_2()
+                        .child(
+                            crate::components::button(
+                                "preset-overwrite-cancel",
+                                cancel,
+                                crate::components::ButtonVariant::Ghost,
+                            )
+                            .on_click(move |_, window, cx| {
+                                let _ = cancel_app
+                                    .update(cx, |view, cx| view.cancel_team_preset_flow(cx));
+                                window.close_dialog(cx);
+                            }),
                         )
-                        .content({
-                            let body = match language {
-                                crate::model::Language::ZhCn => {
-                                    format!("{target_label} 将被预设“{preset_name}”完整覆盖。")
-                                }
-                                crate::model::Language::EnUs => format!(
-                                    "{target_label} will be fully replaced by “{preset_name}”."
-                                ),
-                            };
-                            move |content, _window, _cx| content.child(body.clone())
-                        })
-                        .footer({
-                            let cancel = crate::i18n::paired("取消", "Cancel").get(language);
-                            let confirm =
-                                crate::i18n::paired("确认覆盖", "Confirm overwrite").get(language);
-                            let cancel_app = app.clone();
-                            let confirm_app = app.clone();
-                            div()
-                                .flex()
-                                .justify_end()
-                                .gap_2()
-                                .child(
-                                    crate::components::button(
-                                        "preset-overwrite-cancel",
-                                        cancel,
-                                        crate::components::ButtonVariant::Ghost,
-                                    )
-                                    .on_click(
-                                        move |_, window, cx| {
-                                            let _ = cancel_app.update(cx, |view, cx| {
-                                                view.cancel_team_preset_flow(cx)
-                                            });
-                                            Root::update(window, cx, |root, window, cx| {
-                                                root.close_dialog(window, cx)
-                                            });
-                                        },
-                                    ),
-                                )
-                                .child(
-                                    crate::components::button(
-                                        "preset-overwrite-confirm",
-                                        confirm,
-                                        crate::components::ButtonVariant::Destructive,
-                                    )
-                                    .on_click(
-                                        move |_, window, cx| {
-                                            let _ = confirm_app.update(cx, |view, cx| {
-                                                view.confirm_team_preset_overwrite(window, cx)
-                                            });
-                                            Root::update(window, cx, |root, window, cx| {
-                                                root.close_dialog(window, cx)
-                                            });
-                                        },
-                                    ),
-                                )
-                        })
-                },
-                window,
-                cx,
-            );
+                        .child(
+                            crate::components::button(
+                                "preset-overwrite-confirm",
+                                confirm,
+                                crate::components::ButtonVariant::Destructive,
+                            )
+                            .on_click(move |_, window, cx| {
+                                let _ = confirm_app.update(cx, |view, cx| {
+                                    view.confirm_team_preset_overwrite(window, cx)
+                                });
+                                window.close_dialog(cx);
+                            }),
+                        )
+                })
         });
     }
 
@@ -290,87 +272,69 @@ impl AhabApp {
         self.teams.request_delete(team);
         let language = self.state.settings.language;
         let app = cx.entity().downgrade();
-        Root::update(window, cx, move |root, window, cx| {
-            root.open_dialog(
-                // The builder is `Fn`, not `FnOnce`: it can run again whenever
-                // the dialog re-renders, so the captures are cloned per call
-                // rather than moved out.
-                move |dialog, _window, _cx| {
-                    let name = name.clone();
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            // The builder is `Fn`, not `FnOnce`: it can run again whenever
+            // the dialog re-renders, so the captures are cloned per call
+            // rather than moved out.
+            let name = name.clone();
+            let cancel_app = app.clone();
+            let confirm_app = app.clone();
+            // `on_ok` / `on_cancel` receive a plain `&mut App` rather than
+            // a `Context<AhabApp>`, so the state write goes through the
+            // weak handle; its `update` hands back the `Context<AhabApp>`
+            // the domain methods need.
+            dialog
+                .title(crate::i18n::paired("确认删除队伍？", "Delete this team?").get(language))
+                .content(move |content, _window, _cx| content.child(name.clone()))
+                // `Dialog` renders no OK/Cancel buttons of its own -
+                // `render_ok` / `render_cancel` are only wired up by
+                // `AlertDialog` - so the action row is supplied here.
+                .footer({
+                    let cancel = crate::i18n::paired("取消", "Cancel").get(language);
+                    let confirm = crate::i18n::paired("删除", "Delete").get(language);
                     let cancel_app = app.clone();
                     let confirm_app = app.clone();
-                    // `on_ok` / `on_cancel` receive a plain `&mut App` rather than
-                    // a `Context<AhabApp>`, so the state write goes through the
-                    // weak handle; its `update` hands back the `Context<AhabApp>`
-                    // the domain methods need.
-                    dialog
-                        .title(
-                            crate::i18n::paired("确认删除队伍？", "Delete this team?")
-                                .get(language),
+                    div()
+                        .flex()
+                        .justify_end()
+                        .gap_2()
+                        .child(
+                            crate::components::button(
+                                "delete-dialog-cancel",
+                                cancel,
+                                crate::components::ButtonVariant::Ghost,
+                            )
+                            .on_click(move |_, window, cx| {
+                                let _ = cancel_app.update(cx, |view, cx| {
+                                    view.teams.cancel_delete();
+                                    cx.notify();
+                                });
+                                window.close_dialog(cx);
+                            }),
                         )
-                        .content(move |content, _window, _cx| content.child(name.clone()))
-                        // `Dialog` renders no OK/Cancel buttons of its own -
-                        // `render_ok` / `render_cancel` are only wired up by
-                        // `AlertDialog` - so the action row is supplied here.
-                        .footer({
-                            let cancel = crate::i18n::paired("取消", "Cancel").get(language);
-                            let confirm = crate::i18n::paired("删除", "Delete").get(language);
-                            let cancel_app = app.clone();
-                            let confirm_app = app.clone();
-                            div()
-                                .flex()
-                                .justify_end()
-                                .gap_2()
-                                .child(
-                                    crate::components::button(
-                                        "delete-dialog-cancel",
-                                        cancel,
-                                        crate::components::ButtonVariant::Ghost,
-                                    )
-                                    .on_click(
-                                        move |_, window, cx| {
-                                            let _ = cancel_app.update(cx, |view, cx| {
-                                                view.teams.cancel_delete();
-                                                cx.notify();
-                                            });
-                                            Root::update(window, cx, |root, window, cx| {
-                                                root.close_dialog(window, cx)
-                                            });
-                                        },
-                                    ),
-                                )
-                                .child(
-                                    crate::components::button(
-                                        "delete-dialog-confirm",
-                                        confirm,
-                                        crate::components::ButtonVariant::Destructive,
-                                    )
-                                    .on_click(
-                                        move |_, window, cx| {
-                                            let _ = confirm_app
-                                                .update(cx, |view, cx| view.confirm_delete(cx));
-                                            Root::update(window, cx, |root, window, cx| {
-                                                root.close_dialog(window, cx)
-                                            });
-                                        },
-                                    ),
-                                )
-                        })
-                        .on_cancel(move |_, _, cx| {
-                            let _ = cancel_app.update(cx, |view, cx| {
-                                view.teams.cancel_delete();
-                                cx.notify();
-                            });
-                            true
-                        })
-                        .on_ok(move |_, _, cx| {
-                            let _ = confirm_app.update(cx, |view, cx| view.confirm_delete(cx));
-                            true
-                        })
-                },
-                window,
-                cx,
-            );
+                        .child(
+                            crate::components::button(
+                                "delete-dialog-confirm",
+                                confirm,
+                                crate::components::ButtonVariant::Destructive,
+                            )
+                            .on_click(move |_, window, cx| {
+                                let _ = confirm_app.update(cx, |view, cx| view.confirm_delete(cx));
+                                window.close_dialog(cx);
+                            }),
+                        )
+                })
+                .on_cancel(move |_, _, cx| {
+                    let _ = cancel_app.update(cx, |view, cx| {
+                        view.teams.cancel_delete();
+                        cx.notify();
+                    });
+                    true
+                })
+                .on_ok(move |_, _, cx| {
+                    let _ = confirm_app.update(cx, |view, cx| view.confirm_delete(cx));
+                    true
+                })
         });
     }
 

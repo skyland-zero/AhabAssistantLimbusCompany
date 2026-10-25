@@ -4,7 +4,7 @@
 //!
 //! GPUI resolves an `IconName` by loading its SVG through the window's
 //! `AssetSource`, and a path the source does not know about renders as an empty
-//! square with no error. `gpui_component_assets::Assets` only embeds the ~100
+//! square with no error. `gpui_kit::assets::Assets` only embeds the ~100
 //! icons GPUI Kit's own widgets need, so pointing the window at it alone made
 //! every page icon disappear while the surrounding text kept rendering.
 //!
@@ -24,7 +24,7 @@
 use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};
-use gpui_component_assets::{Assets as ComponentAssets, IconName, icon_assets};
+use gpui_kit::assets::{Assets as ComponentAssets, IconName, icon_assets};
 
 // The icons the app names. `every_referenced_icon_is_embedded` proves this list
 // matches the sources.

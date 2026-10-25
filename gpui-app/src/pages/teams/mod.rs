@@ -22,7 +22,7 @@ use gpui::{
     Context, Div, ElementId, ImageSource, KeyDownEvent, SharedString, deferred, div, img,
     prelude::*, px, relative,
 };
-use gpui_component::button::Button;
+use gpui_kit::component::button::Button;
 
 use crate::{
     app::{AhabApp, TEXT, TEXT_MUTED},

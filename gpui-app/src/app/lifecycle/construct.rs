@@ -113,6 +113,23 @@ impl AhabApp {
         app
     }
 
+    /// Team-dependent visual states run before the mock backend's asynchronous
+    /// hydration fills `teams.teams`. Keep the state pending and retry next
+    /// frame instead of silently capturing an empty page.
+    fn first_team_for_visual_state(
+        &mut self,
+        state: VisualState,
+        cx: &mut Context<Self>,
+    ) -> Option<crate::model::TeamDetail> {
+        if let Some(team) = self.teams.teams.first().cloned() {
+            Some(team)
+        } else {
+            self.visual_state = Some(state);
+            cx.notify();
+            None
+        }
+    }
+
     pub(crate) fn apply_visual_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(state) = self.visual_state.take() else {
             return;
@@ -156,20 +173,20 @@ impl AhabApp {
                 self.home.set_after_completion_open(true);
             }
             VisualState::TeamsEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                 }
             }
             VisualState::TeamsShopEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                     self.teams.set_editor_tab(crate::state::TeamEditorTab::Shop);
                 }
             }
             VisualState::TeamsCombatEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                     self.teams
@@ -177,7 +194,7 @@ impl AhabApp {
                 }
             }
             VisualState::TeamsStarlightEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                     self.teams
@@ -185,7 +202,7 @@ impl AhabApp {
                 }
             }
             VisualState::TeamsAdvancedEditor => {
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                     self.teams
@@ -199,7 +216,7 @@ impl AhabApp {
                 // and it has to do so *after* this frame, because pushing to
                 // Root's layer while the frame is being built does not land in
                 // the frame the caller is about to present.
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     cx.defer_in(window, move |view, window, cx| {
                         view.open_delete_confirmation(team, window, cx);
                     });
@@ -209,7 +226,7 @@ impl AhabApp {
                 // Needs the editor open on the stats tab, then the same deferred
                 // open the delete state uses: pushing a Root dialog while the
                 // frame is being built does not land in that frame.
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                     self.teams
@@ -224,7 +241,7 @@ impl AhabApp {
                 // targets an *existing* team, so the picker has to be opened
                 // against one - `open_preset_picker_for_slot` would take the
                 // empty-slot path and apply the preset without asking.
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_preset_picker_for_team(&team);
                     if let Some(preset_id) = self.teams.presets.first().map(|p| p.presetId.clone())
                         && let Ok(false) = self.teams.select_preset(&preset_id)
@@ -243,7 +260,7 @@ impl AhabApp {
                 });
             }
             VisualState::TeamsSelect => {
-                if let Some(team) = self.teams.teams.first().cloned() {
+                if let Some(team) = self.first_team_for_visual_state(state, cx) {
                     self.teams.open_edit(&team);
                     self.create_team_inputs(window, cx);
                     self.teams.open_select = Some(crate::state::TeamSelect::Purpose);

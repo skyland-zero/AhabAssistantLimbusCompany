@@ -1,5 +1,10 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+// `gpui-kit` re-exports the GPUI snapshot at its crate root. Alias the facade
+// so the existing `gpui::` imports keep resolving through the single
+// dependency instead of requiring a mechanical rename in every module.
+extern crate gpui_kit as gpui;
+
 mod app;
 mod app_inputs;
 mod assets;
@@ -15,14 +20,13 @@ mod theme;
 
 use gpui::{
     App, AppContext, Bounds, KeyBinding, TextRenderingMode, TitlebarOptions, WindowBounds,
-    WindowDecorations, WindowOptions, actions, px, size,
+    WindowDecorations, WindowOptions, px, size,
 };
-use gpui_component::Root;
-use gpui_platform::application;
+use gpui_kit::application;
 
 use app::AhabApp;
 
-actions!(app_actions, [Quit]);
+gpui_kit::actions!(app_actions, [Quit]);
 
 #[cfg(target_os = "windows")]
 fn configure_windows_window(window: &gpui::Window) {
@@ -81,11 +85,11 @@ fn main() {
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
             // GPUI Kit owns widget state (overlays, menus, input focus rings), so
             // it has to be installed before the first window opens.
-            gpui_component::init(cx);
+            gpui_kit::init(cx);
             cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
 
             let bounds = Bounds::centered(None, size(px(820.), px(680.)), cx);
-            match cx.open_window(
+            match gpui_kit::open_window(
                 WindowOptions {
                     // `appears_transparent` hides the native Windows titlebar while
                     // retaining the platform window controls and resize frame.
@@ -103,13 +107,14 @@ fn main() {
                     window_decorations: Some(WindowDecorations::Client),
                     ..Default::default()
                 },
+                cx,
                 |window, cx| {
                     #[cfg(target_os = "windows")]
                     configure_windows_window(window);
 
-                    // GPUI Kit requires `Root` to be the first view in the window:
-                    // it hosts the dialog, sheet, notification and tooltip layers.
-                    // The app keeps owning its own window content underneath.
+                    // `gpui_kit::open_window` wraps this view in a Base `Root`,
+                    // which hosts the dialog, sheet, notification and tooltip
+                    // layers. The app keeps owning its own window content.
                     let view = cx.new(|cx| {
                         let mut app = AhabApp::new();
                         app.attach_window(window, cx);
@@ -126,7 +131,7 @@ fn main() {
                             view.update(cx, |view, cx| view.request_app_exit(cx));
                         }
                     });
-                    cx.new(|cx| Root::new(view, window, cx))
+                    view
                 },
             ) {
                 Ok(_) => {}

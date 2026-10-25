@@ -4,23 +4,17 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# GPUI Kit pins GPUI itself: the framework now ships as the `gpui-pre-*`
-# crates.io snapshot family, and `gpui-component` links the very same
-# `=0.3.6` release. The app renames the packages to `gpui` / `gpui_platform`
-# so both sides resolve to one set of GPUI types instead of two copies.
-#
-# All three `=0.3.6` pins move together; `gpui-component` will not accept a
-# different `gpui-pre`, so bumping one requires bumping all of them at once.
+# GPUI Kit's facade pins the matching GPUI snapshot and re-exports every layer
+# the app uses: GPUI at the crate root, `platform`, `base`, `component` and
+# `assets`. One dependency keeps those versions aligned; `gpui-kit` internally
+# requires the exact `gpui-pre` snapshot its component layer was built against.
 [dependencies]
 async-channel = "2"
 # Local wall-clock formatting for run timestamps (chrono is already in the
 # GPUI dependency tree; the clock feature provides the local timezone).
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 getrandom = "0.4"
-gpui = { version = "=0.3.6", package = "gpui-pre" }
-gpui_platform = { version = "=0.3.6", package = "gpui-pre-platform" }
-gpui-component = "=0.6.6"
-gpui-component-assets = { version = "=0.6.6", package = "gpui-kit-assets" }
+gpui-kit = "=0.8.0"
 image = { version = "0.25.10", default-features = false }
 raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }

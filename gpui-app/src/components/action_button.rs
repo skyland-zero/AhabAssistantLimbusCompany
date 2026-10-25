@@ -1,6 +1,6 @@
 use gpui::{ElementId, SharedString, prelude::*, px};
 
-use gpui_component::button::Button;
+use gpui_kit::component::button::Button;
 
 use super::{ButtonVariant, Icon, button};
 
