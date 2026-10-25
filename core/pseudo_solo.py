@@ -26,7 +26,16 @@ from module.my_error.my_error import userStopError
 # Kept as a compatibility constant for integrations that imported the old
 # setting.  Battle-row sampling is configured separately below.
 PSEUDO_SOLO_OBSERVATION_STABILITY = 1
-TEAM_PAGE_LIVE_COUNT_THRESHOLD = 0.90
+# The team-page templates only cover the 10/11/12-sinner counts.  The
+# existing 10-sinner template scores about 0.818 on the current 1440p UI, so
+# keep the threshold below that while the OCR counter fallback handles the
+# smaller counts.
+TEAM_PAGE_LIVE_COUNT_THRESHOLD = 0.80
+# The team-page live count is drawn at the right edge of the panel.  This
+# crop is derived from the non-black bounding box of
+# teams/10_sinner_live_assets.png (2366,1017)-(2421,1086 at 2560x1440) with a
+# small margin so the 1-2 digit number is readable at other resolutions.
+TEAM_PAGE_COUNT_CROP_RATIO = (0.90, 0.67, 0.97, 0.79)
 # The command row can remain hidden behind the battle-entry animation for
 # roughly one second.  Keep sampling the same battle-entry window a little
 # longer so a transient no-badge frame is not cached as UNKNOWN.
@@ -46,13 +55,26 @@ BATTLE_GEAR_LEFT_CROP_RATIO = (0.15, 0.62, 0.42, 0.98)
 BATTLE_GEAR_RIGHT_CROP_RATIO = (0.52, 0.62, 0.82, 0.98)
 BATTLE_ANIMATION_CROP_RATIO = (0.20, 0.15, 0.80, 0.75)
 BATTLE_ANIMATION_MIN_VALUE = 120
-# At 1920x1080 a real orange level badge is about 40x41 px and has an orange
-# component area of roughly 750-900 px.  Short UI effects can have a similar
-# horizontal projection but are much shorter; validate the connected
-# component instead of accepting projection width alone.
+# At 1920x1080 a real level badge is about 40x41 px and has a component area
+# of roughly 750-900 px.  Short UI effects can have a similar horizontal
+# projection but are much shorter; validate the connected component instead
+# of accepting projection width alone.
 BATTLE_BADGE_MIN_HEIGHT_AT_1080 = 30
 BATTLE_BADGE_MIN_WIDTH_AT_1080 = 28
 BATTLE_BADGE_MIN_AREA_AT_1080 = 500
+# The current 1440p battle UI draws the level badge as a blue circle (HSV hue
+# around 105-113).  Older captures used an orange circle.  Try blue first and
+# keep orange as a compatibility fallback so both UI versions remain usable.
+BATTLE_BADGE_BLUE_HSV_LOW = (100, 80, 40)
+BATTLE_BADGE_BLUE_HSV_HIGH = (118, 255, 255)
+BATTLE_BADGE_ORANGE_HSV_LOW = (8, 120, 120)
+BATTLE_BADGE_ORANGE_HSV_HIGH = (22, 255, 255)
+BATTLE_BADGE_COLOR_RANGES: tuple[
+    tuple[str, tuple[int, int, int], tuple[int, int, int]], ...
+] = (
+    ("blue", BATTLE_BADGE_BLUE_HSV_LOW, BATTLE_BADGE_BLUE_HSV_HIGH),
+    ("orange", BATTLE_BADGE_ORANGE_HSV_LOW, BATTLE_BADGE_ORANGE_HSV_HIGH),
+)
 
 
 class PseudoSoloObservation(StrEnum):
@@ -130,17 +152,43 @@ def _battle_animation_overlay_detection(array: np.ndarray) -> tuple[bool, dict[s
     return detected, diagnostics
 
 
+def _battle_badge_color_candidates(
+    preferred: str | None = None,
+) -> list[tuple[str, tuple[int, int, int], tuple[int, int, int]]]:
+    """Return the badge HSV ranges to try, newest UI colour first."""
+
+    if preferred is None:
+        return list(BATTLE_BADGE_COLOR_RANGES)
+    for candidate in BATTLE_BADGE_COLOR_RANGES:
+        if candidate[0] == preferred:
+            return [candidate]
+    raise ValueError(f"unsupported battle badge colour: {preferred}")
+
+
+def _battle_badge_hsv_range(
+    color: str,
+) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    candidates = _battle_badge_color_candidates(color)
+    _, lower, upper = candidates[0]
+    return lower, upper
+
+
 def _battle_portrait_slot_detection(
     array: np.ndarray,
     *,
     slot_centers: Sequence[float],
     max_count: int,
+    badge_color: str | None = None,
 ) -> tuple[int | None, dict[str, object]]:
     """Classify every fixed command slot as live, empty, or unknown."""
+
+    badge_color = badge_color or "blue"
+    badge_lower, badge_upper = _battle_badge_hsv_range(badge_color)
 
     height, width = array.shape[:2]
     diagnostics: dict[str, object] = {
         "shape": tuple(int(value) for value in array.shape),
+        "badge_color": badge_color,
         "slot_centers": [round(float(value), 2) for value in slot_centers],
         "slot_states": [],
         "reason": "unknown",
@@ -160,10 +208,10 @@ def _battle_portrait_slot_detection(
 
     scale = height / 1440
     hsv = cv2.cvtColor(array, cv2.COLOR_RGB2HSV)
-    orange_mask = cv2.inRange(
+    badge_mask = cv2.inRange(
         hsv,
-        np.array((8, 120, 120), dtype=np.uint8),
-        np.array((22, 255, 255), dtype=np.uint8),
+        np.array(badge_lower, dtype=np.uint8),
+        np.array(badge_upper, dtype=np.uint8),
     )
     live_indexes: list[int] = []
     unknown_indexes: list[int] = []
@@ -179,7 +227,7 @@ def _battle_portrait_slot_detection(
         center_x = round(float(center_x_value))
         badge_x1 = max(0, center_x - badge_half_width)
         badge_x2 = min(width, center_x + badge_half_width + 1)
-        badge = orange_mask[badge_y1:badge_y2, badge_x1:badge_x2]
+        badge = badge_mask[badge_y1:badge_y2, badge_x1:badge_x2]
         badge_pixels = int((badge > 0).sum())
         component_count, _, stats, _ = cv2.connectedComponentsWithStats(badge, 8)
         largest_badge = 0
@@ -265,21 +313,150 @@ def _battle_portrait_slot_detection(
     return len(live_indexes), diagnostics
 
 
+def _scan_badge_runs(
+    array: np.ndarray,
+    hsv: np.ndarray,
+    *,
+    color_name: str,
+    lower: tuple[int, int, int],
+    upper: tuple[int, int, int],
+    max_count: int,
+    animation_diagnostics: dict[str, object] | None,
+) -> tuple[int | None, dict[str, object]]:
+    """Scan the bottom badge band for one badge colour."""
+
+    height, width = array.shape[:2]
+    diagnostics: dict[str, object] = {
+        "shape": tuple(int(value) for value in array.shape),
+        "badge_color": color_name,
+        "roi": None,
+        "badge_pixels": 0,
+        # Keep the legacy key for log consumers that already parse it.
+        "orange_pixels": 0,
+        "candidate_runs": [],
+        "accepted_runs": [],
+        "reason": "unknown",
+    }
+    if animation_diagnostics is not None:
+        diagnostics["animation"] = animation_diagnostics
+
+    mask = cv2.inRange(
+        hsv,
+        np.array(lower, dtype=np.uint8),
+        np.array(upper, dtype=np.uint8),
+    )
+    y1 = max(0, min(height, round(height * BATTLE_PORTRAIT_Y_START_RATIO)))
+    y2 = max(y1, min(height, round(height * BATTLE_PORTRAIT_Y_END_RATIO)))
+    x1 = max(0, min(width, round(width * BATTLE_PORTRAIT_X_START_RATIO)))
+    x2 = max(x1, min(width, round(width * BATTLE_PORTRAIT_X_END_RATIO)))
+    diagnostics["roi"] = (x1, y1, x2, y2)
+    roi_mask = mask[y1:y2, x1:x2]
+    diagnostics["badge_pixels"] = int((roi_mask > 0).sum())
+    diagnostics["orange_pixels"] = diagnostics["badge_pixels"]
+    projection = (roi_mask > 0).sum(axis=0)
+    active_columns = projection >= 10
+    badge_scale = height / 1080
+    min_badge_height = max(16, round(BATTLE_BADGE_MIN_HEIGHT_AT_1080 * badge_scale))
+    min_badge_width = max(18, round(BATTLE_BADGE_MIN_WIDTH_AT_1080 * badge_scale))
+    min_badge_area = max(180, round(BATTLE_BADGE_MIN_AREA_AT_1080 * badge_scale**2))
+    diagnostics["badge_validation_thresholds"] = {
+        "min_component_width": min_badge_width,
+        "min_component_height": min_badge_height,
+        "min_component_area": min_badge_area,
+    }
+
+    candidate_runs: list[tuple[int, int, int, int]] = []
+    accepted_runs: list[tuple[int, int, int, int]] = []
+    badge_component_details: list[dict[str, object]] = []
+    run_start: int | None = None
+    for index, active in enumerate(np.r_[active_columns, False]):
+        if active and run_start is None:
+            run_start = index
+            continue
+        if active or run_start is None:
+            continue
+
+        run_end = index
+        run_width = run_end - run_start
+        run_area = int(projection[run_start:run_end].sum())
+        run = (x1 + run_start, x1 + run_end, run_width, run_area)
+        if len(candidate_runs) < 64:
+            candidate_runs.append(run)
+
+        run_mask = roi_mask[:, run_start:run_end]
+        component_count, _, stats, _ = cv2.connectedComponentsWithStats(run_mask, 8)
+        largest_component = 0
+        largest_component_size = (0, 0)
+        if component_count > 1:
+            largest_index = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+            largest_component = int(stats[largest_index, cv2.CC_STAT_AREA])
+            largest_component_size = (
+                int(stats[largest_index, cv2.CC_STAT_WIDTH]),
+                int(stats[largest_index, cv2.CC_STAT_HEIGHT]),
+            )
+
+        # A visible level badge is approximately 40 px wide and 41 px high at
+        # the reference screenshot scale.  Short UI effects can have a similar
+        # horizontal projection, so width/area alone is not enough; the
+        # largest connected component must also have the expected badge shape.
+        shape_valid = (
+            min(largest_component_size) >= min_badge_width
+            and largest_component_size[1] >= min_badge_height
+            and largest_component >= min_badge_area
+        )
+        if len(badge_component_details) < 64:
+            badge_component_details.append(
+                {
+                    "run": run,
+                    "largest_component": largest_component,
+                    "component_size": largest_component_size,
+                    "shape_valid": shape_valid,
+                }
+            )
+        if 25 <= run_width <= 65 and shape_valid:
+            accepted_runs.append(run)
+        run_start = None
+
+    diagnostics["candidate_runs"] = candidate_runs
+    diagnostics["candidate_run_total"] = len(candidate_runs)
+    diagnostics["badge_component_details"] = badge_component_details
+    diagnostics["accepted_runs"] = accepted_runs
+    max_allowed = max(0, min(int(max_count), 12))
+    if len(accepted_runs) < 1:
+        diagnostics["reason"] = "no_badge"
+        return None, diagnostics
+    if len(accepted_runs) > max_allowed:
+        diagnostics["reason"] = "more_than_selected"
+        return None, diagnostics
+    diagnostics["reason"] = "ok"
+    return len(accepted_runs), diagnostics
+
+
 def _battle_portrait_badge_detection(
     image: object,
     *,
     max_count: int = 12,
     slot_centers: Sequence[float] | None = None,
+    badge_color: str | None = None,
 ) -> tuple[int | None, dict[str, object]]:
-    """Return the portrait count and compact diagnostics for one frame."""
+    """Return the portrait count and compact diagnostics for one frame.
+
+    Blue level circles are used by the current 1440p UI; the orange range is
+    kept as a compatibility fallback for older captures.  When ``badge_color``
+    is supplied only that colour is scanned, which lets the observer retry the
+    whole badge + avatar validation pipeline with the other colour.
+    """
 
     diagnostics: dict[str, object] = {
         "shape": None,
         "roi": None,
+        "badge_pixels": 0,
         "orange_pixels": 0,
         "candidate_runs": [],
         "accepted_runs": [],
         "reason": "unknown",
+        "badge_color": badge_color,
+        "badge_colors_tried": [],
     }
 
     try:
@@ -296,7 +473,12 @@ def _battle_portrait_badge_detection(
             return None, diagnostics
 
         if slot_centers is not None:
-            return _battle_portrait_slot_detection(array, slot_centers=slot_centers, max_count=max_count)
+            return _battle_portrait_slot_detection(
+                array,
+                slot_centers=slot_centers,
+                max_count=max_count,
+                badge_color=badge_color,
+            )
 
         animation_detected, animation_diagnostics = _battle_animation_overlay_detection(array)
         diagnostics["animation"] = animation_diagnostics
@@ -305,99 +487,35 @@ def _battle_portrait_badge_detection(
             return None, diagnostics
 
         hsv = cv2.cvtColor(array, cv2.COLOR_RGB2HSV)
-        # The orange level circles are stable across the two captured battle
-        # scenes.  Restricting the scan to the bottom badge band excludes the
-        # orange skill/effect icons above the portrait row.
-        mask = cv2.inRange(
-            hsv,
-            np.array((8, 120, 120), dtype=np.uint8),
-            np.array((22, 255, 255), dtype=np.uint8),
-        )
-        y1 = max(0, min(height, round(height * BATTLE_PORTRAIT_Y_START_RATIO)))
-        y2 = max(y1, min(height, round(height * BATTLE_PORTRAIT_Y_END_RATIO)))
-        x1 = max(0, min(width, round(width * BATTLE_PORTRAIT_X_START_RATIO)))
-        x2 = max(x1, min(width, round(width * BATTLE_PORTRAIT_X_END_RATIO)))
-        diagnostics["roi"] = (x1, y1, x2, y2)
-        roi_mask = mask[y1:y2, x1:x2]
-        diagnostics["orange_pixels"] = int((roi_mask > 0).sum())
-        projection = (roi_mask > 0).sum(axis=0)
-        active_columns = projection >= 10
-        badge_scale = height / 1080
-        min_badge_height = max(16, round(BATTLE_BADGE_MIN_HEIGHT_AT_1080 * badge_scale))
-        min_badge_width = max(18, round(BATTLE_BADGE_MIN_WIDTH_AT_1080 * badge_scale))
-        min_badge_area = max(180, round(BATTLE_BADGE_MIN_AREA_AT_1080 * badge_scale**2))
-        diagnostics["badge_validation_thresholds"] = {
-            "min_component_width": min_badge_width,
-            "min_component_height": min_badge_height,
-            "min_component_area": min_badge_area,
-        }
-
-        candidate_runs: list[tuple[int, int, int, int]] = []
-        accepted_runs: list[tuple[int, int, int, int]] = []
-        badge_component_details: list[dict[str, object]] = []
-        run_start: int | None = None
-        for index, active in enumerate(np.r_[active_columns, False]):
-            if active and run_start is None:
-                run_start = index
-                continue
-            if active or run_start is None:
-                continue
-
-            run_end = index
-            run_width = run_end - run_start
-            run_area = int(projection[run_start:run_end].sum())
-            run = (x1 + run_start, x1 + run_end, run_width, run_area)
-            if len(candidate_runs) < 64:
-                candidate_runs.append(run)
-
-            run_mask = roi_mask[:, run_start:run_end]
-            component_count, _, stats, _ = cv2.connectedComponentsWithStats(run_mask, 8)
-            largest_component = 0
-            largest_component_size = (0, 0)
-            if component_count > 1:
-                largest_index = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
-                largest_component = int(stats[largest_index, cv2.CC_STAT_AREA])
-                largest_component_size = (
-                    int(stats[largest_index, cv2.CC_STAT_WIDTH]),
-                    int(stats[largest_index, cv2.CC_STAT_HEIGHT]),
-                )
-
-            # A visible level badge is approximately 40 px wide and 41 px
-            # high at the reference screenshot scale.  Short orange effects
-            # can have a similar horizontal projection, so width/area alone
-            # is not enough; the largest connected orange component must also
-            # have the expected two-dimensional badge shape.
-            shape_valid = (
-                min(largest_component_size) >= min_badge_width
-                and largest_component_size[1] >= min_badge_height
-                and largest_component >= min_badge_area
+        first_diagnostics: dict[str, object] | None = None
+        best_diagnostics: dict[str, object] | None = None
+        for color_name, lower, upper in _battle_badge_color_candidates(badge_color):
+            diagnostics["badge_colors_tried"].append(color_name)
+            count, attempt_diagnostics = _scan_badge_runs(
+                array,
+                hsv,
+                color_name=color_name,
+                lower=lower,
+                upper=upper,
+                max_count=max_count,
+                animation_diagnostics=animation_diagnostics,
             )
-            if len(badge_component_details) < 64:
-                badge_component_details.append(
-                    {
-                        "run": run,
-                        "largest_component": largest_component,
-                        "component_size": largest_component_size,
-                        "shape_valid": shape_valid,
-                    }
-                )
-            if 25 <= run_width <= 65 and shape_valid:
-                accepted_runs.append(run)
-            run_start = None
+            if first_diagnostics is None:
+                first_diagnostics = attempt_diagnostics
+            if count is not None:
+                attempt_diagnostics["badge_colors_tried"] = list(diagnostics["badge_colors_tried"])
+                attempt_diagnostics["badge_fallback"] = color_name != diagnostics["badge_colors_tried"][0]
+                return count, attempt_diagnostics
+            if best_diagnostics is None or len(attempt_diagnostics.get("accepted_runs", [])) > len(
+                best_diagnostics.get("accepted_runs", [])
+            ):
+                best_diagnostics = attempt_diagnostics
 
-        diagnostics["candidate_runs"] = candidate_runs
-        diagnostics["candidate_run_total"] = len(candidate_runs)
-        diagnostics["badge_component_details"] = badge_component_details
-        diagnostics["accepted_runs"] = accepted_runs
-        max_allowed = max(0, min(int(max_count), 12))
-        if len(accepted_runs) < 1:
-            diagnostics["reason"] = "no_badge"
-            return None, diagnostics
-        if len(accepted_runs) > max_allowed:
-            diagnostics["reason"] = "more_than_selected"
-            return None, diagnostics
-        diagnostics["reason"] = "ok"
-        return len(accepted_runs), diagnostics
+        result = best_diagnostics or first_diagnostics or diagnostics
+        result["badge_colors_tried"] = list(diagnostics["badge_colors_tried"])
+        result["badge_fallback"] = len(diagnostics["badge_colors_tried"]) > 1
+        result["badge_color"] = None
+        return None, result
     except (TypeError, ValueError, cv2.error) as error:
         diagnostics["reason"] = f"exception:{type(error).__name__}"
         return None, diagnostics
@@ -411,10 +529,10 @@ def battle_portrait_badge_count(
 ) -> int | None:
     """Count the visible living battle portraits from their level badges.
 
-    A defeated sinner no longer has a bottom portrait, including its orange
-    level badge.  The badge is a repeated, localized-independent visual
-    element, so counting it avoids OCR and avoids using the decorative gear
-    anchors that can also match skill icons or battle effects.
+    A defeated sinner no longer has a bottom portrait, including its level
+    badge.  The badge is a repeated, localized-independent visual element, so
+    counting it avoids OCR and avoids using the decorative gear anchors that
+    can also match skill icons or battle effects.
 
     ``image`` must be an RGB image (PIL images and the arrays returned by
     ``Automation._get_screenshot_array(gray=False)`` both satisfy this).
@@ -435,52 +553,88 @@ def _battle_visible_portrait_detection(
 
     The number of command slots is not the number of deployed combatants: it
     can change with the roster and it can also be misread when a gear anchor
-    is covered by an effect.  First locate the orange level badges globally,
-    then validate the avatar area around each badge.  This makes the badge
-    runs themselves the dynamic slot list and keeps an obscured avatar as
-    UNKNOWN instead of silently counting it as alive.
+    is covered by an effect.  First locate the level badges globally, then
+    validate the avatar area around each badge.  This makes the badge runs
+    themselves the dynamic slot list and keeps an obscured avatar as UNKNOWN
+    instead of silently counting it as alive.
+
+    The current UI uses blue level circles; orange is retried as a whole
+    badge + avatar pipeline when the blue scan produces no usable roster.
+    Retrying at this level (rather than only inside the badge scan) prevents
+    an old UI's blue/cyan empty-slot placeholder from being accepted as a
+    living portrait.
     """
 
-    badge_count, badge_diagnostics = _battle_portrait_badge_detection(image, max_count=max_count)
-    diagnostics = dict(badge_diagnostics)
-    accepted_runs = badge_diagnostics.get("accepted_runs", [])
-    centers: list[float] = []
-    if isinstance(accepted_runs, (list, tuple)):
-        for run in accepted_runs:
-            if not isinstance(run, (list, tuple)) or len(run) < 2:
-                continue
-            try:
-                centers.append((float(run[0]) + float(run[1]) - 1.0) / 2.0)
-            except (TypeError, ValueError):
-                continue
-    diagnostics["visible_badge_centers"] = [round(value, 2) for value in centers]
-    diagnostics["detection_source"] = "visible_badges"
-
-    # No badge, an animation veil, or more visible portraits than the
-    # selected roster are all deliberately UNKNOWN.  In particular, do not
-    # fall back to a presumed number of empty command slots here.
-    if badge_count is None:
-        return None, diagnostics
-
     array = np.asarray(image)
+    diagnostics: dict[str, object] = {
+        "shape": tuple(int(value) for value in array.shape),
+        "detection_source": "visible_badges",
+        "badge_attempts": [],
+        "reason": "unknown",
+    }
     if array.ndim != 3 or array.shape[2] not in (3, 4):
         diagnostics["reason"] = "not_rgb"
         return None, diagnostics
     if array.shape[2] == 4:
         array = array[:, :, :3]
 
-    live_count, slot_diagnostics = _battle_portrait_slot_detection(
-        array,
-        slot_centers=centers,
-        max_count=max_count,
-    )
-    # Preserve the global scan details in the same top-level diagnostics used
-    # by the GUI log while adding the per-visible-avatar validation details.
-    for key in ("slot_centers", "slot_states", "live_indexes", "unknown_indexes", "animation", "reason"):
-        if key in slot_diagnostics:
-            diagnostics[key] = slot_diagnostics[key]
-    diagnostics["badge_validation"] = slot_diagnostics
-    return live_count, diagnostics
+    first_failure: dict[str, object] | None = None
+    for color_name, _, _ in _battle_badge_color_candidates():
+        badge_count, badge_diagnostics = _battle_portrait_badge_detection(
+            array,
+            max_count=max_count,
+            badge_color=color_name,
+        )
+        diagnostics["badge_attempts"].append(
+            {
+                "badge_color": color_name,
+                "badge_count": badge_count,
+                "badge_reason": badge_diagnostics.get("reason"),
+            }
+        )
+        if badge_count is None:
+            if first_failure is None:
+                first_failure = badge_diagnostics
+            continue
+
+        accepted_runs = badge_diagnostics.get("accepted_runs", [])
+        centers: list[float] = []
+        if isinstance(accepted_runs, (list, tuple)):
+            for run in accepted_runs:
+                if not isinstance(run, (list, tuple)) or len(run) < 2:
+                    continue
+                try:
+                    centers.append((float(run[0]) + float(run[1]) - 1.0) / 2.0)
+                except (TypeError, ValueError):
+                    continue
+
+        merged = dict(badge_diagnostics)
+        merged["badge_color"] = color_name
+        merged["badge_fallback"] = color_name != "blue"
+        merged["visible_badge_centers"] = [round(value, 2) for value in centers]
+        merged["detection_source"] = "visible_badges"
+        merged["badge_attempts"] = list(diagnostics["badge_attempts"])
+
+        live_count, slot_diagnostics = _battle_portrait_slot_detection(
+            array,
+            slot_centers=centers,
+            max_count=max_count,
+            badge_color=color_name,
+        )
+        # Preserve the global scan details in the same top-level diagnostics
+        # used by the GUI log while adding the per-avatar validation details.
+        for key in ("slot_centers", "slot_states", "live_indexes", "unknown_indexes", "animation", "reason"):
+            if key in slot_diagnostics:
+                merged[key] = slot_diagnostics[key]
+        merged["badge_validation"] = slot_diagnostics
+        if live_count is not None:
+            return live_count, merged
+        if first_failure is None:
+            first_failure = merged
+
+    failure = first_failure or diagnostics
+    failure["badge_attempts"] = list(diagnostics["badge_attempts"])
+    return None, failure
 
 
 class _DefenseState(Protocol):
@@ -712,8 +866,8 @@ class PseudoSoloDefenseState:
 class BattleRosterObserver:
     """Read the number of currently visible ally battle portraits.
 
-    The lower battle row removes a dead sinner's portrait and its orange level
-    badge.  Counting those repeated badges gives the number of visible living
+    The lower battle row removes a dead sinner's portrait and its level badge.
+    Counting those repeated badges gives the number of visible living
     combatants without OCR or a localized death label.  The visible badge
     positions are used as the slot list, so the detector does not assume
     there are seven (or any other fixed number of) deployed combatants.  A
@@ -774,8 +928,8 @@ class BattleRosterObserver:
     def read_battle_live_count(self) -> int | None:
         """Read the number of visible living combatants in the battle row.
 
-        Dead personalities no longer have a portrait or orange level badge.
-        Only the badges actually found in the frame become candidate slots;
+        Dead personalities no longer have a portrait or level badge.  Only the
+        badges actually found in the frame become candidate slots;
         no command-slot count is inferred from gear anchors.  A
         partial/animated portrait is UNKNOWN rather than being silently
         omitted.  The battle is still observed only once, but that one
@@ -899,6 +1053,9 @@ class BattleRosterObserver:
                 f"stable_run={stable_samples} animation={diagnostics.get('animation')} "
                 f"slot_states={diagnostics.get('slot_states')} "
                 f"visible_badge_centers={diagnostics.get('visible_badge_centers')} "
+                f"badge_color={diagnostics.get('badge_color')} "
+                f"badge_colors_tried={diagnostics.get('badge_colors_tried')} "
+                f"badge_fallback={diagnostics.get('badge_fallback')} "
                 f"roi={diagnostics.get('roi')} orange_pixels={diagnostics.get('orange_pixels')} "
                 f"candidate_runs={diagnostics.get('candidate_runs')} "
                 f"badge_thresholds={diagnostics.get('badge_validation_thresholds')} "
@@ -1042,9 +1199,12 @@ class BattleRosterObserver:
     def read_team_page_live_count(self) -> int | None:
         """Read the live sinner count shown on the team-selection page.
 
-        The existing image assets cover the normal 10/11/12-sinner cases.
-        Smaller pseudo-solo teams use a strict ``live/selected`` OCR pattern;
-        an unknown frame is deliberately returned as ``None``.
+        The 10/11/12 templates are tried first; they are the only counts with
+        packaged assets and the current UI scores the 10-sinner template around
+        0.818.  Every other count, including the smaller post-death rosters,
+        is read from the right-side counter with OCR.  The old header crop
+        picked up ``Backup Deployed 3/5`` instead of the roster count, so it is
+        deliberately not used anymore.
         """
 
         frame_token = self._frame_token()
@@ -1071,33 +1231,61 @@ class BattleRosterObserver:
             if max_count < 1:
                 return None
             width, height = self._screenshot_size()
-            team_header_crop = (
-                max(0, int(width * 0.35)),
-                max(0, int(height * 0.10)),
-                min(width, int(width * 0.65)),
-                min(height, int(height * 0.28)),
+            count_crop = (
+                max(0, int(width * TEAM_PAGE_COUNT_CROP_RATIO[0])),
+                max(0, int(height * TEAM_PAGE_COUNT_CROP_RATIO[1])),
+                min(width, int(width * TEAM_PAGE_COUNT_CROP_RATIO[2])),
+                min(height, int(height * TEAM_PAGE_COUNT_CROP_RATIO[3])),
             )
-            texts = auto.get_text_from_screenshot(my_crop=team_header_crop)
+            texts = auto.get_text_from_screenshot(my_crop=count_crop)
         except Exception as error:
             log.debug(f"伪单通队伍页人数识别失败: {error}")
             return None
 
         text = "".join(str(value) for value in texts or [])
-        for match in re.finditer(r"(\d{1,2})\s*/\s*(\d{1,2})", text):
-            live_count, total_count = (int(value) for value in match.groups())
-            if total_count != max_count or live_count > total_count:
-                continue
-            self._last_team_page_live_count = live_count
+        # The old wrong crop returned this deployment hint.  Its first number
+        # is not the roster count, so never parse it as one.
+        if "backup" in text.casefold() or "deployed" in text.casefold():
             log.debug(
-                "伪单通队伍页人数识别: "
+                "伪单通队伍页人数识别忽略部署提示: "
                 f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
-                f"source=ocr crop={team_header_crop} text={text!r} live_count={live_count} total_count={total_count}"
+                f"crop={count_crop} text={text!r}"
             )
-            return live_count
+            return None
+
+        slash_match = re.search(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", text)
+        if slash_match:
+            live_count, total_count = (int(value) for value in slash_match.groups())
+            if total_count == max_count and 1 <= live_count <= total_count:
+                self._last_team_page_live_count = live_count
+                log.debug(
+                    "伪单通队伍页人数识别: "
+                    f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
+                    f"source=ocr crop={count_crop} text={text!r} "
+                    f"live_count={live_count} total_count={total_count}"
+                )
+                return live_count
+            log.debug(
+                "伪单通队伍页人数识别分数不匹配: "
+                f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
+                f"crop={count_crop} text={text!r} expected_total={max_count}"
+            )
+            return None
+
+        for match in re.finditer(r"(?<!\d)(\d{1,2})(?!\d)", text):
+            live_count = int(match.group(1))
+            if 1 <= live_count <= max_count:
+                self._last_team_page_live_count = live_count
+                log.debug(
+                    "伪单通队伍页人数识别: "
+                    f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
+                    f"source=ocr crop={count_crop} text={text!r} live_count={live_count}"
+                )
+                return live_count
         log.debug(
             "伪单通队伍页人数识别无有效结果: "
             f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
-            f"selected_count={self.selected_count} crop={locals().get('team_header_crop')} text={text!r}"
+            f"selected_count={self.selected_count} crop={count_crop} text={text!r}"
         )
         return None
 
@@ -1172,8 +1360,8 @@ class BattleRosterObserver:
             return None, diagnostics
 
         # _calculate_skills_position uses the same x origin/spacing for the
-        # command cards.  The orange level badge is 43.5 reference pixels to
-        # the right of that click position.
+        # command cards.  The level badge is 43.5 reference pixels to the
+        # right of that click position.
         x_offset = 220 - 4.5 * skill_nums
         skill_size = 161 * scale
         slot_centers = [

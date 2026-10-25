@@ -198,8 +198,15 @@ def test_observer_accepts_single_survivor_on_first_complete_frame(monkeypatch) -
     assert observer() is PseudoSoloObservation.SINGLE_SURVIVOR
 
 
-def _portrait_frame(count: int) -> np.ndarray:
+BADGE_RGB = {
+    "blue": (40, 120, 200),
+    "orange": (255, 128, 20),
+}
+
+
+def _portrait_frame(count: int, *, badge_color: str = "blue") -> np.ndarray:
     frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    badge_rgb = BADGE_RGB[badge_color]
     for index in range(count):
         center_x = round(571 + 121.5 * index)
         for y in range(970, 1015):
@@ -209,7 +216,7 @@ def _portrait_frame(count: int) -> np.ndarray:
                     (x * 5 + y * 11) % 150 + 20,
                     (x * 13 + y * 2) % 170 + 40,
                 )
-        frame[1017:1060, center_x - 20 : center_x + 20] = (255, 128, 20)
+        frame[1017:1060, center_x - 20 : center_x + 20] = badge_rgb
     return frame
 
 
@@ -230,6 +237,20 @@ def test_battle_portrait_badge_count_ignores_short_orange_effects() -> None:
     frame[1017:1035, 400:460] = (255, 128, 20)
 
     assert battle_portrait_badge_count(frame) == 1
+
+
+def test_battle_portrait_badge_count_supports_legacy_orange_badges() -> None:
+    assert battle_portrait_badge_count(_portrait_frame(3, badge_color="orange")) == 3
+
+
+def test_observer_falls_back_to_legacy_orange_badges(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 12)
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", _portrait_frame(3, badge_color="orange"), raising=False)
+
+    assert observer.read_battle_live_count() == 3
+    assert observer.last_battle_diagnostics["badge_color"] == "orange"
+    assert observer.last_battle_diagnostics["badge_fallback"] is True
 
 
 def test_observer_recognizes_only_once_per_battle(monkeypatch) -> None:
@@ -266,8 +287,14 @@ def _fixed_slot_centers(slot_count: int) -> list[int]:
     raise AssertionError(slot_count)
 
 
-def _fixed_battle_frame(live_indexes: set[int], slot_count: int = 6) -> np.ndarray:
+def _fixed_battle_frame(
+    live_indexes: set[int],
+    slot_count: int = 6,
+    *,
+    badge_color: str = "blue",
+) -> np.ndarray:
     frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    badge_rgb = BADGE_RGB[badge_color]
     for index, center_x in enumerate(_fixed_slot_centers(slot_count)):
         if index in live_indexes:
             for y in range(970, 1015):
@@ -277,11 +304,12 @@ def _fixed_battle_frame(live_indexes: set[int], slot_count: int = 6) -> np.ndarr
                         (x * 5 + y * 11) % 150 + 20,
                         (x * 13 + y * 2) % 170 + 40,
                     )
-            frame[1018:1060, center_x - 20 : center_x + 21] = (255, 128, 20)
+            frame[1018:1060, center_x - 20 : center_x + 21] = badge_rgb
         else:
-            # A simplified version of the blue/cyan sword/reload placeholder
-            # that marks an empty command slot.
-            frame[970:1010, center_x - 20 : center_x + 21] = (20, 100, 180)
+            # A simplified cyan sword/reload placeholder that marks an empty
+            # command slot.  Its hue is below the blue badge range so it is
+            # classified as EMPTY rather than as a living portrait.
+            frame[970:1010, center_x - 20 : center_x + 21] = (20, 180, 220)
     return frame
 
 
@@ -413,6 +441,40 @@ def test_observer_reads_small_team_page_count_with_strict_ocr(monkeypatch) -> No
     monkeypatch.setattr(pseudo_solo.auto, "screenshot", object(), raising=False)
 
     assert observer.read_team_page_live_count() == 2
+
+
+def test_observer_reads_team_page_count_from_right_counter_region(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 10)
+    calls: list[dict[str, object]] = []
+
+    def fake_get_text(**kwargs):
+        calls.append(kwargs)
+        return ["8/10"]
+
+    monkeypatch.setattr(pseudo_solo.auto, "find_element", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pseudo_solo.auto, "get_text_from_screenshot", fake_get_text)
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", Image.new("RGB", (2560, 1440)), raising=False)
+
+    assert observer.read_team_page_live_count() == 8
+    assert calls, "the counter OCR fallback must run"
+    crop = calls[0]["my_crop"]
+    assert crop[0] > 2300
+    assert crop[1] > 900
+
+
+def test_observer_ignores_team_page_backup_deployment_text(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 10)
+    monkeypatch.setattr(pseudo_solo.auto, "find_element", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        pseudo_solo.auto,
+        "get_text_from_screenshot",
+        lambda **kwargs: ["Backup Deployed 3/5"],
+    )
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", Image.new("RGB", (2560, 1440)), raising=False)
+
+    assert observer.read_team_page_live_count() is None
 
 
 def test_observer_rejects_more_battle_portraits_than_selected_sinners(monkeypatch) -> None:
