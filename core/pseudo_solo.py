@@ -40,9 +40,13 @@ TEAM_PAGE_COUNT_CROP_RATIO = (0.90, 0.67, 0.97, 0.79)
 # roughly one second.  Keep sampling the same battle-entry window a little
 # longer so a transient no-badge frame is not cached as UNKNOWN.
 BATTLE_ROSTER_MAX_SAMPLES = 12
+BATTLE_ROSTER_RETRY_MAX_SAMPLES = 4
+BATTLE_ROSTER_MAX_ATTEMPTS = 5
 BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES = 2
 BATTLE_ROSTER_SAMPLE_INTERVAL = 0.15
 BATTLE_ROSTER_CENTER_TOLERANCE_RATIO = 0.01
+BATTLE_OBSERVATION_RETRY_SECONDS = 2.5
+BATTLE_OBSERVATION_MAX_ATTEMPTS = 5
 BATTLE_PORTRAIT_Y_START_RATIO = 0.90
 BATTLE_PORTRAIT_Y_END_RATIO = 0.995
 BATTLE_PORTRAIT_X_START_RATIO = 0.18
@@ -359,10 +363,14 @@ def _scan_badge_runs(
     min_badge_height = max(16, round(BATTLE_BADGE_MIN_HEIGHT_AT_1080 * badge_scale))
     min_badge_width = max(18, round(BATTLE_BADGE_MIN_WIDTH_AT_1080 * badge_scale))
     min_badge_area = max(180, round(BATTLE_BADGE_MIN_AREA_AT_1080 * badge_scale**2))
+    max_badge_side = max(32, round(65 * badge_scale))
     diagnostics["badge_validation_thresholds"] = {
         "min_component_width": min_badge_width,
         "min_component_height": min_badge_height,
         "min_component_area": min_badge_area,
+        "max_component_side": max_badge_side,
+        "component_aspect_min": 0.80,
+        "component_aspect_max": 1.25,
     }
 
     candidate_runs: list[tuple[int, int, int, int]] = []
@@ -396,25 +404,48 @@ def _scan_badge_runs(
             )
 
         # A visible level badge is approximately 40 px wide and 41 px high at
-        # the reference screenshot scale.  Short UI effects can have a similar
-        # horizontal projection, so width/area alone is not enough; the
-        # largest connected component must also have the expected badge shape.
-        shape_valid = (
-            min(largest_component_size) >= min_badge_width
-            and largest_component_size[1] >= min_badge_height
-            and largest_component >= min_badge_area
-        )
+        # the reference screenshot scale and is roughly square.  A blue status
+        # effect can merge several badges into one wide horizontal projection
+        # run, so validate every connected component in the run instead of
+        # accepting/rejecting the whole run from its largest component.
+        valid_components: list[dict[str, object]] = []
+        if component_count > 1:
+            for component_index in range(1, component_count):
+                comp_x, _, comp_w, comp_h, comp_area = (
+                    int(value) for value in stats[component_index, :5]
+                )
+                if comp_w < min_badge_width or comp_h < min_badge_height:
+                    continue
+                if comp_area < min_badge_area:
+                    continue
+                if comp_w > max_badge_side or comp_h > max_badge_side:
+                    continue
+                aspect = comp_w / max(comp_h, 1)
+                if not 0.80 <= aspect <= 1.25:
+                    continue
+                component_left = x1 + run_start + comp_x
+                component_right = component_left + comp_w
+                accepted_runs.append((component_left, component_right, comp_w, comp_area))
+                valid_components.append(
+                    {
+                        "bbox": (component_left, component_right),
+                        "size": (comp_w, comp_h),
+                        "area": comp_area,
+                        "aspect": round(aspect, 3),
+                    }
+                )
+
+        shape_valid = bool(valid_components)
         if len(badge_component_details) < 64:
             badge_component_details.append(
                 {
                     "run": run,
                     "largest_component": largest_component,
                     "component_size": largest_component_size,
+                    "valid_components": valid_components[:8],
                     "shape_valid": shape_valid,
                 }
             )
-        if 25 <= run_width <= 65 and shape_valid:
-            accepted_runs.append(run)
         run_start = None
 
     diagnostics["candidate_runs"] = candidate_runs
@@ -668,6 +699,8 @@ class PseudoSoloDefenseState:
         self._battle_observed = False
         self._battle_observation = PseudoSoloObservation.UNKNOWN
         self._battle_live_count: int | None = None
+        self._observation_attempts = 0
+        self._last_observation_at = 0.0
         self._last_team_page_observation: tuple[int, int] | None = None
         self._last_live_count: int | None = None
 
@@ -681,12 +714,17 @@ class PseudoSoloDefenseState:
         self._battle_observed = False
         self._battle_observation = PseudoSoloObservation.UNKNOWN
         self._battle_live_count = None
+        self._observation_attempts = 0
+        self._last_observation_at = 0.0
         self._stop_confirmed = False
         self._base_state.remaining_turns = 0
         begin_observation = getattr(self._observer, "begin_battle", None)
         if callable(begin_observation):
             begin_observation()
-        log.debug("伪单通开始本场战斗识别周期：人数只识别一次")
+        log.debug(
+            "伪单通开始本场战斗识别周期："
+            f"UNKNOWN时最多重试{BATTLE_OBSERVATION_MAX_ATTEMPTS}次"
+        )
 
     def consume_turn(self) -> None:
         if self.remaining_turns > 0:
@@ -696,18 +734,29 @@ class PseudoSoloDefenseState:
         """Return whether pseudo-solo should submit an all-defense round.
 
         The first call in a battle captures the roster and converts it to the
-        exact defense budget (living count minus one).  Later calls only
-        consult that cached result and the remaining budget.  A frame that is
-        covered by an animation or cannot classify every portrait is
-        deliberately sent through the normal automatic-P path.
+        exact defense budget (living count minus one).  If that first window
+        lands during the battle-entry animation the result is UNKNOWN; the
+        observer is retried a few times at a bounded cadence instead of caching
+        UNKNOWN for the whole battle.  Once a reliable result is found it is
+        fixed for the rest of the battle.
         """
 
-        new_battle_observation = not self._battle_observed
-        if new_battle_observation:
+        now = time.monotonic()
+        first_attempt = not self._battle_observed
+        retry_due = (
+            self._battle_observed
+            and self._battle_observation == PseudoSoloObservation.UNKNOWN
+            and self._observation_attempts < BATTLE_OBSERVATION_MAX_ATTEMPTS
+            and now - self._last_observation_at >= BATTLE_OBSERVATION_RETRY_SECONDS
+        )
+        observed_now = first_attempt or retry_due
+        if observed_now:
             observation = self._observer()
             observed_count = getattr(self._observer, "last_battle_live_count", None)
             if observed_count is None:
                 observed_count = getattr(self._observer, "battle_live_count", None)
+            self._observation_attempts += 1
+            self._last_observation_at = now
             self._battle_observed = True
             self._battle_observation = observation
             self._battle_live_count = observed_count
@@ -731,7 +780,16 @@ class PseudoSoloDefenseState:
                 log.info("伪单通本场战斗识别到仅剩1名人格，不执行守备")
             else:
                 self._base_state.remaining_turns = 0
-                log.info("伪单通本场战斗人数识别为UNKNOWN，本场按普通P处理")
+                if self._observation_attempts >= BATTLE_OBSERVATION_MAX_ATTEMPTS:
+                    log.info(
+                        "伪单通本场战斗人数识别为UNKNOWN"
+                        f"（已重试{self._observation_attempts}次），本场按普通P处理"
+                    )
+                else:
+                    log.info(
+                        "伪单通本场战斗人数识别为UNKNOWN，"
+                        f"{BATTLE_OBSERVATION_RETRY_SECONDS:.1f}s后重试"
+                    )
         else:
             observation = self._battle_observation
             observed_count = self._battle_live_count
@@ -745,13 +803,15 @@ class PseudoSoloDefenseState:
             f"observation={observation_name} battle_live_count={observed_count} "
             f"selected_count={selected_count} stop_confirmed={self._stop_confirmed} "
             f"battle_observed={self._battle_observed} remaining_turns={self.remaining_turns} "
-            f"should_defend={should_defend}"
+            f"attempts={self._observation_attempts} should_defend={should_defend}"
         )
         if observation == PseudoSoloObservation.UNKNOWN:
-            if new_battle_observation:
-                log.info("伪单通战斗人数为UNKNOWN，本场后续按普通P处理")
+            if self._observation_attempts >= BATTLE_OBSERVATION_MAX_ATTEMPTS:
+                log.debug("伪单通复用已耗尽重试的UNKNOWN结果，本回合按普通P处理")
+            elif observed_now:
+                log.debug("伪单通本轮UNKNOWN，等待下一次重试")
             else:
-                log.debug("伪单通复用本场UNKNOWN人数结果，本回合按普通P处理")
+                log.debug("伪单通复用本场UNKNOWN人数结果，等待重试窗口")
         return should_defend
 
     @property
@@ -883,6 +943,7 @@ class BattleRosterObserver:
         self._last_observation = PseudoSoloObservation.UNKNOWN
         self._last_battle_frame_token: tuple[object, int] | None = None
         self._battle_detection_attempted = False
+        self._battle_detection_attempts = 0
         self._last_battle_live_count: int | None = None
         self._last_battle_diagnostics: dict[str, object] = {}
         self._last_battle_slot_states: list[dict[str, object]] = []
@@ -921,6 +982,7 @@ class BattleRosterObserver:
         self._last_observation = PseudoSoloObservation.UNKNOWN
         self._last_battle_frame_token = None
         self._battle_detection_attempted = False
+        self._battle_detection_attempts = 0
         self._last_battle_live_count = None
         self._last_battle_diagnostics = {}
         self._last_battle_slot_states = []
@@ -942,21 +1004,40 @@ class BattleRosterObserver:
         max_count = min(max(self.selected_count, 0), 12)
         frame_id, screenshot_id = frame_token
         if self._battle_detection_attempted:
+            if self._last_battle_live_count is not None:
+                log.debug(
+                    "伪单通战斗人数识别复用已锁定结果: "
+                    f"frame_id={frame_id} screenshot_id={screenshot_id} "
+                    f"live_count={self._last_battle_live_count}"
+                )
+                return self._last_battle_live_count
+            if self._battle_detection_attempts >= BATTLE_ROSTER_MAX_ATTEMPTS:
+                log.debug(
+                    "伪单通战斗人数识别已达到重试上限: "
+                    f"frame_id={frame_id} screenshot_id={screenshot_id} "
+                    f"attempts={self._battle_detection_attempts} "
+                    f"reason={self._last_battle_diagnostics.get('reason')}"
+                )
+                return None
             log.debug(
-                "伪单通战斗人数识别复用本场缓存（本场仅识别一次）: "
+                "伪单通战斗人数识别上次为UNKNOWN，开始重试: "
                 f"frame_id={frame_id} screenshot_id={screenshot_id} "
-                f"live_count={self._last_battle_live_count} "
-                f"reason={self._last_battle_diagnostics.get('reason')}"
+                f"attempts={self._battle_detection_attempts + 1}/{BATTLE_ROSTER_MAX_ATTEMPTS}"
             )
+        elif frame_token == self._last_battle_frame_token:
             return self._last_battle_live_count
 
-        if frame_token == self._last_battle_frame_token:
-            return self._last_battle_live_count
         self._last_battle_frame_token = frame_token
         self._last_battle_live_count = None
         self._last_battle_diagnostics = {}
         self._last_battle_slot_states = []
         self._battle_detection_attempted = True
+        self._battle_detection_attempts += 1
+        sample_limit = (
+            BATTLE_ROSTER_MAX_SAMPLES
+            if self._battle_detection_attempts == 1
+            else BATTLE_ROSTER_RETRY_MAX_SAMPLES
+        )
         if max_count < 1:
             log.debug(
                 "伪单通战斗人数识别跳过: "
@@ -979,7 +1060,8 @@ class BattleRosterObserver:
 
         log.info(
             "伪单通战斗人数识别开始稳定采样: "
-            f"selected_count={self.selected_count} max_samples={BATTLE_ROSTER_MAX_SAMPLES} "
+            f"selected_count={self.selected_count} max_samples={sample_limit} "
+            f"attempt={self._battle_detection_attempts}/{BATTLE_ROSTER_MAX_ATTEMPTS} "
             f"required_stable={BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES} "
             f"interval={BATTLE_ROSTER_SAMPLE_INTERVAL:.2f}s"
         )
@@ -995,7 +1077,7 @@ class BattleRosterObserver:
         locked_diagnostics: dict[str, object] = {}
         use_fresh_monitor_frames = getattr(getattr(auto, "screenshot", None), "mode", None) == "L"
 
-        for sample_index in range(max(1, int(BATTLE_ROSTER_MAX_SAMPLES))):
+        for sample_index in range(max(1, int(sample_limit))):
             # 协作式取消：停止请求必须立即上抛，而不是跑完 MAX_SAMPLES
             # 轮截图 + CV 才退出（supervised runner 的 stop 优雅窗口只有约 3s）。
             check_cancelled()
@@ -1045,7 +1127,7 @@ class BattleRosterObserver:
             sample_summaries.append(sample_summary)
             log.debug(
                 "伪单通战斗人数识别采样详情: "
-                f"sample={sample_index + 1}/{max(1, int(BATTLE_ROSTER_MAX_SAMPLES))} "
+                f"sample={sample_index + 1}/{max(1, int(sample_limit))} "
                 f"frame_id={getattr(auto, '_frame_id', None)} screenshot_id={id(screenshot)} "
                 f"selected_count={self.selected_count} source={screenshot_source} "
                 f"original={image_description(original_screenshot)} image={image_description(screenshot)} "

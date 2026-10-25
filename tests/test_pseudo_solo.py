@@ -243,6 +243,30 @@ def test_battle_portrait_badge_count_supports_legacy_orange_badges() -> None:
     assert battle_portrait_badge_count(_portrait_frame(3, badge_color="orange")) == 3
 
 
+def test_battle_portrait_badge_count_ignores_tall_blue_effect() -> None:
+    frame = _portrait_frame(1)
+    # 44x75 is large enough in area but its 0.59 aspect ratio is not a level
+    # badge.  This component used to be merged into a wide projection run and
+    # could hide the real badge.
+    frame[1017:1092, 700:744] = (40, 120, 200)
+
+    assert battle_portrait_badge_count(frame) == 1
+
+
+def test_observer_retries_after_unknown_window(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 12)
+    blank = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", blank, raising=False)
+
+    assert observer.read_battle_live_count() is None
+
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 2, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", _portrait_frame(7), raising=False)
+
+    assert observer.read_battle_live_count() == 7
+
+
 def test_observer_falls_back_to_legacy_orange_badges(monkeypatch) -> None:
     observer = BattleRosterObserver([1] * 12)
     monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
