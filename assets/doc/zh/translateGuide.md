@@ -18,8 +18,8 @@ GPUI 翻译表位于 `gpui-app/src/i18n/`：
 4. 运行 Rust 格式检查和测试，确认所有页面都能加载该语言。
 
 ```powershell
-cargo +nightly fmt --manifest-path gpui-app/Cargo.toml
-cargo +nightly test --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 fmt --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 test --manifest-path gpui-app/Cargo.toml
 ```
 
 不再需要 Qt Linguist、`.ts`、`.qm` 或 `lrelease`。

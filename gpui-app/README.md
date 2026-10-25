@@ -15,22 +15,22 @@ gpui-kit = "=0.8.0"
 在仓库根目录执行：
 
 ```powershell
-cargo +nightly run --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 run --manifest-path gpui-app/Cargo.toml
 ```
 
 发布版内存测试：
 
 ```powershell
-cargo +nightly run --release --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 run --release --manifest-path gpui-app/Cargo.toml
 ```
 
 验证模型、Mock IPC 和页面状态：
 
 ```powershell
-cargo +nightly test --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 test --manifest-path gpui-app/Cargo.toml
 ```
 
-`Cargo.lock` 记录实际依赖版本。当前工具链仍固定为 `nightly-2026-08-26`（`rust-toolchain.toml` 与 CI 同步）；`std::hint::cold_path` 自 Rust 1.95 起已稳定，是否切换到 stable 需要单独验证。GPUI 固定资源位于 `gpui-app/resources/assets`，并在编译期嵌入程序。
+`Cargo.lock` 记录实际依赖版本。当前工具链固定为 stable `1.99.1`（`rust-toolchain.toml` 与 CI 同步）。GPUI 固定资源位于 `gpui-app/resources/assets`，并在编译期嵌入程序。
 
 ## Python sidecar
 
@@ -40,7 +40,7 @@ cargo +nightly test --manifest-path gpui-app/Cargo.toml
 
 ```powershell
 $env:AHAB_BACKEND = "sidecar"
-cargo +nightly run --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 run --manifest-path gpui-app/Cargo.toml
 ```
 
 如果使用已启动的 sidecar：

@@ -9,7 +9,7 @@
 
 ```powershell
 uv sync
-rustup toolchain install nightly
+rustup toolchain install 1.99.1
 ```
 
 ## 启动开发版本
@@ -24,7 +24,7 @@ rustup toolchain install nightly
 也可以直接启动 GPUI：
 
 ```powershell
-cargo +nightly run --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 run --manifest-path gpui-app/Cargo.toml
 ```
 
 仅调试后端协议时，可以单独启动 sidecar：
@@ -43,8 +43,8 @@ uv run python main_backend.py --token dev-token
 
 ```powershell
 uv run pytest -q
-cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
-cargo +nightly test --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 fmt --manifest-path gpui-app/Cargo.toml -- --check
+cargo +1.99.1 test --manifest-path gpui-app/Cargo.toml
 ```
 
 ## 翻译

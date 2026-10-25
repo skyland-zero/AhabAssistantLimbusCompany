@@ -25,7 +25,7 @@
 ## 开发检查
 
 ```powershell
-cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
-cargo +nightly test --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 fmt --manifest-path gpui-app/Cargo.toml -- --check
+cargo +1.99.1 test --manifest-path gpui-app/Cargo.toml
 uv run pytest -q
 ```

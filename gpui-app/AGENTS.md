@@ -149,10 +149,10 @@ feature/
 在提交或交付前，从 `gpui-app/` 目录执行：
 
 ```powershell
-cargo +nightly fmt --all -- --check
-cargo +nightly check --all-targets
-cargo +nightly test --all-targets
-cargo +nightly clippy --all-targets -- -D warnings
+cargo +1.99.1 fmt --all -- --check
+cargo +1.99.1 check --all-targets
+cargo +1.99.1 test --all-targets
+cargo +1.99.1 clippy --all-targets -- -D warnings
 git diff --check
 ```
 

@@ -51,7 +51,7 @@ def build_native_decoder() -> None:
     run(
         [
             "cargo",
-            "+nightly",
+            "+1.99.1",
             "build",
             "--release",
             "--manifest-path",
@@ -329,7 +329,7 @@ def build(version: str, *, separate_bundles: bool = False) -> Path:
     run(
         [
             "cargo",
-            "+nightly",
+            "+1.99.1",
             "build",
             "--release",
             "--manifest-path",

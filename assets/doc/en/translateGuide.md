@@ -18,8 +18,8 @@ GPUI translation tables live under `gpui-app/src/i18n/`:
 4. Run formatting and Rust tests before submitting.
 
 ```powershell
-cargo +nightly fmt --manifest-path gpui-app/Cargo.toml
-cargo +nightly test --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 fmt --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 test --manifest-path gpui-app/Cargo.toml
 ```
 
 Qt Linguist, `.ts`, `.qm`, and `lrelease` are no longer required.

@@ -8,7 +8,7 @@
   - 配置来源：保持 `assets/config/config.example.yaml` 的 `set_thread_count: 3`；保持 `module/config/config.py` 的加载优先级，即 `config.yaml` 显式值覆盖示例默认值。
   - 兼容范围：不自动修改当前被 Git 忽略的 `config.yaml`，不新增配置迁移，不改变 RPC 字段或配置文件格式；执行目标计算中的异常安全兜底 `0` 保持不变。
   - 测试场景：验证 GPUI 默认值和 Mock 返回值为 `3`；验证后端对显式 `0` 返回 `0`；验证字段缺失时返回 `3`；验证其他已保存数值不被覆盖。
-  - 完成验证：执行 `cargo +nightly fmt --all -- --check`、`cargo +nightly check --all-targets`、`cargo +nightly test --all-targets`、Python 单元测试和 `git diff --check`。
+  - 完成验证：执行 `cargo +1.99.1 fmt --all -- --check`、`cargo +1.99.1 check --all-targets`、`cargo +1.99.1 test --all-targets`、Python 单元测试和 `git diff --check`。
 
 - [x] 集成 WxPusher 任务通知（个人 SPT）。
   - 使用 WxPusher App/桌面端接收通知，SPT 在设置页配置；v1 不实现 Telegram、通用 Webhook 或多用户 UID。

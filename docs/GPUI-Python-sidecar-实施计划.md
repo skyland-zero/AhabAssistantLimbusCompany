@@ -218,7 +218,7 @@ app.notice
 ## 10. M6：构建、更新和 CI
 
 - [x] 将 `scripts/build.py` 改为 GPUI + Python sidecar 构建流程。
-- [x] 执行 `cargo +nightly build --release`。
+- [x] 执行 `cargo +1.99.1 build --release`。
 - [x] 使用 `main_backend.spec` 构建 backend，使用 `updater.spec` 构建 updater。
 - [x] 组装 `AALC.exe`、`AALC Backend.exe` 和 `AALC Updater.exe`。
 - [x] 复制 `assets/`、`gpui-app/resources/`、README 和 LICENSE。
@@ -263,8 +263,8 @@ app.notice
 ## 12. 测试和验收命令
 
 ```powershell
-cargo +nightly fmt --manifest-path gpui-app/Cargo.toml -- --check
-cargo +nightly test --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 fmt --manifest-path gpui-app/Cargo.toml -- --check
+cargo +1.99.1 test --manifest-path gpui-app/Cargo.toml
 uv run --no-sync pytest -q
 ```
 

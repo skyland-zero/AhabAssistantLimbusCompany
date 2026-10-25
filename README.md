@@ -242,7 +242,7 @@ cd AhabAssistantLimbusCompany
 # 请使用 Python 3.14.x
 pip install -r requirements.txt
 # 需要预先安装 Rust nightly
-cargo +nightly run --manifest-path gpui-app/Cargo.toml
+cargo +1.99.1 run --manifest-path gpui-app/Cargo.toml
 
 # 更新
 git pull

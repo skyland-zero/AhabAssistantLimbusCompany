@@ -13,7 +13,7 @@
 分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`，已推送 `fork`。
 工作区干净，195 测试通过，clippy / rustfmt 干净，应用可启动。
 
-**2026-10-25 更新**：依赖已切到 `gpui-kit 0.8.0`（`gpui-pre 0.3.9` + `gpui-component 0.8.0`），199 测试通过。
+**2026-10-25 更新**：依赖已切到 `gpui-kit 0.8.0`（`gpui-pre 0.3.9` + `gpui-component 0.8.0`），工具链已切到 stable `1.99.1`，199 测试通过。
 0.7.0 起 Root 自动托管 dialog/sheet 层，页面不再手动渲染 `Root::render_dialog_layer` /
 `Root::render_sheet_layer`；弹窗入口改为 `window.open_dialog/close_dialog`。
 
@@ -40,10 +40,10 @@
 ### 每次改完的验证清单
 
 ```sh
-cargo +nightly-2026-08-26 fmt --check
-cargo +nightly-2026-08-26 clippy --all-targets    # 必须 0 警告
-cargo +nightly-2026-08-26 test                    # 195 测试
-cargo +nightly-2026-08-26 build
+cargo +1.99.1 fmt --check
+cargo +1.99.1 clippy --all-targets    # 必须 0 警告
+cargo +1.99.1 test                    # 199 测试
+cargo +1.99.1 build
 AHAB_BACKEND=mock timeout 12 ./target/debug/ahab-gpui-app.exe   # exit 124 = 正常
 ```
 

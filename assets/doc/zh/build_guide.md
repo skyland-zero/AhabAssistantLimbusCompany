@@ -11,7 +11,7 @@
 
 ```powershell
 uv sync --frozen
-rustup toolchain install nightly
+rustup toolchain install 1.99.1
 ```
 
 ## 本地运行
