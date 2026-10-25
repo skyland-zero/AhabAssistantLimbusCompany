@@ -430,14 +430,18 @@ class Mirror:
     def _read_absolute_floor(self) -> int | None:
         """Read the absolute 1-based floor title when entering/resuming a map.
 
-        Uses temporal max-pooling to eliminate the breathing/Glitch flicker
-        on the map title.  At 30 FPS three frames span ~100 ms and guarantee
-        a bright phase is captured; at 15 FPS five frames (~266 ms) are used.
-        The merged image is then HSV high-light binarized before OCR.
+        Uses temporal max-pooling when the active screenshot backend exposes
+        a scrcpy ``snapshot`` API: at 30 FPS three frames span ~100 ms and
+        guarantee a bright phase is captured; at 15 FPS five frames (~266 ms)
+        are used.  The merged image is then HSV high-light binarized before
+        OCR.  MuMu/ADB has no snapshot API, so the single-frame fallback is the
+        normal path there.
 
         All OCR candidates vote: unanimous (or single) readings are trusted,
         conflicting readings return None so the caller falls back to the
         settings-popup marker detection instead of seeding a wrong floor.
+        The single-frame fallback returns as soon as the normal and inverted
+        crops agree, instead of always paying for three attempts.
         """
 
         votes: list[int] = []
@@ -542,6 +546,11 @@ class Mirror:
                 log.debug(f"楼层标题OCR[{attempt + 1}]得到：{ocr_text}，绝对楼层：{floor}")
                 if floor is not None:
                     votes.append(floor)
+            # The normal and inverted crops already provide two independent
+            # readings.  Once they agree there is no reason to run the
+            # remaining attempts (each costs two OCR calls).
+            if len(votes) >= 2 and len(set(votes)) == 1:
+                return votes[0]
             if attempt < 2:
                 sleep(0.3)
         if not votes:
@@ -2445,7 +2454,7 @@ class Mirror:
             try:
                 self.plan_runtime.seed_floor(absolute_floor - 1)
                 self.floor = absolute_floor - 1
-                log.info(f"静默多帧融合读取楼层成功: 第{absolute_floor}层，跳过设置弹窗")
+                log.info(f"静默读取楼层成功: 第{absolute_floor}层，跳过设置弹窗")
                 self.get_floor_num = False
                 self.mirror_map.refresh_floor(self.floor)
                 self._publish_floor()
