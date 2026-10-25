@@ -45,6 +45,19 @@ def _theme_alias_matches(theme_name: object, alias: str) -> bool:
     return True
 
 
+def _theme_pack_card_point(pack: tuple[float, float], scale: float) -> tuple[float, float]:
+    """Return a drag start on the pack card body, not its gift-info icon.
+
+    ``theme_pack_features.png`` is the red magnifying-glass icon at the
+    top-right of every pack.  The current UI treats that icon as an
+    "E.G.O Gift Info" button; starting the pull gesture there opens the info
+    dialog instead of selecting the pack.  The card body is the same area used
+    for the name OCR crop, so aim at its upper-left/center.
+    """
+
+    return pack[0] - 75 * scale, pack[1] + 165 * scale
+
+
 def _theme_pack_aliases_for_floor(
     floor: int | None,
     route: MirrorRouteDefinition | None,
@@ -206,8 +219,9 @@ def select_theme_pack(
                     find_type="image_with_multiple_targets",
                 ):
                     all_theme_pack.sort(key=lambda pos: (pos[0], pos[1]))
-                    auto.mouse_drag_down(all_theme_pack[0][0], all_theme_pack[0][1])
-                    log.debug(f"选择卡包: {all_theme_pack[0]}")
+                    drag_point = _theme_pack_card_point(all_theme_pack[0], scale)
+                    auto.mouse_drag_down(*drag_point)
+                    log.debug(f"选择卡包: {all_theme_pack[0]} drag_start={drag_point}")
                     sleep(3)
                     msg = "此次主题包选择了最左边的（活动）卡包"
                     log.info(msg)
@@ -250,8 +264,9 @@ def select_theme_pack(
                 if max_weight >= int(theme_list.preferred_thresholds):
                     max_index = weight_list.index(max_weight)
                     pack = all_theme_pack[max_index]
-                    auto.mouse_drag_down(pack[0], pack[1])
-                    log.debug(f"选择卡包: {pack}")
+                    drag_point = _theme_pack_card_point(pack, scale)
+                    auto.mouse_drag_down(*drag_point)
+                    log.debug(f"选择卡包: {pack} drag_start={drag_point}")
                     sleep(3)
                     msg = f"此次选择卡包关键词：{pack_name[max_index]}"
                     log.info(msg)
@@ -275,8 +290,9 @@ def select_theme_pack(
                 max_weight = max(weight_list)
                 max_index = weight_list.index(max_weight)
                 pack = all_theme_pack[max_index]
-                auto.mouse_drag_down(pack[0], pack[1])
-                log.debug(f"选择卡包: {pack}")
+                drag_point = _theme_pack_card_point(pack, scale)
+                auto.mouse_drag_down(*drag_point)
+                log.debug(f"选择卡包: {pack} drag_start={drag_point}")
                 sleep(3)
                 log.debug("无匹配最低阈值的主题包，选择最高权重主题包")
                 msg = f"无匹配最低阈值的主题包，选择最高权重主题包\n此次选择卡包关键词：{pack_name[max_index]}"
