@@ -2,12 +2,13 @@
 
 这是仓库内的独立 GPUI 原生应用，用于提供不依赖 WebView2 的 Windows 桌面界面。
 
-依赖直接指向 Zed 的 GitHub 仓库，但固定在经过验证的 commit，而不是随构建时间漂移的 `main`：
+依赖通过 GPUI Kit 的伞形 crate 引入。`gpui-kit` 固定对应的 GPUI 快照，并统一 re-export GPUI、平台层、组件和资源，避免手工对齐多个 `=0.3.x` pin：
 
 ```toml
-gpui = { git = "https://github.com/zed-industries/zed", package = "gpui", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", rev = "f66ed399cdde86092af8af3dc7b418abf45f37f8" }
+gpui-kit = "=0.8.0"
 ```
+
+`main.rs` 中的 `extern crate gpui_kit as gpui;` 保留现有 `gpui::` 导入路径；组件和资源分别走 `gpui_kit::component`、`gpui_kit::assets`。
 
 ## 运行
 
@@ -29,7 +30,7 @@ cargo +nightly run --release --manifest-path gpui-app/Cargo.toml
 cargo +nightly test --manifest-path gpui-app/Cargo.toml
 ```
 
-`Cargo.lock` 会记录实际使用的 Git commit。当前 GitHub main 使用了尚未在 stable 中稳定的 `std::hint::cold_path`，因此应用固定使用 nightly。GPUI 固定资源位于 `gpui-app/resources/assets`，并在编译期嵌入程序。
+`Cargo.lock` 记录实际依赖版本。当前工具链仍固定为 `nightly-2026-08-26`（`rust-toolchain.toml` 与 CI 同步）；`std::hint::cold_path` 自 Rust 1.95 起已稳定，是否切换到 stable 需要单独验证。GPUI 固定资源位于 `gpui-app/resources/assets`，并在编译期嵌入程序。
 
 ## Python sidecar
 

@@ -13,9 +13,13 @@
 分支 `feat/gpui-kit-migration`，基线 `upstream-sync/2026-08-29`，已推送 `fork`。
 工作区干净，195 测试通过，clippy / rustfmt 干净，应用可启动。
 
+**2026-10-25 更新**：依赖已切到 `gpui-kit 0.8.0`（`gpui-pre 0.3.9` + `gpui-component 0.8.0`），199 测试通过。
+0.7.0 起 Root 自动托管 dialog/sheet 层，页面不再手动渲染 `Root::render_dialog_layer` /
+`Root::render_sheet_layer`；弹窗入口改为 `window.open_dialog/close_dialog`。
+
 | 项 | 状态 |
 |---|---|
-| 框架切换：gpui 源码 → `gpui-pre 0.3.6` + `gpui-component 0.6.6` | 完成 |
+| 框架切换：gpui 源码 → `gpui-kit 0.8.0`（`gpui-pre 0.3.9` + `gpui-component 0.8.0`） | 完成 |
 | 主题桥接 `Palette` → `ThemeColor` + `ThemeTokens` | 完成 |
 | 按钮/徽章、开关、图标、加载态、标签页、文本输入 | 完成 |
 | `window` 穿透进页面 render | 完成 |
@@ -77,7 +81,7 @@ AHAB_BACKEND=mock timeout 12 ./target/debug/ahab-gpui-app.exe   # exit 124 = 正
 
 ### 好消息：委托不用自己写
 
-`gpui_component::searchable_list::vec` 里，**`Vec<T>` 本身就实现了
+`gpui_kit::component::searchable_list::vec` 里，**`Vec<T>` 本身就实现了
 `SearchableListDelegate`**，且 `String` / `SharedString` / `&'static str`
 都实现了 `SearchableListItem`。纯标签列表直接：
 
