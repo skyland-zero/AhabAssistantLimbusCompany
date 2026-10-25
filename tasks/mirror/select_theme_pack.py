@@ -52,10 +52,13 @@ def _theme_pack_card_point(pack: tuple[float, float], scale: float) -> tuple[flo
     top-right of every pack.  The current UI treats that icon as an
     "E.G.O Gift Info" button; starting the pull gesture there opens the info
     dialog instead of selecting the pack.  The card body is the same area used
-    for the name OCR crop, so aim at its upper-left/center.
+    for the name OCR crop, so aim at its upper-left/center.  A live test on the
+    current 2560x1440 UI showed that ``(-30*scale, +185*scale)`` pulls the pack
+    successfully, while a point further left (``-75*scale``) still lands in the
+    featured-gift info hit area and opens the dialog again.
     """
 
-    return pack[0] - 75 * scale, pack[1] + 165 * scale
+    return pack[0] - 30 * scale, pack[1] + 185 * scale
 
 
 def _theme_pack_aliases_for_floor(
