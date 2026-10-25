@@ -328,6 +328,23 @@ def test_frozen_factory_locates_runner_beside_application(monkeypatch, tmp_path)
     assert is_frozen is True
 
 
+def test_frozen_factory_prefers_shared_runtime_runner(monkeypatch, tmp_path) -> None:
+    executable = tmp_path / "AALC Backend.exe"
+    executable.write_bytes(b"backend")
+    shared_runner = tmp_path / "AALCRunner.exe"
+    shared_runner.write_bytes(b"runner")
+    legacy_runner = tmp_path / "runner" / "AALCRunner.exe"
+    legacy_runner.parent.mkdir()
+    legacy_runner.write_bytes(b"legacy")
+    monkeypatch.setattr(supervisor_module.sys, "executable", str(executable))
+    monkeypatch.setattr(supervisor_module.sys, "frozen", True, raising=False)
+    monkeypatch.delenv("AHAB_RUNNER_EXE", raising=False)
+    factory = SubprocessRunnerFactory()
+    argv, is_frozen = factory.locate()
+    assert argv == [str(shared_runner)]
+    assert is_frozen is True
+
+
 def test_snapshot_updates_never_run_while_the_session_lock_is_held(monkeypatch) -> None:
     """Regression guard for the supervisor ABBA lock inversion.
 

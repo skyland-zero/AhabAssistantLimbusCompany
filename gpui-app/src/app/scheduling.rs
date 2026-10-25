@@ -31,6 +31,9 @@ impl AhabApp {
     /// The execution toolbar's mouse and keyboard paths both call this so the
     /// two input methods report identical validation feedback.
     pub fn start_execution(&mut self, cx: &mut Context<Self>) {
+        if self.shutdown_started {
+            return;
+        }
         let language = self.state.settings.language;
         if self.home.selected_task_count() == 0 {
             self.show_toast(

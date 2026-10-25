@@ -236,6 +236,7 @@ impl Default for MockState {
             preview_enabled: true,
             tools: HashMap::new(),
             events: Vec::new(),
+            completions: std::collections::VecDeque::new(),
         }
     }
 }

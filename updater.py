@@ -352,6 +352,22 @@ class Updater:
                     print(f"进程 PID: {proc.info['pid']} 已退出")
         print("终止进程完成")
 
+    def remove_legacy_sidecar(self):
+        """删除旧版单文件 sidecar，避免升级后残留并占用磁盘。
+
+        新版安装包把 sidecar 放在 ``backend/`` onedir 目录里。覆盖安装不会
+        自动删除根目录下旧版的 ``AALC Backend.exe``；确认新入口存在后再移除。
+        """
+        legacy = os.path.join(self.cover_folder_path, "AALC Backend.exe")
+        staged = os.path.join(self.cover_folder_path, "backend", "AALC Backend.exe")
+        if not (os.path.isfile(legacy) and os.path.isfile(staged)):
+            return
+        try:
+            os.remove(legacy)
+            print("已删除旧版单文件后端")
+        except OSError as error:
+            print(f"删除旧版单文件后端失败: {error}")
+
     def cleanup(self):
         """清理下载和解压的临时文件。"""
         print("开始清理...")
@@ -405,6 +421,7 @@ class Updater:
             return
         self.terminate_processes()
         self.cover_folder()
+        self.remove_legacy_sidecar()
         self.cleanup()
         input("已完成更新，按回车键退出并打开软件\nThe update is complete, press enter to exit and open the software")
         if os.system(f'cmd /c start "" "{os.path.abspath("./AALC.exe")}"'):

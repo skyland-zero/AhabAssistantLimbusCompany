@@ -34,6 +34,21 @@ def test_stage_runner_bundle_copies_complete_onedir_tree(tmp_path: Path) -> None
     assert not (destination / "stale.dll").exists()
 
 
+def test_stage_backend_bundle_copies_complete_onedir_tree(tmp_path: Path) -> None:
+    source = tmp_path / "AALCBackend"
+    (source / "_internal" / "onnxruntime").mkdir(parents=True)
+    (source / "AALC Backend.exe").write_bytes(b"backend")
+    (source / "_internal" / "python.dll").write_bytes(b"runtime")
+
+    destination = tmp_path / "release" / "backend"
+    destination.mkdir(parents=True)
+    (destination / "stale.dll").write_bytes(b"stale")
+    assert build.stage_backend_bundle(source, destination) == destination
+    assert (destination / "AALC Backend.exe").read_bytes() == b"backend"
+    assert (destination / "_internal" / "python.dll").is_file()
+    assert not (destination / "stale.dll").exists()
+
+
 def test_runner_bundle_entries_are_relative_sorted_and_hashed(tmp_path: Path) -> None:
     bundle = tmp_path / "runner"
     (bundle / "z").mkdir(parents=True)
@@ -50,14 +65,48 @@ def test_runner_bundle_entries_are_relative_sorted_and_hashed(tmp_path: Path) ->
     assert all(not Path(str(entry["path"])).is_absolute() for entry in entries)
 
 
-def test_release_manifest_records_runner_entry_and_all_bundle_metadata(tmp_path: Path) -> None:
+def test_shared_runtime_manifest_uses_one_backend_directory(tmp_path: Path) -> None:
     release = tmp_path / "release"
-    runner = release / "runner"
-    runner.mkdir(parents=True)
-    (runner / "AALCRunner.exe").write_bytes(b"runner")
-    (runner / "_internal.dll").write_bytes(b"runtime")
+    runtime = release / "backend"
+    runtime.mkdir(parents=True)
+    (runtime / "AALC Backend.exe").write_bytes(b"backend")
+    (runtime / "AALCRunner.exe").write_bytes(b"runner")
+
+    manifest = build.build_release_manifest(
+        "1.2.3", release_root=release, shared_runtime=True
+    )
+
+    assert manifest["runtime"] == "shared"
+    assert manifest["backend"]["entry"] == "backend/AALC Backend.exe"
+    assert manifest["runner"]["entry"] == "backend/AALCRunner.exe"
+    assert {entry["path"] for entry in manifest["runner"]["files"]} == {
+        "backend/AALC Backend.exe",
+        "backend/AALCRunner.exe",
+    }
+
+
+def test_release_manifest_records_both_onedir_bundles(tmp_path: Path) -> None:
+    release = tmp_path / "release"
+    for name, entry in (("backend", "AALC Backend.exe"), ("runner", "AALCRunner.exe")):
+        bundle = release / name
+        bundle.mkdir(parents=True)
+        (bundle / entry).write_bytes(name.encode())
+        (bundle / "_internal.dll").write_bytes(b"runtime")
 
     manifest = build.build_release_manifest("1.2.3", release_root=release)
+    assert manifest["backend"]["entry"] == "backend/AALC Backend.exe"
+    assert manifest["backend"]["files"] == [
+        {
+            "path": "backend/AALC Backend.exe",
+            "sha256": hashlib.sha256(b"backend").hexdigest(),
+            "size": 7,
+        },
+        {
+            "path": "backend/_internal.dll",
+            "sha256": hashlib.sha256(b"runtime").hexdigest(),
+            "size": 7,
+        },
+    ]
     assert manifest["runner"]["entry"] == "runner/AALCRunner.exe"
     assert manifest["runner"]["files"] == [
         {

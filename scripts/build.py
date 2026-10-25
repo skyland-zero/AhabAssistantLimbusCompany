@@ -18,9 +18,14 @@ RELEASE = DIST / "AALC"
 NATIVE_DECODER_MANIFEST = ROOT / "native" / "scrcpy_decoder" / "Cargo.toml"
 NATIVE_DECODER_BINARY = ROOT / "native" / "scrcpy_decoder" / "target" / "release" / "scrcpy_decoder.dll"
 SCRCPY_RUNTIME_DIR = ROOT / "assets" / "binary" / "scrcpy-ffmpeg"
+BACKEND_BUNDLE = DIST / "AALCBackend"
+SHARED_RUNTIME_BUNDLE = DIST / "AALCRuntime"
+BACKEND_RELEASE_DIR = RELEASE / "backend"
+BACKEND_ENTRY = "backend/AALC Backend.exe"
 RUNNER_BUNDLE = DIST / "AALCRunner"
 RUNNER_RELEASE_DIR = RELEASE / "runner"
 RUNNER_ENTRY = "runner/AALCRunner.exe"
+SHARED_RUNNER_ENTRY = "backend/AALCRunner.exe"
 
 
 def run(command: list[str], *, cwd: Path = ROOT) -> None:
@@ -107,7 +112,7 @@ def build_bundle_file_entries(bundle_root: Path, *, manifest_prefix: str = "runn
 
     bundle_root = Path(bundle_root)
     if not bundle_root.is_dir():
-        raise FileNotFoundError(f"runner bundle directory is missing: {bundle_root}")
+        raise FileNotFoundError(f"bundle directory is missing: {bundle_root}")
 
     prefix = manifest_prefix.strip("/").replace("\\", "/")
     entries: list[dict[str, Any]] = []
@@ -129,25 +134,40 @@ def build_release_manifest(
     version: str,
     *,
     release_root: Path = RELEASE,
+    backend_root: Path | None = None,
     runner_root: Path | None = None,
+    shared_runtime: bool = False,
 ) -> dict[str, Any]:
-    """Return the release metadata, including every Runner bundle file."""
+    """Return the release metadata, including every onedir bundle file."""
 
     release_root = Path(release_root)
-    runner_root = Path(runner_root) if runner_root is not None else release_root / "runner"
-    entry_path = release_root / RUNNER_ENTRY.replace("/", os.sep)
-    if not entry_path.is_file():
-        raise FileNotFoundError(f"runner entry is missing: {entry_path}")
+    backend_root = Path(backend_root) if backend_root is not None else release_root / "backend"
+    if shared_runtime:
+        runner_root = backend_root
+        runner_entry = SHARED_RUNNER_ENTRY
+        runner_prefix = "backend"
+    else:
+        runner_root = Path(runner_root) if runner_root is not None else release_root / "runner"
+        runner_entry = RUNNER_ENTRY
+        runner_prefix = "runner"
+    for entry, root in ((runner_entry, runner_root), (BACKEND_ENTRY, backend_root)):
+        entry_path = release_root / entry.replace("/", os.sep)
+        if not entry_path.is_file():
+            raise FileNotFoundError(f"{root.name} entry is missing: {entry_path}")
 
     return {
         "version": version,
         "frontend": "AALC.exe",
-        "backend": "AALC Backend.exe",
+        "backend": {
+            "entry": BACKEND_ENTRY,
+            "files": build_bundle_file_entries(backend_root, manifest_prefix="backend"),
+        },
         "updater": "AALC Updater.exe",
         "runner": {
-            "entry": RUNNER_ENTRY,
-            "files": build_bundle_file_entries(runner_root),
+            "entry": runner_entry,
+            "files": build_bundle_file_entries(runner_root, manifest_prefix=runner_prefix),
         },
+        "runtime": "shared" if shared_runtime else "separate",
     }
 
 
@@ -155,7 +175,9 @@ def write_release_manifest(
     version: str,
     *,
     release_root: Path = RELEASE,
+    backend_root: Path | None = None,
     runner_root: Path | None = None,
+    shared_runtime: bool = False,
 ) -> Path:
     """Write and return ``release.json`` for a staged release tree."""
 
@@ -163,7 +185,13 @@ def write_release_manifest(
     manifest_path = release_root / "release.json"
     manifest_path.write_text(
         json.dumps(
-            build_release_manifest(version, release_root=release_root, runner_root=runner_root),
+            build_release_manifest(
+                version,
+                release_root=release_root,
+                backend_root=backend_root,
+                runner_root=runner_root,
+                shared_runtime=shared_runtime,
+            ),
             ensure_ascii=False,
             indent=2,
         )
@@ -173,37 +201,75 @@ def write_release_manifest(
     return manifest_path
 
 
-def stage_runner_bundle(source: Path | None = None, destination: Path | None = None) -> Path:
-    """Copy the complete PyInstaller onedir Runner tree into the release."""
+def stage_bundle(
+    source: Path,
+    destination: Path,
+    *,
+    entry_name: str,
+    label: str,
+) -> Path:
+    """Replace ``destination`` with a complete PyInstaller onedir tree."""
 
-    source = RUNNER_BUNDLE if source is None else Path(source)
-    destination = RUNNER_RELEASE_DIR if destination is None else Path(destination)
     if destination.exists():
         if destination.is_dir() and not destination.is_symlink():
             shutil.rmtree(destination)
         else:
             destination.unlink()
     copy_tree(source, destination)
-    entry = destination / "AALCRunner.exe"
+    entry = destination / entry_name
     if not entry.is_file():
-        raise FileNotFoundError(f"staged runner entry is missing: {entry}")
+        raise FileNotFoundError(f"staged {label} entry is missing: {entry}")
     return destination
 
 
-def stage_release(version: str) -> None:
+def stage_backend_bundle(source: Path | None = None, destination: Path | None = None) -> Path:
+    """Copy the complete PyInstaller onedir sidecar tree into the release."""
+
+    source = BACKEND_BUNDLE if source is None else Path(source)
+    destination = BACKEND_RELEASE_DIR if destination is None else Path(destination)
+    return stage_bundle(
+        source,
+        destination,
+        entry_name="AALC Backend.exe",
+        label="backend",
+    )
+
+
+def stage_runner_bundle(source: Path | None = None, destination: Path | None = None) -> Path:
+    """Copy the complete PyInstaller onedir Runner tree into the release."""
+
+    source = RUNNER_BUNDLE if source is None else Path(source)
+    destination = RUNNER_RELEASE_DIR if destination is None else Path(destination)
+    return stage_bundle(
+        source,
+        destination,
+        entry_name="AALCRunner.exe",
+        label="runner",
+    )
+
+
+def stage_release(version: str, *, shared_runtime: bool = True) -> None:
     RELEASE.mkdir(parents=True, exist_ok=True)
 
     gpui_binary = ROOT / "gpui-app" / "target" / "release" / "ahab-gpui-app.exe"
-    backend_binary = DIST / "AALC Backend.exe"
+    bundle = SHARED_RUNTIME_BUNDLE if shared_runtime else BACKEND_BUNDLE
+    backend_binary = bundle / "AALC Backend.exe"
     updater_binary = DIST / "AALC Updater.exe"
-    for path in (gpui_binary, backend_binary, updater_binary, RUNNER_BUNDLE / "AALCRunner.exe"):
+    runner_binary = bundle / "AALCRunner.exe" if shared_runtime else RUNNER_BUNDLE / "AALCRunner.exe"
+    for path in (gpui_binary, backend_binary, updater_binary, runner_binary):
         if not path.is_file():
             raise FileNotFoundError(f"required build output is missing: {path}")
 
     shutil.copy2(gpui_binary, RELEASE / "AALC.exe")
-    shutil.copy2(backend_binary, RELEASE / "AALC Backend.exe")
+    stage_bundle(
+        bundle,
+        BACKEND_RELEASE_DIR,
+        entry_name="AALC Backend.exe",
+        label="backend",
+    )
     shutil.copy2(updater_binary, RELEASE / "AALC Updater.exe")
-    stage_runner_bundle()
+    if not shared_runtime:
+        stage_runner_bundle()
     shutil.copy2(ROOT / "README.md", RELEASE / "README.md")
     shutil.copy2(ROOT / "LICENSE", RELEASE / "LICENSE")
     copy_tree(
@@ -217,7 +283,7 @@ def stage_release(version: str) -> None:
     version_file.parent.mkdir(parents=True, exist_ok=True)
     version_file.write_text(version, encoding="utf-8")
 
-    write_release_manifest(version)
+    write_release_manifest(version, shared_runtime=shared_runtime)
 
     # Embed the public verification key set in the shipped client.  Private
     # signing material is never written to the release tree; CI supplies it
@@ -245,8 +311,9 @@ def archive_release(version: str) -> Path:
         or (str(bundled_7z) if bundled_7z.is_file() else None)
     )
     if seven_zip:
-        run([seven_zip, "a", "-mx=7", f"{archive_base}.7z", "AALC/*"], cwd=DIST)
-        return archive_base.with_suffix(".7z")
+        archive = Path(f"{archive_base}.7z")
+        run([seven_zip, "a", "-mx=7", str(archive), "AALC/*"], cwd=DIST)
+        return archive
 
     # A zip fallback keeps local builds usable on machines without 7-Zip;
     # CI installs 7-Zip and therefore publishes the normal .7z artifact.
@@ -255,7 +322,7 @@ def archive_release(version: str) -> Path:
     return archive
 
 
-def build(version: str) -> Path:
+def build(version: str, *, separate_bundles: bool = False) -> Path:
     if DIST.exists():
         shutil.rmtree(DIST)
 
@@ -270,10 +337,14 @@ def build(version: str) -> Path:
         ]
     )
     build_native_decoder()
-    build_python_executable("main_backend.spec")
+    if separate_bundles:
+        build_python_executable("main_backend.spec")
+    else:
+        build_python_executable("shared_runtime.spec")
     build_python_executable("updater.spec")
-    build_python_executable("execution_runner.spec")
-    stage_release(version)
+    if separate_bundles:
+        build_python_executable("execution_runner.spec")
+    stage_release(version, shared_runtime=not separate_bundles)
     archive = archive_release(version)
     sys.stdout.write(f"Release ready: {archive}\n")
     return archive
@@ -282,8 +353,13 @@ def build(version: str) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build AALC GPUI + Python sidecar")
     parser.add_argument("--version", default="dev", help="release version")
+    parser.add_argument(
+        "--separate-bundles",
+        action="store_true",
+        help="build independent sidecar/Runner onedir trees instead of the shared runtime",
+    )
     args = parser.parse_args()
-    build(args.version)
+    build(args.version, separate_bundles=args.separate_bundles)
 
 
 if __name__ == "__main__":

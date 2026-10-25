@@ -16,6 +16,7 @@ use crate::{
 mod bootstrap;
 mod construct;
 mod recovery;
+mod shutdown;
 
 const MAX_AUTO_RETRIES: u8 = 3;
 

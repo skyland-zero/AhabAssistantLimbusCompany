@@ -225,12 +225,17 @@ pub struct AhabApp {
     /// flag is intentionally owned by the root app rather than HomeState:
     /// `app.exitRequested` is a process-lifecycle event, not execution state.
     pub(crate) exit_requested: bool,
+    /// Set once the asynchronous graceful-exit sequence has started.
+    pub(crate) shutdown_started: bool,
+    /// Set when the window may actually close after the sidecar has exited.
+    pub(crate) allow_close: bool,
     pub(crate) stop_timeout_generation: u64,
     pub(crate) stats_tick_generation: u64,
     pub(crate) theme_persist_timer_generation: Option<u64>,
     pub(crate) preview_control: PreviewControlState,
     pub(crate) window_minimized: bool,
     pub(crate) window_subscriptions: Vec<Subscription>,
+    pub(crate) app_quit_subscription: Option<Subscription>,
 }
 
 /// Deterministic transient states used by the visual-regression harness. These

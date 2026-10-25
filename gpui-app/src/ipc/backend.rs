@@ -1,13 +1,17 @@
-use std::sync::{
-    Arc, RwLock,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
 };
 
 use serde_json::Value;
 
+use super::contract::SessionInfo;
 use super::{
     EventEnvelope, MockClient, RpcClient, RpcCompletion, RpcError, RpcRequest, RpcResponse,
-    TransportActivity, websocket::WebSocketClient,
+    TransportActivity, contract, websocket::WebSocketClient,
 };
 
 #[derive(Clone)]
@@ -84,6 +88,65 @@ impl SidecarSupervisor {
         result
     }
 
+    fn has_live_process(&self) -> bool {
+        self.with_client(|| false, WebSocketClient::has_live_sidecar)
+    }
+
+    /// Reconnect to the current sidecar without replacing its process.
+    fn reconnect(&self) -> Result<(), String> {
+        if self.restarting.swap(true, Ordering::AcqRel) {
+            return Err("Python sidecar 正在重连或重启".to_owned());
+        }
+        let result = (|| {
+            let replacement = self
+                .client
+                .read()
+                .map_err(|_| "sidecar 状态锁不可用".to_owned())?
+                .reconnect()?;
+            let mut client = self
+                .client
+                .write()
+                .map_err(|_| "sidecar supervisor lock poisoned".to_owned())?;
+            *client = replacement;
+            Ok(())
+        })();
+        self.restarting.store(false, Ordering::Release);
+        self.activity.notify();
+        result
+    }
+
+    /// Ask the owned sidecar to close gracefully and wait briefly for the
+    /// process to exit.  External sidecars are left under their owner's control.
+    pub fn shutdown(&self, timeout: Duration) -> Result<(), String> {
+        if !self.restartable {
+            return Ok(());
+        }
+        if self.restarting.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        self.with_client(
+            || Ok(()),
+            |client| {
+                let deadline = Instant::now() + timeout;
+                let result = if client.is_connected() {
+                    decode_response(
+                        contract::method::APP_SHUTDOWN,
+                        client.request_with_timeout(contract::method::APP_SHUTDOWN, None, timeout),
+                    )
+                    .map(|_| ())
+                    .map_err(|error| error.message)
+                } else {
+                    Ok(())
+                };
+                if result.is_ok() {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    let _ = client.wait_for_exit(remaining);
+                }
+                result
+            },
+        )
+    }
+
     fn is_connected(&self) -> bool {
         !self.restarting.load(Ordering::Acquire)
             && self.with_client(|| false, WebSocketClient::is_connected)
@@ -133,6 +196,10 @@ impl SidecarSupervisor {
         self.with_client(Vec::new, WebSocketClient::take_completions)
     }
 
+    fn session_info(&self) -> Option<SessionInfo> {
+        self.with_client(|| None, WebSocketClient::session_info)
+    }
+
     fn activity(&self) -> TransportActivity {
         self.activity.clone()
     }
@@ -152,7 +219,12 @@ fn ready_receiver(response: RpcResponse) -> async_channel::Receiver<RpcResponse>
 /// External sidecars cannot be replaced by that supervisor, so a new client is
 /// handed back to the app after a successful connection.
 pub enum BackendAttach {
+    /// A replacement sidecar process was started.
     Reused,
+    /// The existing sidecar process was kept and only its transport was
+    /// reconnected. UI state must not be reset in this case.
+    Reconnected,
+    /// An externally managed sidecar was attached through a new client.
     New(BackendClient),
 }
 
@@ -186,12 +258,29 @@ impl BackendClient {
         match self {
             Self::Mock(_) => Err("mock backend does not start a sidecar".to_owned()),
             Self::Sidecar(supervisor) if supervisor.restartable => {
-                supervisor.restart()?;
-                Ok(BackendAttach::Reused)
+                if supervisor.has_live_process() {
+                    // A transport failure is not a process failure.  Keep the
+                    // sidecar (and any Runner it owns) alive and retry the
+                    // session before considering a process replacement.
+                    supervisor.reconnect()?;
+                    Ok(BackendAttach::Reconnected)
+                } else {
+                    supervisor.restart()?;
+                    Ok(BackendAttach::Reused)
+                }
             }
             Self::Sidecar(supervisor) => Ok(BackendAttach::New(Self::Sidecar(
                 SidecarSupervisor::try_new_with_activity(supervisor.activity())?,
             ))),
+        }
+    }
+
+    /// Ask the owned sidecar to close gracefully.  This is a no-op for Mock
+    /// and for externally managed sidecars.
+    pub fn shutdown(&self, timeout: Duration) -> Result<(), String> {
+        match self {
+            Self::Mock(_) => Ok(()),
+            Self::Sidecar(supervisor) => supervisor.shutdown(timeout),
         }
     }
 
@@ -230,7 +319,7 @@ impl BackendClient {
 
     pub fn submit(&self, method: &str, params: Option<Value>) {
         match self {
-            Self::Mock(_) => {}
+            Self::Mock(client) => client.submit(method, params),
             Self::Sidecar(supervisor) => supervisor.submit(method, params),
         }
     }
@@ -244,14 +333,21 @@ impl BackendClient {
 
     pub fn take_completions(&self) -> Vec<RpcCompletion> {
         match self {
-            Self::Mock(_) => Vec::new(),
+            Self::Mock(client) => client.take_completions(),
             Self::Sidecar(supervisor) => supervisor.take_completions(),
+        }
+    }
+
+    pub fn session_info(&self) -> Option<SessionInfo> {
+        match self {
+            Self::Mock(_) => None,
+            Self::Sidecar(supervisor) => supervisor.session_info(),
         }
     }
 
     pub(crate) fn activity(&self) -> TransportActivity {
         match self {
-            Self::Mock(_) => TransportActivity::new(),
+            Self::Mock(client) => client.activity(),
             Self::Sidecar(supervisor) => supervisor.activity(),
         }
     }
@@ -290,5 +386,29 @@ pub fn decode_response(method: &str, response: RpcResponse) -> Result<Option<Val
             .result
             .map(Some)
             .ok_or_else(|| RpcError::new(-32603, format!("{method} returned no result")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn owned_sidecar_reconnects_without_restarting_the_process() {
+        if std::env::var_os("AHAB_RUN_SIDECAR_INTEGRATION").is_none() {
+            return;
+        }
+        let client = BackendClient::unavailable("integration test");
+        let first = client.start_or_connect().expect("sidecar should start");
+        assert!(matches!(first, BackendAttach::Reused));
+        let second = client.start_or_connect().expect("sidecar should reconnect");
+        assert!(matches!(second, BackendAttach::Reconnected));
+
+        let response = client.call(contract::method::APP_PING, None);
+        assert!(response.error.is_none(), "ping response: {response:?}");
+        client
+            .shutdown(Duration::from_secs(5))
+            .expect("sidecar should shut down");
     }
 }

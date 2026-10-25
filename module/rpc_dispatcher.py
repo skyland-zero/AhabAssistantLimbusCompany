@@ -15,9 +15,7 @@ from typing import Any, Callable
 from module.backend_application import BackendApplication
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.logger import log
-
-SCHEMA_VERSION = 3
-
+from module.rpc_contract import SCHEMA_VERSION
 
 _EXECUTION_METHODS = frozenset(
     {
@@ -34,8 +32,10 @@ _ERROR_CODE_NAMES = {
     -32600: "INVALID_REQUEST",
     -32601: "METHOD_NOT_FOUND",
     -32602: "INVALID_PARAMS",
+    -32603: "INVALID_RESPONSE",
     -32700: "PARSE_ERROR",
     -32000: "INTERNAL_ERROR",
+    -32001: "BACKEND_UNAVAILABLE",
     -32010: "EXECUTION_BUSY",
     -32011: "INVALID_EXECUTION_STATE",
     -32013: "STALE_RUN",
@@ -77,6 +77,7 @@ class RpcDispatcher:
         version: str = "unknown",
         shutdown: Callable[[], None] | None = None,
         application: BackendApplication | None = None,
+        diagnostics: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
         # ``device_manager`` remains accepted for the small device-manager
         # compatibility tests and for callers upgrading from the first
@@ -90,12 +91,29 @@ class RpcDispatcher:
         self.device_manager = self.application.device_manager
         self.version = version
         self._shutdown = shutdown
+        self._diagnostics = diagnostics
         self._busy_checker: Callable[[], bool] = self.application.is_busy
         self.application.set_busy_checker(self._busy_checker)
 
     def set_busy_checker(self, checker: Callable[[], bool]) -> None:
         self._busy_checker = checker
         self.application.set_busy_checker(checker)
+
+    def set_diagnostics_provider(self, provider: Callable[[], dict[str, Any]]) -> None:
+        """Attach the transport-owned health snapshot exposed by ``app.diagnose``."""
+
+        self._diagnostics = provider
+
+    def diagnostics(self) -> dict[str, Any]:
+        if self._diagnostics is not None:
+            return self._diagnostics()
+        import os
+
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "version": self.version,
+            "pid": os.getpid(),
+        }
 
     @staticmethod
     def is_mutating(method: Any) -> bool:
@@ -150,6 +168,7 @@ class RpcDispatcher:
             "app.version": "app_version",
             "app.checkUpdate": "app_check_update",
             "app.shutdown": "app_shutdown",
+            "app.diagnose": "__app_diagnose",
             "stats.getSummary": "stats_get_summary",
             "stats.getDailySummary": "stats_get_daily_summary",
             "tasks.getConfig": "tasks_get_config",
@@ -190,6 +209,10 @@ class RpcDispatcher:
         route = route_names.get(method)
         if route is None:
             raise RpcDispatchError(-32601, f"Method not found: {method}")
+        if method == "app.diagnose":
+            if params is not None:
+                raise RpcDispatchError(-32602, f"{method} does not accept params")
+            return self.diagnostics()
         if method in _EXECUTION_METHODS:
             return self._call_execution(method, route, params)
         if method in {
@@ -288,7 +311,7 @@ class RpcDispatcher:
         error: dict[str, Any] = {"code": code, "message": message}
         details: dict[str, Any] = {
             "code": _error_code_name(code, message),
-            "retryable": code in {-32000, -32030},
+            "retryable": code in {-32000, -32001, -32030},
             "userMessage": message,
         }
         if isinstance(data, dict):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 
 import pytest
@@ -11,7 +12,7 @@ from websockets.asyncio.client import connect
 
 from module.execution.event_adapter import RunnerEventAdapter
 from module.rpc_dispatcher import RpcDispatcher
-from module.websocket_server import WebSocketServer
+from module.websocket_server import MAX_OUTBOUND_EVENTS, WebSocketServer
 from tests.unit.module.test_backend_application import make_application
 
 
@@ -73,9 +74,23 @@ async def _exercise_server() -> None:
                 assert "1008" in str(error) or "authentication" in str(error).lower()
 
         async with connect(f"ws://127.0.0.1:{port}") as client:
-            await client.send(json.dumps({"type": "hello", "token": "secret"}))
+            await client.send(
+                json.dumps(
+                    {
+                        "type": "hello",
+                        "token": "secret",
+                        "schemaVersion": 3,
+                        "capabilities": ["core.rpc.v3"],
+                    }
+                )
+            )
             hello = json.loads(await client.recv())
-            assert hello == {"type": "hello", "ok": True, "schemaVersion": 3}
+            assert hello["type"] == "hello"
+            assert hello["ok"] is True
+            assert hello["schemaVersion"] == 3
+            assert hello["bootId"] == server.boot_id
+            assert hello["capabilities"][0] == "core.rpc.v3"
+            assert hello["pid"] == os.getpid()
 
             await client.send(
                 json.dumps(
@@ -94,6 +109,7 @@ async def _exercise_server() -> None:
             event = json.loads(await asyncio.wait_for(client.recv(), timeout=1))
             assert event["event"] == "app.notice"
             assert event["seq"] == 1
+            assert event["bootId"] == server.boot_id
 
             # RunnerEventAdapter keeps ``execution.log`` for legacy Python
             # listeners, while the GPUI wire contract consumes ``log.entry``.
@@ -122,7 +138,45 @@ async def _exercise_server() -> None:
                     "ts": 1_725_000_000_500,
                 },
                 "seq": 2,
+                "bootId": server.boot_id,
             }
+    finally:
+        await server.stop()
+        app.close()
+
+
+def test_backpressure_drops_replaceable_events_without_closing_the_session() -> None:
+    asyncio.run(_exercise_backpressure())
+
+
+async def _exercise_backpressure() -> None:
+    app = make_application()
+    dispatcher = RpcDispatcher(application=app, version="test")
+    server = WebSocketServer(
+        dispatcher,
+        app.device_manager,
+        token="secret",
+        application=app,
+    )
+    server._outbound_ready = asyncio.Event()
+    try:
+        for index in range(MAX_OUTBOUND_EVENTS):
+            server._enqueue_event("app.notice", {"index": index}, index)
+
+        server._enqueue_event("log.entry", {"level": "info", "message": "drop"}, 1000)
+        server._enqueue_event("log.entry", {"level": "error", "message": "keep"}, 1001)
+
+        assert len(server._outbound) == MAX_OUTBOUND_EVENTS
+        assert any(
+            event == "log.entry" and payload.get("level") == "error"
+            for event, payload, _ in server._outbound
+        )
+        assert not any(
+            event == "log.entry" and payload.get("level") == "info"
+            for event, payload, _ in server._outbound
+        )
+        assert server._clients == set()
+        assert server._dropped_events == 2
     finally:
         await server.stop()
         app.close()
@@ -138,6 +192,15 @@ async def _exercise_execution_lane() -> None:
     server = WebSocketServer(dispatcher, app.device_manager, token="secret", application=app)
     port = await server.start()
     try:
+        async with connect(f"ws://127.0.0.1:{port}") as client:
+            await client.send(
+                json.dumps({"type": "hello", "token": "secret", "schemaVersion": 99})
+            )
+            try:
+                await client.recv()
+            except Exception as error:
+                assert "1002" in str(error) or "schema" in str(error).lower()
+
         async with connect(f"ws://127.0.0.1:{port}") as client:
             await client.send(json.dumps({"type": "hello", "token": "secret"}))
             assert json.loads(await client.recv())["schemaVersion"] == 3

@@ -176,6 +176,10 @@ pub struct TeamsState {
     pub saving: bool,
     pub deleting: bool,
     pub team_toggle_in_flight: Option<String>,
+    /// Submitted team waiting for a `team.save` response that cannot be
+    /// resolved without a follow-up `team.list` (the sidecar may return only
+    /// `true` for a successful mutation).
+    pub pending_save: Option<TeamDetail>,
 }
 
 /// Named bool fields keep the page readable and prevent ad-hoc JSON patches.

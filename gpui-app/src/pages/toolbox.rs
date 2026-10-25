@@ -333,12 +333,16 @@ mod tests {
     fn every_tool_has_a_mock_state_boundary() {
         let mut state = ToolboxState::default();
         state.toggle(ToolId::InfiniteBattle);
+        state.pump_mock();
         assert!(state.is_running(ToolId::InfiniteBattle));
         state.screenshot();
+        state.pump_mock();
         assert!(state.feedback.as_deref().unwrap().contains("截图完成"));
         state.apply_resolution();
+        state.pump_mock();
         assert!(state.feedback.as_deref().unwrap().contains("1080P"));
         state.reset_resolution();
+        state.pump_mock();
         assert!(state.feedback.as_deref().unwrap().contains("还原"));
     }
 }

@@ -100,16 +100,25 @@ mod tests {
         assert_eq!(config.skill_replacement_mode, 4);
     }
 
+    fn drain_team_stats_completions(state: &mut TeamsState) {
+        for completion in state.rpc.take_completions() {
+            let result = RpcGateway::decode_response(&completion.method, completion.response);
+            state.apply_stats_completion(&completion.method, completion.params, result);
+        }
+    }
+
     #[test]
     fn team_stats_load_and_clear_use_the_team_rpc_contract() {
         let mut state = TeamsState::default();
         let team = state.teams[0].clone();
         state.open_edit(&team);
         state.refresh_team_stats().unwrap();
+        drain_team_stats_completions(&mut state);
         assert_eq!(state.editor.as_ref().unwrap().stats.totalCount, 6);
 
         assert!(state.request_clear_team_stats());
         state.clear_team_stats().unwrap();
+        drain_team_stats_completions(&mut state);
         let editor = state.editor.as_ref().unwrap();
         assert_eq!(editor.stats.totalCount, 0);
         assert!(!editor.stats_clear_confirmation);
@@ -304,10 +313,12 @@ mod tests {
         state.open_new();
         state.editor.as_mut().unwrap().team.name = "新队伍".into();
         state.save_editor().unwrap();
+        state.pump_mock();
         assert_eq!(state.teams.len(), initial + 1);
         let created = state.teams.last().unwrap().clone();
         state.request_delete(created);
         state.confirm_delete().unwrap();
+        state.pump_mock();
         assert_eq!(state.teams.len(), initial);
     }
 
@@ -445,6 +456,7 @@ mod tests {
         state.open_edit(&team);
 
         state.set_team_enabled(&team, false).unwrap();
+        state.pump_mock();
 
         assert!(!state.teams[0].enabled);
         assert!(!state.editor.as_ref().unwrap().team.enabled);

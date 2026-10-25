@@ -20,26 +20,12 @@ impl TeamsState {
     }
 
     pub fn refresh_team_stats(&mut self) -> Result<(), String> {
-        let Some((team_id, params)) = self.begin_team_stats_load()? else {
+        let Some((_team_id, params)) = self.begin_team_stats_load()? else {
             return Ok(());
         };
-        if self.rpc.is_sidecar() {
-            return Ok(());
-        }
-        let result = self
-            .rpc
-            .request::<TeamStats>(crate::ipc::contract::method::TEAM_STATS_GET, Some(params))
-            .map_err(|error| error.message);
-        match result {
-            Ok(stats) => {
-                self.apply_team_stats(&team_id, stats);
-                Ok(())
-            }
-            Err(error) => {
-                self.fail_team_stats(&team_id, error.clone());
-                Err(error)
-            }
-        }
+        self.rpc
+            .submit(crate::ipc::contract::method::TEAM_STATS_GET, Some(params));
+        Ok(())
     }
 
     pub fn apply_team_stats(&mut self, team_id: &str, mut stats: TeamStats) -> bool {
@@ -120,25 +106,48 @@ impl TeamsState {
     }
 
     pub fn clear_team_stats(&mut self) -> Result<(), String> {
-        let Some((team_id, params)) = self.begin_team_stats_clear()? else {
+        let Some((_team_id, params)) = self.begin_team_stats_clear()? else {
             return Ok(());
         };
-        if self.rpc.is_sidecar() {
-            return Ok(());
-        }
-        let result = self
-            .rpc
-            .request::<TeamStats>(crate::ipc::contract::method::TEAM_STATS_CLEAR, Some(params))
-            .map_err(|error| error.message);
-        match result {
-            Ok(stats) => {
-                self.apply_cleared_team_stats(&team_id, stats);
-                Ok(())
+        self.rpc
+            .submit(crate::ipc::contract::method::TEAM_STATS_CLEAR, Some(params));
+        Ok(())
+    }
+
+    /// Apply a team-stats response from the shared completion pump.
+    pub(crate) fn apply_stats_completion(
+        &mut self,
+        method_name: &str,
+        params: Option<Value>,
+        result: Result<Option<Value>, crate::ipc::RpcError>,
+    ) -> bool {
+        let Some(team_id) = params
+            .as_ref()
+            .and_then(|value| value.get("id"))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+        else {
+            return false;
+        };
+        let stats = result
+            .map_err(|error| error.message)
+            .and_then(|value| value.ok_or_else(|| format!("{method_name} 返回了空结果")))
+            .and_then(|value| {
+                serde_json::from_value::<TeamStats>(value)
+                    .map_err(|error| format!("{method_name} 返回了无效统计：{error}"))
+            });
+        match (method_name, stats) {
+            (crate::ipc::contract::method::TEAM_STATS_GET, Ok(stats)) => {
+                self.apply_team_stats(&team_id, stats)
             }
-            Err(error) => {
-                self.fail_team_stats(&team_id, error.clone());
-                Err(error)
+            (crate::ipc::contract::method::TEAM_STATS_CLEAR, Ok(stats)) => {
+                self.apply_cleared_team_stats(&team_id, stats)
             }
+            (_, Err(error)) => {
+                self.fail_team_stats(&team_id, error);
+                true
+            }
+            _ => false,
         }
     }
 

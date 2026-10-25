@@ -66,6 +66,14 @@ impl RpcGateway {
         self.client.start_or_connect()
     }
 
+    pub fn shutdown(&self, timeout: std::time::Duration) -> Result<(), String> {
+        self.client.shutdown(timeout)
+    }
+
+    pub fn session_info(&self) -> Option<crate::ipc::contract::SessionInfo> {
+        self.client.session_info()
+    }
+
     pub fn decode_response(method: &str, response: RpcResponse) -> Result<Option<Value>, RpcError> {
         decode_response(method, response)
     }

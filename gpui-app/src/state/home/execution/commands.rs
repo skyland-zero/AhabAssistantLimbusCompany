@@ -40,16 +40,13 @@ impl HomeState {
         if !self.is_busy() {
             return false;
         }
-        let needs_timeout = self.rpc.is_sidecar();
         let run_id = self.execution.runId.clone();
-        if needs_timeout {
-            self.state_before_stopping = Some(self.execution.state);
-            self.execution.state = ExecutionState::Stopping;
-            self.execution.requestedBy = Some(crate::model::ExecutionRequestedBy::User);
-        }
+        self.state_before_stopping = Some(self.execution.state);
+        self.execution.state = ExecutionState::Stopping;
+        self.execution.requestedBy = Some(crate::model::ExecutionRequestedBy::User);
         let params = run_id.map(|run_id| json!({ "runId": run_id }));
         self.send(crate::ipc::contract::method::EXECUTION_STOP, params);
-        needs_timeout
+        true
     }
 
     pub fn pause_or_resume(&mut self) {
@@ -132,14 +129,7 @@ impl HomeState {
     }
 
     pub(crate) fn send(&mut self, method: &str, params: Option<serde_json::Value>) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method, params);
-            return;
-        }
-        let result = self.rpc.request_value(method, params);
-        self.apply_rpc_result(result);
-        let events = self.rpc.take_events();
-        self.apply_events(events);
+        self.rpc.submit(method, params);
     }
 
     pub(crate) fn apply_command_result(

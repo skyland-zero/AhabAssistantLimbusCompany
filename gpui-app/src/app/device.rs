@@ -10,9 +10,6 @@ impl AhabApp {
     /// Wait for transport activity and drain every queued sidecar update in a
     /// single GPUI turn. Visual/mock runs apply their events synchronously.
     pub fn start_event_pump(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.home.rpc.is_sidecar() {
-            return;
-        }
         let activity_rpc = self.home.rpc.clone();
         cx.spawn_in(window, async move |this, cx| {
             loop {
@@ -35,11 +32,12 @@ impl AhabApp {
                             cx.notify();
                         }
                         if view.exit_requested {
-                            // Dispatch through GPUI's application context so
-                            // the normal shutdown path runs. In particular,
-                            // do not treat this deliberate exit as a failed
-                            // sidecar connection that should be restarted.
-                            cx.quit();
+                            // The sidecar has already finalized the run; still
+                            // route through the graceful exit sequence so the
+                            // backend can close its devices and flush config.
+                            // This deliberately does not look like a failed
+                            // connection that should be restarted.
+                            view.request_app_exit(cx);
                         }
                     })
                     .is_err()
@@ -212,6 +210,26 @@ impl AhabApp {
                 self.theme_packs.apply_rpc_result(method_name, result);
                 invalidation.root = true;
             }
+            method::TEAM_STATS_GET | method::TEAM_STATS_CLEAR => {
+                if self
+                    .teams
+                    .apply_stats_completion(method_name, completion.params, result)
+                {
+                    invalidation.root = true;
+                }
+            }
+            method::DEVICE_CONNECT | method::DEVICE_DISCONNECT => {
+                self.home.apply_rpc_result(result);
+                invalidation.root = true;
+            }
+            method::TEAM_SAVE | method::TEAM_DELETE | method::TEAM_LIST => {
+                if self.teams.apply_team_completion(method_name, result) {
+                    if !self.teams.saving && self.teams.editor.is_none() {
+                        self.clear_team_inputs();
+                    }
+                    invalidation.root = true;
+                }
+            }
             method::PREVIEW_SET_ENABLED => {
                 invalidation.merge(self.apply_preview_control_completion(result));
             }
@@ -223,31 +241,13 @@ impl AhabApp {
     pub fn select_device(&mut self, id: String, cx: &mut Context<Self>) {
         self.state.settings.lastDeviceId = Some(id.clone());
         let _ = self.state.save();
-        self.home.device_error = None;
-        self.home.close_select();
-        if !self.home.rpc.is_sidecar() {
-            self.home.select_device(id);
-            cx.notify();
-            return;
-        }
-        self.home.device_status = crate::model::ConnectionStatus::Connecting;
+        self.home.select_device(id);
         cx.notify();
-        self.spawn_device_request(
-            crate::ipc::contract::method::DEVICE_CONNECT,
-            Some(serde_json::json!({ "id": id })),
-            cx,
-        );
     }
 
     pub fn disconnect_device(&mut self, cx: &mut Context<Self>) {
-        self.home.close_select();
-        self.home.device_error = None;
-        if !self.home.rpc.is_sidecar() {
-            self.home.disconnect_device();
-            cx.notify();
-            return;
-        }
-        self.spawn_device_request(crate::ipc::contract::method::DEVICE_DISCONNECT, None, cx);
+        self.home.disconnect_device();
+        cx.notify();
     }
 
     pub fn refresh_devices(&mut self, cx: &mut Context<Self>) {
@@ -307,29 +307,6 @@ impl AhabApp {
                     );
                 }
 
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-
-    fn spawn_device_request(
-        &mut self,
-        method: &'static str,
-        params: Option<serde_json::Value>,
-        cx: &mut Context<Self>,
-    ) {
-        let rpc = self.home.rpc.clone();
-        cx.spawn(async move |this, cx| {
-            let request = rpc.request_async(method, params);
-            let result = cx
-                .background_executor()
-                .spawn(async move { request.recv().await.ok() })
-                .await
-                .map(|response| crate::ipc::RpcGateway::decode_response(method, response))
-                .unwrap_or_else(|| Err(crate::ipc::RpcError::new(-32000, "后端连接已断开")));
-            let _ = this.update(cx, |view, cx| {
-                view.home.apply_rpc_result(result);
                 cx.notify();
             });
         })

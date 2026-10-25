@@ -22,7 +22,7 @@ use std::{
         mpsc::{self, Sender},
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use serde_json::{Value, json};
@@ -32,7 +32,7 @@ use super::{
     RpcClient, TransportActivity,
     contract::{
         EventEnvelope, RPC_SCHEMA_VERSION, RequestId, RpcCompletion, RpcError, RpcRequest,
-        RpcResponse,
+        RpcResponse, SessionInfo, capability,
     },
 };
 
@@ -52,6 +52,12 @@ pub struct WebSocketClient {
     shared: Arc<ClientShared>,
 }
 
+#[derive(Clone)]
+struct Endpoint {
+    url: String,
+    token: String,
+}
+
 struct ClientShared {
     next_id: AtomicU64,
     connected: Arc<AtomicBool>,
@@ -59,6 +65,8 @@ struct ClientShared {
     events: Arc<Mutex<VecDeque<EventEnvelope>>>,
     completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
     activity: TransportActivity,
+    endpoint: Option<Endpoint>,
+    session: Option<SessionInfo>,
     commands: Mutex<Option<Sender<WorkerCommand>>>,
     _sidecar: Option<Arc<SidecarGuard>>,
 }
@@ -89,12 +97,12 @@ impl WebSocketClient {
         if let Ok(url) = env::var("AHAB_BACKEND_URL") {
             let token = env::var("AHAB_BACKEND_TOKEN")
                 .map_err(|_| "AHAB_BACKEND_TOKEN is required with AHAB_BACKEND_URL".to_owned())?;
-            return Self::connect_url(&url, &token, None, activity);
+            return Self::connect_url(&url, &token, None, None, activity);
         }
 
-        let (sidecar, port, token) = sidecar::spawn_sidecar()?;
+        let (sidecar, port, token, startup_ms) = sidecar::spawn_sidecar()?;
         let url = format!("ws://127.0.0.1:{port}");
-        Self::connect_url(&url, &token, Some(sidecar), activity)
+        Self::connect_url(&url, &token, Some(sidecar), startup_ms, activity)
     }
 
     /// Return a client that reports an unavailable transport without panicking.
@@ -114,6 +122,8 @@ impl WebSocketClient {
                 events: Arc::new(Mutex::new(VecDeque::new())),
                 completions: Arc::new(Mutex::new(VecDeque::new())),
                 activity,
+                endpoint: None,
+                session: None,
                 commands: Mutex::new(None),
                 _sidecar: None,
             }),
@@ -122,6 +132,55 @@ impl WebSocketClient {
 
     pub fn is_connected(&self) -> bool {
         self.shared.connected.load(Ordering::Acquire)
+    }
+
+    /// Whether the process launched by this client is still alive.  External
+    /// sidecars (no owned child) report `false` here; callers use
+    /// [`Self::reconnect`] for those instead.
+    pub fn has_live_sidecar(&self) -> bool {
+        self.shared
+            ._sidecar
+            .as_ref()
+            .is_some_and(|guard| guard.is_alive())
+    }
+
+    /// Wait for the owned sidecar process to exit.  External clients return
+    /// `true` immediately because there is no child to observe.
+    pub fn wait_for_exit(&self, timeout: Duration) -> bool {
+        self.shared
+            ._sidecar
+            .as_ref()
+            .is_none_or(|guard| guard.wait_timeout(timeout))
+    }
+
+    /// Reconnect to the same endpoint without spawning a replacement process.
+    ///
+    /// The new client shares the existing [`SidecarGuard`], so dropping the old
+    /// client closes only its WebSocket session; the sidecar and any Runner it
+    /// supervises keep running.
+    pub fn reconnect(&self) -> Result<Self, String> {
+        let endpoint = self
+            .shared
+            .endpoint
+            .clone()
+            .ok_or_else(|| "sidecar 端点不可用".to_owned())?;
+        let sidecar = self.shared._sidecar.clone();
+        if let Some(guard) = sidecar.as_ref()
+            && !guard.is_alive()
+        {
+            return Err("sidecar 进程已退出".to_owned());
+        }
+        Self::connect_url(
+            &endpoint.url,
+            &endpoint.token,
+            sidecar,
+            None,
+            self.shared.activity.clone(),
+        )
+    }
+
+    pub(crate) fn session_info(&self) -> Option<SessionInfo> {
+        self.shared.session.clone()
     }
 
     pub(crate) fn activity(&self) -> TransportActivity {
@@ -143,12 +202,21 @@ impl WebSocketClient {
     }
 
     pub fn request(&self, method: impl Into<String>, params: Option<Value>) -> RpcResponse {
+        self.request_with_timeout(method, params, REQUEST_TIMEOUT)
+    }
+
+    pub fn request_with_timeout(
+        &self,
+        method: impl Into<String>,
+        params: Option<Value>,
+        timeout: Duration,
+    ) -> RpcResponse {
         let request = RpcRequest::new(
             self.shared.next_id.fetch_add(1, Ordering::Relaxed),
             method,
             params,
         );
-        self.send_request(request)
+        self.send_request_with_timeout(request, timeout)
     }
 
     pub fn request_async(
@@ -181,8 +249,10 @@ impl WebSocketClient {
         url: &str,
         token: &str,
         sidecar: Option<Arc<SidecarGuard>>,
+        startup_ms: Option<u64>,
         activity: TransportActivity,
     ) -> Result<Self, String> {
+        let started = Instant::now();
         let address = sidecar::parse_loopback_address(url)?;
         let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
             .map_err(|error| format!("连接 Python sidecar 失败：{error}"))?;
@@ -197,7 +267,19 @@ impl WebSocketClient {
             .map_err(|error| format!("WebSocket 握手失败：{error}"))?;
         socket
             .send(Message::text(
-                json!({"type": "hello", "token": token}).to_string(),
+                json!({
+                    "type": "hello",
+                    "token": token,
+                    "schemaVersion": RPC_SCHEMA_VERSION,
+                    "capabilities": [
+                        capability::CORE_RPC_V3,
+                        capability::APP_SHUTDOWN,
+                        capability::APP_DIAGNOSE,
+                        capability::EVENT_BOOT_ID,
+                        capability::TELEMETRY_BACKPRESSURE,
+                    ],
+                })
+                .to_string(),
             ))
             .map_err(|error| format!("sidecar 鉴权发送失败：{error}"))?;
         let hello = socket
@@ -215,6 +297,41 @@ impl WebSocketClient {
         if hello_value.get("schemaVersion") != Some(&json!(RPC_SCHEMA_VERSION)) {
             return Err("sidecar RPC 协议版本不兼容".to_owned());
         }
+        let capabilities: Vec<String> = hello_value
+            .get("capabilities")
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        // A sidecar from before capability negotiation is still usable when
+        // its schema version matches; only an explicit, incompatible list is
+        // rejected.
+        if !capabilities.is_empty()
+            && !capabilities
+                .iter()
+                .any(|capability| capability == capability::CORE_RPC_V3)
+        {
+            return Err(format!(
+                "sidecar 缺少核心 RPC 能力：{}",
+                capabilities.join(", ")
+            ));
+        }
+        let boot_id = hello_value
+            .get("bootId")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let session = SessionInfo {
+            boot_id: boot_id.clone(),
+            capabilities,
+            startup_ms: startup_ms
+                .or_else(|| hello_value.get("startupMs").and_then(Value::as_u64))
+                .or_else(|| Some(started.elapsed().as_millis() as u64)),
+        };
 
         socket
             .get_mut()
@@ -242,11 +359,14 @@ impl WebSocketClient {
                 run_worker(
                     socket,
                     commands_rx,
-                    worker_events,
-                    worker_completions,
-                    worker_connected,
-                    worker_error,
-                    worker_activity,
+                    worker::WorkerShared {
+                        events: worker_events,
+                        completions: worker_completions,
+                        connected: worker_connected,
+                        error: worker_error,
+                        activity: worker_activity,
+                        expected_boot_id: boot_id,
+                    },
                 )
             })
             .map_err(|error| format!("启动 sidecar 网络线程失败：{error}"))?;
@@ -259,6 +379,11 @@ impl WebSocketClient {
                 events,
                 completions,
                 activity,
+                endpoint: Some(Endpoint {
+                    url: url.to_owned(),
+                    token: token.to_owned(),
+                }),
+                session: Some(session),
                 commands: Mutex::new(Some(commands_tx)),
                 _sidecar: sidecar,
             }),
@@ -266,10 +391,18 @@ impl WebSocketClient {
     }
 
     pub(crate) fn send_request(&self, request: RpcRequest) -> RpcResponse {
+        self.send_request_with_timeout(request, REQUEST_TIMEOUT)
+    }
+
+    pub(crate) fn send_request_with_timeout(
+        &self,
+        request: RpcRequest,
+        timeout: Duration,
+    ) -> RpcResponse {
         let id = request.id;
         let (response_tx, response_rx) = mpsc::channel();
         self.enqueue_request(request, Some(ResponseSink::Sync(response_tx)), false);
-        match response_rx.recv_timeout(REQUEST_TIMEOUT) {
+        match response_rx.recv_timeout(timeout) {
             Ok(response) => response,
             Err(error) => RpcResponse::failure(
                 id,
@@ -355,6 +488,7 @@ impl WebSocketClient {
                 queue.pop_front();
             }
             queue.push_back(RpcCompletion {
+                request_id: response.id,
                 method,
                 params,
                 response,

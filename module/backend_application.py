@@ -21,13 +21,17 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from core.team_squad import validate_pseudo_solo_selection
+from module.backend_services import (
+    NotificationUpdateService,
+    ResourceService,
+    TaskConfigService,
+    TeamService,
+    ThemePackService,
+)
 from module.config.redaction import SENSITIVE_CONFIG_KEYS, redact_text
-from module.config.theme_pack_catalog import theme_pack_display_name
 from module.device_manager import DeviceError, DeviceManager, get_device_manager
 from module.execution_stats import ExecutionStatsStore
 from module.logger import log
-from module.observe_ego_gift import normalize_observe_ego_gifts
 from module.preview_capture import PreviewCapture, encode_screenshot_frame
 
 SCHEMA_VERSION = 3
@@ -73,102 +77,6 @@ LEGACY_WINDOW_POSITIONS = {
     3: "free",
 }
 
-SINNER_IDS = (
-    "yi_sang",
-    "faust",
-    "don_quixote",
-    "ryoshu",
-    "meursault",
-    "hong_lu",
-    "heathcliff",
-    "ishmael",
-    "rodion",
-    "sinclair",
-    "outis",
-    "gregor",
-)
-SINNER_NAMES = (
-    "李箱",
-    "浮士德",
-    "堂吉诃德",
-    "良秀",
-    "默尔索",
-    "鸿璐",
-    "希斯克利夫",
-    "以实玛利",
-    "罗佳",
-    "辛克莱",
-    "奥提斯",
-    "格雷戈尔",
-)
-SYSTEM_NAMES = (
-    "burn",
-    "bleed",
-    "tremor",
-    "rupture",
-    "poise",
-    "sinking",
-    "charge",
-    "slash",
-    "pierce",
-    "blunt",
-)
-
-TEAM_PURPOSES = frozenset({"mirror", "luxcavation", "general"})
-TEAM_MIRROR_BOOL_FIELDS = frozenset(
-    {
-        "do_not_heal",
-        "do_not_buy",
-        "do_not_fuse",
-        "do_not_sell",
-        "do_not_enhance",
-        "only_aggressive_fuse",
-        "do_not_system_fuse",
-        "only_system_fuse",
-        "aggressive_also_enhance",
-        "aggressive_save_systems",
-        "after_level_IV",
-        "second_system",
-        "avoid_skill_3",
-        "prioritize_skill_3",
-        "use_damage_p",
-        "re_formation_each_floor",
-        "defense_first_round",
-        "defense_for_solo",
-        "skill_replacement",
-        "use_starlight",
-        "fixed_team_use",
-        "use_team_code",
-        "use_custom_theme_pack_weight",
-        "observe_ego_gift",
-        "reward_cards",
-        "shopping_strategy",
-        "opening_items",
-    }
-)
-TEAM_MIRROR_INT_LIMITS = {
-    "team_system": (0, len(SYSTEM_NAMES) - 1),
-    "shop_strategy": (0, 2),
-    "after_level_IV_select": (0, 3),
-    "max_keyword_refresh": (0, 10),
-    "max_normal_refresh": (0, 10),
-    "second_system_select": (0, len(SYSTEM_NAMES) - 1),
-    "second_system_setting": (0, 1),
-    "defense_for_solo_turns": (1, 5),
-    "skill_replacement_select": (0, 3),
-    "skill_replacement_mode": (0, 4),
-    "fixed_team_use_select": (0, 2),
-    "reward_cards_select": (0, 3),
-    "shopping_strategy_select": (0, 5),
-    "opening_items_select": (0, 5),
-    "opening_items_system": (0, len(SYSTEM_NAMES) - 1),
-}
-TEAM_MIRROR_ACTION_FIELDS = (
-    "second_system_fuse_IV",
-    "second_system_buy",
-    "second_system_select_reward",
-    "second_system_power_up",
-)
 EXECUTABLE_TASK_IDS = ("daily_task", "get_reward", "buy_enkephalin", "mirror")
 
 # ``execution.start.options`` is intentionally a narrow extension point.  No
@@ -756,10 +664,12 @@ class BackendApplication:
         self._shutdown = shutdown
         self._config = config
         self._theme_list = theme_list
+        self._theme_packs: ThemePackService | None = None
+        self._notification_update: NotificationUpdateService | None = None
+        self._teams: TeamService | None = None
+        self._task_config: TaskConfigService | None = None
+        self._resources: ResourceService | None = None
         self._resource_service = resource_service
-        self._resource_check: Any | None = None
-        self._resource_plan: Any | None = None
-        self._resource_run: str | None = None
         self._execution_state = "idle"
         self._execution_state_revision = 0
         self._execution_supervisor_revision = 0
@@ -954,6 +864,56 @@ class BackendApplication:
             self._theme_list = theme_list
         return self._theme_list
 
+    @property
+    def theme_pack_service(self) -> ThemePackService:
+        if self._theme_packs is None:
+            self._theme_packs = ThemePackService(
+                lambda: self.theme_store,
+                lambda: bool(self._config_value("hard_mirror", False)),
+            )
+        return self._theme_packs
+
+    @property
+    def notification_update_service(self) -> NotificationUpdateService:
+        if self._notification_update is None:
+            self._notification_update = NotificationUpdateService(
+                self.notifications,
+                self._config_value,
+                lambda: self.version,
+            )
+        return self._notification_update
+
+    @property
+    def team_service(self) -> TeamService:
+        if self._teams is None:
+            self._teams = TeamService(
+                config=lambda: self.config,
+                theme_store=lambda: self.theme_store,
+                persist_config=self._persist_config,
+                lock=self._lock,
+            )
+        return self._teams
+
+    @property
+    def task_config_service(self) -> TaskConfigService:
+        if self._task_config is None:
+            self._task_config = TaskConfigService(
+                self._config_snapshot,
+                self._apply_config_updates,
+            )
+        return self._task_config
+
+    @property
+    def resource_rpc_service(self) -> ResourceService:
+        if self._resources is None:
+            self._resources = ResourceService(
+                service_factory=self._get_resource_service,
+                config_value=self._config_value,
+                emit=self.emit,
+                lock=self._lock,
+            )
+        return self._resources
+
     def add_event_listener(self, listener: Callable[[str, dict[str, Any], int], None]) -> None:
         self.events.add_listener(listener)
 
@@ -1030,254 +990,10 @@ class BackendApplication:
         return self.stats.daily_summary(date_from=date_from, date_to=date_to)
 
     def tasks_get_config(self) -> dict[str, Any]:
-        raw = self._config_snapshot()
-        return {
-            "schemaVersion": SCHEMA_VERSION,
-            "enabledTasks": {
-                "daily_task": self._json_bool(raw.get("daily_task"), False),
-                "get_reward": self._json_bool(raw.get("get_reward"), False),
-                "buy_enkephalin": self._json_bool(raw.get("buy_enkephalin"), False),
-                "mirror": self._json_bool(raw.get("mirror"), False),
-                "resonate_with_Ahab": self._json_bool(raw.get("resonate_with_Ahab"), False),
-            },
-            "set_windows": {
-                key: (
-                    self._normalise_window_position(raw.get(key, default))
-                    if key == "set_win_position"
-                    else self._json_bool(raw.get(key), default)
-                    if isinstance(default, bool)
-                    else raw.get(key, default)
-                )
-                for key, default in {
-                    "set_win_size": 1080,
-                    "set_win_position": "free",
-                    "set_reduce_miscontact": True,
-                    "screenshot_interval": 0.5,
-                    "mouse_action_interval": 0.3,
-                    "mouse_down_duration": 0.1,
-                    "use_post_message": False,
-                }.items()
-            },
-            "daily_task": {
-                key: self._json_bool(raw.get(key), default) if isinstance(default, bool) else raw.get(key, default)
-                for key, default in {
-                    "set_EXP_count": 1,
-                    "set_thread_count": 3,
-                    "daily_teams": 1,
-                    "use_continuous_combat": False,
-                    "use_continuous_combat_select": 1,
-                    "targeted_teaming_EXP": False,
-                    "EXP_day_1_2": 1,
-                    "EXP_day_3_4": 1,
-                    "EXP_day_5_6": 1,
-                    "EXP_day_7": 1,
-                    "targeted_teaming_thread": False,
-                    "thread_day_1": 1,
-                    "thread_day_2": 1,
-                    "thread_day_3": 1,
-                    "thread_day_4": 1,
-                    "thread_day_5": 1,
-                    "thread_day_6": 1,
-                    "thread_day_7": 1,
-                }.items()
-            },
-            "get_reward": {"set_get_prize": raw.get("set_get_prize", 0)},
-            "buy_enkephalin": {
-                "set_lunacy_to_enkephalin": raw.get("set_lunacy_to_enkephalin", 2),
-                "Dr_Grandet_mode": self._json_bool(raw.get("Dr_Grandet_mode"), False),
-                "skip_enkephalin": self._json_bool(raw.get("skip_enkephalin"), False),
-            },
-            "mirror": {
-                key: self._json_bool(raw.get(key), default) if isinstance(default, bool) else raw.get(key, default)
-                for key, default in {
-                    "set_mirror_count": 1,
-                    "infinite_dungeons": False,
-                    "hard_mirror": False,
-                    "hard_mirror_target_floors": 5,
-                    "no_weekly_bonuses": False,
-                    "floor_3_exit": False,
-                    "save_rewards": False,
-                    "hard_mirror_single_bonuses": False,
-                    "select_event_pack": False,
-                    "skip_event_pack": False,
-                    "re_claim_rewards": False,
-                    "not_skip_whitegossypium": False,
-                    "fight_to_last_man": False,
-                    "mirror_keyboard_navigation": False,
-                    "mirror_keyboard_simple_pathfinding": False,
-                    "mirror_prefer_hatred_and_despair": False,
-                    "mirror_minimize_non_boss_combat": False,
-                }.items()
-            },
-            "resonate_with_Ahab": {"enabled": self._json_bool(raw.get("resonate_with_Ahab"), False)},
-            "afterCompletion": {
-                "actions": list(raw.get("after_completion_actions", []) or []),
-                "powerAction": raw.get("after_completion_power_action", "none"),
-                "keepAfterCompletion": self._json_bool(raw.get("keep_after_completion"), False),
-            },
-        }
+        return self.task_config_service.get_config()
 
     def tasks_set_config(self, params: Any) -> bool:
-        values = self._require_mapping(params, "tasks.setConfig")
-        updates: dict[str, Any] = {}
-        known_flat_fields = {
-            "daily_task",
-            "get_reward",
-            "buy_enkephalin",
-            "mirror",
-            "resonate_with_Ahab",
-            "set_win_size",
-            "set_win_position",
-            "set_reduce_miscontact",
-            "screenshot_interval",
-            "mouse_action_interval",
-            "mouse_down_duration",
-            "use_post_message",
-            "set_EXP_count",
-            "set_thread_count",
-            "daily_teams",
-            "use_continuous_combat",
-            "use_continuous_combat_select",
-            "targeted_teaming_EXP",
-            "EXP_day_1_2",
-            "EXP_day_3_4",
-            "EXP_day_5_6",
-            "EXP_day_7",
-            "targeted_teaming_thread",
-            "thread_day_1",
-            "thread_day_2",
-            "thread_day_3",
-            "thread_day_4",
-            "thread_day_5",
-            "thread_day_6",
-            "thread_day_7",
-            "set_get_prize",
-            "set_lunacy_to_enkephalin",
-            "Dr_Grandet_mode",
-            "skip_enkephalin",
-            "set_mirror_count",
-            "infinite_dungeons",
-            "hard_mirror",
-            "hard_mirror_target_floors",
-            "no_weekly_bonuses",
-            "floor_3_exit",
-            "save_rewards",
-            "hard_mirror_single_bonuses",
-            "select_event_pack",
-            "skip_event_pack",
-            "re_claim_rewards",
-            "not_skip_whitegossypium",
-            "fight_to_last_man",
-            "mirror_keyboard_navigation",
-            "mirror_keyboard_simple_pathfinding",
-            "mirror_prefer_hatred_and_despair",
-            "mirror_minimize_non_boss_combat",
-            "after_completion_actions",
-            "after_completion_power_action",
-            "keep_after_completion",
-        }
-        updates.update(
-            {key: value for key, value in values.items() if key in known_flat_fields and not isinstance(value, Mapping)}
-        )
-        enabled = values.get("enabledTasks")
-        if isinstance(enabled, Mapping):
-            updates.update(
-                {
-                    key: self._require_bool(enabled[key], f"enabledTasks.{key}")
-                    for key in (
-                        "daily_task",
-                        "get_reward",
-                        "buy_enkephalin",
-                        "mirror",
-                        "resonate_with_Ahab",
-                    )
-                    if key in enabled
-                }
-            )
-        sections = {
-            "set_windows": (
-                "set_win_size",
-                "set_win_position",
-                "set_reduce_miscontact",
-                "screenshot_interval",
-                "mouse_action_interval",
-                "mouse_down_duration",
-                "use_post_message",
-            ),
-            "daily_task": (
-                "set_EXP_count",
-                "set_thread_count",
-                "daily_teams",
-                "use_continuous_combat",
-                "use_continuous_combat_select",
-                "targeted_teaming_EXP",
-                "EXP_day_1_2",
-                "EXP_day_3_4",
-                "EXP_day_5_6",
-                "EXP_day_7",
-                "targeted_teaming_thread",
-                "thread_day_1",
-                "thread_day_2",
-                "thread_day_3",
-                "thread_day_4",
-                "thread_day_5",
-                "thread_day_6",
-                "thread_day_7",
-            ),
-            "get_reward": ("set_get_prize",),
-            "buy_enkephalin": ("set_lunacy_to_enkephalin", "Dr_Grandet_mode", "skip_enkephalin"),
-            "mirror": (
-                "set_mirror_count",
-                "infinite_dungeons",
-                "hard_mirror",
-                "hard_mirror_target_floors",
-                "no_weekly_bonuses",
-                "floor_3_exit",
-                "save_rewards",
-                "hard_mirror_single_bonuses",
-                "select_event_pack",
-                "skip_event_pack",
-                "re_claim_rewards",
-                "not_skip_whitegossypium",
-                "fight_to_last_man",
-                "mirror_keyboard_navigation",
-                "mirror_keyboard_simple_pathfinding",
-                "mirror_prefer_hatred_and_despair",
-                "mirror_minimize_non_boss_combat",
-            ),
-        }
-        for section, fields in sections.items():
-            section_values = values.get(section)
-            if section_values is None:
-                continue
-            section_values = self._require_mapping(section_values, f"tasks.setConfig.{section}")
-            for field in fields:
-                if field in section_values:
-                    updates[field] = section_values[field]
-
-        completion = values.get("afterCompletion")
-        if completion is not None:
-            completion = self._require_mapping(completion, "tasks.setConfig.afterCompletion")
-            if "actions" in completion:
-                actions = completion["actions"]
-                if not isinstance(actions, list) or not all(isinstance(item, str) for item in actions):
-                    raise ValueError("afterCompletion.actions must be a string list")
-                updates["after_completion_actions"] = list(actions)
-            if "powerAction" in completion:
-                updates["after_completion_power_action"] = self._require_string(
-                    completion["powerAction"], "afterCompletion.powerAction"
-                )
-            if "keepAfterCompletion" in completion:
-                updates["keep_after_completion"] = self._require_bool(
-                    completion["keepAfterCompletion"], "afterCompletion.keepAfterCompletion"
-                )
-
-        resonate = values.get("resonate_with_Ahab")
-        if isinstance(resonate, Mapping) and "enabled" in resonate:
-            updates["resonate_with_Ahab"] = self._require_bool(resonate["enabled"], "resonate_with_Ahab.enabled")
-
-        self._apply_config_updates(updates)
-        return True
+        return self.task_config_service.set_config(params)
 
     @staticmethod
     def _execution_params(params: Any, method: str) -> dict[str, Any]:
@@ -2959,272 +2675,43 @@ class BackendApplication:
             return {**self._execution_payload(), "accepted": True}
 
     def team_list(self) -> list[dict[str, Any]]:
-        config = self.config
-        teams = getattr(getattr(config, "config", None), "teams", {}) or {}
-        queue = {
-            int(number)
-            for number in (config.get_value("teams_active_queue", []) or [])
-            if isinstance(number, int) and not isinstance(number, bool)
-        }
-        details: list[dict[str, Any]] = []
-        for raw_number, setting in sorted(teams.items(), key=self._team_sort_key):
-            try:
-                number = int(raw_number)
-            except (TypeError, ValueError):
-                continue
-            if number > 0:
-                details.append(self._team_detail(number, setting, number in queue))
-        return details
+        return self.team_service.list_teams()
 
     def team_stats_get(self, params: Any) -> dict[str, Any]:
-        values = self._require_mapping(params, "team.stats.get")
-        team_id = self._require_string(values.get("id"), "team.stats.get.id")
-        team_number = self._team_number_from_id(team_id, "team.stats.get.id")
-        with self._lock:
-            setting = (getattr(self.config.config, "teams", {}) or {}).get(str(team_number))
-            if setting is None:
-                raise ValueError("team.stats.get.id 对应的队伍不存在")
-            return self._team_stats_detail(team_id, team_number, setting)
+        return self.team_service.stats_get(params)
 
     def team_stats_clear(self, params: Any) -> dict[str, Any]:
-        values = self._require_mapping(params, "team.stats.clear")
-        team_id = self._require_string(values.get("id"), "team.stats.clear.id")
-        team_number = self._team_number_from_id(team_id, "team.stats.clear.id")
-        with self._lock:
-            setting = (getattr(self.config.config, "teams", {}) or {}).get(str(team_number))
-            if setting is None:
-                raise ValueError("team.stats.clear.id 对应的队伍不存在")
-            setting.total_mirror_time_hard = [0.0, 0.0, 0.0]
-            setting.mirror_hard_count = 0
-            setting.total_mirror_time_normal = [0.0, 0.0, 0.0]
-            setting.mirror_normal_count = 0
-            self._persist_config()
-            return self._team_stats_detail(team_id, team_number, setting)
+        return self.team_service.stats_clear(params)
 
     def team_preset_list(self) -> list[dict[str, Any]]:
-        """Return the read-only built-in team preset catalog.
-
-        Presets are templates rather than persisted teams.  Their complete
-        team payload is normalized through the same projection used by
-        ``team.list`` so the GPUI picker can save it without knowing Python's
-        legacy ``chosen_sinners``/``sinner_order`` representation.
-        """
-
-        from module.team_presets import builtin_team_presets
-
-        return builtin_team_presets(self._team_detail)
+        return self.team_service.preset_list()
 
     def team_save(self, params: Any) -> dict[str, Any]:
-        values = self._require_mapping(params, "team.save")
-        team_id = values.get("id", "")
-        if not isinstance(team_id, str):
-            raise ValueError("team.save.id must be a string")
-        numbers = self._team_numbers()
-        if team_id:
-            match = re.fullmatch(r"team-(\d+)", team_id)
-            if match is None:
-                raise ValueError("team.save.id 无效")
-            team_number = int(match.group(1))
-            if "teamNumber" in values:
-                raise ValueError("team.save.teamNumber 只允许用于新建队伍")
-        else:
-            if "teamNumber" in values:
-                team_number = self._require_int(values["teamNumber"], "team.save.teamNumber", minimum=1)
-                if team_number in numbers:
-                    raise ValueError(f"编队编号 {team_number} 已被占用")
-            else:
-                team_number = max(numbers, default=0) + 1
-        if team_number < 1:
-            team_number = 1
-        try:
-            from module.config import TeamSetting
-        except ImportError as error:
-            raise RuntimeError(f"无法加载队伍配置模型：{error}") from error
-        current = getattr(self.config.config, "teams", {}).get(str(team_number))
-        setting = current.model_copy(deep=True) if current is not None else TeamSetting(team_number=team_number)
-        current_name = getattr(setting, "remark_name", None) or f"编队 {team_number}"
-        name = self._require_string(values.get("name", current_name), "team.save.name").strip()
-        if not name:
-            raise ValueError("队伍名称不能为空")
-        setting.remark_name = name
-        if "sinners" in values:
-            self._write_team_sinners(setting, values["sinners"])
-        purpose = getattr(setting, "purpose", "mirror") or "mirror"
-        if purpose not in TEAM_PURPOSES:
-            purpose = "mirror"
-        if "purpose" in values:
-            purpose = self._require_string(values["purpose"], "team.save.purpose")
-            if purpose not in TEAM_PURPOSES:
-                raise ValueError("team.save.purpose 无效")
-        setting.purpose = purpose
-
-        # Luxcavation teams deliberately do not expose mirror settings in the
-        # GPUI contract.  A null mirrorConfig means "preserve the stored
-        # mirror settings" when an existing team is changed back later; it is
-        # never a request to erase the compatibility fields in TeamSetting.
-        if purpose != "luxcavation":
-            if "mirrorConfig" in values and values["mirrorConfig"] is not None:
-                mirror = self._require_mapping(values["mirrorConfig"], "team.save.mirrorConfig")
-                self._write_mirror_setting(setting, mirror)
-            elif "accessoryScheme" in values:
-                self._write_accessory_scheme(setting, values["accessoryScheme"])
-            if getattr(setting, "defense_for_solo", False):
-                validate_pseudo_solo_selection(setting.chosen_sinners)
-
-        if hasattr(setting, "team_number"):
-            setting.team_number = team_number
-        requested_enabled = values.get("enabled", self._team_enabled(team_number))
-        if not isinstance(requested_enabled, bool):
-            raise ValueError("team.save.enabled requires a boolean")
-        self.config.config.teams[str(team_number)] = setting
-        if purpose == "luxcavation":
-            self._remove_team_from_queue(team_number)
-            enabled = False
-        else:
-            self._set_team_enabled(team_number, requested_enabled)
-            enabled = requested_enabled
-        self._persist_config()
-        return self._team_detail(team_number, setting, enabled)
+        return self.team_service.save(params)
 
     def team_delete(self, params: Any) -> bool:
-        values = self._require_mapping(params, "team.delete")
-        team_id = self._require_string(values.get("id"), "team.delete.id")
-        match = re.fullmatch(r"team-(\d+)", team_id)
-        if match is None:
-            raise ValueError("team.delete.id 无效")
-        number = int(match.group(1))
-        self.config.config.teams.pop(str(number), None)
-        if hasattr(self.config, "remove_team_from_queue"):
-            self.config.remove_team_from_queue(number)
-        if hasattr(self.theme_store, "delete_team_weight_config"):
-            self.theme_store.delete_team_weight_config(number)
-        self._persist_config()
-        return True
+        return self.team_service.delete(params)
 
     def sinner_list(self) -> list[dict[str, str]]:
-        return [{"id": sinner_id, "name": name} for sinner_id, name in zip(SINNER_IDS, SINNER_NAMES, strict=True)]
+        return self.team_service.sinners()
 
     def theme_pack_list(self) -> dict[str, Any]:
-        store = self.theme_store
-        config = getattr(store, "config", {}) or {}
-        packs: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for section_name in ("theme_pack_list", "theme_pack_list_hard"):
-            section = config.get(section_name, {}) or {}
-            if not isinstance(section, Mapping):
-                continue
-            for pack_id, raw_weight in section.items():
-                pack_id = str(pack_id)
-                if pack_id in seen:
-                    continue
-                seen.add(pack_id)
-                try:
-                    raw_weight = int(raw_weight)
-                except (TypeError, ValueError):
-                    raw_weight = 0
-                packs.append(
-                    {
-                        "id": pack_id,
-                        "name": theme_pack_display_name(
-                            pack_id,
-                            hard=section_name.endswith("hard"),
-                        ),
-                        "weight": min(10, abs(raw_weight)),
-                        "enabled": raw_weight >= 0,
-                        "tier": "HARD" if section_name.endswith("hard") else "NORMAL",
-                    }
-                )
-        return {
-            "schemaVersion": SCHEMA_VERSION,
-            "hardMirrorActive": bool(self._config_value("hard_mirror", False)),
-            "packs": packs,
-        }
+        return self.theme_pack_service.list_packs()
 
     def theme_pack_update_all(self, params: Any) -> bool:
-        values = self._require_mapping(params, "themePack.updateAll")
-        packs = values.get("packs")
-        if not isinstance(packs, list):
-            raise ValueError("themePack.updateAll.packs must be a list")
-        store = self.theme_store
-        config = copy.deepcopy(getattr(store, "config", {}) or {})
-        sections = [config.get(name, {}) for name in ("theme_pack_list", "theme_pack_list_hard")]
-        known = {str(key) for section in sections if isinstance(section, Mapping) for key in section}
-        for pack in packs:
-            pack = self._require_mapping(pack, "themePack.updateAll.pack")
-            pack_id = self._require_string(pack.get("id"), "themePack.id")
-            if pack_id not in known:
-                raise ValueError(f"未知主题包：{pack_id}")
-            try:
-                weight = int(pack.get("weight", 0))
-            except (TypeError, ValueError) as error:
-                raise ValueError(f"主题包权重无效：{pack_id}") from error
-            if not 0 <= weight <= 10 or not isinstance(pack.get("enabled"), bool):
-                raise ValueError(f"主题包权重或启用状态无效：{pack_id}")
-            raw_weight = weight if pack["enabled"] else -max(1, weight)
-            for section_name in ("theme_pack_list", "theme_pack_list_hard"):
-                section = config.get(section_name)
-                if isinstance(section, dict) and pack_id in section:
-                    section[pack_id] = raw_weight
-        store.config = config
-        store.save_config(path=store.theme_pack_list_path, config_data=config)
-        return True
+        return self.theme_pack_service.update_all(params)
 
     def theme_pack_reset_weights(self) -> dict[str, Any]:
-        store = self.theme_store
-        example_path = Path("assets/config/theme_pack_list.example.yaml")
-        if example_path.is_file():
-            default = store.yaml.load(example_path.read_text(encoding="utf-8")) or {}
-            store.config = copy.deepcopy(default)
-            store.save_config(path=store.theme_pack_list_path, config_data=store.config)
-        return self.theme_pack_list()
+        return self.theme_pack_service.reset_weights()
 
     def resource_status(self) -> list[dict[str, Any]]:
-        state_path = Path("assets/config/image_resource_state.json")
-        local_version = "unknown"
-        try:
-            import json
-
-            value = json.loads(state_path.read_text(encoding="utf-8"))
-            local_version = str(value.get("last_applied_manifest_id") or "unknown")
-        except (OSError, ValueError, TypeError):
-            pass
-        return [
-            {
-                "id": "images",
-                "name": "图片资源",
-                "localVersion": local_version,
-                "remoteVersion": None,
-                "lastSyncAt": None,
-            }
-        ]
+        return self.resource_rpc_service.status()
 
     def resource_check_update(self) -> list[dict[str, Any]]:
-        service = self._get_resource_service()
-        result = service.check_for_updates(self._config_value("image_resource_source", "Auto"))
-        self._resource_check = result
-        groups = self.resource_status()
-        if result.remote_manifest is not None:
-            remote_version = result.remote_manifest.manifest_id
-            for group in groups:
-                group["remoteVersion"] = remote_version
-        if result.status.value == "error":
-            raise RuntimeError(result.message or "资源更新检查失败")
-        return groups
+        return self.resource_rpc_service.check_update()
 
     def resource_sync_start(self, params: Any = None) -> dict[str, Any]:
-        with self._lock:
-            if self._resource_run is not None:
-                raise DeviceError("资源同步已经在运行")
-            run_id = uuid.uuid4().hex
-            self._resource_run = run_id
-        scope = "all"
-        if isinstance(params, Mapping) and isinstance(params.get("scope"), str):
-            scope = params["scope"]
-        worker = threading.Thread(
-            target=self._run_resource_sync, args=(run_id, scope), name="AALCResourceSync", daemon=True
-        )
-        worker.start()
-        return {"accepted": True, "runId": run_id}
+        return self.resource_rpc_service.sync_start(params)
 
     def tool_start(self, params: Any) -> dict[str, Any]:
         tool_id = self._tool_id(params)
@@ -3491,52 +2978,10 @@ class BackendApplication:
         return True
 
     def notification_test(self, params: Any) -> dict[str, Any]:
-        values = self._require_mapping(params, "notification.test")
-        spt = values.get("spt", self._config_value("wxpusher_spt", ""))
-        if not isinstance(spt, str):
-            raise ValueError("SPT 必须是字符串")
-        normalized_spt = spt.strip()
-        if not normalized_spt:
-            raise ValueError("SPT 未配置")
-        if len(normalized_spt) <= 4 or not normalized_spt.startswith("SPT_"):
-            raise ValueError("SPT 格式无效")
-        try:
-            self.notifications.send_test(normalized_spt)
-        except Exception as error:
-            raise ValueError(redact_text(error, (spt,))) from error
-        return {"accepted": True}
+        return self.notification_update_service.test_notification(params)
 
     def app_check_update(self) -> dict[str, Any]:
-        """Run the existing framework-free update checker synchronously.
-
-        The caller already executes RPC work away from the WebSocket loop.  A
-        synchronous checker here keeps the legacy source fallback and version
-        comparison in one place; GPUI receives the result without importing
-        update implementation details.
-        """
-
-        try:
-            from module.update.checker import UpdateThread
-
-            checker = UpdateThread(timeout=10, flag=False)
-            checker.run()
-            if not checker.new_version:
-                return {
-                    "schemaVersion": SCHEMA_VERSION,
-                    "status": "failed",
-                    "error": checker.error_msg or "无法从更新源获取版本信息",
-                }
-            latest = checker.new_version
-            update_available = bool(latest != self.version and not checker.is_current_version_latest)
-            return {
-                "schemaVersion": SCHEMA_VERSION,
-                "status": "available" if update_available else "up_to_date",
-                "updateAvailable": update_available,
-                "latest": latest,
-            }
-        except Exception as error:
-            log.warning("更新检查失败：%s", error)
-            return {"schemaVersion": SCHEMA_VERSION, "status": "failed", "error": str(error)}
+        return self.notification_update_service.check_update()
 
     def close(self) -> None:
         with self._lock:
@@ -3718,42 +3163,6 @@ class BackendApplication:
                 except Exception:
                     log.debug("完成旧执行统计失败", exc_info=True)
 
-    def _run_resource_sync(self, run_id: str, scope: str) -> None:
-        try:
-            service = self._get_resource_service()
-            result = service.check_for_updates(self._config_value("image_resource_source", "Auto"))
-            self._resource_check = result
-            if result.remote_manifest is None:
-                raise RuntimeError(result.message or "远端资源清单不可用")
-            plan = service.build_sync_plan(result.remote_manifest)
-            self._resource_plan = plan
-            if not plan.has_changes:
-                service.accept_remote_state(result)
-                self.emit("resource.sync.progress", {"scope": scope, "progress": 100, "runId": run_id})
-                return
-
-            def progress(current: int, total: int) -> None:
-                value = 100 if total <= 0 else max(0, min(100, round(current * 100 / total)))
-                self.emit("resource.sync.progress", {"scope": scope, "progress": value, "runId": run_id})
-
-            service.apply_sync_plan(check_result=result, sync_plan=plan, progress_callback=progress)
-            self.emit("resource.sync.progress", {"scope": scope, "progress": 100, "runId": run_id})
-        except Exception as error:
-            # Keep the GPUI progress indicator recoverable when a sync fails;
-            # app.notice is intentionally routed to the log surface, while
-            # this typed progress event lets the resources page clear its
-            # in-flight state without parsing user-facing text.
-            self.emit(
-                "resource.sync.progress",
-                {"scope": scope, "progress": 0, "runId": run_id, "error": str(error)},
-            )
-            self.emit("app.notice", {"level": "error", "message": f"资源同步失败：{error}", "runId": run_id})
-            log.exception("资源同步失败")
-        finally:
-            with self._lock:
-                if self._resource_run == run_id:
-                    self._resource_run = None
-
     def _run_tool(self, tool_id: str, run_id: str, stop_event: threading.Event) -> None:
         runtime = None
         try:
@@ -3823,14 +3232,6 @@ class BackendApplication:
             value = default
         return copy.deepcopy(value) if isinstance(value, (dict, list, set)) else value
 
-    @staticmethod
-    def _json_bool(value: Any, default: bool) -> bool:
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, int):
-            return value != 0
-        return default
-
     def _apply_config_updates(self, updates: Mapping[str, Any]) -> None:
         if not updates:
             return
@@ -3884,13 +3285,6 @@ class BackendApplication:
         if isinstance(value, str) and value in WINDOW_POSITIONS:
             return value
         raise ValueError("set_win_position contains an unknown position")
-
-    @staticmethod
-    def _normalise_window_position(value: Any) -> str:
-        try:
-            return BackendApplication._canonical_window_position(value)
-        except ValueError:
-            return "free"
 
     def _persist_config(self) -> None:
         self.config.save()
@@ -4285,344 +3679,6 @@ class BackendApplication:
     def _on_download_complete(self, file_name: Any) -> None:
         self.emit("app.notice", {"level": "info", "message": f"更新下载完成：{file_name}"})
 
-    def _team_numbers(self) -> list[int]:
-        teams = getattr(self.config.config, "teams", {}) or {}
-        numbers: list[int] = []
-        for key in teams:
-            try:
-                number = int(key)
-            except (TypeError, ValueError):
-                continue
-            if number > 0:
-                numbers.append(number)
-        return sorted(numbers)
-
-    @staticmethod
-    def _team_sort_key(item: tuple[Any, Any]) -> tuple[int, str]:
-        try:
-            return int(item[0]), str(item[0])
-        except (TypeError, ValueError):
-            return 0, str(item[0])
-
-    def _team_detail(self, number: int, setting: Any, enabled: bool) -> dict[str, Any]:
-        values = setting.model_dump() if hasattr(setting, "model_dump") else dict(setting)
-        defaults = self._team_default()
-        purpose = values.get("purpose", "mirror")
-        if purpose not in TEAM_PURPOSES:
-            purpose = "mirror"
-        chosen = values.get("chosen_sinners", []) or []
-        order = values.get("sinner_order", []) or []
-        selected_indexes = [
-            index for index, selected in enumerate(chosen[: len(SINNER_IDS)]) if selected and index < len(SINNER_IDS)
-        ]
-        ordered_indexes: dict[int, int] = {}
-        for index in selected_indexes:
-            position = order[index] if index < len(order) else 0
-            if (
-                isinstance(position, int)
-                and not isinstance(position, bool)
-                and 1 <= position <= len(selected_indexes)
-                and position not in ordered_indexes
-            ):
-                ordered_indexes[position] = index
-        ordered_selected = [ordered_indexes[position] for position in sorted(ordered_indexes)]
-        ordered_selected.extend(index for index in selected_indexes if index not in ordered_selected)
-        sinners = [SINNER_IDS[index] for index in ordered_selected]
-
-        team_system = self._team_int_value(
-            values.get("team_system", getattr(defaults, "team_system", 0)),
-            default=0,
-            minimum=0,
-            maximum=len(SYSTEM_NAMES) - 1,
-        )
-        mirror: dict[str, Any] = {
-            "team_system": team_system,
-            "shop_strategy": self._team_int_value(
-                values.get("shop_strategy", getattr(defaults, "shop_strategy", 0)),
-                default=0,
-                minimum=0,
-                maximum=2,
-            ),
-            "discard_systems": {
-                name: self._team_bool_value(
-                    values.get(f"system_{name}", False),
-                    default=False,
-                )
-                for name in SYSTEM_NAMES
-            },
-        }
-
-        for field in TEAM_MIRROR_BOOL_FIELDS:
-            mirror[field] = self._team_bool_value(
-                values.get(field, getattr(defaults, field, False)),
-                default=False,
-            )
-        for field, (minimum, maximum) in TEAM_MIRROR_INT_LIMITS.items():
-            mirror[field] = self._team_int_value(
-                values.get(field, getattr(defaults, field, minimum)),
-                default=minimum,
-                minimum=minimum,
-                maximum=maximum,
-            )
-
-        opening_bonus = values.get("opening_bonus", getattr(defaults, "opening_bonus", [])) or []
-        if not isinstance(opening_bonus, list):
-            opening_bonus = []
-        mirror["opening_bonus"] = [
-            self._team_int_value(value, default=0, minimum=0, maximum=3) for value in opening_bonus[:10]
-        ]
-        mirror["opening_bonus"] += [0] * (10 - len(mirror["opening_bonus"]))
-
-        ignore_shop = values.get("ignore_shop", getattr(defaults, "ignore_shop", [])) or []
-        if not isinstance(ignore_shop, list):
-            ignore_shop = []
-        mirror["ignore_shop"] = [self._team_bool_value(value, default=False) for value in ignore_shop[:5]]
-        mirror["ignore_shop"] += [False] * (5 - len(mirror["ignore_shop"]))
-
-        team_code = values.get("team_code", getattr(defaults, "team_code", ""))
-        mirror["team_code"] = team_code if isinstance(team_code, str) else ""
-        route_profile = values.get(
-            "mirror_route_profile",
-            getattr(defaults, "mirror_route_profile", ""),
-        )
-        mirror["mirror_route_profile"] = route_profile if isinstance(route_profile, str) else ""
-        selected_gifts = (
-            values.get(
-                "observe_ego_gift_selected",
-                getattr(defaults, "observe_ego_gift_selected", []),
-            )
-            or []
-        )
-        mirror["observe_ego_gift_selected"] = (
-            normalize_observe_ego_gifts(selected_gifts) if isinstance(selected_gifts, list) else []
-        )
-
-        actions = values.get("second_system_action", getattr(defaults, "second_system_action", [])) or []
-        if not isinstance(actions, list):
-            actions = []
-        default_actions = getattr(defaults, "second_system_action", [0, 0, 0, 0]) or [0, 0, 0, 0]
-        for index, field in enumerate(TEAM_MIRROR_ACTION_FIELDS):
-            raw_value = actions[index] if index < len(actions) else default_actions[index]
-            mirror[field] = self._team_bool_value(raw_value, default=False)
-
-        return {
-            "schemaVersion": SCHEMA_VERSION,
-            "id": f"team-{number}",
-            "name": values.get("remark_name") or f"编队 {number}",
-            "sinners": sinners,
-            "purpose": purpose,
-            "accessoryScheme": SYSTEM_NAMES[team_system],
-            "enabled": False if purpose == "luxcavation" else bool(enabled),
-            "mirrorConfig": None if purpose == "luxcavation" else mirror,
-        }
-
-    @staticmethod
-    def _team_default() -> Any:
-        from module.config import TeamSetting
-
-        return TeamSetting()
-
-    @staticmethod
-    def _team_number_from_id(team_id: str, name: str) -> int:
-        match = re.fullmatch(r"team-(\d+)", team_id)
-        if match is None or not 1 <= int(match.group(1)) <= 0xFFFFFFFF:
-            raise ValueError(f"{name} 无效")
-        return int(match.group(1))
-
-    @staticmethod
-    def _team_stats_bucket(setting: Any, mode: str) -> dict[str, Any]:
-        time_values = getattr(setting, f"total_mirror_time_{mode}", [])
-        if not isinstance(time_values, list):
-            time_values = []
-        averages: list[float] = []
-        for value in time_values[:3]:
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                averages.append(0.0)
-                continue
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError, OverflowError):
-                averages.append(0.0)
-                continue
-            if math.isfinite(numeric):
-                averages.append(max(0.0, numeric))
-            else:
-                averages.append(0.0)
-        averages.extend([0.0] * (3 - len(averages)))
-        count = getattr(setting, f"mirror_{mode}_count", 0)
-        if not isinstance(count, int) or isinstance(count, bool):
-            count = 0
-        return {
-            "count": min(0xFFFFFFFF, max(0, count)),
-            "averageSeconds": averages[0],
-            "last5AverageSeconds": averages[1],
-            "last10AverageSeconds": averages[2],
-        }
-
-    @classmethod
-    def _team_stats_detail(cls, team_id: str, team_number: int, setting: Any) -> dict[str, Any]:
-        hard = cls._team_stats_bucket(setting, "hard")
-        normal = cls._team_stats_bucket(setting, "normal")
-        return {
-            "schemaVersion": 1,
-            "teamId": team_id,
-            "teamNumber": team_number,
-            "totalCount": min(0xFFFFFFFF, hard["count"] + normal["count"]),
-            "hard": hard,
-            "normal": normal,
-        }
-
-    def _write_team_sinners(self, setting: Any, sinners: Any) -> None:
-        if not isinstance(sinners, list) or not all(isinstance(item, str) for item in sinners):
-            raise ValueError("team.save.sinners must be a string list")
-        if len(sinners) > len(SINNER_IDS):
-            raise ValueError(f"team.save.sinners 最多允许 {len(SINNER_IDS)} 名人格")
-        if len(set(sinners)) != len(sinners):
-            raise ValueError("team.save.sinners 不允许重复人格")
-        selected = [0] * len(SINNER_IDS)
-        order = [0] * len(SINNER_IDS)
-        for position, sinner_id in enumerate(sinners, start=1):
-            if sinner_id not in SINNER_IDS:
-                raise ValueError(f"未知人格：{sinner_id}")
-            index = SINNER_IDS.index(sinner_id)
-            selected[index] = 1
-            order[index] = position
-        setting.chosen_sinners = selected
-        setting.sinner_order = order
-        setting.sinners_be_select = sum(selected)
-
-    def _team_enabled(self, number: int) -> bool:
-        return number in {
-            int(value)
-            for value in (self.config.get_value("teams_active_queue", []) or [])
-            if isinstance(value, int) and not isinstance(value, bool)
-        }
-
-    def _set_team_enabled(self, number: int, enabled: bool) -> None:
-        if hasattr(self.config, "set_team_enabled"):
-            self.config.set_team_enabled(number, enabled)
-            return
-        queue = [
-            int(value)
-            for value in (self.config.get_value("teams_active_queue", []) or [])
-            if isinstance(value, int) and not isinstance(value, bool) and int(value) > 0
-        ]
-        if enabled and number not in queue:
-            queue.append(number)
-        if not enabled:
-            queue = [value for value in queue if value != number]
-        self._write_team_queue(queue)
-
-    def _remove_team_from_queue(self, number: int) -> None:
-        if hasattr(self.config, "remove_team_from_queue"):
-            self.config.remove_team_from_queue(number)
-            return
-        queue = [
-            int(value)
-            for value in (self.config.get_value("teams_active_queue", []) or [])
-            if isinstance(value, int) and not isinstance(value, bool) and int(value) != number
-        ]
-        self._write_team_queue(queue)
-
-    def _write_team_queue(self, queue: list[int]) -> None:
-        normalized: list[int] = []
-        for value in queue:
-            if value > 0 and value not in normalized:
-                normalized.append(value)
-        if hasattr(self.config, "unsaved_set_value"):
-            self.config.unsaved_set_value("teams_active_queue", normalized, stacklevel=3)
-        else:
-            setattr(self.config.config, "teams_active_queue", normalized)
-
-    @staticmethod
-    def _write_accessory_scheme(setting: Any, value: Any) -> None:
-        scheme = BackendApplication._require_string(value, "team.save.accessoryScheme")
-        if scheme not in SYSTEM_NAMES:
-            raise ValueError("team.save.accessoryScheme 无效")
-        setting.team_system = SYSTEM_NAMES.index(scheme)
-
-    @staticmethod
-    def _write_mirror_setting(setting: Any, mirror: Mapping[str, Any]) -> None:
-        discard = mirror.get("discard_systems")
-        if discard is not None and not isinstance(discard, Mapping):
-            raise ValueError("team.save.mirrorConfig.discard_systems must be an object")
-        for key, value in mirror.items():
-            if key == "discard_systems" or key in TEAM_MIRROR_ACTION_FIELDS:
-                continue
-            if key in TEAM_MIRROR_BOOL_FIELDS:
-                setattr(setting, key, BackendApplication._require_bool(value, f"team.save.mirrorConfig.{key}"))
-                continue
-            if key in TEAM_MIRROR_INT_LIMITS:
-                minimum, maximum = TEAM_MIRROR_INT_LIMITS[key]
-                setattr(
-                    setting,
-                    key,
-                    BackendApplication._require_int(
-                        value,
-                        f"team.save.mirrorConfig.{key}",
-                        minimum=minimum,
-                        maximum=maximum,
-                    ),
-                )
-                continue
-            if key == "team_code":
-                setattr(setting, key, BackendApplication._require_string(value, f"team.save.mirrorConfig.{key}"))
-                continue
-            if key == "mirror_route_profile":
-                setattr(
-                    setting,
-                    key,
-                    BackendApplication._require_string(value, f"team.save.mirrorConfig.{key}").strip(),
-                )
-                continue
-            if key == "opening_bonus":
-                values = BackendApplication._require_int_list(value, f"team.save.mirrorConfig.{key}")
-                if len(values) > 10 or any(item < 0 or item > 3 for item in values):
-                    raise ValueError(
-                        "team.save.mirrorConfig.opening_bonus must contain 0-3 values and have at most 10 items"
-                    )
-                values += [0] * (10 - len(values))
-                setattr(setting, key, values)
-                continue
-            if key == "observe_ego_gift_selected":
-                values = BackendApplication._require_string_list(value, f"team.save.mirrorConfig.{key}")
-                setattr(setting, key, normalize_observe_ego_gifts(values))
-                continue
-            if key == "ignore_shop":
-                values = BackendApplication._require_bool_list(value, f"team.save.mirrorConfig.{key}")
-                if len(values) > 5:
-                    raise ValueError("team.save.mirrorConfig.ignore_shop must have at most 5 items")
-                values += [False] * (5 - len(values))
-                setattr(setting, key, [1 if item else 0 for item in values])
-                continue
-            if key == "second_system_action":
-                values = BackendApplication._require_int_list(value, f"team.save.mirrorConfig.{key}")
-                if len(values) > 4 or any(item not in {0, 1} for item in values):
-                    raise ValueError(
-                        "team.save.mirrorConfig.second_system_action must contain 0/1 values and have at most 4 items"
-                    )
-                values += [0] * (4 - len(values))
-                setattr(setting, key, values)
-        if isinstance(discard, Mapping):
-            for system in SYSTEM_NAMES:
-                if system in discard:
-                    setattr(
-                        setting,
-                        f"system_{system}",
-                        BackendApplication._require_bool(
-                            discard[system], f"team.save.mirrorConfig.discard_systems.{system}"
-                        ),
-                    )
-        if any(key in mirror for key in TEAM_MIRROR_ACTION_FIELDS):
-            actions = list(getattr(setting, "second_system_action", [0, 0, 0, 0]) or [])[:4]
-            actions += [0] * (4 - len(actions))
-            for index, key in enumerate(TEAM_MIRROR_ACTION_FIELDS):
-                if key in mirror:
-                    actions[index] = (
-                        1 if BackendApplication._require_bool(mirror[key], f"team.save.mirrorConfig.{key}") else 0
-                    )
-            setting.second_system_action = actions
-
     @staticmethod
     def _require_mapping(value: Any, name: str) -> dict[str, Any]:
         if not isinstance(value, Mapping):
@@ -4670,20 +3726,6 @@ class BackendApplication:
         if not isinstance(value, bool):
             raise ValueError(f"{name} requires a boolean")
         return value
-
-    @staticmethod
-    def _team_bool_value(value: Any, *, default: bool) -> bool:
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, int):
-            return value != 0
-        return default
-
-    @staticmethod
-    def _team_int_value(value: Any, *, default: int, minimum: int, maximum: int) -> int:
-        if not isinstance(value, int) or isinstance(value, bool):
-            return default
-        return min(max(value, minimum), maximum)
 
     @staticmethod
     def _tool_id(params: Any) -> str:

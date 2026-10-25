@@ -12,33 +12,26 @@ impl ThemePacksState {
     }
 
     pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
-        let data = ThemePackState::default();
         let mut state = Self {
             rpc: RpcGateway::new(client),
-            confirmed_packs: data.packs.clone(),
-            data,
+            confirmed_packs: Vec::new(),
+            data: ThemePackState::default(),
             sort_by_weight: false,
             feedback: None,
             persist_generation: 0,
             pending_persist_generation: None,
         };
-        if !state.rpc.is_sidecar() {
-            state.reload();
+        #[cfg(test)]
+        {
+            if let Ok(data) = state.rpc.request(method::THEME_PACK_LIST, None) {
+                state.data = data;
+            }
+            state.confirmed_packs = state.data.packs.clone();
+        }
+        if state.confirmed_packs.is_empty() {
+            state.confirmed_packs = state.data.packs.clone();
         }
         state
-    }
-
-    pub fn reload(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::THEME_PACK_LIST, None);
-            return;
-        }
-        if let Some(value) = self.request(method::THEME_PACK_LIST, None)
-            && let Ok(data) = serde_json::from_value(value)
-        {
-            self.data = data;
-            self.confirmed_packs = self.data.packs.clone();
-        }
     }
 
     pub fn sorted_packs(&self) -> Vec<ThemePack> {
@@ -118,25 +111,9 @@ impl ThemePacksState {
     }
 
     pub fn reset_weights(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.cancel_pending_persist();
-            self.rpc.submit(method::THEME_PACK_RESET_WEIGHTS, None);
-            self.feedback = Some("正在恢复默认权重".to_owned());
-            return;
-        }
-        match self
-            .rpc
-            .request_value(method::THEME_PACK_RESET_WEIGHTS, None)
-        {
-            Err(error) => self.feedback = Some(error.message),
-            Ok(Some(value)) => {
-                if let Ok(data) = serde_json::from_value(value) {
-                    self.data = data;
-                    self.feedback = Some("已恢复默认权重".to_owned());
-                }
-            }
-            Ok(None) => {}
-        }
+        self.cancel_pending_persist();
+        self.rpc.submit(method::THEME_PACK_RESET_WEIGHTS, None);
+        self.feedback = Some("正在恢复默认权重".to_owned());
     }
 
     fn patch_pack(&mut self, id: &str, patch: impl FnOnce(&mut ThemePack)) {
@@ -148,24 +125,10 @@ impl ThemePacksState {
     }
 
     fn persist_packs(&mut self, packs: Vec<ThemePack>) {
-        if self.rpc.is_sidecar() {
-            self.data.packs = packs;
-            self.persist_generation = self.persist_generation.wrapping_add(1);
-            self.pending_persist_generation = Some(self.persist_generation);
-            self.feedback = Some("主题包设置待保存".to_owned());
-            return;
-        }
-        let result = self.rpc.request_value(
-            method::THEME_PACK_UPDATE_ALL,
-            Some(json!({ "packs": packs })),
-        );
-        if let Err(error) = result {
-            self.feedback = Some(error.message);
-            return;
-        }
         self.data.packs = packs;
-        self.confirmed_packs = self.data.packs.clone();
-        self.feedback = Some("主题包设置已保存".to_owned());
+        self.persist_generation = self.persist_generation.wrapping_add(1);
+        self.pending_persist_generation = Some(self.persist_generation);
+        self.feedback = Some("主题包设置待保存".to_owned());
     }
 
     pub(crate) fn pending_persist_generation(&self) -> Option<u64> {
@@ -216,20 +179,6 @@ impl ThemePacksState {
                 self.feedback = Some("主题包设置已保存".to_owned());
             }
             _ => {}
-        }
-    }
-
-    fn request(
-        &mut self,
-        method_name: &str,
-        params: Option<serde_json::Value>,
-    ) -> Option<serde_json::Value> {
-        match self.rpc.request_value(method_name, params) {
-            Ok(value) => value,
-            Err(error) => {
-                self.feedback = Some(error.message);
-                None
-            }
         }
     }
 }

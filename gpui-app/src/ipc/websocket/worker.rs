@@ -2,6 +2,7 @@ use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 use super::*;
+use crate::ipc::contract::event;
 
 /// Where a completed response is delivered.
 ///
@@ -30,15 +31,28 @@ struct PendingRequest {
     deadline: Instant,
 }
 
+pub(super) struct WorkerShared {
+    pub(super) events: Arc<Mutex<VecDeque<EventEnvelope>>>,
+    pub(super) completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
+    pub(super) connected: Arc<AtomicBool>,
+    pub(super) error: Arc<Mutex<Option<String>>>,
+    pub(super) activity: TransportActivity,
+    pub(super) expected_boot_id: Option<String>,
+}
+
 pub(super) fn run_worker(
     mut socket: tungstenite::WebSocket<TcpStream>,
     commands: Receiver<WorkerCommand>,
-    events: Arc<Mutex<VecDeque<EventEnvelope>>>,
-    completions: Arc<Mutex<VecDeque<RpcCompletion>>>,
-    connected: Arc<AtomicBool>,
-    error: Arc<Mutex<Option<String>>>,
-    activity: TransportActivity,
+    shared: WorkerShared,
 ) {
+    let WorkerShared {
+        events,
+        completions,
+        connected,
+        error,
+        activity,
+        expected_boot_id,
+    } = shared;
     let mut pending: HashMap<RequestId, PendingRequest> = HashMap::new();
     let mut fatal_error: Option<String> = None;
 
@@ -115,7 +129,10 @@ pub(super) fn run_worker(
 
         match socket.read() {
             Ok(Message::Binary(bytes)) => match decode_binary_event(bytes.as_ref()) {
-                Ok(event) => push_event(&events, event, &activity),
+                Ok(event) if belongs_to_session(&event, expected_boot_id.as_deref()) => {
+                    push_event(&events, event, &activity)
+                }
+                Ok(_) => {}
                 Err(parse_error) => {
                     fatal_error = Some(format!("sidecar 二进制事件无效：{parse_error}"));
                     break;
@@ -125,7 +142,9 @@ pub(super) fn run_worker(
                 if let Some(text) = message_text(message) {
                     match serde_json::from_str::<Value>(&text) {
                         Ok(value) if value.get("event").and_then(Value::as_str).is_some() => {
-                            if let Ok(event) = serde_json::from_value::<EventEnvelope>(value) {
+                            if let Ok(event) = serde_json::from_value::<EventEnvelope>(value)
+                                && belongs_to_session(&event, expected_boot_id.as_deref())
+                            {
                                 push_event(&events, event, &activity);
                             }
                         }
@@ -192,6 +211,18 @@ pub(super) fn run_worker(
     activity.notify();
 }
 
+/// Drop frames from a previous sidecar boot.  Events without a boot id come
+/// from a legacy sidecar and remain acceptable while the schema matches.
+fn belongs_to_session(event: &EventEnvelope, expected: Option<&str>) -> bool {
+    let Some(expected) = expected else {
+        return true;
+    };
+    event
+        .boot_id
+        .as_deref()
+        .is_none_or(|boot_id| boot_id == expected)
+}
+
 fn complete(
     pending: PendingRequest,
     response: RpcResponse,
@@ -215,6 +246,7 @@ fn complete(
                 queue.pop_front();
             }
             queue.push_back(RpcCompletion {
+                request_id: response.id,
                 method: pending.method,
                 params: pending.params,
                 response,
@@ -234,17 +266,44 @@ fn push_event(
 ) {
     let mut queued = false;
     if let Ok(mut queue) = events.lock() {
-        if event.event == super::super::contract::event::SCREENSHOT_FRAME {
-            queue.retain(|queued| queued.event != super::super::contract::event::SCREENSHOT_FRAME);
+        if event.event == event::SCREENSHOT_FRAME {
+            queue.retain(|queued| queued.event != event::SCREENSHOT_FRAME);
         }
         if queue.len() >= MAX_EVENT_QUEUE {
-            queue.pop_front();
+            // Prefer dropping replaceable telemetry over lifecycle or terminal
+            // events.  If the queue is all-critical, sacrifice the oldest item
+            // rather than closing the transport; the app will resync from an
+            // authoritative snapshot on the next state update.
+            if let Some(index) = queue.iter().position(is_droppable_event) {
+                queue.remove(index);
+            } else {
+                queue.pop_front();
+            }
         }
         queue.push_back(event);
         queued = true;
     }
     if queued {
         activity.notify();
+    }
+}
+
+fn is_droppable_event(event: &EventEnvelope) -> bool {
+    match event.event.as_str() {
+        event::SCREENSHOT_FRAME
+        | event::EXECUTION_MIRROR_PROGRESS
+        | event::EXECUTION_MIRROR_FLOOR
+        | event::RESOURCE_SYNC_PROGRESS => true,
+        event::LOG_ENTRY => {
+            let level = event
+                .payload
+                .get("level")
+                .and_then(Value::as_str)
+                .unwrap_or("info")
+                .to_ascii_lowercase();
+            !matches!(level.as_str(), "warn" | "warning" | "error" | "critical")
+        }
+        _ => false,
     }
 }
 
@@ -307,5 +366,29 @@ mod tests {
         let event = decode_binary_event(&frame).expect("valid frame");
         assert_eq!(event.seq, Some(7));
         assert_eq!(event.binary.as_deref(), Some(&[0xff, 0xd8, 0xff, 0xd9][..]));
+    }
+
+    #[test]
+    fn lifecycle_events_and_warnings_survive_event_pressure() {
+        let exit = EventEnvelope::new(event::APP_EXIT_REQUESTED, serde_json::json!({}));
+        assert!(!is_droppable_event(&exit));
+
+        let warning = EventEnvelope::new(
+            event::LOG_ENTRY,
+            serde_json::json!({"level": "warn", "message": "keep"}),
+        );
+        assert!(!is_droppable_event(&warning));
+
+        let info = EventEnvelope::new(
+            event::LOG_ENTRY,
+            serde_json::json!({"level": "info", "message": "drop"}),
+        );
+        assert!(is_droppable_event(&info));
+
+        let progress = EventEnvelope::new(
+            event::EXECUTION_MIRROR_PROGRESS,
+            serde_json::json!({"completed": 1}),
+        );
+        assert!(is_droppable_event(&progress));
     }
 }

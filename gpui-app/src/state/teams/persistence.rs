@@ -19,6 +19,7 @@ impl TeamsState {
     }
 
     pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
+        #[allow(unused_mut)]
         let mut state = Self {
             rpc: RpcGateway::new(client),
             teams: Vec::new(),
@@ -34,29 +35,46 @@ impl TeamsState {
             saving: false,
             deleting: false,
             team_toggle_in_flight: None,
+            pending_save: None,
         };
-        if !state.rpc.is_sidecar() {
-            state.reload();
+        #[cfg(test)]
+        {
+            state.teams = state
+                .rpc
+                .request(method::TEAM_LIST, None)
+                .unwrap_or_default();
+            state.sinners = state
+                .rpc
+                .request(method::SINNER_LIST, None)
+                .unwrap_or_default();
+            state.presets = state
+                .rpc
+                .request(method::TEAM_PRESET_LIST, None)
+                .unwrap_or_default();
         }
         state
     }
 
-    pub fn reload(&mut self) {
-        if self.rpc.is_sidecar() {
-            return;
+    #[cfg(test)]
+    pub(crate) fn pump_mock(&mut self) {
+        for _ in 0..8 {
+            let completions = self.rpc.take_completions();
+            if completions.is_empty() {
+                break;
+            }
+            for completion in completions {
+                let result = RpcGateway::decode_response(&completion.method, completion.response);
+                match completion.method.as_str() {
+                    method::TEAM_SAVE | method::TEAM_DELETE | method::TEAM_LIST => {
+                        self.apply_team_completion(&completion.method, result);
+                    }
+                    method::TEAM_STATS_GET | method::TEAM_STATS_CLEAR => {
+                        self.apply_stats_completion(&completion.method, completion.params, result);
+                    }
+                    _ => {}
+                }
+            }
         }
-        self.teams = self
-            .request_value(method::TEAM_LIST, None)
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
-        self.sinners = self
-            .request_value(method::SINNER_LIST, None)
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
-        self.presets = self
-            .request_value(method::TEAM_PRESET_LIST, None)
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
     }
 
     pub fn export_editor_json(&self) -> Option<String> {
@@ -172,21 +190,9 @@ impl TeamsState {
 
     pub fn save_editor(&mut self) -> Result<(), String> {
         let (submitted, value) = self.prepare_save()?;
-        let result = self
-            .rpc
-            .request_value(method::TEAM_SAVE, Some(value))
-            .map_err(|error| error.message)
-            .and_then(|value| self.decode_saved_team(&submitted, value));
-        match result {
-            Ok(saved) => {
-                self.apply_saved_team(&submitted, saved);
-                Ok(())
-            }
-            Err(error) => {
-                self.fail_save(error.clone());
-                Err(error)
-            }
-        }
+        self.pending_save = Some(submitted);
+        self.rpc.submit(method::TEAM_SAVE, Some(value));
+        Ok(())
     }
 
     pub fn prepare_save(&mut self) -> Result<(TeamDetail, Value), String> {
@@ -249,19 +255,133 @@ impl TeamsState {
 
     pub fn set_team_enabled(&mut self, team: &TeamDetail, enabled: bool) -> Result<(), String> {
         let params = self.begin_team_enabled(team, enabled)?;
-        let result = self
-            .rpc
-            .request_value(method::TEAM_SAVE, Some(params))
-            .map_err(|error| error.message)
-            .and_then(|value| self.decode_enabled_team(&team.id, value));
-        match result {
-            Ok(saved) => {
-                self.apply_team_enabled(saved);
-                Ok(())
-            }
+        self.rpc.submit(method::TEAM_SAVE, Some(params));
+        Ok(())
+    }
+
+    /// Apply a `team.save`, `team.delete` or follow-up `team.list` response
+    /// from the shared completion pump.
+    pub(crate) fn apply_team_completion(
+        &mut self,
+        method_name: &str,
+        result: Result<Option<Value>, crate::ipc::RpcError>,
+    ) -> bool {
+        match method_name {
+            method::TEAM_SAVE => self.apply_team_save_result(result),
+            method::TEAM_DELETE => self.apply_team_delete_result(result),
+            method::TEAM_LIST => self.apply_team_list_result(result),
+            _ => false,
+        }
+    }
+
+    fn apply_team_save_result(
+        &mut self,
+        result: Result<Option<Value>, crate::ipc::RpcError>,
+    ) -> bool {
+        let value = match result {
             Err(error) => {
-                self.fail_team_enabled(error.clone());
-                Err(error)
+                if self.pending_save.take().is_some() {
+                    self.fail_save(error.message);
+                } else {
+                    self.fail_team_enabled(error.message);
+                }
+                return true;
+            }
+            Ok(value) => value,
+        };
+        let Some(value) = value else {
+            let error = "team.save 返回了空结果".to_owned();
+            if self.pending_save.take().is_some() {
+                self.fail_save(error);
+            } else {
+                self.fail_team_enabled(error);
+            }
+            return true;
+        };
+        if value.as_bool() == Some(true) {
+            // The backend acknowledged without echoing the entity.  Refresh
+            // the list and finish the pending operation in that completion.
+            self.rpc.submit(method::TEAM_LIST, None);
+            return true;
+        }
+        if let Some(submitted) = self.pending_save.take() {
+            match serde_json::from_value::<TeamDetail>(value) {
+                Ok(saved) => self.apply_saved_team(&submitted, saved),
+                Err(error) => self.fail_save(format!("team.save 返回了无效队伍：{error}")),
+            }
+            return true;
+        }
+        if let Some(team_id) = self.team_toggle_in_flight.clone() {
+            match serde_json::from_value::<TeamDetail>(value) {
+                Ok(mut saved) => {
+                    if saved.id.is_empty() {
+                        saved.id = team_id;
+                    }
+                    self.apply_team_enabled(saved);
+                }
+                Err(error) => self.fail_team_enabled(format!("team.save 返回了无效队伍：{error}")),
+            }
+            return true;
+        }
+        false
+    }
+
+    fn apply_team_list_result(
+        &mut self,
+        result: Result<Option<Value>, crate::ipc::RpcError>,
+    ) -> bool {
+        let teams = match result {
+            Err(error) => {
+                if self.pending_save.is_some() {
+                    self.fail_save(error.message);
+                } else if self.team_toggle_in_flight.is_some() {
+                    self.fail_team_enabled(error.message);
+                }
+                return true;
+            }
+            Ok(value) => value
+                .and_then(|value| serde_json::from_value::<Vec<TeamDetail>>(value).ok())
+                .unwrap_or_default(),
+        };
+        self.teams = teams;
+        if let Some(submitted) = self.pending_save.take() {
+            match resolve_saved_team(&self.teams, &submitted) {
+                Ok(saved) => self.apply_saved_team(&submitted, saved),
+                Err(error) => self.fail_save(error),
+            }
+            return true;
+        }
+        if let Some(team_id) = self.team_toggle_in_flight.take() {
+            if let Some(saved) = self.teams.iter().find(|team| team.id == team_id).cloned() {
+                self.apply_team_enabled(saved);
+            } else {
+                self.fail_team_enabled("team.save 已成功，但无法从列表定位队伍".to_owned());
+            }
+            return true;
+        }
+        false
+    }
+
+    fn apply_team_delete_result(
+        &mut self,
+        result: Result<Option<Value>, crate::ipc::RpcError>,
+    ) -> bool {
+        match result {
+            Err(error) => {
+                self.fail_delete(error.message);
+                true
+            }
+            Ok(Some(value)) if value.as_bool() == Some(true) => {
+                if let Some(team) = self.delete_target.take() {
+                    self.apply_deleted_team(&team.id);
+                } else {
+                    self.deleting = false;
+                }
+                true
+            }
+            Ok(_) => {
+                self.fail_delete("team.delete 返回了无效结果".to_owned());
+                true
             }
         }
     }
@@ -353,107 +473,40 @@ impl TeamsState {
 
     pub fn confirm_delete(&mut self) -> Result<(), String> {
         let team = self.prepare_delete()?;
-        let result = self
-            .rpc
-            .request_value(method::TEAM_DELETE, Some(json!({"id": team.id.clone()})))
-            .map_err(|error| error.message)
-            .and_then(|value| {
-                if value.as_ref().and_then(Value::as_bool) == Some(true) {
-                    Ok(())
-                } else {
-                    Err("team.delete 返回了无效结果".to_owned())
-                }
-            });
-        match result {
-            Ok(()) => {
-                self.apply_deleted_team(&team.id);
-                Ok(())
-            }
-            Err(error) => {
-                self.fail_delete(error.clone());
-                Err(error)
-            }
-        }
+        self.rpc
+            .submit(method::TEAM_DELETE, Some(json!({"id": team.id})));
+        Ok(())
     }
 
     #[allow(dead_code)]
     pub fn take_feedback(&mut self) -> Option<String> {
         self.feedback.take()
     }
+}
 
-    fn reload_teams_only(&mut self) {
-        self.teams = self
-            .request_value(method::TEAM_LIST, None)
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
-    }
-
-    fn decode_saved_team(
-        &mut self,
-        submitted: &TeamDetail,
-        value: Option<Value>,
-    ) -> Result<TeamDetail, String> {
-        let Some(value) = value else {
-            return Err("team.save 返回了空结果".to_owned());
-        };
-        if value.as_bool() == Some(true) {
-            self.reload_teams_only();
-            let exact = self
-                .teams
+fn resolve_saved_team(teams: &[TeamDetail], submitted: &TeamDetail) -> Result<TeamDetail, String> {
+    let exact = teams
+        .iter()
+        .rev()
+        .find(|team| {
+            team.id.as_str() == submitted.id.as_str()
+                || (submitted.id.is_empty()
+                    && team.name == submitted.name
+                    && team.purpose == submitted.purpose
+                    && team.sinners == submitted.sinners)
+        })
+        .cloned();
+    exact
+        .or_else(|| {
+            teams
                 .iter()
                 .rev()
                 .find(|team| {
-                    team.id.as_str() == submitted.id.as_str()
-                        || (submitted.id.is_empty()
-                            && team.name == submitted.name
-                            && team.purpose == submitted.purpose
-                            && team.sinners == submitted.sinners)
+                    submitted.id.is_empty()
+                        && team.name == submitted.name
+                        && team.purpose == submitted.purpose
                 })
-                .cloned();
-            return exact
-                .or_else(|| {
-                    self.teams
-                        .iter()
-                        .rev()
-                        .find(|team| {
-                            submitted.id.is_empty()
-                                && team.name == submitted.name
-                                && team.purpose == submitted.purpose
-                        })
-                        .cloned()
-                })
-                .ok_or_else(|| "team.save 已成功，但无法从列表定位队伍".to_owned());
-        }
-        serde_json::from_value(value).map_err(|error| format!("team.save 返回了无效队伍：{error}"))
-    }
-
-    fn decode_enabled_team(
-        &mut self,
-        team_id: &str,
-        value: Option<Value>,
-    ) -> Result<TeamDetail, String> {
-        let Some(value) = value else {
-            return Err("team.save 返回了空结果".to_owned());
-        };
-        if value.as_bool() == Some(true) {
-            self.reload_teams_only();
-            return self
-                .teams
-                .iter()
-                .find(|team| team.id == team_id)
                 .cloned()
-                .ok_or_else(|| "team.save 已成功，但无法从列表定位队伍".to_owned());
-        }
-        serde_json::from_value(value).map_err(|error| format!("team.save 返回了无效队伍：{error}"))
-    }
-
-    fn request_value(&mut self, method_name: &str, params: Option<Value>) -> Option<Value> {
-        match self.rpc.request_value(method_name, params) {
-            Ok(value) => value,
-            Err(error) => {
-                self.feedback = Some(error.message);
-                None
-            }
-        }
-    }
+        })
+        .ok_or_else(|| "team.save 已成功，但无法从列表定位队伍".to_owned())
 }

@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import struct
+import time
+import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -16,17 +19,22 @@ from websockets.exceptions import ConnectionClosed
 from module.backend_application import BackendApplication
 from module.device_manager import DeviceManager
 from module.logger import log
-from module.rpc_dispatcher import SCHEMA_VERSION, RpcDispatcher
+from module.rpc_contract import CAPABILITIES, PRIMARY_CAPABILITY, SCHEMA_VERSION
+from module.rpc_dispatcher import RpcDispatcher
 
 MAX_INFLIGHT_REQUESTS = 64
 MAX_OUTBOUND_EVENTS = 512
 READ_WORKERS = 4
+SEND_TIMEOUT = 5.0
 _EXECUTION_CONTROL_METHODS = frozenset(
     {
         "execution.start",
         "execution.pause",
         "execution.resume",
         "execution.stop",
+        # Lifecycle shutdown must not queue behind a long mutation such as a
+        # resource sync or config persistence.
+        "app.shutdown",
     }
 )
 _COALESCIBLE_EVENTS = {
@@ -40,7 +48,9 @@ _COALESCIBLE_EVENTS = {
     "device.status",
     "resource.sync.progress",
 }
-_DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"log.entry", "execution.log", "heartbeat"}
+# Preview/progress/telemetry may be replaced by a newer value.  Log entries are
+# handled separately because warning/error records must survive backpressure.
+_DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"heartbeat"}
 # RunnerEventAdapter keeps the historical sidecar event names internally, but
 # the GPUI contract uses the canonical top-level event for log entries.  Apply
 # this compatibility alias only at the transport boundary so existing Python
@@ -48,6 +58,19 @@ _DROPPABLE_EVENTS = _COALESCIBLE_EVENTS | {"log.entry", "execution.log", "heartb
 _WIRE_EVENT_ALIASES = {
     "execution.log": "log.entry",
 }
+_LOG_EVENTS = frozenset({"log.entry", "execution.log"})
+_CRITICAL_LOG_LEVELS = frozenset({"warn", "warning", "error", "critical"})
+
+
+def _is_droppable_event(event: str, payload: dict[str, Any]) -> bool:
+    """Whether an event may be discarded to relieve outbound backpressure."""
+
+    if event in _DROPPABLE_EVENTS:
+        return True
+    if event in _LOG_EVENTS:
+        level = str(payload.get("level", "info")).strip().lower()
+        return level not in _CRITICAL_LOG_LEVELS
+    return False
 
 
 class _BroadcastLogHandler(logging.Handler):
@@ -89,7 +112,11 @@ class WebSocketServer:
         self.device_manager = device_manager
         self.application = application or dispatcher.application
         self.token = token
+        # A boot id changes for every server process/session.  Event envelopes
+        # carry it so a client can reject frames from a previous sidecar boot.
+        self.boot_id = uuid.uuid4().hex
         self.port: int | None = None
+        self._started_monotonic: float | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._server: Any = None
         self._clients: set[ServerConnection] = set()
@@ -97,18 +124,22 @@ class WebSocketServer:
         self._request_tasks: set[asyncio.Task[Any]] = set()
         self._inflight_requests = 0
         self._outbound: deque[tuple[str, dict[str, Any], int | None]] = deque()
+        self._dropped_events = 0
         self._outbound_ready: asyncio.Event | None = None
         self._sender_task: asyncio.Task[None] | None = None
         self._execution_executor: ThreadPoolExecutor | None = None
         self._mutation_executor: ThreadPoolExecutor | None = None
         self._read_executor: ThreadPoolExecutor | None = None
         self._log_handler = _BroadcastLogHandler(self)
-        self.application.add_event_listener(self._on_application_event)
+        # The event listener is installed in ``start`` so a stopped/restarted
+        # server does not accumulate duplicate listeners.
+        self.dispatcher.set_diagnostics_provider(self.diagnostics)
 
     async def start(self, host: str = "127.0.0.1", port: int = 0) -> int:
         if self._server is not None:
             return self.port or 0
         self._loop = asyncio.get_running_loop()
+        self._started_monotonic = time.monotonic()
         self._execution_executor = ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="AALCRpcExecution",
@@ -182,6 +213,7 @@ class WebSocketServer:
         log.removeHandler(self._log_handler)
         self.application.remove_event_listener(self._on_application_event)
         self._loop = None
+        self._started_monotonic = None
 
     @staticmethod
     async def _drain_executor(name: str, executor: ThreadPoolExecutor) -> None:
@@ -206,6 +238,24 @@ class WebSocketServer:
             await asyncio.sleep(0.05)
         log.warning("RPC %s executor did not stop within the shutdown deadline", name)
 
+    def diagnostics(self) -> dict[str, Any]:
+        """Return the live transport snapshot exposed as ``app.diagnose``."""
+
+        started = self._started_monotonic
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "version": self.dispatcher.version,
+            "bootId": self.boot_id,
+            "pid": os.getpid(),
+            "port": self.port,
+            "capabilities": list(CAPABILITIES),
+            "clients": len(self._clients),
+            "inflightRequests": self._inflight_requests,
+            "outboundDepth": len(self._outbound),
+            "droppedEvents": self._dropped_events,
+            "uptimeMs": 0 if started is None else round((time.monotonic() - started) * 1000),
+        }
+
     def publish(self, event: str, payload: dict[str, Any], sequence: int | None = None) -> None:
         """Queue an event from any worker thread without spawning a task."""
 
@@ -227,14 +277,24 @@ class WebSocketServer:
                     break
 
         if len(self._outbound) >= MAX_OUTBOUND_EVENTS:
-            for index, (queued_event, _, _) in enumerate(self._outbound):
-                if queued_event in _DROPPABLE_EVENTS:
-                    del self._outbound[index]
-                    break
-            else:
-                for client in tuple(self._clients):
-                    asyncio.create_task(client.close(code=1013, reason="event backpressure"))
-                self._outbound.clear()
+            # Never close the control session because telemetry is behind.
+            # Drop the oldest replaceable event first; if the queue contains
+            # only critical events, sacrifice the oldest one and keep the
+            # connection alive so the client can resync from an authoritative
+            # snapshot instead of losing the backend entirely.
+            drop_index = next(
+                (
+                    index
+                    for index, (queued_event, queued_payload, _) in enumerate(self._outbound)
+                    if _is_droppable_event(queued_event, queued_payload)
+                ),
+                None,
+            )
+            if drop_index is None:
+                drop_index = 0
+                log.warning("sidecar 事件队列已满且没有可丢弃事件，丢弃最旧事件")
+            del self._outbound[drop_index]
+            self._dropped_events += 1
 
         self._outbound.append((event, payload, sequence))
         if self._outbound_ready is not None:
@@ -291,8 +351,29 @@ class WebSocketServer:
         if not isinstance(hello, dict) or hello.get("type") != "hello" or hello.get("token") != self.token:
             await connection.close(code=1008, reason="invalid sidecar token")
             return False
+        requested_schema = hello.get("schemaVersion")
+        if requested_schema is not None and requested_schema != SCHEMA_VERSION:
+            await connection.close(code=1002, reason="incompatible rpc schema")
+            return False
+        client_capabilities = hello.get("capabilities")
+        if (
+            isinstance(client_capabilities, list)
+            and PRIMARY_CAPABILITY not in client_capabilities
+        ):
+            await connection.close(code=1002, reason="missing core rpc capability")
+            return False
         await connection.send(
-            json.dumps({"type": "hello", "ok": True, "schemaVersion": SCHEMA_VERSION}, separators=(",", ":"))
+            json.dumps(
+                {
+                    "type": "hello",
+                    "ok": True,
+                    "schemaVersion": SCHEMA_VERSION,
+                    "bootId": self.boot_id,
+                    "capabilities": list(CAPABILITIES),
+                    "pid": os.getpid(),
+                },
+                separators=(",", ":"),
+            )
         )
         return True
 
@@ -347,13 +428,21 @@ class WebSocketServer:
         message: str | bytes
         if wire_event == "screenshot.frame" and isinstance(payload.get("jpeg"), bytes):
             jpeg = payload.pop("jpeg")
-            header: dict[str, Any] = {"event": wire_event, "payload": payload}
+            header: dict[str, Any] = {
+                "event": wire_event,
+                "payload": payload,
+                "bootId": self.boot_id,
+            }
             if sequence is not None:
                 header["seq"] = sequence
             metadata = json.dumps(header, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             message = struct.pack(">I", len(metadata)) + metadata + jpeg
         else:
-            envelope: dict[str, Any] = {"event": wire_event, "payload": payload}
+            envelope: dict[str, Any] = {
+                "event": wire_event,
+                "payload": payload,
+                "bootId": self.boot_id,
+            }
             if sequence is not None:
                 envelope["seq"] = sequence
             message = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
@@ -375,7 +464,17 @@ class WebSocketServer:
     async def _send_encoded(self, connection: ServerConnection, message: str | bytes) -> None:
         lock = self._send_locks.setdefault(connection, asyncio.Lock())
         async with lock:
-            await connection.send(message)
+            try:
+                await asyncio.wait_for(connection.send(message), timeout=SEND_TIMEOUT)
+            except asyncio.TimeoutError:
+                # A wedged client must not stall event delivery or control
+                # responses for every other connection.
+                log.warning("sidecar 客户端写入超时，关闭该连接")
+                try:
+                    await connection.close(code=1011, reason="send timeout")
+                except Exception:
+                    pass
+                raise
 
     @staticmethod
     def _error(request_id: Any, code: int, message: str) -> dict[str, Any]:
@@ -385,6 +484,7 @@ class WebSocketServer:
             -32602: "INVALID_PARAMS",
             -32700: "PARSE_ERROR",
             -32000: "INTERNAL_ERROR",
+            -32001: "BACKEND_UNAVAILABLE",
             -32030: "QUEUE_FULL",
         }.get(code, str(code))
         return {

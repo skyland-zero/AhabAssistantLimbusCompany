@@ -23,71 +23,48 @@ impl ToolboxState {
         self.running.get(&tool).copied().unwrap_or(false)
     }
 
+    #[cfg(test)]
+    pub(crate) fn pump_mock(&mut self) {
+        for _ in 0..8 {
+            let events = self.rpc.take_events();
+            let completions = self.rpc.take_completions();
+            if events.is_empty() && completions.is_empty() {
+                break;
+            }
+            self.apply_events(events);
+            for completion in completions {
+                let result = crate::ipc::RpcGateway::decode_response(
+                    &completion.method,
+                    completion.response,
+                );
+                self.apply_rpc_result(&completion.method, completion.params, result);
+            }
+        }
+    }
+
     pub fn toggle(&mut self, tool: ToolId) {
         let method_name = if self.is_running(tool) {
             method::TOOL_STOP
         } else {
             method::TOOL_START
         };
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method_name, Some(json!({ "id": tool })));
-            self.feedback = Some("正在提交工具请求".to_owned());
-            return;
-        }
-        let result = self
-            .rpc
-            .request_value(method_name, Some(json!({ "id": tool })));
-        let events = self.rpc.take_events();
-        self.apply_events(events);
-        if let Err(error) = result {
-            self.feedback = Some(error.message);
-        }
+        self.rpc.submit(method_name, Some(json!({ "id": tool })));
+        self.feedback = Some("正在提交工具请求".to_owned());
     }
 
     pub fn screenshot(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::TOOL_SCREENSHOT, None);
-            self.feedback = Some("正在截图".to_owned());
-            return;
-        }
-        match self.rpc.request_value(method::TOOL_SCREENSHOT, None) {
-            Err(error) => self.feedback = Some(error.message),
-            Ok(result) => {
-                let path = result
-                    .and_then(|value| {
-                        value
-                            .get("path")
-                            .and_then(|value| value.as_str())
-                            .map(str::to_owned)
-                    })
-                    .unwrap_or_else(|| "AALC/screenshots/mock.png".to_owned());
-                self.feedback = Some(format!("截图完成：{path}"));
-            }
-        }
+        self.rpc.submit(method::TOOL_SCREENSHOT, None);
+        self.feedback = Some("正在截图".to_owned());
     }
 
     pub fn apply_resolution(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::TOOL_RESOLUTION_SET, None);
-            self.feedback = Some("正在修改设备分辨率".to_owned());
-            return;
-        }
-        match self.rpc.request_value(method::TOOL_RESOLUTION_SET, None) {
-            Err(error) => self.feedback = Some(error.message),
-            Ok(result) => self.feedback = Some(resolution_feedback(result.as_ref(), false)),
-        }
+        self.rpc.submit(method::TOOL_RESOLUTION_SET, None);
+        self.feedback = Some("正在修改设备分辨率".to_owned());
     }
 
     pub fn reset_resolution(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::TOOL_RESOLUTION_RESET, None);
-            self.feedback = Some("正在还原设备分辨率".to_owned());
-            return;
-        }
-        match self.rpc.request_value(method::TOOL_RESOLUTION_RESET, None) {
-            Err(error) => self.feedback = Some(error.message),
-            Ok(result) => self.feedback = Some(resolution_feedback(result.as_ref(), true)),
-        }
+        self.rpc.submit(method::TOOL_RESOLUTION_RESET, None);
+        self.feedback = Some("正在还原设备分辨率".to_owned());
     }
 
     pub(crate) fn apply_events(&mut self, events: Vec<EventEnvelope>) {

@@ -82,7 +82,6 @@ fn main() {
             // GPUI Kit owns widget state (overlays, menus, input focus rings), so
             // it has to be installed before the first window opens.
             gpui_component::init(cx);
-            cx.on_action(|_: &Quit, cx| cx.quit());
             cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
 
             let bounds = Bounds::centered(None, size(px(820.), px(680.)), cx);
@@ -120,6 +119,12 @@ fn main() {
                             view.start_backend_bootstrap(cx);
                         });
                         app
+                    });
+                    let quit_handle = view.downgrade();
+                    cx.on_action(move |_: &Quit, cx| {
+                        if let Some(view) = quit_handle.upgrade() {
+                            view.update(cx, |view, cx| view.request_app_exit(cx));
+                        }
                     });
                     cx.new(|cx| Root::new(view, window, cx))
                 },

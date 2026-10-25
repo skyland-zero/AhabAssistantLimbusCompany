@@ -2,10 +2,6 @@ use super::*;
 
 impl AhabApp {
     pub fn start_backend_hydration(&mut self, cx: &mut Context<Self>) {
-        if !self.home.rpc.is_sidecar() {
-            return;
-        }
-
         let backend_epoch = self.backend_epoch;
         let home_rpc = self.home.rpc.clone();
         let teams_rpc = self.teams.rpc.clone();
@@ -274,23 +270,51 @@ impl AhabApp {
                                 return;
                             }
 
-                            if let BackendAttach::New(client) = attach {
-                                view.install_backend_client(client);
-                            }
+                            let (restarted, reconnected) = match attach {
+                                BackendAttach::New(client) => {
+                                    view.install_backend_client(client);
+                                    (false, false)
+                                }
+                                BackendAttach::Reused => (true, false),
+                                BackendAttach::Reconnected => (false, true),
+                            };
                             view.backend_operation = BackendOperation::Idle;
                             view.backend_status.phase = BackendPhase::Ready;
                             view.backend_status.retry_no = None;
                             view.backend_status.last_error = None;
                             view.backend_epoch = view.backend_epoch.wrapping_add(1);
                             view.preview_control.backend_changed();
-                            if recovery {
+                            if recovery && restarted {
                                 view.home.reset_after_sidecar_restart();
                             }
-                            view.log_backend_localized(
-                                LogLevel::Info,
-                                "Python 后端已就绪，开始加载主控台数据",
-                                "Python backend is ready; loading console data",
-                            );
+                            if reconnected {
+                                view.log_backend_localized(
+                                    LogLevel::Info,
+                                    "Python 后端连接已恢复，正在重新同步状态",
+                                    "Python backend reconnected; resynchronizing state",
+                                );
+                            } else {
+                                view.log_backend_localized(
+                                    LogLevel::Info,
+                                    "Python 后端已就绪，开始加载主控台数据",
+                                    "Python backend is ready; loading console data",
+                                );
+                            }
+                            if let Some(session) = view.home.rpc.session_info() {
+                                let startup = session
+                                    .startup_ms
+                                    .map_or_else(|| "?".to_owned(), |ms| ms.to_string());
+                                let boot = session.boot_id.as_deref().unwrap_or("legacy");
+                                let message = match view.state.settings.language {
+                                    Language::ZhCn => {
+                                        format!("Python 后端启动耗时 {startup} ms，boot {boot}")
+                                    }
+                                    Language::EnUs => {
+                                        format!("Python backend started in {startup} ms, boot {boot}")
+                                    }
+                                };
+                                view.log_backend(LogLevel::Info, message);
+                            }
                             view.start_backend_hydration(cx);
                             view.reconcile_preview_without_window(cx);
                             cx.notify();

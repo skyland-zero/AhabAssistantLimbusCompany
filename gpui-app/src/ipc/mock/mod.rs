@@ -52,6 +52,9 @@ struct MockState {
     preview_enabled: bool,
     tools: HashMap<ToolId, bool>,
     events: Vec<EventEnvelope>,
+    /// Fire-and-forget responses, mirroring the sidecar's completion queue so
+    /// state code uses one asynchronous path for both transports.
+    completions: std::collections::VecDeque<super::contract::RpcCompletion>,
 }
 
 #[cfg(test)]

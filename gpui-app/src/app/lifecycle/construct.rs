@@ -91,12 +91,15 @@ impl AhabApp {
             backend_attempt_id: 0,
             backend_epoch: 0,
             exit_requested: false,
+            shutdown_started: false,
+            allow_close: false,
             stop_timeout_generation: 0,
             stats_tick_generation: 0,
             theme_persist_timer_generation: None,
             preview_control: Default::default(),
             window_minimized: false,
             window_subscriptions: Vec::new(),
+            app_quit_subscription: None,
         };
 
         if app.backend_status.phase == BackendPhase::WaitingForFirstFrame {

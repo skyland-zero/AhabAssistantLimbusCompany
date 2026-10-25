@@ -130,6 +130,27 @@ impl Default for HomeState {
 }
 
 impl HomeState {
+    /// Drain mock completions through the same handlers the GPUI event pump
+    /// uses.  Tests call this instead of relying on a synchronous transport.
+    #[cfg(test)]
+    pub(crate) fn pump_mock(&mut self) {
+        for _ in 0..8 {
+            let events = self.rpc.take_events();
+            let completions = self.rpc.take_completions();
+            if events.is_empty() && completions.is_empty() {
+                break;
+            }
+            self.apply_events(events);
+            for completion in completions {
+                let result = crate::ipc::RpcGateway::decode_response(
+                    &completion.method,
+                    completion.response,
+                );
+                self.apply_command_result(&completion.method, result);
+            }
+        }
+    }
+
     pub fn with_layout(right_panel_width: u32, right_panel_collapsed: bool) -> Self {
         Self::with_client(
             MockClient::default(),
@@ -143,19 +164,21 @@ impl HomeState {
         right_panel_width: u32,
         right_panel_collapsed: bool,
     ) -> Self {
+        // Runtime hydration is scheduled from AhabApp::start_backend_hydration
+        // so startup and first paint never wait on the network.  The same path
+        // is used by the deterministic mock, which keeps state code free of
+        // transport-specific synchronous branches.
+        #[allow(unused_mut)]
         let mut rpc = RpcGateway::new(client);
-        let (tasks, devices) = if rpc.is_sidecar() {
-            // Runtime hydration is scheduled from AhabApp::start_backend_hydration
-            // so sidecar startup and first paint never wait on the network.
-            (TasksConfig::default(), Vec::new())
-        } else {
-            (
-                rpc.request(crate::ipc::contract::method::TASKS_GET_CONFIG, None)
-                    .unwrap_or_default(),
-                rpc.request(crate::ipc::contract::method::DEVICE_LIST, None)
-                    .unwrap_or_default(),
-            )
-        };
+        #[cfg(test)]
+        let (tasks, devices) = (
+            rpc.request(crate::ipc::contract::method::TASKS_GET_CONFIG, None)
+                .unwrap_or_default(),
+            rpc.request(crate::ipc::contract::method::DEVICE_LIST, None)
+                .unwrap_or_default(),
+        );
+        #[cfg(not(test))]
+        let (tasks, devices) = (TasksConfig::default(), Vec::new());
 
         Self {
             rpc,
@@ -228,12 +251,16 @@ mod tests {
     fn home_execution_follows_idle_running_paused_running_idle() {
         let mut home = HomeState::default();
         home.start();
+        home.pump_mock();
         assert_eq!(home.execution.state, ExecutionState::Running);
         home.pause_or_resume();
+        home.pump_mock();
         assert_eq!(home.execution.state, ExecutionState::Paused);
         home.pause_or_resume();
+        home.pump_mock();
         assert_eq!(home.execution.state, ExecutionState::Running);
         home.stop();
+        home.pump_mock();
         assert_eq!(home.execution.state, ExecutionState::Idle);
     }
 
@@ -315,6 +342,7 @@ mod tests {
         assert_eq!(home.device_status, ConnectionStatus::Disconnected);
         assert_eq!(home.rpc.take_events().len(), 0);
         home.select_device("pc:limbus".into());
+        home.pump_mock();
         assert_eq!(home.device_status, ConnectionStatus::Connected);
     }
 
@@ -369,6 +397,7 @@ mod tests {
 
         home.device_error = Some("连接超时".into());
         home.select_device("mumu:0".into());
+        home.pump_mock();
         assert!(home.device_error.is_none());
         assert_eq!(home.device_status, ConnectionStatus::Connected);
     }

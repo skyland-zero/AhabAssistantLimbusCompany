@@ -16,6 +16,7 @@ async-channel = "2"
 # Local wall-clock formatting for run timestamps (chrono is already in the
 # GPUI dependency tree; the clock feature provides the local timezone).
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+getrandom = "0.4"
 gpui = { version = "=0.3.6", package = "gpui-pre" }
 gpui_platform = { version = "=0.3.6", package = "gpui-pre-platform" }
 gpui-component = "=0.6.6"

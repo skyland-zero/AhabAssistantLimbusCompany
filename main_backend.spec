@@ -6,6 +6,12 @@ The sidecar intentionally excludes every Qt package. Backend modules use a
 few lazy imports because the automation stack is large, so the pure-Python
 backend packages are collected explicitly here instead of relying only on
 PyInstaller's static import walk.
+
+The bundle is onedir, matching the one-shot Runner.  A one-file sidecar adds
+a bootloader process between GPUI and the process that owns the WebSocket,
+device lease and Runner Job Object; ``child.kill()`` would then terminate the
+bootloader instead of the actual backend.  ``COLLECT`` keeps the executable
+PID identical to the RPC server PID and avoids per-launch extraction.
 """
 
 from pathlib import Path
@@ -25,8 +31,8 @@ from pyinstaller_common import (
 hiddenimports = collect_common_hiddenimports()
 datas = collect_common_datas(root)
 # The frozen ``module.__init__`` resolves these defaults relative to the
-# private one-file extraction root.  Keep the sidecar self-contained for
-# startup before it can read the external release ``assets`` directory.
+# bundle's ``_internal`` root.  Keep the sidecar self-contained for startup
+# before it can read the external release ``assets`` directory.
 datas.extend(
     (
         str(root / "assets" / "config" / name),
@@ -63,13 +69,15 @@ a.binaries = [
 
 pyz = PYZ(a.pure)
 
+# Keep the executable's own binary list empty and hand every collected file to
+# COLLECT.  This is the same arrangement as execution_runner.spec: the launched
+# PID is the real Python process, so GPUI's process liveness checks and
+# TerminateProcess fallback have deterministic semantics.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="AALC Backend",
     debug=False,
     bootloader_ignore_signals=False,
@@ -82,4 +90,15 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=str(root / "assets" / "logo" / "my_icon_256X256.ico"),
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="AALCBackend",
 )

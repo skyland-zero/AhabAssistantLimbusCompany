@@ -144,8 +144,10 @@ mod tests {
         let mut state = ToolboxState::default();
         assert!(!state.is_running(ToolId::InfiniteBattle));
         state.toggle(ToolId::InfiniteBattle);
+        state.pump_mock();
         assert!(state.is_running(ToolId::InfiniteBattle));
         state.toggle(ToolId::InfiniteBattle);
+        state.pump_mock();
         assert!(!state.is_running(ToolId::InfiniteBattle));
     }
 
@@ -153,6 +155,7 @@ mod tests {
     fn resources_check_and_sync_share_canonical_names() {
         let mut state = ResourcesState::default();
         state.check_update();
+        state.pump_mock();
         assert!(
             state
                 .groups
@@ -160,6 +163,7 @@ mod tests {
                 .all(|group| group.remoteVersion.is_some())
         );
         state.sync_now();
+        state.pump_mock();
         assert!(state.groups.iter().all(|group| group.lastSyncAt == Some(0)));
         assert_eq!(state.sync_progress, Some(100));
         state.finish_sync();
@@ -193,6 +197,7 @@ mod tests {
             );
         }
         state.test_notification("SPT_unsaved".into());
+        state.pump_mock();
         assert_eq!(state.feedback.as_deref(), Some("测试通知已发送"));
     }
 }

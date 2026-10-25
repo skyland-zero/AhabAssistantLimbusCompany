@@ -12,6 +12,7 @@ impl SettingsPageState {
     }
 
     pub fn with_client(client: impl Into<crate::ipc::BackendClient>) -> Self {
+        #[allow(unused_mut)]
         let mut state = Self {
             rpc: RpcGateway::new(client),
             hotkey: HotkeyConfig::default(),
@@ -20,25 +21,34 @@ impl SettingsPageState {
             open_select: None,
             feedback: None,
         };
-        if !state.rpc.is_sidecar() {
-            state.reload();
+        #[cfg(test)]
+        {
+            state.hotkey = state
+                .rpc
+                .request(method::HOTKEY_GET, None)
+                .unwrap_or_default();
+            state.system = state
+                .rpc
+                .request(method::SYSTEM_SETTINGS_GET, None)
+                .unwrap_or_default();
         }
         state
     }
 
-    pub fn reload(&mut self) {
-        if self.rpc.is_sidecar() {
-            return;
-        }
-        if let Some(value) = self.request(method::HOTKEY_GET, None)
-            && let Ok(hotkey) = serde_json::from_value(value)
-        {
-            self.hotkey = hotkey;
-        }
-        if let Some(value) = self.request(method::SYSTEM_SETTINGS_GET, None)
-            && let Ok(system) = serde_json::from_value(value)
-        {
-            self.system = system;
+    #[cfg(test)]
+    pub(crate) fn pump_mock(&mut self) {
+        for _ in 0..8 {
+            let completions = self.rpc.take_completions();
+            if completions.is_empty() {
+                break;
+            }
+            for completion in completions {
+                let result = crate::ipc::RpcGateway::decode_response(
+                    &completion.method,
+                    completion.response,
+                );
+                self.apply_rpc_result(&completion.method, result);
+            }
         }
     }
 
@@ -109,44 +119,16 @@ impl SettingsPageState {
     }
 
     pub fn test_notification(&mut self, spt: String) {
-        let params = Some(serde_json::json!({"spt": spt}));
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::NOTIFICATION_TEST, params);
-            self.feedback = Some("正在发送测试通知".to_owned());
-            return;
-        }
-        let result = self.rpc.request_value(method::NOTIFICATION_TEST, params);
-        self.feedback = Some(match result {
-            Ok(_) => "测试通知已发送".to_owned(),
-            Err(error) => error.message,
-        });
+        self.rpc.submit(
+            method::NOTIFICATION_TEST,
+            Some(serde_json::json!({"spt": spt})),
+        );
+        self.feedback = Some("正在发送测试通知".to_owned());
     }
 
     pub fn check_update(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::APP_CHECK_UPDATE, None);
-            self.feedback = Some("正在检查更新".to_owned());
-            return;
-        }
-        match self.rpc.request_value(method::APP_CHECK_UPDATE, None) {
-            Err(error) => self.feedback = Some(error.message),
-            Ok(result) => {
-                let result = result.unwrap_or_default();
-                let latest = result
-                    .get("latest")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("未知");
-                let update_available = result
-                    .get("updateAvailable")
-                    .and_then(|value| value.as_bool())
-                    .unwrap_or(false);
-                self.feedback = Some(if update_available {
-                    format!("发现新版本：{latest}")
-                } else {
-                    format!("当前已是最新版本：{latest}")
-                });
-            }
-        }
+        self.rpc.submit(method::APP_CHECK_UPDATE, None);
+        self.feedback = Some("正在检查更新".to_owned());
     }
 
     pub fn capture(&mut self, target: HotkeyTarget) {
@@ -160,30 +142,19 @@ impl SettingsPageState {
     }
 
     fn persist_hotkey(&mut self) {
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(
-                method::HOTKEY_SET,
-                Some(serde_json::to_value(&self.hotkey).expect("HotkeyConfig is serializable")),
-            );
-            self.feedback = Some("正在保存设置".to_owned());
-            return;
-        }
-        let result = self.rpc.request_value(
+        self.rpc.submit(
             method::HOTKEY_SET,
             Some(serde_json::to_value(&self.hotkey).expect("HotkeyConfig is serializable")),
         );
-        self.set_feedback(result);
+        self.feedback = Some("正在保存设置".to_owned());
     }
 
     fn persist_system(&mut self) {
-        let params = Some(self.visible_system_settings_patch());
-        if self.rpc.is_sidecar() {
-            self.rpc.submit(method::SYSTEM_SETTINGS_SET, params);
-            self.feedback = Some("正在保存设置".to_owned());
-            return;
-        }
-        let result = self.rpc.request_value(method::SYSTEM_SETTINGS_SET, params);
-        self.set_feedback(result);
+        self.rpc.submit(
+            method::SYSTEM_SETTINGS_SET,
+            Some(self.visible_system_settings_patch()),
+        );
+        self.feedback = Some("正在保存设置".to_owned());
     }
 
     pub(crate) fn visible_system_settings_patch(&self) -> serde_json::Value {
@@ -199,13 +170,6 @@ impl SettingsPageState {
             "mirrorchyan_cdk": self.system.mirrorchyan_cdk,
             "wxpusher_spt": self.system.wxpusher_spt,
         })
-    }
-
-    fn set_feedback(&mut self, result: Result<Option<serde_json::Value>, crate::ipc::RpcError>) {
-        self.feedback = Some(match result {
-            Ok(_) => "设置已保存".to_owned(),
-            Err(error) => error.message,
-        });
     }
 
     pub(crate) fn apply_rpc_result(
@@ -275,20 +239,6 @@ impl SettingsPageState {
                 }
             }
             _ => {}
-        }
-    }
-
-    fn request(
-        &mut self,
-        method_name: &str,
-        params: Option<serde_json::Value>,
-    ) -> Option<serde_json::Value> {
-        match self.rpc.request_value(method_name, params) {
-            Ok(value) => value,
-            Err(error) => {
-                self.feedback = Some(error.message);
-                None
-            }
         }
     }
 }

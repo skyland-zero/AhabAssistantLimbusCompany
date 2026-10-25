@@ -396,7 +396,16 @@ class SubprocessRunnerFactory:
             executable_root = Path(sys.executable).resolve().parent
             if executable_root not in roots:
                 roots.append(executable_root)
-            candidates = [root / "runner" / executable_name for root in roots]
+            # Shared-runtime releases stage both executables in ``backend/``;
+            # keep the dedicated ``runner/`` directory as a rollback layout.
+            candidates = [
+                candidate
+                for root in roots
+                for candidate in (
+                    root / executable_name,
+                    root / "runner" / executable_name,
+                )
+            ]
             bundled = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
             if not bundled.is_file():
                 raise SupervisorError("RUNNER_NOT_FOUND", f"Bundled Runner does not exist: {bundled}")

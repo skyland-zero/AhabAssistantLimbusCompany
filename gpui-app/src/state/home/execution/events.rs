@@ -138,6 +138,7 @@ impl HomeState {
                 event: event_name,
                 payload,
                 seq,
+                boot_id: _,
                 binary,
             } = event;
             let runner_derived = Self::is_runner_derived_event(&event_name);

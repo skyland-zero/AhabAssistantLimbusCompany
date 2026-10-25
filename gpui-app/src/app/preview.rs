@@ -102,6 +102,14 @@ impl PreviewControlState {
 
 impl AhabApp {
     pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.register_app_quit(cx);
+        self.register_window_close_guard(window, cx);
+        if self.backend_status.phase == BackendPhase::Mock {
+            // The mock backend exposes the same asynchronous completion/event
+            // queues as the sidecar, so first-paint hydration is transport
+            // neutral.
+            self.start_backend_hydration(cx);
+        }
         self.window_minimized = shell::is_window_minimized(window);
         // Built here because `InputState` needs a window; doing it lazily from a
         // page render would create entities during a render pass.

@@ -12,6 +12,24 @@ pub type RequestId = u64;
 /// mock advertise the same schema.
 pub const RPC_SCHEMA_VERSION: u32 = 3;
 
+/// Capabilities advertised by the sidecar handshake.  Missing capabilities
+/// describe an older sidecar; mandatory ones are checked by the transport.
+pub mod capability {
+    pub const CORE_RPC_V3: &str = "core.rpc.v3";
+    pub const APP_SHUTDOWN: &str = "app.shutdown";
+    pub const APP_DIAGNOSE: &str = "app.diagnose";
+    pub const EVENT_BOOT_ID: &str = "event.bootId";
+    pub const TELEMETRY_BACKPRESSURE: &str = "telemetry.backpressure";
+}
+
+/// Metadata learned during the WebSocket hello exchange.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SessionInfo {
+    pub boot_id: Option<String>,
+    pub capabilities: Vec<String>,
+    pub startup_ms: Option<u64>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RpcRequest {
     pub jsonrpc: String,
@@ -103,12 +121,17 @@ pub struct EventEnvelope {
     pub payload: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seq: Option<u64>,
+    #[serde(rename = "bootId", default, skip_serializing_if = "Option::is_none")]
+    pub boot_id: Option<String>,
     #[serde(skip)]
     pub binary: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RpcCompletion {
+    /// The JSON-RPC request id, so concurrent calls of the same method cannot
+    /// consume each other's completion.
+    pub request_id: RequestId,
     pub method: String,
     pub params: Option<Value>,
     pub response: RpcResponse,
@@ -119,6 +142,7 @@ impl EventEnvelope {
             event: event.into(),
             payload: payload.into(),
             seq: None,
+            boot_id: None,
             binary: None,
         }
     }
@@ -149,6 +173,8 @@ pub mod method {
     pub const APP_PING: &str = "app.ping";
     pub const APP_VERSION: &str = "app.version";
     pub const APP_CHECK_UPDATE: &str = "app.checkUpdate";
+    pub const APP_SHUTDOWN: &str = "app.shutdown";
+    pub const APP_DIAGNOSE: &str = "app.diagnose";
     pub const STATS_GET_SUMMARY: &str = "stats.getSummary";
     pub const STATS_GET_DAILY_SUMMARY: &str = "stats.getDailySummary";
     pub const TASKS_GET_CONFIG: &str = "tasks.getConfig";
@@ -197,9 +223,20 @@ pub mod event {
     pub const TOOL_STATUS: &str = "tool.status";
     pub const DEVICE_STATUS: &str = "device.status";
     pub const LOG_ENTRY: &str = "log.entry";
+    pub const EXECUTION_TASK_STARTED: &str = "execution.taskStarted";
+    pub const EXECUTION_TASK_COMPLETED: &str = "execution.taskCompleted";
+    pub const EXECUTION_CONFIG_DELTA: &str = "execution.configDelta";
+    pub const EXECUTION_RESOURCE_CREATED: &str = "execution.resourceCreated";
+    pub const EXECUTION_RESOURCE_RELEASED: &str = "execution.resourceReleased";
+    pub const EXECUTION_RUNNER_READY: &str = "execution.runnerReady";
+    pub const EXECUTION_FINISHED: &str = "execution.finished";
+    pub const EXECUTION_ERROR: &str = "execution.error";
+    pub const EXECUTION_AFTER_COMPLETION_REQUESTED: &str = "execution.afterCompletionRequested";
     pub const RESOURCE_SYNC_PROGRESS: &str = "resource.sync.progress";
     pub const APP_NOTICE: &str = "app.notice";
+    pub const APP_FOCUS_REQUESTED: &str = "app.focusRequested";
     pub const APP_EXIT_REQUESTED: &str = "app.exitRequested";
+    pub const HEARTBEAT: &str = "heartbeat";
 }
 
 #[cfg(test)]

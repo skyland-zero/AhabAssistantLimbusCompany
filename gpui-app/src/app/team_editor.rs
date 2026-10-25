@@ -2,12 +2,7 @@ use gpui::{AppContext, ClipboardItem, Context, ParentElement as _, Styled as _, 
 use gpui_component::{Root, WindowExt as _};
 
 use super::AhabApp;
-use crate::{
-    app_inputs::TeamInputs,
-    components::TextInput,
-    ipc::{RpcGateway, contract::method},
-    model::TeamDetail,
-};
+use crate::{app_inputs::TeamInputs, components::TextInput, model::TeamDetail};
 
 impl AhabApp {
     pub fn open_new_team(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -247,73 +242,7 @@ impl AhabApp {
     }
 
     pub fn set_team_enabled(&mut self, team: &TeamDetail, enabled: bool, cx: &mut Context<Self>) {
-        if self.teams.rpc.is_sidecar() {
-            let params = match self.teams.begin_team_enabled(team, enabled) {
-                Ok(params) => params,
-                Err(error) => {
-                    self.teams.feedback = Some(error);
-                    cx.notify();
-                    return;
-                }
-            };
-            let team_id = team.id.clone();
-            let rpc = self.teams.rpc.clone();
-            cx.spawn(async move |this, cx| {
-                let request = rpc.request_async(method::TEAM_SAVE, Some(params));
-                let response = cx
-                    .background_executor()
-                    .spawn(async move { request.recv().await.ok() })
-                    .await;
-                let result = match response {
-                    None => Err("后端连接已断开".to_owned()),
-                    Some(response) => match RpcGateway::decode_response(method::TEAM_SAVE, response) {
-                        Err(error) => Err(error.message),
-                        Ok(None) => Err("team.save 返回了空结果".to_owned()),
-                        Ok(Some(value)) if value.as_bool() == Some(true) => {
-                            let list_request = rpc.request_async(method::TEAM_LIST, None);
-                            let list_response = cx
-                                .background_executor()
-                                .spawn(async move { list_request.recv().await.ok() })
-                                .await;
-                            match list_response {
-                                None => Err("team.save 已成功，但无法读取队伍列表".to_owned()),
-                                Some(response) => match RpcGateway::decode_response(
-                                    method::TEAM_LIST,
-                                    response,
-                                ) {
-                                    Err(error) => Err(error.message),
-                                    Ok(None) => Err("team.list 返回了空结果".to_owned()),
-                                    Ok(Some(value)) => {
-                                        let teams: Result<Vec<TeamDetail>, _> =
-                                            serde_json::from_value(value);
-                                        teams
-                                            .map_err(|error| format!("team.list 返回了无效队伍：{error}"))
-                                            .and_then(|teams| {
-                                                teams
-                                                    .into_iter()
-                                                    .find(|team| team.id == team_id)
-                                                    .ok_or_else(|| {
-                                                        "team.save 已成功，但无法从列表定位队伍".to_owned()
-                                                    })
-                                            })
-                                    }
-                                },
-                            }
-                        }
-                        Ok(Some(value)) => serde_json::from_value(value)
-                            .map_err(|error| format!("team.save 返回了无效队伍：{error}")),
-                    },
-                };
-                let _ = this.update(cx, |view, cx| {
-                    match result {
-                        Ok(saved) => view.teams.apply_team_enabled(saved),
-                        Err(error) => view.teams.fail_team_enabled(error),
-                    }
-                    cx.notify();
-                });
-            })
-            .detach();
-        } else if let Err(error) = self.teams.set_team_enabled(team, enabled) {
+        if let Err(error) = self.teams.set_team_enabled(team, enabled) {
             self.teams.feedback = Some(error);
         }
         cx.notify();
@@ -332,116 +261,14 @@ impl AhabApp {
 
     pub fn save_team_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_team_inputs_to_state(window, cx);
-        if self.teams.rpc.is_sidecar() {
-            let (submitted, value) = match self.teams.prepare_save() {
-                Ok(prepared) => prepared,
-                Err(error) => {
-                    self.teams.feedback = Some(error);
-                    cx.notify();
-                    return;
-                }
-            };
-            let rpc = self.teams.rpc.clone();
-            cx.spawn(async move |this, cx| {
-                let request = rpc.request_async(method::TEAM_SAVE, Some(value));
-                let response = cx
-                    .background_executor()
-                    .spawn(async move { request.recv().await.ok() })
-                    .await;
-                let result = match response {
-                    None => Err("后端连接已断开".to_owned()),
-                    Some(response) => {
-                        match RpcGateway::decode_response(method::TEAM_SAVE, response) {
-                            Err(error) => Err(error.message),
-                            Ok(None) => Err("team.save 返回了空结果".to_owned()),
-                            Ok(Some(value)) if value.as_bool() == Some(true) => {
-                                let list_request = rpc.request_async(method::TEAM_LIST, None);
-                                let list_response = cx
-                                    .background_executor()
-                                    .spawn(async move { list_request.recv().await.ok() })
-                                    .await;
-                                match list_response {
-                                    None => Err("team.save 已成功，但无法读取队伍列表".to_owned()),
-                                    Some(response) => match RpcGateway::decode_response(
-                                        method::TEAM_LIST,
-                                        response,
-                                    ) {
-                                        Err(error) => Err(error.message),
-                                        Ok(None) => Err("team.list 返回了空结果".to_owned()),
-                                        Ok(Some(value)) => {
-                                            resolve_saved_team_from_list(value, &submitted)
-                                        }
-                                    },
-                                }
-                            }
-                            Ok(Some(value)) => serde_json::from_value(value)
-                                .map_err(|error| format!("team.save 返回了无效队伍：{error}")),
-                        }
-                    }
-                };
-                let _ = this.update(cx, |view, cx| {
-                    match result {
-                        Ok(saved) => {
-                            view.teams.apply_saved_team(&submitted, saved);
-                            view.clear_team_inputs();
-                        }
-                        Err(error) => view.teams.fail_save(error),
-                    }
-                    cx.notify();
-                });
-            })
-            .detach();
-        } else {
-            match self.teams.save_editor() {
-                Ok(()) => self.clear_team_inputs(),
-                Err(error) => self.teams.feedback = Some(error),
-            }
+        if let Err(error) = self.teams.save_editor() {
+            self.teams.feedback = Some(error);
         }
         cx.notify();
     }
 
     pub fn confirm_delete(&mut self, cx: &mut Context<Self>) {
-        if self.teams.rpc.is_sidecar() {
-            let team = match self.teams.prepare_delete() {
-                Ok(team) => team,
-                Err(error) => {
-                    self.teams.feedback = Some(error);
-                    cx.notify();
-                    return;
-                }
-            };
-            let team_id = team.id.clone();
-            let rpc = self.teams.rpc.clone();
-            cx.spawn(async move |this, cx| {
-                let request = rpc.request_async(
-                    method::TEAM_DELETE,
-                    Some(serde_json::json!({"id": team_id.clone()})),
-                );
-                let response = cx
-                    .background_executor()
-                    .spawn(async move { request.recv().await.ok() })
-                    .await;
-                let result = match response {
-                    None => Err("后端连接已断开".to_owned()),
-                    Some(response) => {
-                        match RpcGateway::decode_response(method::TEAM_DELETE, response) {
-                            Err(error) => Err(error.message),
-                            Ok(Some(value)) if value.as_bool() == Some(true) => Ok(()),
-                            Ok(Some(_)) => Err("team.delete 返回了无效结果".to_owned()),
-                            Ok(None) => Err("team.delete 返回了空结果".to_owned()),
-                        }
-                    }
-                };
-                let _ = this.update(cx, |view, cx| {
-                    match result {
-                        Ok(()) => view.teams.apply_deleted_team(&team_id),
-                        Err(error) => view.teams.fail_delete(error),
-                    }
-                    cx.notify();
-                });
-            })
-            .detach();
-        } else if let Err(error) = self.teams.confirm_delete() {
+        if let Err(error) = self.teams.confirm_delete() {
             self.teams.feedback = Some(error);
         }
         cx.notify();
@@ -670,7 +497,7 @@ impl AhabApp {
         self.team_inputs.subscriptions.push(normal_subscription);
     }
 
-    fn clear_team_inputs(&mut self) {
+    pub(crate) fn clear_team_inputs(&mut self) {
         self.team_inputs = TeamInputs::default();
     }
 
@@ -735,32 +562,4 @@ impl AhabApp {
             input.update(cx, |input, cx| input.set_text(normal_refresh, window, cx));
         }
     }
-}
-
-fn resolve_saved_team_from_list(
-    value: serde_json::Value,
-    submitted: &TeamDetail,
-) -> Result<TeamDetail, String> {
-    let teams: Vec<TeamDetail> = serde_json::from_value(value)
-        .map_err(|error| format!("team.list 返回了无效队伍：{error}"))?;
-    let exact = teams
-        .iter()
-        .into_iter()
-        .find(|team| {
-            team.id.as_str() == submitted.id.as_str()
-                || (submitted.id.is_empty()
-                    && team.name == submitted.name
-                    && team.purpose == submitted.purpose
-                    && team.sinners == submitted.sinners)
-        })
-        .cloned();
-    exact
-        .or_else(|| {
-            teams.into_iter().rev().find(|team| {
-                submitted.id.is_empty()
-                    && team.name == submitted.name
-                    && team.purpose == submitted.purpose
-            })
-        })
-        .ok_or_else(|| "team.save 已成功，但无法从列表定位队伍".to_owned())
 }

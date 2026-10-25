@@ -13,8 +13,30 @@ impl MockState {
         self.handle(request)
     }
 
+    pub fn submit(&mut self, method_name: &str, params: Option<Value>) {
+        let request = RpcRequest::new(self.sequence.next(), method_name, params);
+        let request_id = request.id;
+        let method = request.method.clone();
+        let params = request.params.clone();
+        let response = self.handle(request);
+        if self.completions.len() >= 512 {
+            self.completions.pop_front();
+        }
+        self.completions
+            .push_back(super::super::contract::RpcCompletion {
+                request_id,
+                method,
+                params,
+                response,
+            });
+    }
+
     pub fn take_events(&mut self) -> Vec<EventEnvelope> {
         std::mem::take(&mut self.events)
+    }
+
+    pub fn take_completions(&mut self) -> Vec<super::super::contract::RpcCompletion> {
+        self.completions.drain(..).collect()
     }
 
     fn params<T: serde::de::DeserializeOwned>(
@@ -89,6 +111,25 @@ impl MockState {
                 "status": "up_to_date",
                 "updateAvailable": false,
                 "latest": env!("CARGO_PKG_VERSION")
+            })),
+            method::APP_SHUTDOWN => Ok(json!(true)),
+            method::APP_DIAGNOSE => Ok(json!({
+                "schemaVersion": 3,
+                "version": env!("CARGO_PKG_VERSION"),
+                "bootId": "mock-boot",
+                "pid": std::process::id(),
+                "capabilities": [
+                    "core.rpc.v3",
+                    "app.shutdown",
+                    "app.diagnose",
+                    "event.bootId",
+                    "telemetry.backpressure"
+                ],
+                "clients": 1,
+                "inflightRequests": 0,
+                "outboundDepth": 0,
+                "droppedEvents": 0,
+                "uptimeMs": 0
             })),
             method::STATS_GET_SUMMARY => Ok(serde_json::to_value(&self.stats).unwrap()),
             method::STATS_GET_DAILY_SUMMARY => Ok(serde_json::to_value(DailyStatsPayload {
