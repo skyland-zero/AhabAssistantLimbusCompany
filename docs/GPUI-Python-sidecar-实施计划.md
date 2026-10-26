@@ -1,6 +1,6 @@
 # GPUI + Python sidecar 最终迁移实施计划
 
-> 依据：`项目目录精简分析.md`
+> 依据：`docs/archive/项目目录精简分析.md`
 >
 > 目标平台：Windows x64
 >
