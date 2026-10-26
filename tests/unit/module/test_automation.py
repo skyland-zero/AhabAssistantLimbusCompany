@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import psutil
 from PIL import Image
 
 from module.automation.automation import Automation
@@ -142,6 +143,35 @@ def test_wait_for_fresh_frame_true_without_frame_seq_transport() -> None:
     automation = _automation_with_frame(Image.new("RGB", (4, 4), (0, 0, 0)), handler=object())
 
     assert automation.wait_for_fresh_frame(timeout=0.1) is True
+
+
+def test_memory_pressure_probe_is_throttled(monkeypatch) -> None:
+    automation = object.__new__(Automation)
+    automation.memory_protection = True
+    automation._memory_check_interval = 5.0
+    automation._last_memory_check = 0.0
+    automation._memory_percent = 0.0
+    calls: list[int] = []
+
+    def fake_virtual_memory():
+        calls.append(1)
+        return SimpleNamespace(percent=95)
+
+    monkeypatch.setattr(psutil, "virtual_memory", fake_virtual_memory)
+    with patch.object(automation, "clear_img_cache") as clear:
+        automation._check_memory_pressure()
+        automation._check_memory_pressure()
+
+    assert len(calls) == 1
+    clear.assert_called_once_with(collect=False)
+
+
+def test_click_position_does_not_materialize_the_full_screenshot() -> None:
+    automation = object.__new__(Automation)
+    automation.screenshot = Image.new("L", (200, 100), 128)
+
+    with patch("module.automation.automation.np.array", side_effect=AssertionError("unexpected copy")):
+        assert automation.calculate_click_position((10, 20), offset=False) == (10, 20)
 
 
 def test_is_usable_image_rejects_empty_inputs() -> None:

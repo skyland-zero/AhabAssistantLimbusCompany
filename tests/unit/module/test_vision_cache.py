@@ -4,6 +4,7 @@ import threading
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import numpy as np
 from PIL import Image
 
 from module.automation.automation import Automation
@@ -194,3 +195,75 @@ def test_multiple_target_match_returns_a_copy_of_the_cached_list() -> None:
 
     assert second == matches
     match.assert_called_once()
+
+
+def _ocr_result(txts, centers, scores=None):
+    boxes = []
+    for x, y in centers:
+        boxes.append([[x - 5, y - 5], [x + 5, y - 5], [x + 5, y + 5], [x - 5, y + 5]])
+    payload = {"txts": txts, "boxes": boxes}
+    if scores is not None:
+        payload["scores"] = scores
+    return SimpleNamespace(**payload)
+
+
+def test_ocr_matching_prefers_exact_text_and_keeps_duplicate_entries() -> None:
+    automation = make_automation(Image.new("L", (200, 200), 128))
+    result = _ocr_result(["10", "1", "1"], [(105, 10), (10, 20), (30, 20)], scores=(0.99, 0.90, 0.95))
+
+    with patch("module.automation.automation.ocr.run", return_value=result):
+        assert automation.find_text_element("1") == [30.0, 20.0]
+        assert automation.find_text_element("10") == [105.0, 10.0]
+
+
+def test_ocr_matching_rejects_longer_numeric_strings() -> None:
+    automation = make_automation(Image.new("L", (200, 200), 128))
+    automation._last_ocr_entries = [
+        ("1000", [10.0, 10.0], (0, 0, 20, 20), 0.99),
+        ("100%", [30.0, 30.0], (20, 20, 40, 40), 0.90),
+    ]
+
+    assert automation.find_str_in_text("100", {"1000": [10.0, 10.0], "100%": [30.0, 30.0]}) == [30.0, 30.0]
+
+    automation._last_ocr_entries = [("10", [10.0, 10.0], (0, 0, 20, 20), 0.99)]
+    assert automation.find_str_in_text("1", {"10": [10.0, 10.0]}) is False
+
+
+def test_ocr_matching_normalizes_full_width_and_team_separator() -> None:
+    automation = make_automation(Image.new("L", (200, 200), 128))
+    automation._last_ocr_entries = [("ＴＥＡＭＳ　＃５", [12.0, 34.0], (0, 0, 20, 20), 0.9)]
+
+    assert automation.find_str_in_text("TEAMS #5", {"ＴＥＡＭＳ　＃５": [12.0, 34.0]}) == [12.0, 34.0]
+
+
+def test_empty_ocr_target_never_matches_the_first_box() -> None:
+    automation = make_automation(Image.new("L", (200, 200), 128))
+    automation._last_ocr_entries = [("anything", [1.0, 2.0], (0, 0, 1, 1), 1.0)]
+
+    assert automation.find_str_in_text("", {"anything": [1.0, 2.0]}) is False
+
+
+def test_assets_bbox_is_not_reapplied_after_my_crop() -> None:
+    rng = np.random.default_rng(1)
+    template = rng.integers(0, 255, (20, 20), dtype=np.uint8)
+    frame = np.zeros((200, 200), dtype=np.uint8)
+    frame[100:120, 100:120] = template
+    automation = make_automation(Image.fromarray(frame))
+
+    with (
+        patch.object(automation, "_path_state_is_known", return_value=True),
+        patch.object(automation, "_match_cache_state_key", return_value=("state",)),
+        patch("module.automation.automation.ImageUtils.existing_image_paths", return_value=["fake"]),
+        patch.object(
+            automation,
+            "_load_template_for_path",
+            return_value=(template, (100, 100, 120, 120)),
+        ),
+    ):
+        # The absolute asset bbox starts outside this crop; using it as a
+        # crop-relative region used to make the match fail.
+        assert automation.find_image_element(
+            "fake_assets.png",
+            threshold=0.8,
+            my_crop=(80, 80, 140, 140),
+        ) == (110, 110)

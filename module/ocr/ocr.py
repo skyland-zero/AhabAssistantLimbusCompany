@@ -50,11 +50,12 @@ class OCR(metaclass=SingletonMeta):
                 with Image.open(image) as image_file:
                     image_array = np.array(image_file)
             elif isinstance(image, Image.Image):
-                image_array = np.array(image)
+                # PIL 图像只读；asarray 对 L 模式可避免整帧复制。
+                image_array = np.asarray(image)
             elif isinstance(image, np.ndarray):
                 image_array = image
             else:
-                image_array = np.array(image)
+                image_array = np.asarray(image)
 
             if image_array.ndim == 2:
                 img_cv_gray = image_array
@@ -63,11 +64,10 @@ class OCR(metaclass=SingletonMeta):
                 if channel_count == 1:
                     img_cv_gray = image_array[:, :, 0]
                 elif channel_count == 3:
-                    img_cv = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
-                    img_cv_gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                    # 直接 RGB->灰度，避免 RGB->BGR->灰度的一次全图复制。
+                    img_cv_gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
                 elif channel_count == 4:
-                    img_cv = cv2.cvtColor(image_array, cv2.COLOR_RGBA2BGR)
-                    img_cv_gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                    img_cv_gray = cv2.cvtColor(image_array, cv2.COLOR_RGBA2GRAY)
                 else:
                     raise ValueError(f"不支持的图像通道数: {channel_count}")
             else:

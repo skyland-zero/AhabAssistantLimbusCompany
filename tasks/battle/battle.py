@@ -42,6 +42,7 @@ def _battle_ui_crops() -> dict[str, tuple[int, int, int, int]]:
     width = int(height * 16 / 9)
     return {
         "win_rate": (int(width * 0.58), int(height * 0.65), int(width * 0.82), height),
+        "win_rate_text": (int(width * 0.50), int(height * 0.55), width, height),
         "gear_right": (int(width * 0.52), int(height * 0.62), int(width * 0.82), int(height * 0.98)),
         "gear_left": (int(width * 0.15), int(height * 0.62), int(width * 0.42), int(height * 0.98)),
         "in_mirror": (int(width * 0.72), int(height * 0.04), int(width * 0.92), int(height * 0.28)),
@@ -390,7 +391,7 @@ class Battle:
             self.defense_all_time = defense_all_time
         if defense_on_turn1:
             defense_first_round = True
-            turn_ocr_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/turn_ocr_assets.png"))
+            turn_ocr_bbox = ImageUtils.get_bbox_from_path("battle/turn_ocr_assets.png")
 
         begin_battle_observation = getattr(defense_for_solo_state, "begin_battle", None)
         if callable(begin_battle_observation):
@@ -559,7 +560,7 @@ class Battle:
             if fail_count >= 10 or self.identify_keyword_turn is False:
                 # 如果多次识别不到战斗界面
                 try:
-                    turn_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/turn_assets.png"))
+                    turn_bbox = ImageUtils.get_bbox_from_path("battle/turn_assets.png")
                     sc = ImageUtils.crop(np.array(auto.screenshot), turn_bbox)
                     sc = cv2.inRange(sc, 50, 255)
                     result = ocr.run(sc)
@@ -591,7 +592,7 @@ class Battle:
                 if not infinite_battle:
                     auto.mouse_to_blank()
                 try:
-                    turn_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/turn_assets.png"))
+                    turn_bbox = ImageUtils.get_bbox_from_path("battle/turn_assets.png")
                     sc = ImageUtils.crop(np.array(auto.screenshot), turn_bbox)
                     sc = cv2.inRange(sc, 50, 255)
                     result = ocr.run(sc)
@@ -612,7 +613,7 @@ class Battle:
             if chance == 1:
                 if not infinite_battle:
                     auto.mouse_to_blank()
-                if auto.find_language_text("胜率", "rate"):
+                if auto.find_language_text("胜率", "rate", my_crop=crops["win_rate_text"]):
                     perform_battle_operation()
                     chance = self.INIT_CHANCE
                     waiting = self._update_wait_time(waiting, False, total_count)
@@ -646,7 +647,7 @@ class Battle:
                         "event/select_first_option_assets.png",
                         find_type="image_with_multiple_targets",
                     )
-                    finishes_bbox = ImageUtils.get_bbox(ImageUtils.load_image("event/continue_assets.png"))
+                    finishes_bbox = ImageUtils.get_bbox_from_path("event/continue_assets.png")
                     if auto.find_text_element(
                         [
                             "conti",

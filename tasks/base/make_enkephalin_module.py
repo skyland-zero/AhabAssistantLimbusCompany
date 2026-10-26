@@ -43,7 +43,7 @@ def get_current_enkephalin():
     from module.ocr import ocr
     from utils.image_utils import ImageUtils
 
-    enkephalin_bbox = ImageUtils.get_bbox(ImageUtils.load_image("enkephalin/enkephalin_now_bbox.png"))
+    enkephalin_bbox = ImageUtils.get_bbox_from_path("enkephalin/enkephalin_now_bbox.png")
     for _ in range(5):
         try:
             while auto.take_screenshot() is None:

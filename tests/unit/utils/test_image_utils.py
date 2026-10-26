@@ -82,6 +82,29 @@ def test_non_max_suppression_filters_overlap_and_low_confidence() -> None:
     assert kept == [0, 2]
 
 
+def test_bbox_from_path_is_cached_until_cleared(monkeypatch) -> None:
+    calls: list[str] = []
+    image = np.zeros((10, 10), dtype=np.uint8)
+    image[2:5, 3:7] = 255
+
+    def fake_load(path, **_kwargs):
+        calls.append(path)
+        return image
+
+    monkeypatch.setattr(ImageUtils, "load_image", fake_load)
+    ImageUtils.clear_bbox_cache()
+    try:
+        assert ImageUtils.get_bbox_from_path("asset.png") == (3, 2, 7, 5)
+        assert ImageUtils.get_bbox_from_path("asset.png") == (3, 2, 7, 5)
+        assert calls == ["asset.png"]
+
+        ImageUtils.clear_bbox_cache()
+        assert ImageUtils.get_bbox_from_path("asset.png") == (3, 2, 7, 5)
+        assert calls == ["asset.png", "asset.png"]
+    finally:
+        ImageUtils.clear_bbox_cache()
+
+
 def test_non_max_suppression_handles_empty_inputs() -> None:
     assert ImageUtils.non_max_suppression([], [], score_threshold=0.5) == []
 

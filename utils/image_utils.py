@@ -13,6 +13,12 @@ from utils.path_manager import path_manager
 
 
 class ImageUtils:
+    # ``_assets.png`` templates are full-screen reference frames; their content
+    # bbox is stable until the window size / theme / language changes.  Several
+    # battle and shop loops used to reload and re-measure the same asset on
+    # every iteration, so keep the bbox next to the existing template cache.
+    _bbox_cache: dict[tuple, tuple[int, int, int, int] | None] = {}
+
     @staticmethod
     def load_image(image_path, resize=True, return_path=False):
         """
@@ -163,6 +169,37 @@ class ImageUtils:
         y = np.where(np.max(image, axis=1) > threshold)[0]
         # 返回有效区域的边界框坐标
         return x[0], y[0], x[-1] + 1, y[-1] + 1
+
+    @staticmethod
+    def get_bbox_from_path(image_path):
+        """Load an asset once and return its content bbox for the active state."""
+
+        state_key = (
+            image_path,
+            tuple(path_manager.pic_path),
+            path_manager.current_theme,
+            path_manager.current_language,
+            float(getattr(cfg, "set_win_size", 0) or 0),
+        )
+        if state_key in ImageUtils._bbox_cache:
+            return ImageUtils._bbox_cache[state_key]
+
+        image = ImageUtils.load_image(image_path)
+        bbox = None
+        if image is not None:
+            try:
+                bbox = tuple(int(value) for value in ImageUtils.get_bbox(image))
+            except Exception as error:
+                log.debug(f"计算图片边界失败: {image_path} ({error})")
+                bbox = None
+        ImageUtils._bbox_cache[state_key] = bbox
+        return bbox
+
+    @staticmethod
+    def clear_bbox_cache() -> None:
+        """Drop cached reference-frame bboxes after a resource state change."""
+
+        ImageUtils._bbox_cache.clear()
 
     @staticmethod
     def crop(image, area, copy=True):

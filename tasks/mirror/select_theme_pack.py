@@ -168,8 +168,8 @@ def select_theme_pack(
             if loop_count < 0:
                 break
             if loop_count < 5:
-                normal_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/theme_pack/normal_assets.png"))
-                hard_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/theme_pack/hard_assets.png"))
+                normal_bbox = ImageUtils.get_bbox_from_path("mirror/theme_pack/normal_assets.png")
+                hard_bbox = ImageUtils.get_bbox_from_path("mirror/theme_pack/hard_assets.png")
                 difficulty_bbox = [
                     min(normal_bbox[0], hard_bbox[0]),
                     min(normal_bbox[1], hard_bbox[1]),
@@ -195,7 +195,7 @@ def select_theme_pack(
                 sleep(2)  # 等待卡包加载动画完成
                 continue
             elif difficulty == "normal":
-                normal_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/theme_pack/normal_assets.png"))
+                normal_bbox = ImageUtils.get_bbox_from_path("mirror/theme_pack/normal_assets.png")
                 auto.mouse_click(
                     (normal_bbox[0] + normal_bbox[2]) // 2,
                     (normal_bbox[1] + normal_bbox[3]) // 2,
@@ -207,7 +207,7 @@ def select_theme_pack(
                 sleep(2)  # 等待卡包加载动画完成
                 continue
             elif difficulty == "hard":
-                hard_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/theme_pack/hard_assets.png"))
+                hard_bbox = ImageUtils.get_bbox_from_path("mirror/theme_pack/hard_assets.png")
                 auto.mouse_click(
                     (hard_bbox[0] + hard_bbox[2]) // 2,
                     (hard_bbox[1] + hard_bbox[3]) // 2,

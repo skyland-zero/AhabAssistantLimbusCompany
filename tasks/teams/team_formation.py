@@ -5,6 +5,7 @@ from module.config import cfg
 from module.decorator.decorator import begin_and_finish_time_log
 from module.device_manager import is_simulator_runtime
 from module.logger import log
+from utils.image_utils import ImageUtils
 
 SIMULATOR_ORDERED_TEAM_PAGE_SWIPE_DISTANCE = 375
 WINDOWS_ORDERED_TEAM_PAGE_SWIPE_DISTANCE = 400
@@ -181,10 +182,9 @@ def deal_with_spills():
     import numpy as np
 
     from module.ocr import ocr
-    from utils.image_utils import ImageUtils
 
     scale = cfg.set_win_size / 1440
-    sinner_nums_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/normal_to_battle_assets.png"))
+    sinner_nums_bbox = ImageUtils.get_bbox_from_path("battle/normal_to_battle_assets.png")
     sinner_nums_bbox = (
         sinner_nums_bbox[0],
         sinner_nums_bbox[1] - 115 * scale,
@@ -250,11 +250,33 @@ def deal_with_spills():
         pass
 
 
+def _team_count_crop():
+    """Limit the deployed-count OCR to the area above the battle button.
+
+    The counter sits next to the same bottom-right button as
+    ``normal_to_battle_assets.png``; using that reference keeps the crop valid
+    across resolutions and avoids a full-screen OCR every battle.
+    """
+
+    scale = cfg.set_win_size / 1440
+    bbox = ImageUtils.get_bbox_from_path("battle/normal_to_battle_assets.png")
+    if bbox is None:
+        return None
+    width = int(cfg.set_win_size * 16 / 9)
+    height = int(cfg.set_win_size)
+    return (
+        max(0, int(bbox[0] - 120 * scale)),
+        max(0, int(bbox[1] - 260 * scale)),
+        min(width, int(bbox[2] + 150 * scale)),
+        min(height, int(bbox[1] + 40 * scale)),
+    )
+
+
 @begin_and_finish_time_log(task_name="检查队伍剩余战斗力")
 def check_team():
     # 至少还有5人可以战斗
     sinner_nums = [f"{a}/{b}" for b in range(5, 10) for a in range(5, b + 1)]
-    if auto.find_element(sinner_nums, find_type="text"):
+    if auto.find_element(sinner_nums, find_type="text", my_crop=_team_count_crop()):
         return True
     else:
         return False

@@ -12,7 +12,8 @@ Global:
     min_height: 30
     width_height_ratio: 8
     min_side_len: 30
-    max_side_len: 1600 # 限制最大边长为1600px
+    # 上限与 ocr.py 的 900px 预处理保持一致；短图不再被 min 模式放大。
+    max_side_len: 900
 
     return_word_box: false
     return_single_char_box: false
@@ -81,8 +82,10 @@ Det:
     model_path: null
     model_dir: null
 
-    limit_side_len: 736
-    limit_type: min
+    # max + 900 只缩小、不放大。旧配置 min + 736 会把 300x60 的横条
+    # 拉到 3680x736，是 OCR 小图延迟的主要来源。
+    limit_side_len: 900
+    limit_type: max
     std: [ 0.5, 0.5, 0.5 ]
     mean: [ 0.5, 0.5, 0.5 ]
 

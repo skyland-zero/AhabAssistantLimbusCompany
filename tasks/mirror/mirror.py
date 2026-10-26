@@ -377,7 +377,7 @@ class Mirror:
         return team_formation(self.sinner_team, self.chosen_sinners)
 
     def _parallel_mode_bbox(self):
-        bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_to_mir/infinity_mirror_bbox.png"))
+        bbox = ImageUtils.get_bbox_from_path("mirror/road_to_mir/infinity_mirror_bbox.png")
         return (
             bbox[2] - 70,
             bbox[1],
@@ -446,11 +446,10 @@ class Mirror:
 
         votes: list[int] = []
 
-        floor_image = ImageUtils.load_image("mirror/road_in_mir/get_floor_bbox.png")
-        if floor_image is None:
+        floor_bbox = ImageUtils.get_bbox_from_path("mirror/road_in_mir/get_floor_bbox.png")
+        if floor_bbox is None:
             log.warning("无法加载镜牢楼层标题识别区域")
             return None
-        floor_bbox = ImageUtils.get_bbox(floor_image)
         padding = max(12, int(round((floor_bbox[3] - floor_bbox[1]) * 0.5)))
         padded_floor_bbox = (
             floor_bbox[0] - padding,
@@ -796,9 +795,7 @@ class Mirror:
         start_time = time.time()
         vision_profiler.reset()
         self._next_event_effect_check_at = 0.0
-        self.observe_bbox = ImageUtils.get_bbox(
-            ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/observe_bbox.png")
-        )
+        self.observe_bbox = ImageUtils.get_bbox_from_path("mirror/road_to_mir/observe_ego_gift/observe_bbox.png")
 
         if auto.click_element("home/drive_assets.png") or auto.find_element("home/window_assets.png"):
             sleep(0.5)
@@ -829,9 +826,7 @@ class Mirror:
             if auto.find_element("mirror/claim_reward/battle_statistics_assets.png"):
                 self._clear_entering_node_state()
                 if auto.click_element("mirror/claim_reward/claim_rewards_assets.png") is False:
-                    claim_rewards_bbox = ImageUtils.get_bbox(
-                        ImageUtils.load_image("mirror/claim_reward/claim_rewards_assets.png")
-                    )
+                    claim_rewards_bbox = ImageUtils.get_bbox_from_path("mirror/claim_reward/claim_rewards_assets.png")
                     auto.mouse_click(
                         (claim_rewards_bbox[0] + claim_rewards_bbox[2]) / 2,
                         (claim_rewards_bbox[1] + claim_rewards_bbox[3]) / 2,
@@ -1032,7 +1027,7 @@ class Mirror:
                 continue
             elif main_loop_count < 10:
                 # 连续未能识别界面（濒临超时卡死）时的 OCR 终极兜底，保证极端情况防卡死
-                turn_bbox = ImageUtils.get_bbox(ImageUtils.load_image("battle/turn_assets.png"))
+                turn_bbox = ImageUtils.get_bbox_from_path("battle/turn_assets.png")
                 turn_ocr_result = auto.find_text_element("turn", turn_bbox)
                 if turn_ocr_result is not False:
                     self._fight()
@@ -1221,8 +1216,8 @@ class Mirror:
             if failed:
                 auto.mouse_click_blank()
                 sleep(0.5)
-                complete_mirror_bbox = ImageUtils.get_bbox(
-                    ImageUtils.load_image("mirror/claim_reward/complete_mirror_100%_assets.png")
+                complete_mirror_bbox = ImageUtils.get_bbox_from_path(
+                    "mirror/claim_reward/complete_mirror_100%_assets.png"
                 )
                 if auto.find_text_element("100", complete_mirror_bbox):
                     failed = False
@@ -1272,7 +1267,7 @@ class Mirror:
                                 auto.mouse_click(position[0], position[1])
 
                     auto.take_screenshot()
-                    coins_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/claim_reward/coins_bbox.png"))
+                    coins_bbox = ImageUtils.get_bbox_from_path("mirror/claim_reward/coins_bbox.png")
                     for _ in range(5):
                         try:
                             sc = ImageUtils.crop(np.array(auto.screenshot), coins_bbox)
@@ -1349,8 +1344,8 @@ class Mirror:
                 log.debug("结算已回到主界面且已读取通行证经验，撤销失败标记")
             else:
                 try:
-                    complete_mirror_bbox = ImageUtils.get_bbox(
-                        ImageUtils.load_image("mirror/claim_reward/complete_mirror_100%_assets.png")
+                    complete_mirror_bbox = ImageUtils.get_bbox_from_path(
+                        "mirror/claim_reward/complete_mirror_100%_assets.png"
                     )
                     if auto.find_text_element("100", complete_mirror_bbox):
                         failed = False
@@ -1738,9 +1733,7 @@ class Mirror:
         # 体系之间的间距
         system_distance = second_point[0] - first_point[0]
 
-        gift_box = ImageUtils.get_bbox(
-            ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/gift_box_bbox.png")
-        )
+        gift_box = ImageUtils.get_bbox_from_path("mirror/road_to_mir/observe_ego_gift/gift_box_bbox.png")
 
         # 选择观测饰品
         for gift_id in self.observe_ego_gift_selected:
@@ -1796,9 +1789,7 @@ class Mirror:
 
         # 观测饰品选择完毕
         for _ in range(5):
-            bbox = ImageUtils.get_bbox(
-                ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/select_gift_bbox.png")
-            )
+            bbox = ImageUtils.get_bbox_from_path("mirror/road_to_mir/observe_ego_gift/select_gift_bbox.png")
             ocr_result = auto.find_language_text("选择", "select", bbox)
             if ocr_result:
                 auto.mouse_click((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
@@ -1813,9 +1804,7 @@ class Mirror:
             )
 
         for _ in range(3):
-            bbox = ImageUtils.get_bbox(
-                ImageUtils.load_image("mirror/road_to_mir/observe_ego_gift/reject_gift_bbox.png")
-            )
+            bbox = ImageUtils.get_bbox_from_path("mirror/road_to_mir/observe_ego_gift/reject_gift_bbox.png")
             ocr_result = auto.find_language_text("拒绝", "reject", bbox)
             if ocr_result:
                 auto.mouse_click((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
@@ -2019,7 +2008,7 @@ class Mirror:
                     retry()
                 event_chance -= 1
             if event_chance < 0:
-                finishes_bbox = ImageUtils.get_bbox(ImageUtils.load_image("event/continue_assets.png"))
+                finishes_bbox = ImageUtils.get_bbox_from_path("event/continue_assets.png")
                 if auto.find_text_element(
                     [
                         "continue",
@@ -2316,7 +2305,7 @@ class Mirror:
                     my_list = [gift[3] for gift in my_list]
                     if owned_gifts:
                         log.debug(f"检测到{owned_gifts}个已持有EGO饰品，已降低选择优先级")
-                select_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/road_in_mir/ego_gift_get_bbox.png"))
+                select_bbox = ImageUtils.get_bbox_from_path("mirror/road_in_mir/ego_gift_get_bbox.png")
                 if select_bbox:
                     select_bbox = (
                         max(select_bbox[0] - 100, 0),  # 确保左上角 x 坐标不小于 0

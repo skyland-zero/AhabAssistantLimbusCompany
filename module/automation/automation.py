@@ -1,8 +1,10 @@
 import gc
 import math
 import random
+import re
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, List
 
@@ -56,6 +58,11 @@ class Automation(metaclass=SingletonMeta):
         self._screenshot_array_cache = {}
         self._ocr_cache = {}
         self._match_result_cache = {}
+        self._last_ocr_box_dict = {}
+        self._last_ocr_entries = []
+        self._last_memory_check = 0.0
+        self._memory_check_interval = 5.0
+        self._memory_percent = 0.0
         self._input_lock = threading.RLock()
         self._interaction_gate = threading.Event()
         self._interaction_gate.set()
@@ -608,10 +615,18 @@ class Automation(metaclass=SingletonMeta):
         """
         # TODO:后续适配无需窗口设置模式
         x, y = coordinates
-        screenshot = np.array(self.screenshot)
+        screenshot = self.screenshot
+        if screenshot is None:
+            return x, y
+        screenshot_size = getattr(screenshot, "size", None)
+        if isinstance(screenshot_size, tuple) and len(screenshot_size) >= 2:
+            width, height = screenshot_size[0], screenshot_size[1]
+        else:
+            shape = getattr(screenshot, "shape", (0, 0))
+            height, width = (shape[0], shape[1]) if len(shape) >= 2 else (0, 0)
         if offset:
-            x = max(0, min(screenshot.shape[1], x + random.randint(-10, 10)))
-            y = max(0, min(screenshot.shape[0], y + random.randint(-10, 10)))
+            x = max(0, min(width, x + random.randint(-10, 10)))
+            y = max(0, min(height, y + random.randint(-10, 10)))
         return x, y
 
     def mouse_action_with_pos(
@@ -872,7 +887,7 @@ class Automation(metaclass=SingletonMeta):
             crop_offset = (0, 0)
             if my_crop:
                 crop_offset = (int(round(my_crop[0])), int(round(my_crop[1])))
-                screenshot = ImageUtils.crop(screenshot, my_crop)
+                screenshot = ImageUtils.crop(screenshot, my_crop, copy=False)
                 if not self._is_usable_image(screenshot):
                     return []
             matches = ImageUtils.match_template_with_multiple_targets(
@@ -895,10 +910,74 @@ class Automation(metaclass=SingletonMeta):
             log.error(f"寻找图片出错:{e}")
             return []
 
-    def find_str_in_text(self, target, ocr_dict):
+    @staticmethod
+    def _normalize_ocr_text(value) -> str:
+        """Normalize full-width characters, case, spaces and team '#' separators."""
+
+        if value is None:
+            return ""
+        text = unicodedata.normalize("NFKC", str(value)).casefold()
+        return "".join(text.split()).replace("#", "")
+
+    def _best_ocr_entry(self, target, entries):
+        """Return the strongest OCR entry for ``target``.
+
+        Match priority is exact text, digit-boundary match, then substring.
+        Digit-bearing targets deliberately skip the plain substring fallback:
+        searching for ``1`` or ``0/1`` must not select ``10`` or ``0/10``.
+        """
+
+        target_norm = self._normalize_ocr_text(target)
+        if not target_norm or not entries:
+            return None
+        target_has_digit = any(char.isdigit() for char in target_norm)
+        boundary_pattern = None
+        if target_has_digit and not (target_norm.isdigit() and len(target_norm) == 1):
+            boundary_pattern = re.compile(r"(?<!\d)" + re.escape(target_norm) + r"(?!\d)")
+
+        best_key = None
+        best_entry = None
+        for index, entry in enumerate(entries):
+            text, _position, _box, score = entry
+            text_norm = self._normalize_ocr_text(text)
+            if not text_norm:
+                continue
+            if text_norm == target_norm:
+                rank = 0
+            elif boundary_pattern is not None and boundary_pattern.search(text_norm):
+                rank = 1
+            elif not target_has_digit and target_norm in text_norm:
+                rank = 2
+            else:
+                continue
+            try:
+                numeric_score = float(score)
+            except (TypeError, ValueError):
+                numeric_score = 0.0
+            key = (rank, -numeric_score, index)
+            if best_key is None or key < best_key:
+                best_key = key
+                best_entry = entry
+        return best_entry
+
+    def find_str_in_text(self, target, ocr_dict, entries=None):
         """
         返回目标文本的坐标
         """
+        if entries is None:
+            entries = getattr(self, "_last_ocr_entries", None)
+        entry = self._best_ocr_entry(target, entries) if entries else None
+        if entry is not None:
+            log.debug(f"识别到目标：{entry[0]},坐标为：{entry[1]}")
+            return entry[1]
+        if not target:
+            return False
+        # When structured entries are available, never let a digit-bearing
+        # target fall back to the old substring scan: that is exactly how
+        # "1" used to select "10/12".
+        if entries is not None and any(char.isdigit() for char in self._normalize_ocr_text(target)):
+            return False
+        # Compatibility fallback for callers that provide a plain OCR dict.
         for text in ocr_dict.keys():
             if target.lower() in text.lower():
                 log.debug(f"识别到目标：{text},坐标为：{ocr_dict[text]}")
@@ -933,12 +1012,15 @@ class Automation(metaclass=SingletonMeta):
 
             ocr_texts = getattr(ocr_result, "txts", None)
             ocr_boxes = getattr(ocr_result, "boxes", None)
+            ocr_scores = getattr(ocr_result, "scores", None)
             ocr_text_list = list(ocr_texts) if ocr_texts is not None else []
             ocr_position_list = []
             ocr_box_list = []
+            ocr_entries = []
             crop_offset_x = float(my_crop[0]) if my_crop is not None else 0.0
             crop_offset_y = float(my_crop[1]) if my_crop is not None else 0.0
-            for box in ocr_boxes if ocr_boxes is not None else []:
+            score_list = list(ocr_scores) if ocr_scores is not None else []
+            for index, box in enumerate(ocr_boxes if ocr_boxes is not None else []):
                 x = (box[0][0] + box[2][0]) / 2 + crop_offset_x
                 y = (box[0][1] + box[2][1]) / 2 + crop_offset_y
                 ocr_position_list.append([x, y])
@@ -947,9 +1029,24 @@ class Automation(metaclass=SingletonMeta):
                 xmax = max(p[0] for p in box) + crop_offset_x
                 ymax = max(p[1] for p in box) + crop_offset_y
                 ocr_box_list.append((xmin, ymin, xmax, ymax))
-            ocr_dict = {text: position for text, position in zip(ocr_text_list, ocr_position_list)}
-            ocr_box_dict = {text: b for text, b in zip(ocr_text_list, ocr_box_list)}
-            cached = (ocr_dict, ocr_text_list, ocr_box_dict)
+                score = score_list[index] if index < len(score_list) else 0.0
+                ocr_entries.append(
+                    (
+                        ocr_text_list[index] if index < len(ocr_text_list) else "",
+                        ocr_position_list[-1],
+                        ocr_box_list[-1],
+                        score,
+                    )
+                )
+            # Keep the first occurrence for legacy dict callers; duplicate OCR
+            # strings must not overwrite the earlier coordinate.
+            ocr_dict = {}
+            for text, position in zip(ocr_text_list, ocr_position_list):
+                ocr_dict.setdefault(text, position)
+            ocr_box_dict = {}
+            for text, box in zip(ocr_text_list, ocr_box_list):
+                ocr_box_dict.setdefault(text, box)
+            cached = (ocr_dict, ocr_text_list, ocr_box_dict, ocr_entries)
             ocr_cache[cache_key] = cached
 
             search_region = tuple(int(round(x)) for x in my_crop) if my_crop is not None else (0, 0, 1920, 1080)
@@ -963,6 +1060,7 @@ class Automation(metaclass=SingletonMeta):
 
         ocr_dict, ocr_text_list, *rest = cached
         self._last_ocr_box_dict = rest[0] if rest else {}
+        self._last_ocr_entries = rest[1] if len(rest) > 1 else []
         if only_text:
             return ocr_text_list or False
         return ocr_dict
@@ -970,21 +1068,22 @@ class Automation(metaclass=SingletonMeta):
     def _find_target_in_ocr_dict(self, target, ocr_dict, all_text=False):
         if ocr_dict == {}:
             return False
+        entries = getattr(self, "_last_ocr_entries", None)
         if isinstance(target, str):
-            return self.find_str_in_text(target, ocr_dict)
+            return self.find_str_in_text(target, ocr_dict, entries)
         elif isinstance(target, list):
             if all_text:
                 for key in target:
-                    if self.find_str_in_text(str(key), ocr_dict) is False:
+                    if self.find_str_in_text(str(key), ocr_dict, entries) is False:
                         return False
                 return True
             for key in target:
-                if result := self.find_str_in_text(str(key), ocr_dict):
+                if result := self.find_str_in_text(str(key), ocr_dict, entries):
                     return result
             return False
         elif isinstance(target, dict):
             for key, value in target.items():
-                if position := self.find_str_in_text(str(key), ocr_dict):
+                if position := self.find_str_in_text(str(key), ocr_dict, entries):
                     return TextMatchResult(value=value, text=str(key), position=position)
             return None
         return False
@@ -1041,10 +1140,22 @@ class Automation(metaclass=SingletonMeta):
 
     def _find_box_for_target(self, target, ocr_box_dict=None):
         """根据目标文本寻找对应的识别边界框 (xmin, ymin, xmax, ymax)。"""
+        targets = [target] if isinstance(target, str) else list(target) if isinstance(target, (list, tuple)) else []
+        if ocr_box_dict is None:
+            entries = getattr(self, "_last_ocr_entries", None)
+            if entries:
+                for item in targets:
+                    entry = self._best_ocr_entry(item, entries)
+                    if entry is not None and entry[2]:
+                        return entry[2]
+                if any(
+                    any(char.isdigit() for char in self._normalize_ocr_text(item))
+                    for item in targets
+                ):
+                    return None
         box_dict = ocr_box_dict if ocr_box_dict is not None else getattr(self, "_last_ocr_box_dict", {})
         if not box_dict:
             return None
-        targets = [target] if isinstance(target, str) else list(target) if isinstance(target, (list, tuple)) else []
         for t in targets:
             t_str = str(t)
             for text, box in box_dict.items():
@@ -1219,7 +1330,7 @@ class Automation(metaclass=SingletonMeta):
                     pic_crop = [int(i * 1440 / cfg.set_win_size) for i in pic_crop]
                 elif cfg.set_win_size > 1440:
                     pic_crop = [int(i * cfg.set_win_size / 1440) for i in pic_crop]
-                screenshot = ImageUtils.crop(screenshot, pic_crop)
+                screenshot = ImageUtils.crop(screenshot, pic_crop, copy=False)
                 if not self._is_usable_image(screenshot):
                     return None
 
@@ -1258,16 +1369,45 @@ class Automation(metaclass=SingletonMeta):
                 log.error(f"匹配图片特征失败:{e}")
             return None
 
-    def clear_img_cache(self) -> None:
-        """清除图片缓存"""
+    def clear_img_cache(self, *, collect: bool = True) -> None:
+        """清除图片缓存。
+
+        ``collect=False`` is used by the memory-pressure path: dropping the
+        template/bbox dictionaries already releases the ndarrays through
+        refcounting, while a synchronous full ``gc.collect()`` inside the
+        matching loop would stall every following lookup.
+        """
         self.img_cache.clear()
         getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
+        ImageUtils.clear_bbox_cache()
         unavailable_templates = getattr(self, "_unavailable_feature_templates", None)
         if unavailable_templates is not None:
             unavailable_templates.clear()
-        gc.collect()  # 强制垃圾回收，清理内存
+        if collect:
+            gc.collect()
         log.debug("图片缓存已清除", stacklevel=2)
+
+    def _check_memory_pressure(self) -> None:
+        """Throttle the expensive ``psutil.virtual_memory`` probe.
+
+        ``psutil.virtual_memory()`` measured ~4.5 ms per call on Windows;
+        invoking it for every template lookup made the optional memory
+        protection slower than the matching it was meant to protect.
+        """
+
+        if not getattr(self, "memory_protection", False):
+            return
+        now = time.monotonic()
+        interval = float(getattr(self, "_memory_check_interval", 5.0))
+        last_check = float(getattr(self, "_last_memory_check", 0.0))
+        if now - last_check < interval:
+            return
+        self._last_memory_check = now
+        self._memory_percent = float(psutil.virtual_memory().percent)
+        if self._memory_percent > 90:
+            log.debug(f"当前系统内存总占用率: {self._memory_percent}%，释放图片缓存")
+            self.clear_img_cache(collect=False)
 
     def _load_template_for_path(self, target: str, target_path: str, cacheable: bool):
         cache_key = ("template", target, target_path, cfg.set_win_size, bool(getattr(cfg, "enable_template_blur", False)))
@@ -1444,13 +1584,7 @@ class Automation(metaclass=SingletonMeta):
         在当前截图中查找目标图像的位置
         """
         try:
-            if self.memory_protection:
-                memory = psutil.virtual_memory()
-                # memory.percent 直接返回当前已使用的百分比 (0.0 到 100.0)
-                current_percent = memory.percent
-                if current_percent > 90:
-                    log.debug(f"当前系统内存总占用率: {current_percent}%，释放图片缓存")
-                    self.clear_img_cache()
+            self._check_memory_pressure()
 
             existing_paths = ImageUtils.existing_image_paths(target)
             if not existing_paths:
@@ -1494,7 +1628,7 @@ class Automation(metaclass=SingletonMeta):
                 crop_x2 = min(screen_w, int(round(my_crop[2])))
                 crop_y2 = min(screen_h, int(round(my_crop[3])))
                 search_region = (crop_x1, crop_y1, crop_x2, crop_y2)
-                screenshot = ImageUtils.crop(screenshot_full, search_region)
+                screenshot = ImageUtils.crop(screenshot_full, search_region, copy=False)
                 if not self._is_usable_image(screenshot):
                     return None
                 is_fullscreen = False
@@ -1528,7 +1662,12 @@ class Automation(metaclass=SingletonMeta):
                     actual_fullscreen = False
 
                 t_match_start = time.perf_counter()
-                center, matchVal = ImageUtils.match_template(screenshot, template, bbox, model)
+                # ``bbox`` is an absolute full-screen position from an
+                # ``_assets.png`` reference frame.  When ``my_crop`` already
+                # cropped the screenshot, applying it again searches the wrong
+                # sub-region (or runs past the crop and reports a false miss).
+                match_bbox = None if my_crop else bbox
+                center, matchVal = ImageUtils.match_template(screenshot, template, match_bbox, model)
                 match_cost_ms = (time.perf_counter() - t_match_start) * 1000.0
 
                 if my_crop and center is not None:

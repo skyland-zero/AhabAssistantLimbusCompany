@@ -283,6 +283,18 @@ class Shop:
             int(round(height * 0.95)),
         )
 
+    @classmethod
+    def _reward_dialog_crop(cls) -> tuple[int, int, int, int]:
+        """Return the centered reward/fusion popup area for text OCR."""
+
+        width, height = cls._route_screen_size()
+        return (
+            int(round(width * 0.12)),
+            int(round(height * 0.12)),
+            int(round(width * 0.88)),
+            int(round(height * 0.82)),
+        )
+
     def _remove_route_targets(self, positions, *, hover: bool = False):
         """Filter route targets out of a destructive inventory operation."""
 
@@ -928,10 +940,19 @@ class Shop:
                     continue
 
                 if ego_gift_get_confirm := auto.find_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png"):
-                    if auto.find_language_text(["残片", "罪孽"], ["fragment", "corrosion", "resources"]):
+                    reward_crop = self._reward_dialog_crop()
+                    if auto.find_language_text(
+                        ["残片", "罪孽"],
+                        ["fragment", "corrosion", "resources"],
+                        my_crop=reward_crop,
+                    ):
                         fuse = True
                     else:
-                        if auto.find_language_text(system_cn_zh[self.system], self.system):
+                        if auto.find_language_text(
+                            system_cn_zh[self.system],
+                            self.system,
+                            my_crop=reward_crop,
+                        ):
                             self.after_fuse_IV()
                             fuse = False
                     auto.mouse_click(ego_gift_get_confirm[0], ego_gift_get_confirm[1])
@@ -1089,10 +1110,19 @@ class Shop:
 
                     if auto.find_element("mirror/road_in_mir/ego_gift_get_confirm_assets.png"):
                         if fuse_IV:
-                            if auto.find_language_text(["残片", "罪孽"], ["fragment", "corrosion", "resources"]):
+                            reward_crop = self._reward_dialog_crop()
+                            if auto.find_language_text(
+                                ["残片", "罪孽"],
+                                ["fragment", "corrosion", "resources"],
+                                my_crop=reward_crop,
+                            ):
                                 pass
                             else:
-                                if auto.find_language_text(system_cn_zh[self.system], self.system):
+                                if auto.find_language_text(
+                                    system_cn_zh[self.system],
+                                    self.system,
+                                    my_crop=reward_crop,
+                                ):
                                     self.fuse_IV = True
                                     self.fuse_aggressive_switch = False
                                     log.info("合成四级，切换到非激进模式")
@@ -2065,9 +2095,9 @@ class Shop:
         my_money = None
         try:
             if in_heal:
-                money_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/shop/my_money_heal_bbox.png"))
+                money_bbox = ImageUtils.get_bbox_from_path("mirror/shop/my_money_heal_bbox.png")
             else:
-                money_bbox = ImageUtils.get_bbox(ImageUtils.load_image("mirror/shop/my_money_bbox.png"))
+                money_bbox = ImageUtils.get_bbox_from_path("mirror/shop/my_money_bbox.png")
             my_money = auto.get_text_from_screenshot(money_bbox)
             parsed_money = _extract_money_from_ocr_texts(my_money)
             if parsed_money is None:
