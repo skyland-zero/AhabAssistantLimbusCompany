@@ -338,12 +338,12 @@ def build(version: str, *, separate_bundles: bool = False) -> Path:
     )
     build_native_decoder()
     if separate_bundles:
-        build_python_executable("main_backend.spec")
+        build_python_executable("packaging/specs/main_backend.spec")
     else:
-        build_python_executable("shared_runtime.spec")
-    build_python_executable("updater.spec")
+        build_python_executable("packaging/specs/shared_runtime.spec")
+    build_python_executable("packaging/specs/updater.spec")
     if separate_bundles:
-        build_python_executable("execution_runner.spec")
+        build_python_executable("packaging/specs/execution_runner.spec")
     stage_release(version, shared_runtime=not separate_bundles)
     archive = archive_release(version)
     sys.stdout.write(f"Release ready: {archive}\n")

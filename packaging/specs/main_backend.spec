@@ -16,7 +16,7 @@ PID identical to the RPC server PID and avoids per-launch extraction.
 
 from pathlib import Path
 
-root = Path(SPECPATH).resolve()
+root = Path(SPECPATH).resolve().parents[1]
 
 import sys
 

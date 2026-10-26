@@ -11,7 +11,7 @@ without a second extraction/bootloader process.
 
 from pathlib import Path
 
-root = Path(SPECPATH).resolve()
+root = Path(SPECPATH).resolve().parents[1]
 
 import sys
 
