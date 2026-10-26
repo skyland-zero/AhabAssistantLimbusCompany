@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 
 import cv2
@@ -18,6 +19,18 @@ class ImageUtils:
     # battle and shop loops used to reload and re-measure the same asset on
     # every iteration, so keep the bbox next to the existing template cache.
     _bbox_cache: dict[tuple, tuple[int, int, int, int] | None] = {}
+
+    # Coarse-to-fine matching limits.  The thresholds are deliberately
+    # conservative: the full-resolution verification below the coarse pass is
+    # what decides a hit, so a low coarse floor only costs a small extra pass
+    # while it protects low-contrast UI elements from false negatives.
+    _COARSE_MIN_AREA = 350_000
+    _COARSE_MIN_TEMPLATE_SIDE = 28
+    _COARSE_MIN_SCALED_SIDE = 14
+    _COARSE_MIN_SCORE = 0.25
+    _COARSE_MAX_SCALE = 4
+    _COARSE_MAX_CANDIDATES = 3
+    _COARSE_MAX_MULTI_CANDIDATES = 32
 
     @staticmethod
     def load_image(image_path, resize=True, return_path=False):
@@ -248,7 +261,222 @@ class ImageUtils:
         return cl1
 
     @staticmethod
-    def match_template(screenshot, template, bbox, model="clam"):
+    def _blur_enabled() -> bool:
+        return bool(getattr(cfg, "enable_template_blur", False))
+
+    @classmethod
+    def _select_match_region(cls, screenshot, bbox, model):
+        """Resolve the final search region and its full-screen origin."""
+
+        shape = screenshot.shape
+        if len(shape) == 2:
+            height, width = shape
+        elif len(shape) == 3:
+            height, width = shape[:2]
+        else:
+            return None, (0, 0)
+
+        if bbox is None or model == "aggressive":
+            return screenshot, (0, 0)
+
+        offset = 100 if model == "normal" else 30
+        x1 = max(int(round(bbox[0])) - offset, 0)
+        y1 = max(int(round(bbox[1])) - offset, 0)
+        x2 = min(int(round(bbox[2])) + offset, width)
+        y2 = min(int(round(bbox[3])) + offset, height)
+        if x2 <= x1 or y2 <= y1:
+            return None, (0, 0)
+        return screenshot[y1:y2, x1:x2], (x1, y1)
+
+    @classmethod
+    def _match_region_full(cls, region, template, origin=(0, 0)):
+        """Match one template against a region without any downscaling."""
+
+        if (
+            region is None
+            or template is None
+            or not hasattr(region, "shape")
+            or not hasattr(template, "shape")
+            or region.size == 0
+            or template.size == 0
+            or len(region.shape) < 2
+            or len(template.shape) < 2
+        ):
+            return None, 0.0
+        template_height, template_width = template.shape[:2]
+        if region.shape[0] < template_height or region.shape[1] < template_width:
+            return None, 0.0
+
+        source = region
+        if cls._blur_enabled():
+            source = cv2.GaussianBlur(source, (3, 3), 0)
+        result = cv2.matchTemplate(source, template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
+        center = (
+            int(origin[0]) + int(max_loc[0]) + template_width // 2,
+            int(origin[1]) + int(max_loc[1]) + template_height // 2,
+        )
+        return center, float(max_val)
+
+    @classmethod
+    def _coarse_scale(cls, region_shape, template_shape) -> int:
+        """Choose a conservative downscale factor for coarse matching."""
+
+        region_height, region_width = region_shape[:2]
+        template_height, template_width = template_shape[:2]
+        area = int(region_height) * int(region_width)
+        template_min = min(int(template_height), int(template_width))
+        if area < cls._COARSE_MIN_AREA or template_min < cls._COARSE_MIN_TEMPLATE_SIDE:
+            return 1
+
+        if area < 900_000:
+            scale = 2
+        elif area < 2_000_000:
+            scale = 3
+        else:
+            scale = 4
+        max_by_template = template_min // cls._COARSE_MIN_SCALED_SIDE
+        return max(1, min(scale, max_by_template, cls._COARSE_MAX_SCALE))
+
+    @classmethod
+    def _resize_for_coarse(cls, region, template, scale):
+        """Return downscaled region/template and exact scale factors."""
+
+        region_height, region_width = region.shape[:2]
+        template_height, template_width = template.shape[:2]
+        small_width = max(1, int(round(region_width / scale)))
+        small_height = max(1, int(round(region_height / scale)))
+        small_template_width = max(1, int(round(template_width / scale)))
+        small_template_height = max(1, int(round(template_height / scale)))
+        if small_width < small_template_width or small_height < small_template_height:
+            return None
+        small_region = cv2.resize(
+            region,
+            (small_width, small_height),
+            interpolation=cv2.INTER_AREA,
+        )
+        small_template = cv2.resize(
+            template,
+            (small_template_width, small_template_height),
+            interpolation=cv2.INTER_AREA,
+        )
+        return (
+            small_region,
+            small_template,
+            float(region_width) / float(small_width),
+            float(region_height) / float(small_height),
+        )
+
+    @staticmethod
+    def _top_peaks(result, count, suppress_width, suppress_height):
+        """Return up to ``count`` separated peaks from a template result map."""
+
+        scores = np.array(result, copy=True)
+        peaks = []
+        for _ in range(max(1, int(count))):
+            _, max_val, _, max_loc = cv2.minMaxLoc(scores)
+            max_val = float(max_val)
+            if not math.isfinite(max_val) or max_val <= -1.0:
+                break
+            x, y = int(max_loc[0]), int(max_loc[1])
+            peaks.append((x, y))
+            x1 = max(0, x - max(1, suppress_width) // 2)
+            y1 = max(0, y - max(1, suppress_height) // 2)
+            x2 = min(scores.shape[1], x + max(1, suppress_width) // 2 + 1)
+            y2 = min(scores.shape[0], y + max(1, suppress_height) // 2 + 1)
+            scores[y1:y2, x1:x2] = -1.0
+        return peaks
+
+    @classmethod
+    def _verify_coarse_candidate(cls, region, template, cand_x, cand_y, scale_x, scale_y, origin):
+        """Verify one coarse peak in a small full-resolution window."""
+
+        template_height, template_width = template.shape[:2]
+        region_height, region_width = region.shape[:2]
+        pad_x = max(8, int(round(scale_x * 2)), int(round(template_width * 0.15)))
+        pad_y = max(8, int(round(scale_y * 2)), int(round(template_height * 0.15)))
+        full_x = int(round(cand_x * scale_x))
+        full_y = int(round(cand_y * scale_y))
+        full_x = max(0, min(full_x, region_width - template_width))
+        full_y = max(0, min(full_y, region_height - template_height))
+        x1 = max(0, full_x - pad_x)
+        y1 = max(0, full_y - pad_y)
+        x2 = min(region_width, full_x + template_width + pad_x)
+        y2 = min(region_height, full_y + template_height + pad_y)
+        if x2 <= x1 or y2 <= y1:
+            return None, 0.0
+        return cls._match_region_full(
+            region[y1:y2, x1:x2],
+            template,
+            (origin[0] + x1, origin[1] + y1),
+        )
+
+    @classmethod
+    def _coarse_match(cls, region, template, scale, threshold):
+        """Run one coarse pass and verify its top candidates at full resolution.
+
+        Returns ``(center, score, fallback)``.  ``fallback=True`` asks the
+        caller to perform one complete full-resolution match, which preserves
+        the old behavior when the coarse peak is ambiguous.
+        """
+
+        resized = cls._resize_for_coarse(region, template, scale)
+        if resized is None:
+            return None, 0.0, True
+        small_region, small_template, scale_x, scale_y = resized
+        result = cv2.matchTemplate(small_region, small_template, cv2.TM_CCOEFF_NORMED)
+        _, coarse_max, _, _ = cv2.minMaxLoc(result)
+        coarse_max = float(coarse_max)
+        if not math.isfinite(coarse_max):
+            return None, 0.0, True
+        if coarse_max < cls._COARSE_MIN_SCORE:
+            return None, 0.0, False
+
+        peaks = cls._top_peaks(
+            result,
+            cls._COARSE_MAX_CANDIDATES,
+            small_template.shape[1] // 2,
+            small_template.shape[0] // 2,
+        )
+        best_center = None
+        best_score = 0.0
+        for cand_x, cand_y in peaks:
+            center, score = cls._verify_coarse_candidate(
+                region,
+                template,
+                cand_x,
+                cand_y,
+                scale_x,
+                scale_y,
+                (0, 0),
+            )
+            if center is not None and score > best_score:
+                best_center = center
+                best_score = score
+            if threshold is not None and best_score >= threshold:
+                return best_center, best_score, False
+
+        if threshold is None:
+            return best_center, best_score, False
+
+        fallback_floor = max(0.55, float(threshold) - 0.15)
+        if coarse_max >= fallback_floor:
+            return None, 0.0, True
+        return best_center, best_score, False
+
+    @classmethod
+    def match_template(
+        cls,
+        screenshot,
+        template,
+        bbox,
+        model="clam",
+        *,
+        threshold=None,
+        coarse=True,
+    ):
+        """Match a template, optionally using a coarse-to-fine search."""
+
         try:
             if (
                 screenshot is None
@@ -262,77 +490,113 @@ class ImageUtils:
             ):
                 return None, 0.0
 
-            shape = screenshot.shape
-            if len(shape) == 2:
-                height, width = shape
-            elif len(shape) == 3:
-                height, width, _ = shape
-            else:
+            region, origin = cls._select_match_region(screenshot, bbox, model)
+            if region is None or region.size == 0:
+                return None, 0.0
+            if region.shape[0] < template.shape[0] or region.shape[1] < template.shape[1]:
                 return None, 0.0
 
-            template_height, template_width = template.shape[:2]
-
-            def match(source):
-                if (
-                    source is None
-                    or source.size == 0
-                    or source.shape[0] < template_height
-                    or source.shape[1] < template_width
-                ):
-                    return None
-                if _blur_on:
-                    source = cv2.GaussianBlur(source, (3, 3), 0)
-                return cv2.matchTemplate(source, template, cv2.TM_CCOEFF_NORMED)
-
-            if model == "normal":
-                if bbox:
-                    bbox = (
-                        max(bbox[0] - 100, 0),  # 确保左上角 x 坐标不小于 0
-                        max(bbox[1] - 100, 0),  # 确保左上角 y 坐标不小于 0
-                        min(bbox[2] + 100, width),  # 确保右下角 x 坐标不大于 图片宽
-                        min(bbox[3] + 100, height),  # 确保右下角 y 坐标不大于 图片高
-                    )
-            else:
-                if bbox:
-                    bbox = (
-                        max(bbox[0] - 30, 0),  # 确保左上角 x 坐标不小于 0
-                        max(bbox[1] - 30, 0),  # 确保左上角 y 坐标不小于 0
-                        min(bbox[2] + 30, width),  # 确保右下角 x 坐标不大于 图片宽
-                        min(bbox[3] + 30, height),  # 确保右下角 y 坐标不大于 图片高
-                    )
-            # 模板已在加载时按开关预糊，此处仅对截图高斯；开关关闭时模板未糊，截图也不糊以保持原图匹配
-            from module.config import cfg as _cfg
-            _blur_on = bool(getattr(_cfg, "enable_template_blur", False))
-            if bbox is not None and model != "aggressive":
-                screenshot_crop = screenshot[bbox[1] : bbox[3], bbox[0] : bbox[2]]
-                result = match(screenshot_crop)
-                if result is None:
-                    return None, 0.0
-                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                h, w = template.shape[:2]
-                center = (bbox[0] + max_loc[0] + w // 2, bbox[1] + max_loc[1] + h // 2)
-                return center, max_val
-            else:
-                result = match(screenshot)
-                if result is None:
-                    return None, 0.0
-                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                h, w = template.shape[:2]
-                center = (int(max_loc[0]) + w // 2, int(max_loc[1]) + h // 2)
-                return center, max_val
+            scale = cls._coarse_scale(region.shape, template.shape) if coarse else 1
+            if scale > 1 and not cls._blur_enabled() and float(np.std(template)) >= 1.0:
+                center, score, fallback = cls._coarse_match(region, template, scale, threshold)
+                if not fallback:
+                    if center is not None:
+                        center = (center[0] + origin[0], center[1] + origin[1])
+                    return center, score
+            return cls._match_region_full(region, template, origin)
         except Exception as e:
             log.error(f"图片识别出现错误：{e}")
             return None, 0.0
 
     @staticmethod
-    def match_template_with_multiple_targets(screenshot, template, threshold, min_dist=10):
+    def _component_peaks(result, threshold):
+        """Return sorted component peaks from a template result map."""
+
+        match_mask = np.asarray(result >= threshold, dtype=np.uint8)
+        if not np.any(match_mask):
+            return []
+        label_count, labels, stats, _ = cv2.connectedComponentsWithStats(match_mask, connectivity=8)
+        points = []
+        for label in range(1, label_count):
+            x, y, width, height, _ = stats[label]
+            component_mask = (labels[y : y + height, x : x + width] == label).astype(np.uint8)
+            component_result = result[y : y + height, x : x + width]
+            _, _, _, max_loc = cv2.minMaxLoc(component_result, mask=component_mask)
+            point_x = int(x + max_loc[0])
+            point_y = int(y + max_loc[1])
+            points.append((point_x, point_y, float(result[point_y, point_x])))
+        points.sort(key=lambda item: item[2], reverse=True)
+        return points
+
+    @classmethod
+    def _coarse_multi_match(cls, screenshot, template, threshold, min_dist, scale):
+        """Coarse multi-target search; returns ``None`` when full fallback is needed."""
+
+        resized = cls._resize_for_coarse(screenshot, template, scale)
+        if resized is None:
+            return None
+        small_screenshot, small_template, scale_x, scale_y = resized
+        result = cv2.matchTemplate(small_screenshot, small_template, cv2.TM_CCOEFF_NORMED)
+        coarse_max = float(np.max(result)) if result.size else 0.0
+        # Downscaling lowers TM_CCOEFF_NORMED scores (especially for noisy or
+        # high-frequency art), so the coarse gate must be well below the final
+        # threshold.  Verification below still applies the caller's threshold.
+        coarse_threshold = max(cls._COARSE_MIN_SCORE, min(0.45, float(threshold) * 0.40))
+        points = cls._component_peaks(result, coarse_threshold)
+        if not points:
+            return []
+        template_height, template_width = template.shape[:2]
+        verified = []
+        for cand_x, cand_y, _ in points[: cls._COARSE_MAX_MULTI_CANDIDATES]:
+            center, score = cls._verify_coarse_candidate(
+                screenshot,
+                template,
+                cand_x,
+                cand_y,
+                scale_x,
+                scale_y,
+                (0, 0),
+            )
+            if center is not None and score >= threshold:
+                verified.append((center, float(score)))
+        if not verified:
+            if coarse_max >= max(0.60, float(threshold) - 0.15):
+                return None
+            return []
+        verified.sort(key=lambda item: item[1], reverse=True)
+        kept = []
+        min_dist_squared = float(min_dist) ** 2
+        for center, _ in verified:
+            top_left = (center[0] - template_width // 2, center[1] - template_height // 2)
+            if all(
+                (top_left[0] - kept_point[0]) ** 2 + (top_left[1] - kept_point[1]) ** 2 > min_dist_squared
+                for kept_point in kept
+            ):
+                kept.append(top_left)
+        return [
+            (int(point[0] + template_width / 2), int(point[1] + template_height / 2))
+            for point in kept
+        ]
+
+    @classmethod
+    def match_template_with_multiple_targets(
+        cls,
+        screenshot,
+        template,
+        threshold,
+        min_dist=10,
+        *,
+        coarse=True,
+    ):
         """在一张截图中查找多个模板位置。
 
         ``matchTemplate`` 的结果通常包含同一目标周围的大量相邻像素。
         旧实现会对所有过阈值像素排序，复杂度和临时对象数量会随截图
         大小快速增长。先把过阈值区域分成连通块，每块只取最高点，
         再执行原有的最小距离抑制，可以保留目标级别的结果并避免全量排序。
+        大图会先做一次粗搜，再对候选做全分辨率复核。
         """
+
         if (
             screenshot is None
             or template is None
@@ -347,39 +611,38 @@ class ImageUtils:
         ):
             return []
 
-        w, h = ImageUtils.get_image_info(template)
+        threshold = 0.0 if threshold is None else float(threshold)
+        width, height = cls.get_image_info(template)
+        scale = cls._coarse_scale(screenshot.shape, template.shape) if coarse else 1
+        if scale > 1 and not cls._blur_enabled() and float(np.std(template)) >= 1.0:
+            result = cls._coarse_multi_match(screenshot, template, threshold, min_dist, scale)
+            if result is not None:
+                return result
+
         # 模板已按开关预糊，仅当开启时对截图高斯
-        from module.config import cfg as _cfg2
-        if bool(getattr(_cfg2, "enable_template_blur", False)):
+        if cls._blur_enabled():
             blurred_screenshot = cv2.GaussianBlur(screenshot, (3, 3), 0)
             res = cv2.matchTemplate(blurred_screenshot, template, cv2.TM_CCOEFF_NORMED)
         else:
             res = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
-        match_mask = np.asarray(res >= threshold, dtype=np.uint8)
-        if not np.any(match_mask):
+        points = cls._component_peaks(res, threshold)
+        if not points:
             log.debug(f"未找到匹配项，最高匹配度为：{np.max(res)}")
             return []
 
-        label_count, labels, stats, _ = cv2.connectedComponentsWithStats(match_mask, connectivity=8)
-        points = []
-        for label in range(1, label_count):
-            x, y, width, height, _ = stats[label]
-            component_mask = (labels[y : y + height, x : x + width] == label).astype(np.uint8)
-            component_result = res[y : y + height, x : x + width]
-            _, _, _, max_loc = cv2.minMaxLoc(component_result, mask=component_mask)
-            points.append((int(x + max_loc[0]), int(y + max_loc[1])))
-
-        points.sort(key=lambda point: float(res[point[1], point[0]]), reverse=True)
         center_points = []
         min_dist_squared = float(min_dist) ** 2
-        for point in points:
+        for point_x, point_y, _ in points:
             if all(
-                (point[0] - kept_point[0]) ** 2 + (point[1] - kept_point[1]) ** 2 > min_dist_squared
+                (point_x - kept_point[0]) ** 2 + (point_y - kept_point[1]) ** 2 > min_dist_squared
                 for kept_point in center_points
             ):
-                center_points.append(point)
+                center_points.append((point_x, point_y))
 
-        return [(int(point[0] + w / 2), int(point[1] + h / 2)) for point in center_points]
+        return [
+            (int(point[0] + width / 2), int(point[1] + height / 2))
+            for point in center_points
+        ]
 
     @staticmethod
     def get_image_info(image_array):

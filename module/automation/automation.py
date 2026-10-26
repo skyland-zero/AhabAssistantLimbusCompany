@@ -1667,7 +1667,13 @@ class Automation(metaclass=SingletonMeta):
                 # cropped the screenshot, applying it again searches the wrong
                 # sub-region (or runs past the crop and reports a false miss).
                 match_bbox = None if my_crop else bbox
-                center, matchVal = ImageUtils.match_template(screenshot, template, match_bbox, model)
+                center, matchVal = ImageUtils.match_template(
+                    screenshot,
+                    template,
+                    match_bbox,
+                    model,
+                    threshold=threshold,
+                )
                 match_cost_ms = (time.perf_counter() - t_match_start) * 1000.0
 
                 if my_crop and center is not None:

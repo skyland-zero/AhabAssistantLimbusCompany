@@ -111,13 +111,19 @@ for image_file in image_files:
     relative_path = image_file.relative_to(image_root).as_posix()
 
     for model in models:
-        center, score = ImageUtils.match_template(screenshot_gray, template, bbox, model=model)
+        center, score = ImageUtils.match_template(
+            screenshot_gray,
+            template,
+            bbox,
+            model=model,
+            threshold=threshold,
+        )
         results.append(
             (
                 float(score),
                 model,
                 relative_path,
-                tuple(int(v) for v in center),
+                tuple(int(v) for v in center) if center is not None else None,
                 tuple(int(v) for v in bbox),
             )
         )

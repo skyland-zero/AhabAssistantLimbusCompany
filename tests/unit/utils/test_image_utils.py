@@ -27,6 +27,83 @@ def test_template_matching_returns_no_match_when_region_is_smaller_than_template
     assert ImageUtils.match_template_with_multiple_targets(screenshot, template, threshold=0.8) == []
 
 
+def test_coarse_single_target_matches_full_resolution() -> None:
+    rng = np.random.default_rng(5)
+    template = rng.integers(0, 255, (80, 80), dtype=np.uint8)
+    screenshot = rng.integers(0, 255, (900, 1200), dtype=np.uint8)
+    screenshot[500:580, 700:780] = template
+
+    coarse = ImageUtils.match_template(screenshot, template, None, "aggressive", threshold=0.8)
+    full = ImageUtils.match_template(
+        screenshot,
+        template,
+        None,
+        "aggressive",
+        threshold=0.8,
+        coarse=False,
+    )
+
+    assert coarse[0] == full[0] == (740, 540)
+    assert coarse[1] > 0.99
+    assert abs(coarse[1] - full[1]) < 0.01
+
+
+def test_coarse_single_target_preserves_bbox_offset() -> None:
+    rng = np.random.default_rng(6)
+    template = rng.integers(0, 255, (80, 80), dtype=np.uint8)
+    screenshot = rng.integers(0, 255, (900, 1200), dtype=np.uint8)
+    screenshot[500:580, 700:780] = template
+
+    center, score = ImageUtils.match_template(
+        screenshot,
+        template,
+        (690, 490, 790, 590),
+        "clam",
+        threshold=0.8,
+    )
+
+    assert center == (740, 540)
+    assert score > 0.99
+
+
+def test_coarse_multiple_targets_matches_full_resolution() -> None:
+    rng = np.random.default_rng(11)
+    template = rng.integers(0, 255, (80, 80), dtype=np.uint8)
+    screenshot = rng.integers(0, 255, (900, 1200), dtype=np.uint8)
+    positions = [(120, 100), (850, 650)]
+    for x, y in positions:
+        screenshot[y : y + 80, x : x + 80] = template
+
+    coarse = ImageUtils.match_template_with_multiple_targets(screenshot, template, threshold=0.95)
+    full = ImageUtils.match_template_with_multiple_targets(
+        screenshot,
+        template,
+        threshold=0.95,
+        coarse=False,
+    )
+
+    assert set(coarse) == set(full) == {(160, 140), (890, 690)}
+
+
+def test_coarse_matching_rejects_random_negative() -> None:
+    rng = np.random.default_rng(123)
+    template = rng.integers(0, 255, (80, 80), dtype=np.uint8)
+    screenshot = rng.integers(0, 255, (900, 1200), dtype=np.uint8)
+
+    assert ImageUtils.match_template(
+        screenshot,
+        template,
+        None,
+        "aggressive",
+        threshold=0.95,
+    ) == (None, 0.0)
+    assert ImageUtils.match_template_with_multiple_targets(
+        screenshot,
+        template,
+        threshold=0.95,
+    ) == []
+
+
 def test_feature_matching_accepts_precomputed_descriptors() -> None:
     rng = np.random.default_rng(11)
     template = rng.integers(0, 255, size=(80, 80), dtype=np.uint8)

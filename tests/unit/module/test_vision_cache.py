@@ -267,3 +267,23 @@ def test_assets_bbox_is_not_reapplied_after_my_crop() -> None:
             threshold=0.8,
             my_crop=(80, 80, 140, 140),
         ) == (110, 110)
+
+
+def test_find_image_element_uses_coarse_search_for_large_frames() -> None:
+    rng = np.random.default_rng(13)
+    template = rng.integers(0, 255, (80, 80), dtype=np.uint8)
+    frame = rng.integers(0, 255, (900, 1200), dtype=np.uint8)
+    frame[500:580, 700:780] = template
+    automation = make_automation(Image.fromarray(frame))
+
+    with (
+        patch.object(automation, "_path_state_is_known", return_value=True),
+        patch.object(automation, "_match_cache_state_key", return_value=("state",)),
+        patch("module.automation.automation.ImageUtils.existing_image_paths", return_value=["fake"]),
+        patch.object(
+            automation,
+            "_load_template_for_path",
+            return_value=(template, None),
+        ),
+    ):
+        assert automation.find_image_element("fake.png", threshold=0.8) == (740, 540)

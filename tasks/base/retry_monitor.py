@@ -128,7 +128,13 @@ class RetryMonitor:
         crop_y2 = int(h * 0.85)
         cropped_image = image[crop_y1:crop_y2, crop_x1:crop_x2]
         for template in self._templates:
-            match = ImageUtils.match_template(cropped_image, template, None, model="clam")
+            match = ImageUtils.match_template(
+                cropped_image,
+                template,
+                None,
+                model="clam",
+                threshold=best_score,
+            )
             if match is None:
                 continue
             center, score = match

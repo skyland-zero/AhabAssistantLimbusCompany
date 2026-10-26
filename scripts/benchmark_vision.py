@@ -62,8 +62,32 @@ def main() -> None:
     template_features = ImageUtils.feature_descriptors(template)
     frame_features = ImageUtils.feature_descriptors(frame)
     actions = {
-        "template_full": lambda: ImageUtils.match_template(frame, template, None, "aggressive"),
-        "template_multiple": lambda: ImageUtils.match_template_with_multiple_targets(frame, template, threshold=0.9),
+        "template_full": lambda: ImageUtils.match_template(
+            frame,
+            template,
+            None,
+            "aggressive",
+            threshold=0.8,
+            coarse=False,
+        ),
+        "template_coarse": lambda: ImageUtils.match_template(
+            frame,
+            template,
+            None,
+            "aggressive",
+            threshold=0.8,
+        ),
+        "template_multiple_full": lambda: ImageUtils.match_template_with_multiple_targets(
+            frame,
+            template,
+            threshold=0.9,
+            coarse=False,
+        ),
+        "template_multiple_coarse": lambda: ImageUtils.match_template_with_multiple_targets(
+            frame,
+            template,
+            threshold=0.9,
+        ),
         "feature_cached": lambda: ImageUtils.feature_matching(
             template,
             frame,
