@@ -134,6 +134,11 @@ impl TeamsState {
             .get("enabled")
             .and_then(Value::as_bool)
             .unwrap_or(current.enabled);
+        let team_code = object
+            .get("teamCode")
+            .and_then(Value::as_str)
+            .unwrap_or(current.teamCode.as_str())
+            .to_owned();
 
         let mirror_config = if purpose == TeamPurpose::Luxcavation {
             None
@@ -181,6 +186,7 @@ impl TeamsState {
             } else {
                 enabled
             },
+            teamCode: team_code,
             mirrorConfig: mirror_config,
         };
         editor.json_import_open = false;

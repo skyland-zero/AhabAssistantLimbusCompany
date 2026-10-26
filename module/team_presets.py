@@ -121,6 +121,39 @@ _SPIDERWEB_NORMAL_FARM_SETTING: dict[str, Any] = {
 }
 
 
+_SPIDERWEB_EXP_LUX_SETTING: dict[str, Any] = {
+    "purpose": "luxcavation",
+    "team_system": 4,
+    "sinners_be_select": 8,
+    "chosen_sinners": [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0],
+    # Ryoshu, Thumb Apprentice Heathcliff, Faust, Ishmael, Yi Sang,
+    # Sinclair, Don Quixote, Hong Lu.  Heathcliff is moved to order 2 so
+    # Hong Lu stays the latest House ally and dies first for sever-fate.
+    "sinner_order": [5, 3, 7, 1, 0, 8, 2, 4, 0, 6, 0, 0],
+    "use_team_code": True,
+    "team_code": (
+        "H4sIAAAAAAAACgXBwQ2DMAxA0ZmoaG85fNtpclFULE6ZwIk6AIzf92wxMpOjqYkkz8t7/WA3I+NHQzeZ8"
+        "MLjdKoyIzrf0GoSgnjbN+xBDk8OzqojWYnub6CUP39lOM9gAAAA"
+    ),
+    "remark_name": "蜘蛛巢经验本（8人）",
+}
+
+_SPIDERWEB_THREAD_LUX_SETTING: dict[str, Any] = {
+    "purpose": "luxcavation",
+    "team_system": 4,
+    "sinners_be_select": 7,
+    "chosen_sinners": [1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0],
+    # Ryoshu, Faust, Ishmael, Yi Sang, Sinclair, Don Quixote, Hong Lu.
+    "sinner_order": [4, 2, 6, 1, 0, 7, 0, 3, 0, 5, 0, 0],
+    "use_team_code": True,
+    "team_code": (
+        "H4sIAAAAAAAACgXBwQ2DMBBFwZYSCY4c3nodtCALVpxcwTdKAaH8zPjLkcQZxc3ErOh1wx+G8kujrHbD/Iu8"
+        "ggp3ZudopbqlYdH2FX+jEeLkqmWIiezxAZblD9bzziNgAAAA"
+    ),
+    "remark_name": "蜘蛛巢纽本（7人）",
+}
+
+
 BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
     BuiltinTeamPreset(
         preset_id="hos_ryoshu_solo_normal",
@@ -229,6 +262,54 @@ BUILTIN_TEAM_PRESETS: tuple[BuiltinTeamPreset, ...] = (
         route_name_zh="蜘蛛巢全家桶 普牢速刷路线",
         route_name_en="House of Spiders Normal Speed Farm Route",
         setting=_SPIDERWEB_NORMAL_FARM_SETTING,
+    ),
+    BuiltinTeamPreset(
+        preset_id="spiderweb_exp_luxcavation",
+        route_id="",
+        name_zh="蜘蛛巢经验本（8人）",
+        name_en="House of Spiders EXP (8-sinner)",
+        description_zh=(
+            "严格 8 人全蜘蛛巢：良秀首位，拇指子辈希斯克利夫放编队顺序 2；"
+            "鸿璐先死开断缘，随后堂吉诃德→李箱→以实玛利→浮士德→拇指夫→辛克莱。"
+            "适用于经验本 10 连战，斩击日最佳。编队码已内置，可在队伍页复制。"
+        ),
+        description_en=(
+            "Strict eight-sinner House of Spiders lineup with Ryoshu first and "
+            "Thumb Apprentice Heathcliff at order 2 so Hong Lu remains the "
+            "latest House ally and dies first for the sever-fate buff, followed "
+            "by Don Quixote, Yi Sang, Ishmael, Faust, Heathcliff, then Sinclair. "
+            "Built for the ten-wave EXP Luxcavation, best on Slash days. The team "
+            "code is built in and can be copied from the team editor."
+        ),
+        floor_hint_zh="8 人：良秀核心，鸿璐先死开断缘",
+        floor_hint_en="8 sinners: Ryoshu core; Hong Lu dies first for sever-fate",
+        route_name_zh="经验本 · 10 连战",
+        route_name_en="EXP Luxcavation · 10-wave",
+        setting=_SPIDERWEB_EXP_LUX_SETTING,
+    ),
+    BuiltinTeamPreset(
+        preset_id="spiderweb_thread_luxcavation",
+        route_id="",
+        name_zh="蜘蛛巢纽本（7人）",
+        name_en="House of Spiders Thread (7-sinner)",
+        description_zh=(
+            "严格 7 人蜘蛛巢：良秀首位，6 名队友按顺序献祭；"
+            "适用于纽本 Lv60 三连战。周一火蛾或周五黑檀女王如拖时间，"
+            "可改用单核良秀（见 docs/纽本与经验本-蜘蛛巢编队方案.md）。"
+            "编队码已内置，可在队伍页复制。"
+        ),
+        description_en=(
+            "Strict seven-sinner House of Spiders lineup with Ryoshu first and "
+            "six allies sacrificed in order for the Lv60 Thread Luxcavation "
+            "three-run chain. If Faelantern or Ebony Queen stalls, switch to the "
+            "solo Ryoshu variant in docs/纽本与经验本-蜘蛛巢编队方案.md. The "
+            "team code is built in and can be copied from the team editor."
+        ),
+        floor_hint_zh="7 人：良秀核心，按顺序献祭",
+        floor_hint_en="7 sinners: Ryoshu core with ordered sacrifices",
+        route_name_zh="纽本 · 3 连战",
+        route_name_en="Thread Luxcavation · 3-run",
+        setting=_SPIDERWEB_THREAD_LUX_SETTING,
     ),
 )
 

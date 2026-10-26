@@ -70,9 +70,14 @@ Rust 侧继续使用以下 DTO：
   "purpose": "luxcavation",
   "accessoryScheme": "burn",
   "enabled": false,
+  "teamCode": "",
   "mirrorConfig": null
 }
 ```
+
+经验本用途的编队码放在顶层 `teamCode`，因为 `mirrorConfig` 固定为 `null`。
+它只用于保存、展示和复制编队码；日常任务仍按 `daily_teams` / `EXP_day_*` /
+`thread_day_*` 的队伍编号选队，不会自动加载编队码。
 
 ### 2.3 用途行为
 
@@ -114,7 +119,7 @@ Rust 侧继续使用以下 DTO：
 修改 `gpui-app/src/model/teams.rs`：
 
 1. 为新增镜牢字段补充 Rust 类型，并为可选/旧字段提供 `serde(default)`。
-2. 保持现有 JSON 字段名：顶层使用 `schemaVersion`、`accessoryScheme`、`mirrorConfig`，镜牢字段保持 Python 现有 snake_case 名称。
+2. 保持现有 JSON 字段名：顶层使用 `schemaVersion`、`accessoryScheme`、`teamCode`、`mirrorConfig`，镜牢字段保持 Python 现有 snake_case 名称。
 3. `mirrorConfig: Option<TeamMirrorConfig>` 作为用途隔离的现有兼容点；不引入新的 tagged-union wire 格式。
 
 修改 `gpui-app/src/state/teams/persistence.rs`：
@@ -140,7 +145,7 @@ Rust 侧继续使用以下 DTO：
 1. 根据 `team.purpose` 决定 Tab：
    - `mirror`、`general`：Basic、Shop、Combat、Starlight、Advanced；
    - `luxcavation`：仅 Basic。
-2. Basic 页对经验本隐藏：饰品体系、编队码、固定镜牢用途、镜牢启用开关。保留名称、用途、人格顺序。
+2. Basic 页对经验本隐藏：饰品体系、固定镜牢用途、镜牢启用开关。保留名称、用途、人格顺序，并显示顶层 `teamCode` 的编队码卡片（可复制，不自动加载）。
 3. 列表卡片对经验本不显示镜牢专属徽章、镜牢队列状态和镜牢统计。
 4. 新建队伍时：
    - 从 `Luxcavation` 分类创建时生成 `purpose=luxcavation`、`mirrorConfig=null`；

@@ -206,6 +206,8 @@ pub struct TeamDetail {
     pub purpose: TeamPurpose,
     pub accessoryScheme: String,
     pub enabled: bool,
+    #[serde(default)]
+    pub teamCode: String,
     pub mirrorConfig: Option<TeamMirrorConfig>,
 }
 
@@ -249,6 +251,7 @@ mod tests {
             purpose: TeamPurpose::General,
             accessoryScheme: "poise".into(),
             enabled: true,
+            teamCode: "code".into(),
             mirrorConfig: Some(Default::default()),
         };
         let json = serde_json::to_string(&team).unwrap();

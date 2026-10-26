@@ -1,5 +1,5 @@
 config_version: 1781049600 # 配置文件版本号 (时间戳)
-team_presets_revision: 5 # 内置队伍预设迁移版本
+team_presets_revision: 6 # 内置队伍预设迁移版本
 
 # 游戏设置
 game_title_name: LimbusCompany # 游戏窗口标题。
@@ -336,3 +336,23 @@ teams:
     use_team_code: false # 使用编队码
     team_code: "" # 编队码
     mirror_route_profile: spiderweb_family_normal_farm_route # 镜牢饰品路线 ID
+  '6':
+    purpose: luxcavation # 队伍用途
+    team_system: 4 # 队伍使用的体系
+    team_number: 6 # 使用的队伍序号
+    sinners_be_select: 8 # 有几名罪人被选中
+    chosen_sinners: [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0] # 有哪几名罪人被选中
+    sinner_order: [5, 3, 7, 1, 0, 8, 2, 4, 0, 6, 0, 0] # 罪人被选中的顺序
+    remark_name: 蜘蛛巢经验本（8人） # 队伍备注名
+    use_team_code: true # 使用编队码
+    team_code: "H4sIAAAAAAAACgXBwQ2DMAxA0ZmoaG85fNtpclFULE6ZwIk6AIzf92wxMpOjqYkkz8t7/WA3I+NHQzeZ8MLjdKoyIzrf0GoSgnjbN+xBDk8OzqojWYnub6CUP39lOM9gAAAA" # 编队码
+  '7':
+    purpose: luxcavation # 队伍用途
+    team_system: 4 # 队伍使用的体系
+    team_number: 7 # 使用的队伍序号
+    sinners_be_select: 7 # 有几名罪人被选中
+    chosen_sinners: [1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0] # 有哪几名罪人被选中
+    sinner_order: [4, 2, 6, 1, 0, 7, 0, 3, 0, 5, 0, 0] # 罪人被选中的顺序
+    remark_name: 蜘蛛巢纽本（7人） # 队伍备注名
+    use_team_code: true # 使用编队码
+    team_code: "H4sIAAAAAAAACgXBwQ2DMBBFwZYSCY4c3nodtCALVpxcwTdKAaH8zPjLkcQZxc3ErOh1wx+G8kujrHbD/Iu8ggp3ZudopbqlYdH2FX+jEeLkqmWIiezxAZblD9bzziNgAAAA" # 编队码

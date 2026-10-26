@@ -255,6 +255,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        teamCode: String::new(),
         mirrorConfig: Some(normal_solo_config),
     };
     let hard_solo_team = TeamDetail {
@@ -265,6 +266,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        teamCode: String::new(),
         mirrorConfig: Some(hard_solo_config),
     };
 
@@ -296,6 +298,7 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        teamCode: String::new(),
         mirrorConfig: Some(spider_config),
     };
 
@@ -349,7 +352,48 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        teamCode: String::new(),
         mirrorConfig: Some(spider_farm_config),
+    };
+
+    let exp_lux_team = TeamDetail {
+        schemaVersion: 1,
+        id: String::new(),
+        name: "蜘蛛巢经验本（8人）".into(),
+        sinners: vec![
+            "ryoshu".into(),
+            "heathcliff".into(),
+            "faust".into(),
+            "ishmael".into(),
+            "yi_sang".into(),
+            "sinclair".into(),
+            "don_quixote".into(),
+            "hong_lu".into(),
+        ],
+        purpose: TeamPurpose::Luxcavation,
+        accessoryScheme: "poise".into(),
+        enabled: false,
+        teamCode: "H4sIAAAAAAAACgXBwQ2DMAxA0ZmoaG85fNtpclFULE6ZwIk6AIzf92wxMpOjqYkkz8t7/WA3I+NHQzeZ8MLjdKoyIzrf0GoSgnjbN+xBDk8OzqojWYnub6CUP39lOM9gAAAA".into(),
+        mirrorConfig: None,
+    };
+    let thread_lux_team = TeamDetail {
+        schemaVersion: 1,
+        id: String::new(),
+        name: "蜘蛛巢纽本（7人）".into(),
+        sinners: vec![
+            "ryoshu".into(),
+            "faust".into(),
+            "ishmael".into(),
+            "yi_sang".into(),
+            "sinclair".into(),
+            "don_quixote".into(),
+            "hong_lu".into(),
+        ],
+        purpose: TeamPurpose::Luxcavation,
+        accessoryScheme: "poise".into(),
+        enabled: false,
+        teamCode: "H4sIAAAAAAAACgXBwQ2DMBBFwZYSCY4c3nodtCALVpxcwTdKAaH8zPjLkcQZxc3ErOh1wx+G8kujrHbD/Iu8ggp3ZudopbqlYdH2FX+jEeLkqmWIiezxAZblD9bzziNgAAAA".into(),
+        mirrorConfig: None,
     };
 
     vec![
@@ -436,6 +480,48 @@ fn builtin_team_presets() -> Vec<TeamPreset> {
                 enUs: "House of Spiders Normal Speed Farm Route".into(),
             },
             team: spider_farm_team,
+        },
+        TeamPreset {
+            presetId: "spiderweb_exp_luxcavation".into(),
+            routeId: String::new(),
+            name: LocalizedText {
+                zhCn: "蜘蛛巢经验本（8人）".into(),
+                enUs: "House of Spiders EXP (8-sinner)".into(),
+            },
+            description: LocalizedText {
+                zhCn: "严格 8 人全蜘蛛巢：良秀首位，拇指子辈希斯克利夫放编队顺序 2；鸿璐先死开断缘，随后堂吉诃德→李箱→以实玛利→浮士德→拇指夫→辛克莱。适用于经验本 10 连战，斩击日最佳。编队码已内置，可在队伍页复制。".into(),
+                enUs: "Strict eight-sinner House of Spiders lineup with Ryoshu first and Thumb Apprentice Heathcliff at order 2 so Hong Lu remains the latest House ally and dies first for the sever-fate buff, followed by Don Quixote, Yi Sang, Ishmael, Faust, Heathcliff, then Sinclair. Built for the ten-wave EXP Luxcavation, best on Slash days. The team code is built in and can be copied from the team editor.".into(),
+            },
+            floorHint: LocalizedText {
+                zhCn: "8 人：良秀核心，鸿璐先死开断缘".into(),
+                enUs: "8 sinners: Ryoshu core; Hong Lu dies first for sever-fate".into(),
+            },
+            routeName: LocalizedText {
+                zhCn: "经验本 · 10 连战".into(),
+                enUs: "EXP Luxcavation · 10-wave".into(),
+            },
+            team: exp_lux_team,
+        },
+        TeamPreset {
+            presetId: "spiderweb_thread_luxcavation".into(),
+            routeId: String::new(),
+            name: LocalizedText {
+                zhCn: "蜘蛛巢纽本（7人）".into(),
+                enUs: "House of Spiders Thread (7-sinner)".into(),
+            },
+            description: LocalizedText {
+                zhCn: "严格 7 人蜘蛛巢：良秀首位，6 名队友按顺序献祭；适用于纽本 Lv60 三连战。周一火蛾或周五黑檀女王如拖时间，可改用单核良秀（见 docs/纽本与经验本-蜘蛛巢编队方案.md）。编队码已内置，可在队伍页复制。".into(),
+                enUs: "Strict seven-sinner House of Spiders lineup with Ryoshu first and six allies sacrificed in order for the Lv60 Thread Luxcavation three-run chain. If Faelantern or Ebony Queen stalls, switch to the solo Ryoshu variant in docs/纽本与经验本-蜘蛛巢编队方案.md. The team code is built in and can be copied from the team editor.".into(),
+            },
+            floorHint: LocalizedText {
+                zhCn: "7 人：良秀核心，按顺序献祭".into(),
+                enUs: "7 sinners: Ryoshu core with ordered sacrifices".into(),
+            },
+            routeName: LocalizedText {
+                zhCn: "纽本 · 3 连战".into(),
+                enUs: "Thread Luxcavation · 3-run".into(),
+            },
+            team: thread_lux_team,
         },
     ]
 }

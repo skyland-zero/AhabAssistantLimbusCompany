@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn built_in_presets_have_stable_ids_and_complete_routes() {
         let state = TeamsState::default();
-        assert_eq!(state.presets.len(), 4);
+        assert_eq!(state.presets.len(), 6);
         let normal = state
             .presets
             .iter()
@@ -191,6 +191,16 @@ mod tests {
             .presets
             .iter()
             .find(|preset| preset.presetId == "spiderweb_family_normal_farm")
+            .unwrap();
+        let exp_lux = state
+            .presets
+            .iter()
+            .find(|preset| preset.presetId == "spiderweb_exp_luxcavation")
+            .unwrap();
+        let thread_lux = state
+            .presets
+            .iter()
+            .find(|preset| preset.presetId == "spiderweb_thread_luxcavation")
             .unwrap();
         assert_eq!(normal.routeId, "hos_ryoshu_solo_route");
         assert_eq!(hard.routeId, "hos_ryoshu_solo_route");
@@ -236,6 +246,14 @@ mod tests {
         );
         assert!(!normal.description.zhCn.is_empty());
         assert!(!hard.description.zhCn.is_empty());
+        assert_eq!(exp_lux.team.purpose, TeamPurpose::Luxcavation);
+        assert_eq!(thread_lux.team.purpose, TeamPurpose::Luxcavation);
+        assert!(exp_lux.team.mirrorConfig.is_none());
+        assert!(thread_lux.team.mirrorConfig.is_none());
+        assert_eq!(exp_lux.team.sinners.len(), 8);
+        assert_eq!(thread_lux.team.sinners.len(), 7);
+        assert!(!exp_lux.team.teamCode.is_empty());
+        assert!(!thread_lux.team.teamCode.is_empty());
     }
 
     #[test]
@@ -256,6 +274,28 @@ mod tests {
                 .mirror_route_profile,
             "hos_ryoshu_solo_route"
         );
+    }
+
+    #[test]
+    fn luxcavation_preset_keeps_team_code_without_mirror_config() {
+        let mut state = TeamsState::default();
+        let expected_code = state
+            .presets
+            .iter()
+            .find(|preset| preset.presetId == "spiderweb_exp_luxcavation")
+            .unwrap()
+            .team
+            .teamCode
+            .clone();
+        state.open_preset_picker_for_slot(6);
+        assert!(state.select_preset("spiderweb_exp_luxcavation").unwrap());
+        let editor = state.editor.as_ref().unwrap();
+        assert_eq!(editor.requested_team_number, Some(6));
+        assert_eq!(editor.team.purpose, TeamPurpose::Luxcavation);
+        assert!(editor.team.mirrorConfig.is_none());
+        assert_eq!(editor.team.sinners.len(), 8);
+        assert_eq!(editor.team.teamCode, expected_code);
+        assert!(!editor.team.teamCode.is_empty());
     }
 
     #[test]
@@ -372,6 +412,7 @@ mod tests {
             purpose: TeamPurpose::General,
             accessoryScheme: "burn".into(),
             enabled: true,
+            teamCode: String::new(),
             mirrorConfig: Some(TeamMirrorConfig::default()),
         };
         state.apply_saved_team(&submitted, saved);

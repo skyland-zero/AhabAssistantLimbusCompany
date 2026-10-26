@@ -2,7 +2,11 @@ use gpui::{AppContext, ClipboardItem, Context, ParentElement as _, Styled as _, 
 use gpui_kit::component::WindowExt as _;
 
 use super::AhabApp;
-use crate::{app_inputs::TeamInputs, components::TextInput, model::TeamDetail};
+use crate::{
+    app_inputs::TeamInputs,
+    components::TextInput,
+    model::{TeamDetail, TeamPurpose},
+};
 
 impl AhabApp {
     pub fn open_new_team(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -347,6 +351,32 @@ impl AhabApp {
         cx.notify();
     }
 
+    pub fn copy_team_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_team_inputs_to_state(window, cx);
+        let code = self
+            .teams
+            .editor
+            .as_ref()
+            .map(|editor| {
+                if editor.team.purpose == TeamPurpose::Luxcavation {
+                    editor.team.teamCode.clone()
+                } else {
+                    editor.mirror_config().team_code
+                }
+            })
+            .unwrap_or_default();
+        if !code.is_empty() {
+            cx.write_to_clipboard(ClipboardItem::new_string(code));
+            let language = self.state.settings.language;
+            self.teams.feedback = Some(
+                crate::i18n::paired("编队码已复制", "Team code copied")
+                    .get(language)
+                    .to_owned(),
+            );
+        }
+        cx.notify();
+    }
+
     pub fn import_team_json(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let input = self
             .team_inputs
@@ -387,7 +417,11 @@ impl AhabApp {
         let editor = self.teams.editor.as_ref().expect("editor just opened");
         let name = editor.team.name.clone();
         let mirror_config = editor.mirror_config();
-        let code = mirror_config.team_code.clone();
+        let code = if editor.team.purpose == TeamPurpose::Luxcavation {
+            editor.team.teamCode.clone()
+        } else {
+            mirror_config.team_code.clone()
+        };
         let keyword_refresh = mirror_config.max_keyword_refresh.to_string();
         let normal_refresh = mirror_config.max_normal_refresh.to_string();
         let name_placeholder = match language {
@@ -490,10 +524,14 @@ impl AhabApp {
             if let Some(name) = name {
                 editor.team.name = name;
             }
-            if let Some(config) = editor.team.mirrorConfig.as_mut() {
-                if let Some(code) = code {
+            if let Some(code) = code {
+                if editor.team.purpose == TeamPurpose::Luxcavation {
+                    editor.team.teamCode = code;
+                } else if let Some(config) = editor.team.mirrorConfig.as_mut() {
                     config.team_code = code;
                 }
+            }
+            if let Some(config) = editor.team.mirrorConfig.as_mut() {
                 if let Some(value) = keyword_refresh {
                     config.max_keyword_refresh = value.min(10);
                 }
@@ -510,7 +548,11 @@ impl AhabApp {
         };
         let name = editor.team.name.clone();
         let mirror_config = editor.mirror_config();
-        let code = mirror_config.team_code;
+        let code = if editor.team.purpose == TeamPurpose::Luxcavation {
+            editor.team.teamCode.clone()
+        } else {
+            mirror_config.team_code.clone()
+        };
         let keyword_refresh = mirror_config.max_keyword_refresh.to_string();
         let normal_refresh = mirror_config.max_normal_refresh.to_string();
         if let Some(input) = self.team_inputs.name.as_ref() {

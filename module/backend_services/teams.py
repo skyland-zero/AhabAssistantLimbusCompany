@@ -331,6 +331,14 @@ class TeamService:
                 raise ValueError("team.save.purpose 无效")
         setting.purpose = purpose
 
+        if purpose == "luxcavation":
+            if "teamCode" in values:
+                team_code = _require_string(values["teamCode"], "team.save.teamCode").strip()
+                setting.team_code = team_code
+                setting.use_team_code = bool(team_code)
+            if "accessoryScheme" in values:
+                self._write_accessory_scheme(setting, values["accessoryScheme"])
+
         # Luxcavation teams deliberately do not expose mirror settings in the
         # GPUI contract.  A null mirrorConfig means "preserve the stored
         # mirror settings" when an existing team is changed back later; it is
@@ -424,6 +432,9 @@ class TeamService:
             minimum=0,
             maximum=len(SYSTEM_NAMES) - 1,
         )
+        team_code = values.get("team_code", "")
+        if not isinstance(team_code, str):
+            team_code = ""
         mirror: dict[str, Any] = {
             "team_system": team_system,
             "shop_strategy": _team_int_value(
@@ -520,6 +531,10 @@ class TeamService:
             "accessoryScheme": SYSTEM_NAMES[team_system],
             "enabled": False if purpose == "luxcavation" else bool(enabled),
             "mirrorConfig": None if purpose == "luxcavation" else mirror,
+            # Luxcavation teams hide mirrorConfig, so their formation code is
+            # carried at the top level instead.  Mirror teams keep using
+            # mirrorConfig.team_code to preserve the existing contract.
+            "teamCode": team_code if purpose == "luxcavation" else "",
         }
 
     def _team_numbers(self) -> list[int]:

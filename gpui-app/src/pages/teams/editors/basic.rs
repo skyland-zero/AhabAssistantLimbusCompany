@@ -187,23 +187,19 @@ pub(crate) fn basic_editor(
         sinners = sinners.child(control);
     }
 
-    let code_field = if config.use_team_code {
-        code_input
-            .map(|input| {
-                labeled_field(
-                    text("编队码", "Team code").get(language),
-                    div().child(input),
-                )
-            })
-            .unwrap_or_else(|| {
-                labeled_field(
-                    text("编队码", "Team code").get(language),
-                    div().child(text("编辑器初始化中", "Initializing").get(language)),
-                )
-            })
-    } else {
-        div()
-    };
+    let code_field = code_input
+        .map(|input| {
+            labeled_field(
+                text("编队码", "Team code").get(language),
+                div().child(input),
+            )
+        })
+        .unwrap_or_else(|| {
+            labeled_field(
+                text("编队码", "Team code").get(language),
+                div().child(text("编辑器初始化中", "Initializing").get(language)),
+            )
+        });
 
     let team_code_switch = mirror_switch(
         app,
@@ -241,26 +237,57 @@ pub(crate) fn basic_editor(
         cx.notify();
     }));
 
-    let team_code_card = editor_card(
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(control_row(
-                text("启用编队码", "Use Team Code").get(language),
-                team_code_switch,
-            ))
-            .child(
-                div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
-                    text(
-                        "启用后保存编队码，运行时由后端解析。",
-                        "Save the team code and let the backend parse it at runtime.",
-                    )
-                    .get(language),
+    let team_code_card = if is_luxcavation {
+        let mut copy_code = button(
+            "team-copy-code",
+            text("复制编队码", "Copy team code").get(language),
+            ButtonVariant::Ghost,
+        );
+        copy_code = copy_code
+            .on_click(cx.listener(|view, _, window, cx| view.copy_team_code(window, cx)));
+        editor_card(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(code_field)
+                .child(copy_code)
+                .child(
+                    div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                        text(
+                            "编队码会随队伍保存；在游戏内导入一次即可。日常任务仍按编号选队。",
+                            "The code is saved with the team; import it once in-game. Daily tasks still select by team number.",
+                        )
+                        .get(language),
+                    ),
                 ),
-            )
-            .child(code_field),
-    );
+        )
+    } else {
+        editor_card(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(control_row(
+                    text("启用编队码", "Use Team Code").get(language),
+                    team_code_switch,
+                ))
+                .child(
+                    div().text_size(px(10.)).text_color(rgb(TEXT_MUTED)).child(
+                        text(
+                            "启用后保存编队码，运行时由后端解析。",
+                            "Save the team code and let the backend parse it at runtime.",
+                        )
+                        .get(language),
+                    ),
+                )
+                .child(if config.use_team_code {
+                    code_field
+                } else {
+                    div()
+                }),
+        )
+    };
 
     let fixed_card = editor_card(
         div()
@@ -298,8 +325,13 @@ pub(crate) fn basic_editor(
             }),
     );
 
-    let mirror_basic_cards = if is_luxcavation {
-        div().into_any_element()
+    let basic_cards = if is_luxcavation {
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(team_code_card)
+            .into_any_element()
     } else {
         div()
             .flex()
@@ -362,6 +394,6 @@ pub(crate) fn basic_editor(
                     .child(clear_sinners),
             ),
         ))
-        .child(mirror_basic_cards)
+        .child(basic_cards)
         .child(enabled_field)
 }

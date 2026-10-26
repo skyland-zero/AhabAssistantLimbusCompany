@@ -41,6 +41,8 @@ _BUILTIN_TEAM_PRESET_NAMES = frozenset(
         "小指良伪单通（困牢）",
         "蜘蛛巢全家桶",
         "蜘蛛巢全家桶（普牢速刷）",
+        "蜘蛛巢经验本（8人）",
+        "蜘蛛巢纽本（7人）",
     }
 )
 
@@ -55,6 +57,12 @@ _TEAM_PRESETS_INTRODUCED_BY_REVISION = {
         }
     ),
     5: frozenset({"蜘蛛巢全家桶（普牢速刷）"}),
+    6: frozenset(
+        {
+            "蜘蛛巢经验本（8人）",
+            "蜘蛛巢纽本（7人）",
+        }
+    ),
 }
 
 

@@ -50,6 +50,7 @@ impl Default for MockState {
                     purpose: TeamPurpose::Mirror,
                     accessoryScheme: "tremor".into(),
                     enabled: true,
+                    teamCode: String::new(),
                     mirrorConfig: Some(TeamMirrorConfig {
                         team_system: 2,
                         discard_systems: DiscardSystems {
@@ -69,6 +70,7 @@ impl Default for MockState {
                     purpose: TeamPurpose::Luxcavation,
                     accessoryScheme: "burn".into(),
                     enabled: false,
+                    teamCode: String::new(),
                     mirrorConfig: None,
                 },
                 TeamDetail {
@@ -85,6 +87,7 @@ impl Default for MockState {
                     purpose: TeamPurpose::General,
                     accessoryScheme: "poise".into(),
                     enabled: false,
+                    teamCode: String::new(),
                     mirrorConfig: Some(TeamMirrorConfig {
                         team_system: 5,
                         ..Default::default()

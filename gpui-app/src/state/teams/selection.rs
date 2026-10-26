@@ -43,6 +43,7 @@ impl TeamsState {
                 purpose,
                 accessoryScheme: "burn".into(),
                 enabled: !is_luxcavation,
+                teamCode: String::new(),
                 mirrorConfig: (!is_luxcavation).then(TeamMirrorConfig::default),
             },
             requested_team_number,

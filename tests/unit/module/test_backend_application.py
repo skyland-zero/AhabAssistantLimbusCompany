@@ -1409,6 +1409,8 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
         "hos_ryoshu_solo_hard",
         "spiderweb_family",
         "spiderweb_family_normal_farm",
+        "spiderweb_exp_luxcavation",
+        "spiderweb_thread_luxcavation",
     ]
     normal, hard = presets[:2]
     assert normal["routeId"] == "hos_ryoshu_solo_route"
@@ -1454,6 +1456,48 @@ def test_builtin_team_preset_catalog_returns_stable_ids_and_full_team_templates(
     assert spider_farm_mirror["skill_replacement"] is True
     assert spider_farm_mirror["skill_replacement_mode"] == 3
     assert spider_farm_mirror["use_team_code"] is False
+
+    exp_lux, thread_lux = presets[4], presets[5]
+    assert exp_lux["presetId"] == "spiderweb_exp_luxcavation"
+    assert thread_lux["presetId"] == "spiderweb_thread_luxcavation"
+    assert exp_lux["routeId"] == ""
+    assert thread_lux["routeId"] == ""
+    assert exp_lux["team"]["purpose"] == "luxcavation"
+    assert thread_lux["team"]["purpose"] == "luxcavation"
+    assert exp_lux["team"]["mirrorConfig"] is None
+    assert thread_lux["team"]["mirrorConfig"] is None
+    assert exp_lux["team"]["teamCode"] == (
+        "H4sIAAAAAAAACgXBwQ2DMAxA0ZmoaG85fNtpclFULE6ZwIk6AIzf92wxMpOjqYkkz8t7/WA3I+NHQzeZ8"
+        "MLjdKoyIzrf0GoSgnjbN+xBDk8OzqojWYnub6CUP39lOM9gAAAA"
+    )
+    assert thread_lux["team"]["teamCode"] == (
+        "H4sIAAAAAAAACgXBwQ2DMBBFwZYSCY4c3nodtCALVpxcwTdKAaH8zPjLkcQZxc3ErOh1wx+G8kujrHbD/Iu8"
+        "ggp3ZudopbqlYdH2FX+jEeLkqmWIiezxAZblD9bzziNgAAAA"
+    )
+    assert exp_lux["team"]["sinners"] == [
+        "ryoshu",
+        "heathcliff",
+        "faust",
+        "ishmael",
+        "yi_sang",
+        "sinclair",
+        "don_quixote",
+        "hong_lu",
+    ]
+    assert thread_lux["team"]["sinners"] == [
+        "ryoshu",
+        "faust",
+        "ishmael",
+        "yi_sang",
+        "sinclair",
+        "don_quixote",
+        "hong_lu",
+    ]
+    assert exp_lux["team"]["name"] == "蜘蛛巢经验本（8人）"
+    assert thread_lux["team"]["name"] == "蜘蛛巢纽本（7人）"
+    assert exp_lux["description"]["zhCn"]
+    assert thread_lux["description"]["zhCn"]
+
     app.close()
 
 
@@ -1471,13 +1515,19 @@ def test_team_save_allocates_id_and_isolates_luxcavation_from_mirror_queue() -> 
     }
     app.config.values["teams_active_queue"] = [1]
 
+    team_code = (
+        "H4sIAAAAAAAACgXBwQ2DMAxA0ZmoaG85fNtpclFULE6ZwIk6AIzf92wxMpOjqYkkz8t7/WA3I+NHQzeZ8"
+        "MLjdKoyIzrf0GoSgnjbN+xBDk8OzqojWYnub6CUP39lOM9gAAAA"
+    )
     created = app.team_save(
         {
             "id": "",
             "name": "经验本队伍",
             "purpose": "luxcavation",
             "sinners": ["faust", "yi_sang"],
+            "accessoryScheme": "poise",
             "mirrorConfig": None,
+            "teamCode": team_code,
             "enabled": False,
         }
     )
@@ -1486,8 +1536,12 @@ def test_team_save_allocates_id_and_isolates_luxcavation_from_mirror_queue() -> 
     assert created["purpose"] == "luxcavation"
     assert created["enabled"] is False
     assert created["mirrorConfig"] is None
+    assert created["teamCode"] == team_code
+    assert created["accessoryScheme"] == "poise"
     assert app.config.config.teams["2"].purpose == "luxcavation"
     assert app.config.config.teams["2"].shopping_strategy is False
+    assert app.config.config.teams["2"].team_code == team_code
+    assert app.config.config.teams["2"].use_team_code is True
 
     converted = app.team_save(
         {
@@ -1669,6 +1723,65 @@ def test_builtin_team_preset_merge_from_revision_four_only_adds_the_new_preset()
     assert "4" not in loaded["teams"]
     assert loaded["teams_active_queue"] == [1, 2]
     assert loaded["team_presets_revision"] == 5
+
+
+def test_builtin_team_preset_merge_from_revision_five_adds_luxcavation_presets() -> None:
+    exp_name = "蜘蛛巢经验本（8人）"
+    thread_name = "蜘蛛巢纽本（7人）"
+    config = object.__new__(Config)
+    config._defaults = {
+        "team_presets_revision": 6,
+        "teams": {
+            "2": {"remark_name": "小指良伪单通（普牢）", "team_number": 2},
+            "3": {"remark_name": "小指良伪单通（困牢）", "team_number": 3},
+            "4": {"remark_name": "蜘蛛巢全家桶", "team_number": 4},
+            "5": {"remark_name": "蜘蛛巢全家桶（普牢速刷）", "team_number": 5},
+            "6": {"remark_name": exp_name, "team_number": 6},
+            "7": {"remark_name": thread_name, "team_number": 7},
+        },
+    }
+    loaded = {
+        "team_presets_revision": 5,
+        "teams": {
+            "1": {"remark_name": "我的日常队"},
+            "2": {"remark_name": "镜牢二队"},
+            "3": {"remark_name": "镜牢三队"},
+            "4": {"remark_name": "蜘蛛巢全家桶"},
+            "5": {"remark_name": "蜘蛛巢全家桶（普牢速刷）"},
+        },
+        "teams_active_queue": [2, 3],
+    }
+
+    assert config._merge_builtin_team_presets(loaded) is True
+    assert loaded["teams"]["1"]["remark_name"] == "我的日常队"
+    assert loaded["teams"]["2"]["remark_name"] == "镜牢二队"
+    assert loaded["teams"]["3"]["remark_name"] == "镜牢三队"
+    assert loaded["teams"]["6"]["remark_name"] == exp_name
+    assert loaded["teams"]["7"]["remark_name"] == thread_name
+    assert loaded["teams"]["6"]["team_number"] == 6
+    assert loaded["teams"]["7"]["team_number"] == 7
+    assert loaded["teams_active_queue"] == [2, 3]
+    assert loaded["team_presets_revision"] == 6
+
+    occupied = {
+        "team_presets_revision": 5,
+        "teams": {
+            "1": {"remark_name": "我的日常队"},
+            "2": {"remark_name": "镜牢二队"},
+            "3": {"remark_name": "镜牢三队"},
+            "4": {"remark_name": "蜘蛛巢全家桶"},
+            "5": {"remark_name": "蜘蛛巢全家桶（普牢速刷）"},
+            "6": {"remark_name": "我的六号队"},
+        },
+    }
+    assert config._merge_builtin_team_presets(occupied) is True
+    assert occupied["teams"]["2"]["remark_name"] == "镜牢二队"
+    assert occupied["teams"]["6"]["remark_name"] == "我的六号队"
+    assert occupied["teams"]["7"]["remark_name"] == exp_name
+    assert occupied["teams"]["8"]["remark_name"] == thread_name
+    assert occupied["teams"]["7"]["team_number"] == 7
+    assert occupied["teams"]["8"]["team_number"] == 8
+    assert occupied["team_presets_revision"] == 6
 
 
 def test_task_patch_preserves_unknown_config_values_and_rejects_bad_values() -> None:
