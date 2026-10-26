@@ -56,3 +56,19 @@ assets/images/default/share/mirror/ego_gifts/{gift_id}.png
 - 图像不是空图。
 
 新增路线饰品图标后，应补充同类测试或复用该检查。注意：现有 House of Spiders 路线仍有少量历史图标缺失（例如 `bloodtinged_ichthyic_odor`、`into_certain_library_book`），不要直接写成“所有路线图标必须存在”的全量测试，除非先补齐这些资源。
+
+## 2. 分支策略
+
+仓库约定以下分支分工：
+
+| 分支 | 角色 | 说明 |
+| --- | --- | --- |
+| `dev-gpui` | **日常开发分支** | 所有本地改动、提交都提交到这里，并推送到 `origin/dev-gpui` |
+| `main` | **上游同步分支** | 只用来拉取上游更新，保持与 `origin/main` 一致，**不在 `main` 上提交任何本地改动** |
+| `feat/gpui-kit-0.8` | 创建 `dev-gpui` 时的起点 | 只是当时最新提交所在的分支，`dev-gpui` 从它拉出；它不是长期基线，不需要特殊维护 |
+
+约定：
+
+- 开始工作前先确认当前在 `dev-gpui` 分支，不要直接在 `main` 上修改代码。
+- 同步上游流程：切到 `main` 执行 `git pull`（或 `git fetch`）后，再切回 `dev-gpui` 合并或变基，`main` 本身不产生新提交。
+- 如果 `main` 出现任何本地提交或未提交改动，应先处理干净再继续，保持其作为纯上游镜像。
