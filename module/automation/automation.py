@@ -14,6 +14,7 @@ import psutil
 from PIL.Image import Image
 
 from core.execution_control import check_cancelled, interruptible_sleep, wait_for_event
+from module.perf_log import perf_log
 from module.vision_profiler import vision_profiler
 from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
@@ -317,10 +318,24 @@ class Automation(metaclass=SingletonMeta):
                 check_cancelled()
                 if gate_open and self._interaction_gate.is_set():
                     method = getattr(self.input_handler, method_name)
-                    return self._invoke_input_and_wait_for_frame(method, *args, **kwargs)
+                    started_at = time.perf_counter()
+                    result = self._invoke_input_and_wait_for_frame(method, *args, **kwargs)
+                    perf_log.action(
+                        method=method_name,
+                        caller=perf_log.caller(1),
+                        duration_ms=round((time.perf_counter() - started_at) * 1000.0, 3),
+                    )
+                    return result
                 if not gate_open:
                     method = getattr(self.input_handler, method_name)
-                    return self._invoke_input_and_wait_for_frame(method, *args, **kwargs)
+                    started_at = time.perf_counter()
+                    result = self._invoke_input_and_wait_for_frame(method, *args, **kwargs)
+                    perf_log.action(
+                        method=method_name,
+                        caller=perf_log.caller(1),
+                        duration_ms=round((time.perf_counter() - started_at) * 1000.0, 3),
+                    )
+                    return result
                 # gate_open 但等待输入锁期间门被关闭:重新等待
 
     def mouse_click(self, x, y, times=1):
@@ -404,6 +419,7 @@ class Automation(metaclass=SingletonMeta):
         if frame_seq is not None and previous_seq == frame_seq:
             self.screenshot = screenshot
             self._frame_dirty = False
+            perf_log.set_frame(self._frame_id)
             return
 
         self.screenshot = screenshot
@@ -418,6 +434,7 @@ class Automation(metaclass=SingletonMeta):
         getattr(self, "_ocr_cache", {}).clear()
         getattr(self, "_match_result_cache", {}).clear()
         getattr(self, "_feature_frame_cache", {}).clear()
+        perf_log.set_frame(self._frame_id)
 
     @staticmethod
     def _normalize_crop(crop):
@@ -481,6 +498,7 @@ class Automation(metaclass=SingletonMeta):
         if cache_key in cache:
             return cache[cache_key]
 
+        conversion_start = time.perf_counter()
         image_array = np.asarray(screenshot)
         if gray:
             if image_array.ndim == 3:
@@ -498,6 +516,16 @@ class Automation(metaclass=SingletonMeta):
             image_array = image_array[:, :, :3]
 
         cache[cache_key] = image_array
+        conversion_ms = (time.perf_counter() - conversion_start) * 1000.0
+        if conversion_ms >= 0.5:
+            perf_log.record(
+                "array",
+                cache_hit=False,
+                duration_ms=round(conversion_ms, 3),
+                shape=list(image_array.shape),
+                gray=gray,
+                caller=perf_log.caller(1),
+            )
         return image_array
 
     def _remember_screenshot(self, screenshot: Image | None) -> None:
@@ -711,7 +739,21 @@ class Automation(metaclass=SingletonMeta):
             Image: 截取当前屏幕的图像对象
         """
         start_time = time.time()
+        total_start_wall = start_time
+        total_start_perf = time.perf_counter()
+        dirty_before = self._frame_dirty
         screenshot_interval_time = cfg.screenshot_interval if cfg.screenshot_interval else 0.85
+        previous_age_ms = None
+        if self._latest_screenshot_monotonic:
+            previous_age_ms = (time.monotonic() - self._latest_screenshot_monotonic) * 1000.0
+        reuse_available = (
+            self.screenshot is not None
+            and not dirty_before
+            and previous_age_ms is not None
+            and previous_age_ms <= screenshot_interval_time * 1000.0
+        )
+        wait_ms = 0.0
+        capture_ms = 0.0
         while True:
             try:
                 check_cancelled()
@@ -720,16 +762,38 @@ class Automation(metaclass=SingletonMeta):
                         screenshot_interval_time - (time.time() - self.last_screenshot_time),
                         0,
                     )
+                    wait_started = time.perf_counter()
                     interruptible_sleep(wait_time)
+                    wait_ms = (time.perf_counter() - wait_started) * 1000.0
 
+                capture_started = time.perf_counter()
                 with self._screenshot_lock:
                     result = ScreenShot.take_screenshot(gray)
                     check_cancelled()
                     self._remember_screenshot(result)
+                capture_ms = (time.perf_counter() - capture_started) * 1000.0
                 if result:
                     with self._screenshot_lock:
                         self._set_business_screenshot(result)
                     self.last_screenshot_time = time.time()
+                    perf_log.screenshot(
+                        frame=self._frame_id,
+                        caller=perf_log.caller(1),
+                        start_ts=total_start_wall,
+                        start_perf=total_start_perf,
+                        wait_ms=wait_ms,
+                        capture_ms=capture_ms,
+                        total_ms=(time.perf_counter() - total_start_perf) * 1000.0,
+                        gray=gray,
+                        size=list(result.size),
+                        dirty_before=dirty_before,
+                        previous_age_ms=(
+                            round(previous_age_ms, 3)
+                            if previous_age_ms is not None
+                            else None
+                        ),
+                        reuse_available=reuse_available,
+                    )
                     return result
                 else:
                     return None
@@ -865,6 +929,7 @@ class Automation(metaclass=SingletonMeta):
         在当前截图中查找多个目标图像的位置
         """
         try:
+            started_at = time.perf_counter()
             cache_key = (
                 "multiple",
                 self._current_frame_key(screenshot_image),
@@ -876,6 +941,15 @@ class Automation(metaclass=SingletonMeta):
             )
             cache_hit, cached_result = self._match_cache_get(cache_key)
             if cache_hit:
+                perf_log.multi_match(
+                    target=target,
+                    caller=perf_log.caller(1),
+                    region=list(my_crop) if my_crop else None,
+                    fullscreen=not bool(my_crop),
+                    duration_ms=0.0,
+                    count=len(cached_result) if isinstance(cached_result, list) else 0,
+                    from_cache=True,
+                )
                 return cached_result
 
             template, bbox = self._load_active_template(target)
@@ -884,27 +958,51 @@ class Automation(metaclass=SingletonMeta):
             screenshot = self._get_screenshot_array(screenshot_image, gray=True)
             if not self._is_usable_image(screenshot):
                 return []
+            if hasattr(screenshot, "shape"):
+                full_height, full_width = screenshot.shape[:2]
+            elif hasattr(screenshot, "size"):
+                full_width, full_height = screenshot.size
+            else:
+                return []
             crop_offset = (0, 0)
             if my_crop:
                 crop_offset = (int(round(my_crop[0])), int(round(my_crop[1])))
+                region = (
+                    max(0, crop_offset[0]),
+                    max(0, crop_offset[1]),
+                    min(full_width, int(round(my_crop[2]))),
+                    min(full_height, int(round(my_crop[3]))),
+                )
                 screenshot = ImageUtils.crop(screenshot, my_crop, copy=False)
                 if not self._is_usable_image(screenshot):
                     return []
+            else:
+                region = (0, 0, full_width, full_height)
+            if hasattr(template, "shape"):
+                template_height, template_width = template.shape[:2]
+            elif hasattr(template, "size"):
+                template_width, template_height = template.size
+            else:
+                template_width, template_height = 0, 0
             matches = ImageUtils.match_template_with_multiple_targets(
                 screenshot, template, threshold, min_dist=min_dist
             )
             if crop_offset != (0, 0):
                 matches = [(x + crop_offset[0], y + crop_offset[1]) for x, y in matches]
             self._match_cache_put(cache_key, matches)
-            if len(matches) == 0:
-                log.debug(f"未找到任何目标图像{target}", stacklevel=additional_stack + 3)
-                return []
-            else:
-                log.debug(
-                    f"找到{len(matches)}个目标：{matches}",
-                    stacklevel=additional_stack + 3,
-                )
-                return matches
+            perf_log.multi_match(
+                target=target,
+                caller=perf_log.caller(1),
+                region=list(region),
+                area=max(0, region[2] - region[0]) * max(0, region[3] - region[1]),
+                fullscreen=not bool(my_crop),
+                duration_ms=round((time.perf_counter() - started_at) * 1000.0, 3),
+                count=len(matches),
+                from_cache=False,
+                template_size=[template_width, template_height],
+                screen_size=[full_width, full_height],
+            )
+            return matches
         except Exception as e:
             check_cancelled()
             log.error(f"寻找图片出错:{e}")
@@ -968,7 +1066,13 @@ class Automation(metaclass=SingletonMeta):
             entries = getattr(self, "_last_ocr_entries", None)
         entry = self._best_ocr_entry(target, entries) if entries else None
         if entry is not None:
-            log.debug(f"识别到目标：{entry[0]},坐标为：{entry[1]}")
+            perf_log.ocr_match(
+                target=str(target),
+                text=entry[0],
+                position=list(entry[1]),
+                caller=perf_log.caller(1),
+                match_type="structured",
+            )
             return entry[1]
         if not target:
             return False
@@ -980,11 +1084,23 @@ class Automation(metaclass=SingletonMeta):
         # Compatibility fallback for callers that provide a plain OCR dict.
         for text in ocr_dict.keys():
             if target.lower() in text.lower():
-                log.debug(f"识别到目标：{text},坐标为：{ocr_dict[text]}")
+                perf_log.ocr_match(
+                    target=str(target),
+                    text=text,
+                    position=list(ocr_dict[text]),
+                    caller=perf_log.caller(1),
+                    match_type="substring",
+                )
                 return ocr_dict[text]
             # 去除空格后再匹配，解决OCR识别结果带空格的问题（如 "HongLu" vs "Hong Lu"）
             if target.replace(" ", "").lower() in text.replace(" ", "").lower():
-                log.debug(f"识别到目标（去空格匹配）：{text},坐标为：{ocr_dict[text]}")
+                perf_log.ocr_match(
+                    target=str(target),
+                    text=text,
+                    position=list(ocr_dict[text]),
+                    caller=perf_log.caller(1),
+                    match_type="compact_substring",
+                )
                 return ocr_dict[text]
         return False
 
@@ -997,8 +1113,17 @@ class Automation(metaclass=SingletonMeta):
             ocr_cache = self._ocr_cache = {}
 
         cached = ocr_cache.get(cache_key)
+        source_image = self.screenshot if screenshot_image is None else screenshot_image
+        if my_crop is not None:
+            search_region = tuple(int(round(x)) for x in my_crop)
+        else:
+            source_size = getattr(source_image, "size", None)
+            search_region = (
+                (0, 0, int(source_size[0]), int(source_size[1]))
+                if isinstance(source_size, tuple) and len(source_size) >= 2
+                else None
+            )
         if cached is None:
-            source_image = self.screenshot if screenshot_image is None else screenshot_image
             t_ocr_start = time.perf_counter()
             if my_crop is not None:
                 if hasattr(source_image, "crop"):
@@ -1049,14 +1174,39 @@ class Automation(metaclass=SingletonMeta):
             cached = (ocr_dict, ocr_text_list, ocr_box_dict, ocr_entries)
             ocr_cache[cache_key] = cached
 
-            search_region = tuple(int(round(x)) for x in my_crop) if my_crop is not None else (0, 0, 1920, 1080)
-            vision_profiler.record_ocr(search_region, ocr_cost_ms)
-            log.debug(
-                f"[VISION-OCR] region={search_region} | cost={ocr_cost_ms:.1f}ms | count={len(ocr_text_list)} | texts={ocr_text_list[:3]}",
-                stacklevel=additional_stack + 3,
+            vision_profiler.record_ocr(search_region or (0, 0, 0, 0), ocr_cost_ms)
+            perf_log.ocr(
+                caller=perf_log.caller(1),
+                region=list(search_region) if search_region is not None else None,
+                area=(
+                    max(0, search_region[2] - search_region[0])
+                    * max(0, search_region[3] - search_region[1])
+                    if search_region is not None
+                    else None
+                ),
+                fullscreen=my_crop is None,
+                duration_ms=round(ocr_cost_ms, 3),
+                text_count=len(ocr_text_list),
+                texts=ocr_text_list[:3],
+                cache_hit=False,
             )
-            if ocr_dict:
-                log.debug(f"识别到文本及其坐标：{ocr_dict}", stacklevel=additional_stack + 3)
+        else:
+            cached_texts = cached[1] if len(cached) > 1 else []
+            perf_log.ocr(
+                caller=perf_log.caller(1),
+                region=list(search_region) if search_region is not None else None,
+                area=(
+                    max(0, search_region[2] - search_region[0])
+                    * max(0, search_region[3] - search_region[1])
+                    if search_region is not None
+                    else None
+                ),
+                fullscreen=my_crop is None,
+                duration_ms=0.0,
+                text_count=len(cached_texts),
+                texts=list(cached_texts[:3]),
+                cache_hit=True,
+            )
 
         ocr_dict, ocr_text_list, *rest = cached
         self._last_ocr_box_dict = rest[0] if rest else {}
@@ -1610,6 +1760,17 @@ class Automation(metaclass=SingletonMeta):
             if cache_allowed:
                 cache_hit, cached_result = self._match_cache_get(cache_key)
                 if cache_hit:
+                    perf_log.match(
+                        target=target,
+                        caller=perf_log.caller(1),
+                        model=model,
+                        region=list(my_crop) if my_crop else None,
+                        fullscreen=not bool(my_crop),
+                        duration_ms=0.0,
+                        score=None,
+                        matched=bool(cached_result),
+                        from_cache=True,
+                    )
                     return cached_result
 
             screenshot_full = self._get_screenshot_array(screenshot_image, gray=True)
@@ -1681,13 +1842,21 @@ class Automation(metaclass=SingletonMeta):
 
                 matched = self._is_valid_match(matchVal, threshold)
 
-                rw = actual_region[2] - actual_region[0]
-                rh = actual_region[3] - actual_region[1]
-                target_clean = target.replace("./assets/images/", "").replace("\\", "/")
-                hit_str = f"({center[0]},{center[1]})" if (matched and center) else "None"
-                log.debug(
-                    f"[VISION-MATCH] target={target_clean} | model={model} | region={actual_region}[{rw}x{rh}] | cost={match_cost_ms:.1f}ms | score={matchVal:.3f} | hit={hit_str}",
-                    stacklevel=additional_stack + 3,
+                perf_log.match(
+                    target=target,
+                    caller=perf_log.caller(1),
+                    model=model,
+                    region=list(actual_region),
+                    area=max(0, actual_region[2] - actual_region[0])
+                    * max(0, actual_region[3] - actual_region[1]),
+                    fullscreen=actual_fullscreen,
+                    duration_ms=round(match_cost_ms, 3),
+                    score=float(matchVal),
+                    matched=matched,
+                    from_cache=False,
+                    template_size=[tw, th],
+                    screen_size=[screen_w, screen_h],
+                    threshold=threshold,
                 )
 
                 vision_profiler.record_match(

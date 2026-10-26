@@ -1,9 +1,12 @@
+import time
+
 from core.execution_control import interruptible_sleep as sleep
 from module.automation import TextMatchResult, auto
 from module.config import cfg, theme_list
 from module.decorator.decorator import begin_and_finish_time_log
 from module.logger import log
 from module.mirror_routes import MirrorRouteDefinition
+from module.perf_log import perf_log
 from tasks.base.back_init_menu import back_init_menu
 from utils.image_utils import ImageUtils
 from utils.path_manager import path_manager
@@ -88,6 +91,7 @@ def select_theme_pack(
     prefer_hatred_and_despair: bool | None = None,
 ):
     loop_count = 30
+    theme_started = time.perf_counter()
     auto.model = "clam"
     scale = cfg.set_win_size / 1080
     if path_manager.current_language == "zh_cn":
@@ -226,6 +230,17 @@ def select_theme_pack(
                     auto.mouse_drag_down(*drag_point)
                     log.debug(f"选择卡包: {all_theme_pack[0]} drag_start={drag_point}")
                     sleep(3)
+                    perf_log.record(
+                        "theme_pack",
+                        status="feature",
+                        floor=floor,
+                        pack_count=len(all_theme_pack),
+                        selected="feature",
+                        drag_point=list(drag_point),
+                        elapsed_ms=round((time.perf_counter() - theme_started) * 1000.0, 3),
+                        refresh_times=refresh_times,
+                        loop_count=loop_count,
+                    )
                     msg = "此次主题包选择了最左边的（活动）卡包"
                     log.info(msg)
                     return
@@ -271,6 +286,20 @@ def select_theme_pack(
                     auto.mouse_drag_down(*drag_point)
                     log.debug(f"选择卡包: {pack} drag_start={drag_point}")
                     sleep(3)
+                    perf_log.record(
+                        "theme_pack",
+                        status="preferred",
+                        floor=floor,
+                        pack_count=len(all_theme_pack),
+                        names=list(pack_name),
+                        weights=list(weight_list),
+                        selected=pack_name[max_index],
+                        selected_index=max_index,
+                        drag_point=list(drag_point),
+                        elapsed_ms=round((time.perf_counter() - theme_started) * 1000.0, 3),
+                        refresh_times=refresh_times,
+                        loop_count=loop_count,
+                    )
                     msg = f"此次选择卡包关键词：{pack_name[max_index]}"
                     log.info(msg)
                     return
@@ -297,6 +326,20 @@ def select_theme_pack(
                 auto.mouse_drag_down(*drag_point)
                 log.debug(f"选择卡包: {pack} drag_start={drag_point}")
                 sleep(3)
+                perf_log.record(
+                    "theme_pack",
+                    status="fallback",
+                    floor=floor,
+                    pack_count=len(all_theme_pack),
+                    names=list(pack_name),
+                    weights=list(weight_list),
+                    selected=pack_name[max_index],
+                    selected_index=max_index,
+                    drag_point=list(drag_point),
+                    elapsed_ms=round((time.perf_counter() - theme_started) * 1000.0, 3),
+                    refresh_times=refresh_times,
+                    loop_count=loop_count,
+                )
                 log.debug("无匹配最低阈值的主题包，选择最高权重主题包")
                 msg = f"无匹配最低阈值的主题包，选择最高权重主题包\n此次选择卡包关键词：{pack_name[max_index]}"
                 log.info(msg)
@@ -315,5 +358,13 @@ def select_theme_pack(
             log.error("无法选取主题包,尝试回到初始界面")
             back_init_menu()
             break
+    perf_log.record(
+        "theme_pack",
+        status="failed",
+        floor=floor,
+        elapsed_ms=round((time.perf_counter() - theme_started) * 1000.0, 3),
+        refresh_times=refresh_times,
+        loop_count=loop_count,
+    )
     log.error("无法选取主题包,尝试回到初始界面")
     back_init_menu()

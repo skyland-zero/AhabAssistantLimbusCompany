@@ -31,6 +31,7 @@ from module.my_error.my_error import (
 )
 from module.observe_ego_gift import normalize_observe_ego_gifts, resolve_observe_ego_gift
 from module.ocr import ocr
+from module.perf_log import perf_log
 from module.vision_profiler import vision_profiler
 from tasks import all_systems, observe_system, start_gift
 from tasks.base.back_init_menu import back_init_menu
@@ -884,6 +885,7 @@ class Mirror:
                             msg = f"启动后第{floor_num + 1}层卡包，该楼层时间不完整"
                         to_log_with_time(msg, floor_time)
                         log.debug(vision_profiler.get_summary_text())
+                        perf_log.summary(vision_profiler.get_summary_dict(), floor=floor_num)
                 except MirrorPlanProgressError as error:
                     self.plan_runtime.record_deviation(str(error))
                     log.info(f"楼层时间记录跳过：{error}")
@@ -1500,6 +1502,7 @@ class Mirror:
         # 输出镜牢总时间
         msg = f"此次镜牢使用{self.system}体系队伍"
         to_log_with_time(msg, elapsed_time)
+        perf_log.summary(vision_profiler.get_summary_dict(), floor=self.floor)
         vision_profiler.log_summary()
 
         return True

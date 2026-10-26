@@ -1,4 +1,5 @@
 import logging
+import time
 
 import cv2
 import numpy as np
@@ -7,6 +8,7 @@ from PIL import Image
 from rapidocr import EngineType, LangDet, LangRec, ModelType, OCRVersion, RapidOCR
 from rapidocr.utils.output import RapidOCROutput
 
+from module.perf_log import perf_log
 from utils.singletonmeta import SingletonMeta
 
 
@@ -45,6 +47,7 @@ class OCR(metaclass=SingletonMeta):
 
     def run(self, image: Image.Image | np.ndarray | str) -> RapidOCROutput:
         """执行OCR识别，支持Image对象、文件路径和np.ndarray对象"""
+        run_started = time.perf_counter()
         try:
             if isinstance(image, str):
                 with Image.open(image) as image_file:
@@ -81,15 +84,21 @@ class OCR(metaclass=SingletonMeta):
             h, w = img_cv_gray.shape[:2]
             scale = 1.0
             max_side = max(h, w)
+            resize_started = time.perf_counter()
             if max_side > 900:
                 scale = 900.0 / float(max_side)
                 new_w = max(1, int(round(w * scale)))
                 new_h = max(1, int(round(h * scale)))
                 img_cv_gray = cv2.resize(img_cv_gray, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            resize_ms = (time.perf_counter() - resize_started) * 1000.0
 
             # 自适应均衡化(均值化后更亮)
+            preprocess_started = time.perf_counter()
             processed_image = self._clahe.apply(img_cv_gray)
+            preprocess_ms = (time.perf_counter() - preprocess_started) * 1000.0
+            engine_started = time.perf_counter()
             results = self.engine(processed_image)
+            engine_ms = (time.perf_counter() - engine_started) * 1000.0
             # 将缩放后的boxes还原到原图坐标系，保持上层my_crop偏移逻辑不变
             if scale != 1.0 and getattr(results, "boxes", None) is not None:
                 inv = 1.0 / scale
@@ -106,12 +115,19 @@ class OCR(metaclass=SingletonMeta):
                     results.boxes = scaled_boxes  # type: ignore[attr-defined]
                 except Exception:
                     pass
-            self.log_results(results)
+            perf_log.ocr_engine(
+                raw_shape=[w, h],
+                processed_shape=list(processed_image.shape),
+                scale=round(scale, 4),
+                resize_ms=round(resize_ms, 3),
+                preprocess_ms=round(preprocess_ms, 3),
+                engine_ms=round(engine_ms, 3),
+                total_ms=round((time.perf_counter() - run_started) * 1000.0, 3),
+                text_count=len(getattr(results, "txts", ()) or ()),
+            )
             return results
         except Exception as e:
+            # Keep unexpected OCR failures visible; per-call success output is
+            # now emitted by the independent performance log instead.
             self.logger.error(e)
             return RapidOCROutput()
-
-    def log_results(self, ocr_results: RapidOCROutput) -> None:
-        """记录OCR识别记录"""
-        self.logger.debug(f"OCR识别结果：{ocr_results.txts}")

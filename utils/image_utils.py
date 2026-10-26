@@ -627,7 +627,6 @@ class ImageUtils:
             res = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
         points = cls._component_peaks(res, threshold)
         if not points:
-            log.debug(f"未找到匹配项，最高匹配度为：{np.max(res)}")
             return []
 
         center_points = []

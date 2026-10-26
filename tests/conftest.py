@@ -21,3 +21,6 @@ _ISOLATION_ROOT = Path(tempfile.mkdtemp(prefix="aalc-pytest-"))
 os.environ["AALC_CONFIG_PATH"] = str(_ISOLATION_ROOT / "config.yaml")
 os.environ["AALC_THEME_PACK_LIST_PATH"] = str(_ISOLATION_ROOT / "theme_pack_list.yaml")
 os.environ["AALC_THEME_PACK_WEIGHT_PATH"] = str(_ISOLATION_ROOT / "theme_pack_weight")
+# The suite must not append to the developer's performance log.  Individual
+# tests that exercise the logger construct an isolated PerfLog instance.
+os.environ.setdefault("AALC_PERF_LOG", "0")

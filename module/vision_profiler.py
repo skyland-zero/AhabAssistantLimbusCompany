@@ -33,6 +33,7 @@ class TargetStats:
     misses: int = 0
     total_time_ms: float = 0.0
     fullscreen_calls: int = 0
+    fullscreen_time_ms: float = 0.0
     hit_points: list[tuple[int, int]] = field(default_factory=list)
     template_size: tuple[int, int] = (0, 0)
     screen_size: tuple[int, int] = (1920, 1080)
@@ -106,6 +107,7 @@ class VisionProfiler(metaclass=SingletonMeta):
             stat.total_time_ms += duration_ms
             if is_fullscreen:
                 stat.fullscreen_calls += 1
+                stat.fullscreen_time_ms += duration_ms
 
             if matched:
                 stat.hits += 1
@@ -202,6 +204,45 @@ class VisionProfiler(metaclass=SingletonMeta):
             "cluster_center": (int(med_x), int(med_y)),
         }
 
+    def get_summary_dict(self) -> dict[str, Any]:
+        """Return the profiler state as JSON-serializable data."""
+
+        with self._lock:
+            targets = []
+            for stat in sorted(
+                self._targets.values(),
+                key=lambda item: item.total_time_ms,
+                reverse=True,
+            ):
+                targets.append(
+                    {
+                        "target": stat.target,
+                        "calls": stat.calls,
+                        "hits": stat.hits,
+                        "misses": stat.misses,
+                        "hit_rate": round(stat.hit_rate, 2),
+                        "total_time_ms": round(stat.total_time_ms, 3),
+                        "avg_time_ms": round(stat.avg_time_ms, 3),
+                        "fullscreen_calls": stat.fullscreen_calls,
+                        "fullscreen_time_ms": round(stat.fullscreen_time_ms, 3),
+                    }
+                )
+            fullscreen_calls = sum(stat.fullscreen_calls for stat in self._targets.values())
+            fullscreen_time_ms = sum(stat.fullscreen_time_ms for stat in self._targets.values())
+            return {
+                "match": {
+                    "calls": self._total_match_calls,
+                    "time_ms": round(self._total_match_time_ms, 3),
+                    "fullscreen_calls": fullscreen_calls,
+                    "fullscreen_time_ms": round(fullscreen_time_ms, 3),
+                },
+                "ocr": {
+                    "calls": self._ocr_stats.calls,
+                    "time_ms": round(self._ocr_stats.total_time_ms, 3),
+                },
+                "targets": targets,
+            }
+
     def get_summary_text(self) -> str:
         """生成格式化的性能报告与 ROI 推荐文本。"""
         with self._lock:
@@ -222,7 +263,7 @@ class VisionProfiler(metaclass=SingletonMeta):
                 clean_name = stat.target.replace("./assets/images/", "").replace("\\", "/")
                 lines.append(
                     f"  {i}. {clean_name}: "
-                    f"调用 {stat.calls}次 (全屏{stat.fullscreen_calls}次), "
+                    f"调用 {stat.calls}次 (全屏{stat.fullscreen_calls}次/{stat.fullscreen_time_ms:.0f}ms), "
                     f"命中 {stat.hits}次 ({stat.hit_rate:.1f}%), "
                     f"均耗 {stat.avg_time_ms:.1f}ms, "
                     f"累计 {stat.total_time_ms:.1f}ms"

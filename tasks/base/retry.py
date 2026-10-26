@@ -12,6 +12,7 @@ from module.automation import auto
 from module.config import cfg
 from module.game_and_screen import screen
 from module.logger import log
+from module.perf_log import perf_log
 from utils.utils import check_game_running
 
 _last_title_screen_tap_time = 0.0
@@ -214,6 +215,13 @@ def _current_frame_is_reusable() -> bool:
     return auto.screenshot is not None and not getattr(auto, "_frame_dirty", True)
 
 
+def _current_frame_age_ms() -> float | None:
+    timestamp = getattr(auto, "_latest_screenshot_monotonic", 0.0)
+    if not timestamp:
+        return None
+    return max(0.0, (time.monotonic() - timestamp) * 1000.0)
+
+
 def wait_for_ui_state(
     check: Callable[[], bool],
     timeout: float,
@@ -271,12 +279,26 @@ def retry(*, screenshot_ready: bool = False):
     ``screenshot_ready=True``，复用首帧以避免重复截图。
     """
     global _last_heavy_retry_ts, _heavy_retry_miss_streak
+    retry_started = time.perf_counter()
     start_time = time.time()
     selected_session = _active_session()
     is_windows = selected_session.target.kind == "pc" if selected_session is not None else not cfg.config.simulator
     if is_windows:
         saved_hwnd = screen.handle.hwnd
     reuse_frame = screenshot_ready
+    frame_age_ms = _current_frame_age_ms()
+    reuse_available = (
+        _current_frame_is_reusable()
+        and frame_age_ms is not None
+        and frame_age_ms <= 150.0
+    )
+    perf_log.retry(
+        caller=perf_log.caller(1),
+        screenshot_ready=bool(screenshot_ready),
+        reuse_available=reuse_available,
+        frame_age_ms=round(frame_age_ms, 3) if frame_age_ms is not None else None,
+        miss_streak=_heavy_retry_miss_streak,
+    )
     while True:
         if ensure_simulator_game_started():
             start_time = time.time()
@@ -289,6 +311,13 @@ def retry(*, screenshot_ready: bool = False):
         if auto.get_restore_time() is not None:
             start_time = max(start_time, auto.get_restore_time())
         if check_times(start_time):
+            perf_log.record(
+                "retry_end",
+                caller=perf_log.caller(1),
+                status="timeout",
+                duration_ms=round((time.perf_counter() - retry_started) * 1000.0, 3),
+                miss_streak=_heavy_retry_miss_streak,
+            )
             return False
         if reuse_frame and _current_frame_is_reusable():
             reuse_frame = False
@@ -308,6 +337,12 @@ def retry(*, screenshot_ready: bool = False):
             elif _heavy_retry_miss_streak % 3 != 0:
                 heavy_due = False
         if heavy_due:
+            perf_log.record(
+                "retry_heavy",
+                caller=perf_log.caller(1),
+                miss_streak=_heavy_retry_miss_streak,
+                reuse_ready=bool(reuse_frame),
+            )
             dialog_crop = _retry_dialog_crop()
             if position := auto.find_element("base/retry_countdown.png", my_crop=dialog_crop):
                 sleep(5)
@@ -315,12 +350,14 @@ def retry(*, screenshot_ready: bool = False):
                 reuse_frame = False
                 _heavy_retry_miss_streak = 0
                 _last_heavy_retry_ts = time.monotonic()
+                perf_log.record("retry_handled", reason="countdown")
                 continue
             if auto.click_element("base/retry.png", threshold=0.9, my_crop=dialog_crop):
                 auto.mouse_to_blank()
                 reuse_frame = False
                 _heavy_retry_miss_streak = 0
                 _last_heavy_retry_ts = time.monotonic()
+                perf_log.record("retry_handled", reason="retry")
                 continue
             # 原三重OR冗余：仅保留try_again -> click retry，避免重复查countdown/retry
             if auto.find_element("base/try_again.png", my_crop=dialog_crop):
@@ -328,6 +365,7 @@ def retry(*, screenshot_ready: bool = False):
                 reuse_frame = False
                 _heavy_retry_miss_streak = 0
                 _last_heavy_retry_ts = time.monotonic()
+                perf_log.record("retry_handled", reason="try_again")
                 continue
             # 未命中：计入miss并刷新时间戳，下次节流以此刻为准
             _heavy_retry_miss_streak += 1
@@ -351,6 +389,13 @@ def retry(*, screenshot_ready: bool = False):
                 init_game()
             reuse_frame = False
             continue
+        perf_log.record(
+            "retry_end",
+            caller=perf_log.caller(1),
+            status="clean",
+            duration_ms=round((time.perf_counter() - retry_started) * 1000.0, 3),
+            miss_streak=_heavy_retry_miss_streak,
+        )
         break
 
 

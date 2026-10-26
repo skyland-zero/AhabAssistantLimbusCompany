@@ -47,19 +47,48 @@ def check_cancelled() -> None:
 
 
 def interruptible_sleep(seconds: float, *, poll_interval: float = 0.1) -> None:
-    deadline = time.monotonic() + max(0.0, seconds)
-    while True:
-        check_cancelled()
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return
-        with _lock:
-            event = _cancel_event
-        delay = min(poll_interval, remaining)
-        if event is None:
-            time.sleep(delay)
-        elif event.wait(delay):
+    measured = float(seconds) >= 0.2
+    perf_log = None
+    started_at = 0.0
+    if measured:
+        try:
+            # Lazy import keeps the core cancellation bridge independent
+            # during startup and avoids a module cycle through the logger.
+            from module.perf_log import perf_log as _perf_log
+
+            perf_log = _perf_log
+            started_at = time.perf_counter()
+        except Exception:
+            perf_log = None
+
+    completed = False
+    try:
+        deadline = time.monotonic() + max(0.0, seconds)
+        while True:
             check_cancelled()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                completed = True
+                return
+            with _lock:
+                event = _cancel_event
+            delay = min(poll_interval, remaining)
+            if event is None:
+                time.sleep(delay)
+            elif event.wait(delay):
+                check_cancelled()
+    finally:
+        if perf_log is not None:
+            try:
+                actual_ms = (time.perf_counter() - started_at) * 1000.0
+                perf_log.sleep(
+                    caller=perf_log.caller(1),
+                    requested_ms=round(float(seconds) * 1000.0, 3),
+                    actual_ms=round(actual_ms, 3),
+                    completed=completed,
+                )
+            except Exception:
+                pass
 
 
 def wait_for_event(event: threading.Event, timeout: float, *, poll_interval: float = 0.1) -> bool:

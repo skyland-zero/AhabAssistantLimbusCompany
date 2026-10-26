@@ -2,6 +2,7 @@ import time
 
 from module.logger import log
 from module.my_error.my_error import userStopError
+from module.perf_log import perf_log
 
 
 # 一个任务开始与结束的日志，并记录耗时
@@ -13,9 +14,16 @@ def begin_and_finish_time_log(task_name, calculate_time=True):
 
             # 计时开始
             start_time = time.time()
+            perf_log.push_task(task_name)
 
             # 真正函数
-            result = func(*args, **kw)
+            try:
+                result = func(*args, **kw)
+            except Exception:
+                perf_log.pop_task(status="error")
+                raise
+            else:
+                perf_log.pop_task(status="ok")
 
             # 计时结束
             end_time = time.time()
