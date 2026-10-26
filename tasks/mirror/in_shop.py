@@ -167,6 +167,8 @@ class Shop:
         position,
         *,
         hover: bool = False,
+        visible_names: bool = True,
+        reset_mouse: bool = True,
     ) -> int | None:
         """Read a route gift at an inventory position.
 
@@ -174,12 +176,18 @@ class Shop:
         fast crop check handles visible names; the optional hover path is used
         only by destructive fusion filtering so route targets can be removed
         from the candidate list before any click occurs.
+
+        Grid scans can set ``visible_names=False`` because inventory cells do
+        not render names before hovering; they can also defer the blank-mouse
+        reset until the whole scan finishes with ``reset_mouse=False``.
         """
 
         gift_id = self._route_gift_id_at_position(
             position,
             hover=hover,
             include_recipe_targets=True,
+            visible_names=visible_names,
+            reset_mouse=reset_mouse,
         )
         if gift_id is None:
             return None
@@ -193,8 +201,16 @@ class Shop:
         gift_ids=None,
         hover: bool = False,
         include_recipe_targets: bool = False,
+        visible_names: bool = True,
+        reset_mouse: bool = True,
     ) -> str | None:
-        """Match a route gift at an inventory coordinate, optionally by hover."""
+        """Match a route gift at an inventory coordinate, optionally by hover.
+
+        ``visible_names=False`` skips the pre-hover OCR used for grids whose
+        cells do not show names.  The post-hover check still runs, and callers
+        can pass ``reset_mouse=False`` to reset the pointer once per scan
+        instead of once per cell.
+        """
 
         if not self.route.gifts or not position or len(position) < 2:
             return None
@@ -214,13 +230,21 @@ class Shop:
         )
         if int(round(crop[2])) <= int(round(crop[0])) or int(round(crop[3])) <= int(round(crop[1])):
             return None
-        gift_id = self._route_gift_id_for_crop(
-            crop,
-            gift_ids,
-            include_recipe_targets=include_recipe_targets,
-        )
-        if gift_id is not None or not hover:
-            return gift_id
+
+        if not hover:
+            return self._route_gift_id_for_crop(
+                crop,
+                gift_ids,
+                include_recipe_targets=include_recipe_targets,
+            )
+        if visible_names:
+            gift_id = self._route_gift_id_for_crop(
+                crop,
+                gift_ids,
+                include_recipe_targets=include_recipe_targets,
+            )
+            if gift_id is not None:
+                return gift_id
 
         try:
             auto.mouse_move((x, y))
@@ -237,7 +261,8 @@ class Shop:
             log.debug(f"读取路线饰品悬浮提示失败: {error}")
             return None
         finally:
-            auto.mouse_to_blank()
+            if reset_mouse:
+                auto.mouse_to_blank()
 
     @staticmethod
     def _route_screen_size() -> tuple[float, float]:
@@ -246,15 +271,39 @@ class Shop:
             return tuple(map(float, screenshot_size))
         return float(cfg.set_win_size * 16 / 9), float(cfg.set_win_size)
 
+    @classmethod
+    def _fuse_inventory_crop(cls) -> tuple[int, int, int, int]:
+        """Return a generous right-side crop for the system-fusion inventory."""
+
+        width, height = cls._route_screen_size()
+        return (
+            int(round(width * 0.30)),
+            int(round(height * 0.08)),
+            int(round(width)),
+            int(round(height * 0.95)),
+        )
+
     def _remove_route_targets(self, positions, *, hover: bool = False):
         """Filter route targets out of a destructive inventory operation."""
 
         if not self.route.gifts or not positions:
             return positions
         protected = []
-        for position in positions:
-            if self._route_priority_at_position(position, hover=hover) is not None:
-                protected.append(position)
+        try:
+            for position in positions:
+                if (
+                    self._route_priority_at_position(
+                        position,
+                        hover=hover,
+                        visible_names=False,
+                        reset_mouse=False,
+                    )
+                    is not None
+                ):
+                    protected.append(position)
+        finally:
+            if hover:
+                auto.mouse_to_blank()
         if protected:
             log.debug(f"保护{len(protected)}个当前路线饰品，跳过通用合成/出售")
         return [position for position in positions if position not in protected]
@@ -734,10 +783,20 @@ class Shop:
                     abs(point[0] - existing[0]) <= 40 and abs(point[1] - existing[1]) <= 40 for existing in seen
                 ):
                     seen.append(point)
-        for point in seen:
-            priority = self._route_priority_at_position(point, hover=True)
-            if priority is not None:
-                candidates.append((priority, point))
+        if not seen:
+            return []
+        try:
+            for point in seen:
+                priority = self._route_priority_at_position(
+                    point,
+                    hover=True,
+                    visible_names=False,
+                    reset_mouse=False,
+                )
+                if priority is not None:
+                    candidates.append((priority, point))
+        finally:
+            auto.mouse_to_blank()
         candidates.sort(key=lambda item: (item[0], item[1][1], item[1][0]))
         return [point for _, point in candidates]
 
@@ -1101,13 +1160,25 @@ class Shop:
         self.enter_fuse()
 
         while True:
-            if list_block := auto.find_element("mirror/shop/gifts_list_block.png", take_screenshot=True):
+            # No input occurs between the inventory reads below, so capture one
+            # frame and reuse it for the list, fuse labels, formula gifts and
+            # system-gift scan instead of taking a screenshot for each lookup.
+            frame = auto.take_screenshot()
+            if frame is None:
+                continue
+            if list_block := auto.find_element(
+                "mirror/shop/gifts_list_block.png",
+                screenshot_image=frame,
+            ):
                 auto.mouse_drag(list_block[0], list_block[1], drag_time=1, dy=-500)
+                frame = auto.take_screenshot()
+                if frame is None:
+                    continue
             points = auto.find_element(
                 "mirror/shop/fuse_label.png",
                 find_type="image_with_multiple_targets",
                 threshold=0.85,
-                take_screenshot=True,
+                screenshot_image=frame,
             )
             if len(points) < 2:
                 auto.mouse_click_blank(times=3)
@@ -1121,7 +1192,7 @@ class Shop:
             fusion_gift = None
             # 如果找到能合成的公式饰品，则合成
             for gift in system_gifts:
-                if pos := auto.find_element(gift):
+                if pos := auto.find_element(gift, screenshot_image=frame):
                     if pos[1] > dividing_line:
                         continue
                     auto.mouse_click(pos[0], pos[1])
@@ -1131,11 +1202,24 @@ class Shop:
 
             fusion_pos = []
             if not fusion:
+                inventory_crop = self._fuse_inventory_crop()
+                if inventory_crop[2] <= inventory_crop[0] or inventory_crop[3] <= inventory_crop[1]:
+                    inventory_crop = None
                 all_system_gift = auto.find_element(
                     f"mirror/shop/enhance_gifts/{self.system}.png",
                     find_type="image_with_multiple_targets",
-                    take_screenshot=True,
+                    screenshot_image=frame,
+                    my_crop=inventory_crop,
                 )
+                if not all_system_gift and inventory_crop is not None:
+                    # The crop is an optimization; fall back to the full frame
+                    # if a future UI layout places inventory outside it.
+                    log.debug("合成库存裁剪未命中，回退全屏扫描")
+                    all_system_gift = auto.find_element(
+                        f"mirror/shop/enhance_gifts/{self.system}.png",
+                        find_type="image_with_multiple_targets",
+                        screenshot_image=frame,
+                    )
                 all_system_gift = self._remove_route_targets(all_system_gift, hover=True)
                 if len(all_system_gift) > 0:
                     for g in all_system_gift:
@@ -1461,6 +1545,9 @@ class Shop:
             if button := auto.find_element("mirror/shop/sort_button_assets.png"):
                 auto.mouse_click(button[0], button[1])
                 auto.mouse_click(button[0], button[1] + 200 * my_scale)
+                # The scan cache reuses the first settled frame instead of
+                # repeating the full scan on every stale round.
+                sleep(0.5)
                 break
             if auto.click_element("mirror/shop/enhance_gifts_assets.png"):
                 sleep(1)
@@ -1481,6 +1568,58 @@ class Shop:
         system_level_IV = False
         second_system_level_IV = False
         stale_count = 0
+        # The enhance screen is static until we actually upgrade something.
+        # Reuse the expensive route/system scans across stale iterations, and
+        # clear the cache after every successful upgrade so the next scan sees
+        # the new inventory state.
+        scan_cache = {}
+
+        def cached_scan(key, scanner):
+            if key in scan_cache:
+                log.debug(f"复用升级扫描结果：{key}")
+                return scan_cache[key]
+            scan_cache[key] = scanner()
+            return scan_cache[key]
+
+        def scan_route_candidates():
+            return self._route_enhance_candidates()
+
+        def scan_level_iv():
+            if system_level_IV:
+                return None
+            return auto.find_element(f"mirror/shop/level_IV_gifts/{self.system}_level_IV.png")
+
+        def scan_second_level_iv():
+            if not (self.second_system and self.second_system_action[3]) or second_system_level_IV:
+                return None
+            if self.second_system_setting != 1 and not (
+                self.second_system_setting == 0 and self.fuse_IV is True
+            ):
+                return None
+            return auto.find_element(
+                f"mirror/shop/level_IV_gifts/{self.second_system_select}_level_IV.png"
+            )
+
+        def scan_first_gift():
+            if self.first_gift_enhance is not False or system_level_IV:
+                return None
+            return auto.find_element(f"mirror/shop/enhance_gifts/big_{self.system}.png")
+
+        def scan_system_gifts():
+            gifts = auto.find_element(
+                f"mirror/shop/enhance_gifts/{self.system}.png",
+                find_type="image_with_multiple_targets",
+            )
+            if not gifts:
+                return []
+            gifts = sorted(gifts, key=lambda x: (x[1], x[0]))
+            raw_count = len(gifts)
+            screen_size = auto.screenshot.size if auto.screenshot is not None else None
+            gifts = _filter_enhance_gift_scan_points(gifts, screen_size)
+            if len(gifts) != raw_count:
+                log.debug(f"升级扫描区域过滤：{raw_count} -> {len(gifts)}")
+            return gifts
+
         while True:
             # 自动截图
             if auto.take_screenshot() is None:
@@ -1488,7 +1627,7 @@ class Shop:
 
             next_gift = True
 
-            for route_gift in self._route_enhance_candidates():
+            for route_gift in cached_scan("route", scan_route_candidates):
                 if check_enhanced(route_gift):
                     continue
                 auto.mouse_click(route_gift[0], route_gift[1])
@@ -1496,6 +1635,7 @@ class Shop:
                     return False
                 self.enhance_gifts_list.append(route_gift)
                 log.info("按路线优先升级路线饰品")
+                scan_cache.clear()
                 next_gift = False
                 break
 
@@ -1504,61 +1644,51 @@ class Shop:
 
             # 升级本体系四级
             if not system_level_IV:
-                if level_IV := auto.find_element(f"mirror/shop/level_IV_gifts/{self.system}_level_IV.png"):
+                if level_IV := cached_scan("level_iv", scan_level_iv):
                     if check_enhanced(level_IV) is False:
                         auto.mouse_click(level_IV[0], level_IV[1])
                         if self.ego_gift_to_power_up() is False:
                             break
                         else:
                             self.enhance_gifts_list.append(level_IV)
+                            scan_cache.clear()
                     system_level_IV = True
                     continue
 
             # 升级第二体系四级
             if self.second_system and self.second_system_action[3] and second_system_level_IV is False:
-                if self.second_system_setting == 1 or (self.second_system_setting == 0 and self.fuse_IV is True):
-                    if level_IV_2 := auto.find_element(
-                        f"mirror/shop/level_IV_gifts/{self.second_system_select}_level_IV.png"
-                    ):
-                        if check_enhanced(level_IV_2) is False:
-                            auto.mouse_click(level_IV_2[0], level_IV_2[1])
-                            if self.ego_gift_to_power_up() is False:
-                                break
-                            else:
-                                self.enhance_gifts_list.append(level_IV_2)
-                        second_system_level_IV = True
-                        continue
+                if level_IV_2 := cached_scan("second_level_iv", scan_second_level_iv):
+                    if check_enhanced(level_IV_2) is False:
+                        auto.mouse_click(level_IV_2[0], level_IV_2[1])
+                        if self.ego_gift_to_power_up() is False:
+                            break
+                        else:
+                            self.enhance_gifts_list.append(level_IV_2)
+                            scan_cache.clear()
+                    second_system_level_IV = True
+                    continue
 
             if self.first_gift_enhance is False and system_level_IV is False:
-                if f_gift := auto.find_element(f"mirror/shop/enhance_gifts/big_{self.system}.png"):
+                if f_gift := cached_scan("first_gift", scan_first_gift):
                     if self.ego_gift_to_power_up() is False:
                         break
                     else:
                         self.enhance_gifts_list.append(f_gift)
                         self.first_gift_enhance = True
+                        scan_cache.clear()
                         continue
 
-            if gifts := auto.find_element(
-                f"mirror/shop/enhance_gifts/{self.system}.png",
-                find_type="image_with_multiple_targets",
-            ):
-                gifts = sorted(gifts, key=lambda x: (x[1], x[0]))
-                raw_count = len(gifts)
-                screen_size = auto.screenshot.size if auto.screenshot is not None else None
-                gifts = _filter_enhance_gift_scan_points(gifts, screen_size)
-                if len(gifts) != raw_count:
-                    log.debug(f"升级扫描区域过滤：{raw_count} -> {len(gifts)}")
-                for gift in gifts:
-                    if check_enhanced(gift) is False:
-                        auto.mouse_click(gift[0], gift[1])
-                        if self.ego_gift_to_power_up() is False:
-                            next_gift = False
-                            break
-                        else:
-                            self.enhance_gifts_list.append(gift)
+            for gift in cached_scan("system_gifts", scan_system_gifts):
+                if check_enhanced(gift) is False:
+                    auto.mouse_click(gift[0], gift[1])
+                    if self.ego_gift_to_power_up() is False:
+                        next_gift = False
+                        break
                     else:
-                        continue
-                    next_gift = False
+                        self.enhance_gifts_list.append(gift)
+                else:
+                    continue
+                next_gift = False
 
             # if list_block is False and auto.find_element("mirror/shop/gifts_list_block.png"):
             #     block_position = auto.find_element("mirror/shop/gifts_list_block.png")
