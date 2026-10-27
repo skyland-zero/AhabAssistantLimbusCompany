@@ -62,13 +62,17 @@ allowed_protected_files = [
     # Bounded retry-monitor lifecycle and ROI matching used by cancellation.
     "tasks/base/retry_monitor.py",
     "tasks/base/script_task_scheme.py",
+    # Fork-owned pseudo-solo battle hooks: the dynamic defense decision, the
+    # battle-scoped observer reset, and the run-scoped survivor cache path.
     "tasks/battle/battle.py",
     # Make daily reward polling interruptible by the Runner cancellation path.
     "tasks/daily/get_prize.py",
     "tasks/daily/luxcavation.py",
     # Fork-owned mirror compatibility hooks (team-code precedence and the
-    # pseudo-solo defense adapter); replay these small changes after taking
-    # the upstream mirror runner during synchronization.
+    # pseudo-solo defense adapter, including the run-scoped survivor cache that
+    # kicks in once ``赤红纠缠的蜘蛛巢`` makes deaths permanent); replay these
+    # small changes after taking the upstream mirror runner during
+    # synchronization.
     "tasks/mirror/mirror.py",
     # Fork-owned route adapter hooks.  The route catalog stays outside the
     # protected tree; these files only pass the selected route into existing

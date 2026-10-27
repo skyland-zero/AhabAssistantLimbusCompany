@@ -12,6 +12,7 @@ from core.pseudo_solo import (
     BattleRosterObserver,
     PseudoSoloDefenseState,
     PseudoSoloObservation,
+    SurvivorLedger,
     battle_portrait_badge_count,
     defense_turns_for_live_count,
 )
@@ -596,3 +597,303 @@ def test_observer_propagates_cancellation_from_monitor_capture(monkeypatch) -> N
     monkeypatch.setattr(pseudo_solo.auto, "take_monitor_screenshot", raise_stop)
     with pytest.raises(userStopError):
         observer.read_battle_live_count()
+
+
+# ---------------------------------------------------------------------------
+# Run-scoped survivor cache (「赤红纠缠的蜘蛛巢」: deaths are permanent)
+# ---------------------------------------------------------------------------
+
+
+def test_ledger_needs_two_matching_readings_before_it_confirms() -> None:
+    ledger = SurvivorLedger(required_confirmations=2)
+
+    first = ledger.record(7, source="team_page")
+    assert first.accepted is True
+    assert first.reason == SurvivorLedger.REASON_PENDING
+    assert first.confirmed is None
+    assert first.pending == 7
+
+    second = ledger.record(7, source="battle_row")
+    assert second.reason == SurvivorLedger.REASON_CONFIRMED
+    assert second.confirmed == 7
+    assert second.changed is True
+    assert ledger.source == "battle_row"
+
+
+def test_ledger_ignores_unreadable_frames() -> None:
+    ledger = SurvivorLedger(required_confirmations=1)
+    assert ledger.record(7, source="team_page").confirmed == 7
+
+    for unreadable in (None, "", "n/a", -1, True):
+        update = ledger.record(unreadable, source="battle_row")
+        assert update.accepted is False
+        assert update.reason == SurvivorLedger.REASON_UNREADABLE
+        assert update.confirmed == 7
+
+
+def test_ledger_confirms_a_decrease_after_two_readings() -> None:
+    ledger = SurvivorLedger(required_confirmations=2)
+    ledger.record(7, source="team_page")
+    ledger.record(7, source="team_page")
+    assert ledger.confirmed == 7
+
+    downgrade = ledger.record(6, source="battle_row")
+    assert downgrade.reason == SurvivorLedger.REASON_DECREASE_PENDING
+    assert downgrade.confirmed == 7
+
+    confirmed = ledger.record(6, source="battle_row")
+    assert confirmed.reason == SurvivorLedger.REASON_DECREASE_CONFIRMED
+    assert confirmed.confirmed == 6
+    assert confirmed.changed is True
+
+
+def test_ledger_rejects_an_increase_because_nobody_revives() -> None:
+    ledger = SurvivorLedger(required_confirmations=1)
+    ledger.record(5, source="team_page")
+
+    update = ledger.record(9, source="battle_row")
+    assert update.accepted is False
+    assert update.reason == SurvivorLedger.REASON_IMPOSSIBLE_INCREASE
+    assert update.confirmed == 5
+    assert ledger.confirmed == 5
+
+
+def test_ledger_reset_clears_the_run_cache() -> None:
+    ledger = SurvivorLedger(required_confirmations=1)
+    ledger.record(7, source="team_page")
+    assert ledger.confirmed == 7
+
+    ledger.reset()
+    assert ledger.confirmed is None
+    assert ledger.pending is None
+    assert ledger.source == ""
+
+
+def test_observer_run_cache_is_off_by_default(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 12)
+
+    assert observer.no_revive is False
+    assert observer.run_live_count is None
+
+    # Offer a reading through the ledger path and make sure nothing is cached.
+    observer._record_run_count(7, source="team_page")
+    assert observer.run_live_count is None
+
+
+def test_observer_enable_run_cache_confirms_after_two_readings() -> None:
+    observer = BattleRosterObserver([1] * 12)
+    observer.enable_run_cache()
+
+    observer._record_run_count(7, source="team_page")
+    assert observer.run_live_count is None
+    observer._record_run_count(7, source="team_page")
+    assert observer.run_live_count == 7
+
+
+def test_observer_battle_row_reuses_confirmed_count_without_resampling(monkeypatch) -> None:
+    observer = BattleRosterObserver([1] * 12, no_revive=True)
+    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="team_page")
+    assert observer.run_live_count == 7
+
+    verifications: list[int] = []
+
+    def fake_verify():
+        verifications.append(1)
+        return 7
+
+    def explode(*_args, **_kwargs):
+        raise AssertionError("the multi-frame sampler must not run once the run cache is confirmed")
+
+    monkeypatch.setattr(observer, "_verify_run_count_once", fake_verify)
+    monkeypatch.setattr(observer, "_capture_battle_color_frame", explode)
+    monkeypatch.setattr(pseudo_solo.auto, "_frame_id", 1, raising=False)
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", object(), raising=False)
+
+    assert observer.read_battle_live_count() == 7
+    assert len(verifications) == 1
+
+    # A new battle still returns the cached value, again with one cheap check.
+    observer.begin_battle()
+    monkeypatch.setattr(pseudo_solo.auto, "screenshot", object(), raising=False)
+    assert observer.read_battle_live_count() == 7
+    assert len(verifications) == 2
+    assert observer.run_live_count == 7
+
+
+def test_observer_run_cache_survives_begin_battle_and_clears_on_reset_run() -> None:
+    observer = BattleRosterObserver([1] * 12, no_revive=True)
+    observer._record_run_count(6, source="team_page")
+    observer._record_run_count(6, source="team_page")
+
+    observer.begin_battle()
+    assert observer.run_live_count == 6
+    observer.reset()
+    assert observer.run_live_count == 6
+
+    observer.reset_run()
+    assert observer.run_live_count is None
+
+
+def test_state_reuses_run_cache_for_every_battle() -> None:
+    class FakeRunObserver:
+        selected_count = 10
+        last_battle_live_count = None
+        calls = 0
+        run_live_count = 7
+
+        def __call__(self) -> PseudoSoloObservation:
+            self.calls += 1
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+        def begin_battle(self) -> None:
+            self.last_battle_live_count = None
+
+    observer = FakeRunObserver()
+    base_state = FakeDefenseState(5)
+    state = PseudoSoloDefenseState(base_state, observer)
+
+    state.begin_battle()
+    assert observer.calls == 0
+    assert state.battle_observation_pending is False
+    assert state.live_count == 7
+    assert state.last_battle_live_count == 7
+    assert base_state.remaining_turns == 6
+    assert state.should_defend() is True
+    assert observer.calls == 0
+
+    # The next battle reuses the same count instead of re-observing.
+    state.begin_battle()
+    assert observer.calls == 0
+    assert base_state.remaining_turns == 6
+    assert state.should_defend() is True
+    assert observer.calls == 0
+
+
+def test_state_run_cache_stops_defense_for_single_survivor() -> None:
+    class FakeRunObserver:
+        selected_count = 10
+        last_battle_live_count = None
+        run_live_count = 1
+
+        def __call__(self) -> PseudoSoloObservation:
+            raise AssertionError("the cached count must not be re-observed")
+
+    base_state = FakeDefenseState(5)
+    state = PseudoSoloDefenseState(base_state, FakeRunObserver())
+
+    state.begin_battle()
+    assert base_state.remaining_turns == 0
+    assert state.should_defend() is False
+    assert state.battle_observation_pending is False
+
+
+def test_state_run_cache_ignores_floor_changes_with_the_same_count() -> None:
+    class FakeRunObserver:
+        selected_count = 10
+        last_battle_live_count = None
+        run_live_count = 7
+        reset_calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+        def read_team_page_live_count(self) -> int | None:
+            return self.run_live_count
+
+        def reset(self) -> None:
+            self.reset_calls += 1
+
+    observer = FakeRunObserver()
+    base_state = FakeDefenseState(5)
+    state = PseudoSoloDefenseState(base_state, observer)
+
+    state.begin_battle()
+    state.consume_turn()
+    assert base_state.remaining_turns == 5
+
+    # Same count on a new floor keeps the cached roster: the budget is restored
+    # for the next battle but the observer is neither reset nor re-read.
+    assert state.observe_team_page(2) is True
+    assert base_state.remaining_turns == 6
+    assert observer.reset_calls == 0
+    assert state.observe_team_page(2) is False
+
+
+def test_state_run_cache_recomputes_when_the_count_drops() -> None:
+    class FakeRunObserver:
+        selected_count = 10
+        last_battle_live_count = None
+        run_live_count = 7
+
+        def __call__(self) -> PseudoSoloObservation:
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+        def read_team_page_live_count(self) -> int | None:
+            return self.run_live_count
+
+    observer = FakeRunObserver()
+    base_state = FakeDefenseState(5)
+    state = PseudoSoloDefenseState(base_state, observer)
+
+    state.begin_battle()
+    state.consume_turn()
+    state.consume_turn()
+    assert base_state.remaining_turns == 4
+
+    observer.run_live_count = 4
+    assert state.observe_team_page(3) is True
+    assert base_state.remaining_turns == 3
+    assert state.live_count == 4
+
+
+def test_state_run_cache_confirms_a_drop_after_two_team_page_readings() -> None:
+    observer = BattleRosterObserver([1] * 12, no_revive=True)
+    base_state = FakeDefenseState(5)
+    state = PseudoSoloDefenseState(base_state, observer)
+
+    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="team_page")
+    assert observer.run_live_count == 7
+
+    monkeypatch_counts = iter([7, 6, 6])
+
+    def fake_team_page() -> int | None:
+        value = next(monkeypatch_counts)
+        observer._record_run_count(value, source="team_page")
+        return value
+
+    observer.read_team_page_live_count = fake_team_page
+
+    assert state.observe_team_page(2) is True
+    assert base_state.remaining_turns == 6
+
+    # The ledger needs its second reading before the drop reaches the budget.
+    assert state.observe_team_page(2) is False
+    assert base_state.remaining_turns == 6
+    assert state.observe_team_page(2) is True
+    assert observer.run_live_count == 6
+    assert base_state.remaining_turns == 5
+
+
+def test_state_reset_for_run_clears_the_observer_cache() -> None:
+    class FakeRunObserver:
+        selected_count = 10
+        last_battle_live_count = None
+        run_live_count = 7
+        reset_run_calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            return PseudoSoloObservation.MULTIPLE_SURVIVORS
+
+        def reset_run(self) -> None:
+            self.reset_run_calls += 1
+            self.run_live_count = None
+
+    observer = FakeRunObserver()
+    state = PseudoSoloDefenseState(FakeDefenseState(5), observer)
+
+    state.begin_battle()
+    state.reset_for_run()
+    assert observer.reset_run_calls == 1
+    assert state.live_count is None

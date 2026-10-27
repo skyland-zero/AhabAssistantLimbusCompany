@@ -29,7 +29,11 @@ from module.my_error.my_error import (
     unableToFindTeamError,
     userStopError,
 )
-from module.observe_ego_gift import normalize_observe_ego_gifts, resolve_observe_ego_gift
+from module.observe_ego_gift import (
+    SPIDERWEB_ENTANGLED_IN_RED,
+    normalize_observe_ego_gifts,
+    resolve_observe_ego_gift,
+)
 from module.ocr import ocr
 from module.perf_log import perf_log
 from module.vision_profiler import vision_profiler
@@ -167,6 +171,12 @@ class Mirror:
             team_setting.observe_ego_gift_selected
         )  # 用户选择的观测EGO饰品列表
         self.observe_ego_gift_done = False
+        # 「赤红纠缠的蜘蛛巢」让队友阵亡后整局不复活，因此一支队伍的人数只需
+        # 确认一次就能用完整局。 这里按配置推断，真正选中后再由
+        # ``select_observe_ego_gift`` 确认一次。
+        self.survivors_are_permanent = (
+            bool(self.observe_ego_gift) and SPIDERWEB_ENTANGLED_IN_RED in self.observe_ego_gift_selected
+        )
 
         self.defense_first_round = team_setting.defense_first_round  # 是否第一回合全员防御
         self.defense_for_solo = team_setting.defense_for_solo  # 是否小指良单通连续防御
@@ -174,8 +184,13 @@ class Mirror:
             base_defense_state = DefenseForSoloState(team_setting.defense_for_solo_turns)
             self.defense_for_solo_state = PseudoSoloDefenseState(
                 base_defense_state,
-                BattleRosterObserver(team_setting.chosen_sinners),
+                BattleRosterObserver(
+                    team_setting.chosen_sinners,
+                    no_revive=self.survivors_are_permanent,
+                ),
             )
+            if self.survivors_are_permanent:
+                log.info("已观测赤红纠缠的蜘蛛巢：存活人数整局缓存，不因换层重读")
         else:
             self.defense_for_solo_state = None
 
@@ -1704,6 +1719,7 @@ class Mirror:
 
         log.debug("开始选择观测EGO饰品")
         auto.model = "clam"
+        selected_targets: set[str] = set()
 
         my_scale = cfg.set_win_size / 1440
         first_point = None
@@ -1769,6 +1785,7 @@ class Mirror:
                 take_screenshot=True,
             ):
                 _select_gift(level_point)
+                selected_targets.add(target.key)
             else:
                 level_point = None
                 for _ in range(5):
@@ -1788,7 +1805,19 @@ class Mirror:
                 if level_point is None:
                     continue
                 _select_gift(level_point)
+                selected_targets.add(target.key)
                 sleep(0.5)
+
+        if SPIDERWEB_ENTANGLED_IN_RED in selected_targets:
+            # The gift was actually clicked, so the permanent-death assumption
+            # is confirmed rather than merely inferred from the configuration.
+            self.survivors_are_permanent = True
+            enable_run_cache = getattr(
+                getattr(self, "defense_for_solo_state", None), "enable_run_cache", None
+            )
+            if callable(enable_run_cache):
+                enable_run_cache()
+            log.info("观测饰品已选中赤红纠缠的蜘蛛巢，确认整局不复活")
 
         # 观测饰品选择完毕
         for _ in range(5):

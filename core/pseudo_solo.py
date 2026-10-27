@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
@@ -93,6 +94,144 @@ def defense_turns_for_live_count(live_count: int) -> int:
     """Return the turns needed for every living ally except the solo unit."""
 
     return max(int(live_count) - 1, 0)
+
+
+@dataclass(frozen=True, slots=True)
+class SurvivorLedgerUpdate:
+    """Outcome of one reading offered to :class:`SurvivorLedger`."""
+
+    accepted: bool
+    reason: str
+    confirmed: int | None
+    pending: int | None
+    changed: bool
+
+
+class SurvivorLedger:
+    """Run-scoped living-ally count for rosters whose deaths are permanent.
+
+    ``赤红纠缠的蜘蛛巢`` (E.G.O Gift Search target
+    ``spiderweb_entangled_in_red``) permanently removes a dead sinner for the
+    rest of the mirror run.  Under that gift the living count is monotonic:
+    it can only fall, and a rise is always a mis-read rather than a revival.
+
+    A value is confirmed after ``required_confirmations`` independent readings
+    of the same number.  Once confirmed, the count survives every battle for
+    the rest of the run, so the expensive multi-frame roster sampling only
+    happens until the first confirmation.  An unreadable frame never clears a
+    confirmed value, and a larger count is rejected instead of overriding it.
+    """
+
+    REASON_UNREADABLE = "unreadable"
+    REASON_PENDING = "pending_confirmation"
+    REASON_MATCH = "match"
+    REASON_CONFIRMED = "confirmed"
+    REASON_DECREASE_PENDING = "decrease_pending"
+    REASON_DECREASE_CONFIRMED = "decrease_confirmed"
+    REASON_IMPOSSIBLE_INCREASE = "impossible_increase"
+
+    def __init__(self, *, required_confirmations: int = 2) -> None:
+        self._required_confirmations = max(1, int(required_confirmations))
+        self._confirmed: int | None = None
+        self._pending: int | None = None
+        self._streak = 0
+        self._source = ""
+
+    @property
+    def required_confirmations(self) -> int:
+        return self._required_confirmations
+
+    @property
+    def confirmed(self) -> int | None:
+        """Return the run-scoped living-ally count, if it is confirmed yet."""
+
+        return self._confirmed
+
+    @property
+    def pending(self) -> int | None:
+        """Return the value waiting for its second confirmation."""
+
+        return self._pending
+
+    @property
+    def source(self) -> str:
+        """Return which reader confirmed the current value."""
+
+        return self._source
+
+    def record(self, count: object, *, source: str) -> SurvivorLedgerUpdate:
+        """Offer one reading and return what the ledger did with it."""
+
+        normalized = self._normalize(count)
+        if normalized is None:
+            return self._update(
+                accepted=False,
+                reason=self.REASON_UNREADABLE,
+                changed=False,
+            )
+
+        if self._confirmed is not None:
+            if normalized == self._confirmed:
+                self._pending = None
+                self._streak = 0
+                return self._update(accepted=True, reason=self.REASON_MATCH, changed=False)
+            if normalized > self._confirmed:
+                # Permanent deaths make an increase impossible; keeping the
+                # lower confirmed value also keeps the defense budget correct.
+                self._pending = None
+                self._streak = 0
+                return self._update(
+                    accepted=False,
+                    reason=self.REASON_IMPOSSIBLE_INCREASE,
+                    changed=False,
+                )
+
+        if self._pending == normalized:
+            self._streak += 1
+        else:
+            self._pending = normalized
+            self._streak = 1
+
+        if self._streak < self._required_confirmations:
+            reason = self.REASON_DECREASE_PENDING if self._confirmed is not None else self.REASON_PENDING
+            return self._update(accepted=True, reason=reason, changed=False)
+
+        previous = self._confirmed
+        self._confirmed = normalized
+        self._pending = None
+        self._streak = 0
+        self._source = source
+        reason = self.REASON_DECREASE_CONFIRMED if previous is not None else self.REASON_CONFIRMED
+        return self._update(accepted=True, reason=reason, changed=True)
+
+    def reset(self) -> None:
+        """Forget the run cache; used when the mirror run restarts."""
+
+        self._confirmed = None
+        self._pending = None
+        self._streak = 0
+        self._source = ""
+
+    @staticmethod
+    def _normalize(count: object) -> int | None:
+        if count is None or isinstance(count, bool):
+            return None
+        try:
+            value = int(count)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+        if value < 0:
+            return None
+        return value
+
+    def _update(self, *, accepted: bool, reason: str, changed: bool) -> SurvivorLedgerUpdate:
+        return SurvivorLedgerUpdate(
+            accepted=accepted,
+            reason=reason,
+            confirmed=self._confirmed,
+            pending=self._pending,
+            changed=changed,
+        )
 
 
 def _battle_animation_overlay_detection(array: np.ndarray) -> tuple[bool, dict[str, object]]:
@@ -721,6 +860,16 @@ class PseudoSoloDefenseState:
         begin_observation = getattr(self._observer, "begin_battle", None)
         if callable(begin_observation):
             begin_observation()
+        cached_count = self._run_scoped_live_count()
+        if cached_count is not None:
+            # The run-scoped cache is authoritative once a permanent-death
+            # roster has been confirmed; no per-battle sampling is needed.
+            self._apply_run_live_count(cached_count)
+            log.info(
+                "伪单通本场战斗复用整局人数缓存："
+                f"存活{cached_count}，守备预算{self.remaining_turns}回合"
+            )
+            return
         log.debug(
             "伪单通开始本场战斗识别周期："
             f"UNKNOWN时最多重试{BATTLE_OBSERVATION_MAX_ATTEMPTS}次"
@@ -729,6 +878,28 @@ class PseudoSoloDefenseState:
     def consume_turn(self) -> None:
         if self.remaining_turns > 0:
             self._base_state.consume_turn()
+
+    def _run_scoped_live_count(self) -> int | None:
+        """Return the run-scoped count when the observer supports one."""
+
+        return getattr(self._observer, "run_live_count", None)
+
+    def _apply_run_live_count(self, live_count: int) -> None:
+        """Adopt a run-scoped count as this battle's observation and budget."""
+
+        count = max(0, int(live_count))
+        multiple = count > 1
+        self._battle_observed = True
+        self._battle_observation = (
+            PseudoSoloObservation.MULTIPLE_SURVIVORS if multiple else PseudoSoloObservation.SINGLE_SURVIVOR
+        )
+        self._battle_live_count = count
+        if multiple:
+            self._base_state.remaining_turns = max(0, defense_turns_for_live_count(count))
+            self._stop_confirmed = False
+        else:
+            self._base_state.remaining_turns = 0
+            self._stop_confirmed = True
 
     def should_defend(self) -> bool:
         """Return whether pseudo-solo should submit an all-defense round.
@@ -742,14 +913,29 @@ class PseudoSoloDefenseState:
         """
 
         now = time.monotonic()
-        first_attempt = not self._battle_observed
-        retry_due = (
-            self._battle_observed
-            and self._battle_observation == PseudoSoloObservation.UNKNOWN
-            and self._observation_attempts < BATTLE_OBSERVATION_MAX_ATTEMPTS
-            and now - self._last_observation_at >= BATTLE_OBSERVATION_RETRY_SECONDS
-        )
-        observed_now = first_attempt or retry_due
+        cached_count = self._run_scoped_live_count()
+        if cached_count is not None:
+            if not self._battle_observed or self._battle_live_count != cached_count:
+                self._apply_run_live_count(cached_count)
+                log.info(
+                    "伪单通整局人数缓存生效："
+                    f"存活{cached_count}，守备预算{self.remaining_turns}回合"
+                )
+            observation = self._battle_observation
+            observed_count = self._battle_live_count
+            observed_now = False
+        else:
+            first_attempt = not self._battle_observed
+            retry_due = (
+                self._battle_observed
+                and self._battle_observation == PseudoSoloObservation.UNKNOWN
+                and self._observation_attempts < BATTLE_OBSERVATION_MAX_ATTEMPTS
+                and now - self._last_observation_at >= BATTLE_OBSERVATION_RETRY_SECONDS
+            )
+            observed_now = first_attempt or retry_due
+            if not observed_now:
+                observation = self._battle_observation
+                observed_count = self._battle_live_count
         if observed_now:
             observation = self._observer()
             observed_count = getattr(self._observer, "last_battle_live_count", None)
@@ -822,16 +1008,26 @@ class PseudoSoloDefenseState:
 
     @property
     def live_count(self) -> int | None:
-        """Return the last reliable team-page count, if one was observed."""
+        """Return the best known living-ally count.
 
+        A confirmed run-scoped count wins over the per-floor team-page value
+        because permanent deaths make it authoritative for the rest of the run.
+        """
+
+        cached = self._run_scoped_live_count()
+        if cached is not None:
+            return cached
         return self._last_live_count
 
     @property
     def last_battle_live_count(self) -> int | None:
         """Return the last battle-row count used for the current decision."""
 
+        cached = self._run_scoped_live_count()
         if self._battle_observed:
             return self._battle_live_count
+        if cached is not None:
+            return cached
         return getattr(self._observer, "last_battle_live_count", None)
 
     @property
@@ -846,6 +1042,8 @@ class PseudoSoloDefenseState:
     def battle_observation_pending(self) -> bool:
         """Return whether this battle still needs its first row observation."""
 
+        if self._run_scoped_live_count() is not None:
+            return False
         return not self._battle_observed
 
     def observe_team_page(self, floor: int) -> bool:
@@ -857,7 +1055,12 @@ class PseudoSoloDefenseState:
         frames with the same count do not reset a partially consumed budget.
         If the count cannot be read, the configured compatibility fallback is
         left untouched.
+
+        When the observer keeps a run-scoped ledger (permanent deaths after
+        ``赤红纠缠的蜘蛛巢``), only an actual count change restarts observation;
+        a new floor with the same count keeps the cached roster.
         """
+
         read_live_count = getattr(self._observer, "read_team_page_live_count", None)
         if not callable(read_live_count):
             log.debug(f"伪单通队伍页同步跳过: floor={floor} observer不支持队伍页人数读取")
@@ -873,12 +1076,18 @@ class PseudoSoloDefenseState:
 
         live_count = max(0, int(live_count))
         observation = (floor, live_count)
-        if self._last_team_page_observation == observation:
-            return False
+        repeated_observation = self._last_team_page_observation == observation
         previous_observation = self._last_team_page_observation
         floor_changed = previous_observation is not None and previous_observation[0] != floor
         self._last_team_page_observation = observation
         self._last_live_count = live_count
+        cached_count = self._run_scoped_live_count()
+        if cached_count is not None:
+            # The ledger already folded this reading in, so a repeated frame is
+            # still worth re-checking: a confirmed drop must reach the budget.
+            return self._adopt_team_page_run_count(floor, live_count, cached_count)
+        if repeated_observation:
+            return False
 
         if live_count <= 1:
             changed = floor_changed or self._base_state.remaining_turns > 0 or not self._stop_confirmed
@@ -908,6 +1117,35 @@ class PseudoSoloDefenseState:
             log.info(f"第{floor}层队伍页检测到{live_count}名存活己方人格，伪单通连续防御调整为{required_turns}回合")
         return changed
 
+    def _adopt_team_page_run_count(self, floor: int, live_count: int, cached_count: int) -> bool:
+        """Fold a team-page reading into the run-scoped ledger.
+
+        The ledger owns the decision: a matching count changes nothing, a lower
+        count still needs its second confirmation, and a higher count is
+        rejected as a mis-read because deaths are permanent.
+        """
+
+        if live_count != cached_count:
+            log.debug(
+                "伪单通队伍页人数与整局缓存不一致，保留缓存: "
+                f"floor={floor} team_page={live_count} cached={cached_count}"
+            )
+            return False
+        required_turns = defense_turns_for_live_count(cached_count)
+        changed = (
+            self._base_state.remaining_turns != required_turns
+            or self._stop_confirmed
+            or not self._battle_observed
+        )
+        self._apply_run_live_count(cached_count)
+        if not changed:
+            return False
+        log.info(
+            f"第{floor}层队伍页确认整局人数缓存：存活{cached_count}名己方人格，"
+            f"守备预算{required_turns}回合"
+        )
+        return True
+
     def reset_for_run(self) -> None:
         """Restore the initial cycle when the mirror run is restarted."""
 
@@ -918,7 +1156,9 @@ class PseudoSoloDefenseState:
         self._battle_live_count = None
         self._last_team_page_observation = None
         self._last_live_count = None
-        reset_observer = getattr(self._observer, "reset", None)
+        reset_observer = getattr(self._observer, "reset_run", None)
+        if not callable(reset_observer):
+            reset_observer = getattr(self._observer, "reset", None)
         if callable(reset_observer):
             reset_observer()
 
@@ -935,10 +1175,27 @@ class BattleRosterObserver:
     can send the frame through normal automatic P instead of guessing.
     """
 
-    def __init__(self, selected_sinners: Sequence[int], *, selected_count: int | None = None) -> None:
+    def __init__(
+        self,
+        selected_sinners: Sequence[int],
+        *,
+        selected_count: int | None = None,
+        no_revive: bool = False,
+    ) -> None:
         selected = list(selected_sinners[:12])
         self.selected_count = selected_count if selected_count is not None else sum(bool(value) for value in selected)
-        log.debug(f"伪单通人数观察器初始化: selected_count={self.selected_count}")
+        # ``no_revive`` mirrors ``赤红纠缠的蜘蛛巢``: dead allies stay dead for the
+        # whole run, so one confirmed count stays authoritative until the run
+        # restarts instead of being re-sampled once per battle.
+        self.no_revive = bool(no_revive)
+        self._ledger: SurvivorLedger | None = (
+            SurvivorLedger(required_confirmations=BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES)
+            if self.no_revive
+            else None
+        )
+        log.debug(
+            f"伪单通人数观察器初始化: selected_count={self.selected_count} no_revive={self.no_revive}"
+        )
         self._last_frame_token: tuple[object, int] | None = None
         self._last_observation = PseudoSoloObservation.UNKNOWN
         self._last_battle_frame_token: tuple[object, int] | None = None
@@ -949,6 +1206,43 @@ class BattleRosterObserver:
         self._last_battle_slot_states: list[dict[str, object]] = []
         self._last_team_page_frame_token: tuple[object, int] | None = None
         self._last_team_page_live_count: int | None = None
+
+    @property
+    def run_live_count(self) -> int | None:
+        """Return the confirmed run-scoped living-ally count, if any."""
+
+        return self._ledger.confirmed if self._ledger is not None else None
+
+    def enable_run_cache(self) -> None:
+        """Start tracking one confirmed count for the rest of the run."""
+
+        if self._ledger is not None:
+            return
+        self._ledger = SurvivorLedger(required_confirmations=BATTLE_ROSTER_REQUIRED_STABLE_SAMPLES)
+        self.no_revive = True
+        log.info("伪单通已启用整局存活人数缓存（队友阵亡后不复活）")
+
+    def _record_run_count(self, count: int | None, *, source: str) -> None:
+        """Offer one reading to the run ledger and log transitions."""
+
+        if self._ledger is None:
+            return
+        update = self._ledger.record(count, source=source)
+        if update.changed:
+            log.info(
+                "伪单通整局人数缓存确认: "
+                f"live_count={update.confirmed} source={source} reason={update.reason}"
+            )
+        elif update.reason == SurvivorLedger.REASON_IMPOSSIBLE_INCREASE:
+            log.warning(
+                "伪单通整局人数缓存拒绝上升读数（队友阵亡后不复活）: "
+                f"reading={count} cached={update.confirmed} source={source}"
+            )
+        elif not update.accepted and update.reason != SurvivorLedger.REASON_UNREADABLE:
+            log.debug(
+                "伪单通整局人数缓存忽略读数: "
+                f"reading={count} cached={update.confirmed} source={source} reason={update.reason}"
+            )
 
     def __call__(self) -> PseudoSoloObservation:
         frame_token = self._frame_token()
@@ -974,6 +1268,13 @@ class BattleRosterObserver:
         self.begin_battle()
         self._last_team_page_frame_token = None
         self._last_team_page_live_count = None
+
+    def reset_run(self) -> None:
+        """Forget everything, including the run-scoped survivor cache."""
+
+        self.reset()
+        if self._ledger is not None:
+            self._ledger.reset()
 
     def begin_battle(self) -> None:
         """Clear the battle cache before entering one new battle."""
@@ -1003,6 +1304,19 @@ class BattleRosterObserver:
         frame_token = self._frame_token()
         max_count = min(max(self.selected_count, 0), 12)
         frame_id, screenshot_id = frame_token
+        run_count = self.run_live_count
+        if run_count is not None:
+            # A confirmed run-scoped count only needs a cheap single-frame
+            # sanity check; the expensive multi-frame window is done once per
+            # run, not once per battle.
+            verified = self._verify_run_count_once()
+            self._last_battle_live_count = run_count
+            log.debug(
+                "伪单通战斗人数复用整局缓存: "
+                f"frame_id={frame_id} screenshot_id={screenshot_id} "
+                f"live_count={run_count} reading={verified}"
+            )
+            return run_count
         if self._battle_detection_attempted:
             if self._last_battle_live_count is not None:
                 log.debug(
@@ -1176,9 +1490,28 @@ class BattleRosterObserver:
             return None
 
         self._last_battle_live_count = locked_count
+        self._record_run_count(locked_count, source="battle_row")
         observation_name = "single_survivor" if locked_count == 1 else "multiple_survivors"
         log.info(f"伪单通战斗界面识别到{locked_count}名存活人格，状态={observation_name}")
         return locked_count
+
+    def _verify_run_count_once(self) -> int | None:
+        """Read one battle frame without disturbing the run-scoped cache.
+
+        The reading is offered to the ledger, so a genuine death still needs
+        two consistent frames and a bogus higher reading is rejected.  The
+        cached value is always returned to the caller.
+        """
+
+        max_count = min(max(self.selected_count, 0), 12)
+        if max_count < 1:
+            return None
+        screenshot, _, _ = self._capture_battle_color_frame(0)
+        reading, diagnostics = _battle_visible_portrait_detection(screenshot, max_count=max_count)
+        self._last_battle_diagnostics = diagnostics
+        check_cancelled()
+        self._record_run_count(reading, source="battle_row")
+        return reading
 
     def _capture_battle_color_frame(self, sample_index: int) -> tuple[object, str, object]:
         """Capture one color frame without replacing the business screenshot."""
@@ -1303,6 +1636,7 @@ class BattleRosterObserver:
                     threshold=TEAM_PAGE_LIVE_COUNT_THRESHOLD,
                 ):
                     self._last_team_page_live_count = live_count
+                    self._record_run_count(live_count, source="team_page")
                     log.debug(
                         "伪单通队伍页人数识别: "
                         f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
@@ -1340,6 +1674,7 @@ class BattleRosterObserver:
             live_count, total_count = (int(value) for value in slash_match.groups())
             if total_count == max_count and 1 <= live_count <= total_count:
                 self._last_team_page_live_count = live_count
+                self._record_run_count(live_count, source="team_page")
                 log.debug(
                     "伪单通队伍页人数识别: "
                     f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
@@ -1358,6 +1693,7 @@ class BattleRosterObserver:
             live_count = int(match.group(1))
             if 1 <= live_count <= max_count:
                 self._last_team_page_live_count = live_count
+                self._record_run_count(live_count, source="team_page")
                 log.debug(
                     "伪单通队伍页人数识别: "
                     f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
