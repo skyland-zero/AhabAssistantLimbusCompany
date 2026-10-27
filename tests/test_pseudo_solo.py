@@ -484,8 +484,12 @@ def test_observer_reads_team_page_count_from_right_counter_region(monkeypatch) -
     assert observer.read_team_page_live_count() == 8
     assert calls, "the counter OCR fallback must run"
     crop = calls[0]["my_crop"]
-    assert crop[0] > 2300
+    # The counter sits at the right edge of the panel; the crop is derived from
+    # the packaged template bbox (2366..2421 at 1440p) instead of a wide ratio
+    # band that used to catch neighbouring panel glyphs.
+    assert crop[0] > 2200
     assert crop[1] > 900
+    assert crop[2] - crop[0] < 400
 
 
 def test_observer_ignores_team_page_backup_deployment_text(monkeypatch) -> None:
@@ -607,7 +611,7 @@ def test_observer_propagates_cancellation_from_monitor_capture(monkeypatch) -> N
 def test_ledger_needs_two_matching_readings_before_it_confirms() -> None:
     ledger = SurvivorLedger(required_confirmations=2)
 
-    first = ledger.record(7, source="team_page")
+    first = ledger.record(7, source="team_page_asset")
     assert first.accepted is True
     assert first.reason == SurvivorLedger.REASON_PENDING
     assert first.confirmed is None
@@ -620,9 +624,23 @@ def test_ledger_needs_two_matching_readings_before_it_confirms() -> None:
     assert ledger.source == "battle_row"
 
 
+def test_ledger_rejects_ocr_only_readings_without_an_authoritative_one() -> None:
+    ledger = SurvivorLedger(required_confirmations=2)
+
+    # Two consistent OCR digits are not enough: that counter has already
+    # reported ``3`` while a single ally was alive.
+    for _ in range(4):
+        update = ledger.record(3, source="team_page_ocr")
+        assert update.accepted is True
+        assert update.changed is False
+        assert update.confirmed is None
+
+    assert ledger.record(3, source="battle_row").confirmed is None
+    assert ledger.record(3, source="battle_row").confirmed == 3
+
 def test_ledger_ignores_unreadable_frames() -> None:
     ledger = SurvivorLedger(required_confirmations=1)
-    assert ledger.record(7, source="team_page").confirmed == 7
+    assert ledger.record(7, source="battle_row").confirmed == 7
 
     for unreadable in (None, "", "n/a", -1, True):
         update = ledger.record(unreadable, source="battle_row")
@@ -633,8 +651,8 @@ def test_ledger_ignores_unreadable_frames() -> None:
 
 def test_ledger_confirms_a_decrease_after_two_readings() -> None:
     ledger = SurvivorLedger(required_confirmations=2)
-    ledger.record(7, source="team_page")
-    ledger.record(7, source="team_page")
+    ledger.record(7, source="battle_row")
+    ledger.record(7, source="battle_row")
     assert ledger.confirmed == 7
 
     downgrade = ledger.record(6, source="battle_row")
@@ -647,9 +665,33 @@ def test_ledger_confirms_a_decrease_after_two_readings() -> None:
     assert confirmed.changed is True
 
 
+def test_ledger_refuses_a_decrease_confirmed_only_by_ocr() -> None:
+    ledger = SurvivorLedger(required_confirmations=2)
+    ledger.record(9, source="battle_row")
+    ledger.record(9, source="battle_row")
+    assert ledger.confirmed == 9
+
+    for _ in range(3):
+        held = ledger.record(3, source="team_page_ocr")
+        assert held.confirmed == 9
+        assert held.changed is False
+        assert held.reason in (
+            SurvivorLedger.REASON_DECREASE_PENDING,
+            SurvivorLedger.REASON_DECREASE_NEEDS_AUTHORITY,
+        )
+    # The window is exhausted, so the hold is reported explicitly now.
+    assert ledger.record(3, source="team_page_ocr").reason == SurvivorLedger.REASON_DECREASE_NEEDS_AUTHORITY
+
+    # The battle portrait row is the authority; once it agrees the drop lands.
+    assert ledger.record(3, source="battle_row").confirmed == 9
+    corrected = ledger.record(3, source="battle_row")
+    assert corrected.confirmed == 3
+    assert corrected.changed is True
+
+
 def test_ledger_rejects_an_increase_because_nobody_revives() -> None:
     ledger = SurvivorLedger(required_confirmations=1)
-    ledger.record(5, source="team_page")
+    ledger.record(5, source="battle_row")
 
     update = ledger.record(9, source="battle_row")
     assert update.accepted is False
@@ -660,7 +702,7 @@ def test_ledger_rejects_an_increase_because_nobody_revives() -> None:
 
 def test_ledger_reset_clears_the_run_cache() -> None:
     ledger = SurvivorLedger(required_confirmations=1)
-    ledger.record(7, source="team_page")
+    ledger.record(7, source="battle_row")
     assert ledger.confirmed == 7
 
     ledger.reset()
@@ -676,7 +718,7 @@ def test_observer_run_cache_is_off_by_default(monkeypatch) -> None:
     assert observer.run_live_count is None
 
     # Offer a reading through the ledger path and make sure nothing is cached.
-    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="team_page_asset")
     assert observer.run_live_count is None
 
 
@@ -684,16 +726,33 @@ def test_observer_enable_run_cache_confirms_after_two_readings() -> None:
     observer = BattleRosterObserver([1] * 12)
     observer.enable_run_cache()
 
-    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="team_page_asset")
     assert observer.run_live_count is None
-    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="team_page_asset")
     assert observer.run_live_count == 7
+
+
+def test_observer_run_cache_ignores_ocr_only_readings() -> None:
+    observer = BattleRosterObserver([1] * 12, no_revive=True)
+
+    # The counters in ``logs/`` show the team-page OCR crop reporting ``3``
+    # while a single ally was alive, so those readings must never lock a run.
+    for _ in range(4):
+        observer._record_run_count(3, source="team_page_ocr")
+    assert observer.run_live_count is None
+
+    # One battle-row reading is not enough either while OCR frames pad the
+    # confirmation window; the row has to agree twice on its own.
+    observer._record_run_count(3, source="battle_row")
+    assert observer.run_live_count is None
+    observer._record_run_count(3, source="battle_row")
+    assert observer.run_live_count == 3
 
 
 def test_observer_battle_row_reuses_confirmed_count_without_resampling(monkeypatch) -> None:
     observer = BattleRosterObserver([1] * 12, no_revive=True)
-    observer._record_run_count(7, source="team_page")
-    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="battle_row")
+    observer._record_run_count(7, source="battle_row")
     assert observer.run_live_count == 7
 
     verifications: list[int] = []
@@ -723,8 +782,8 @@ def test_observer_battle_row_reuses_confirmed_count_without_resampling(monkeypat
 
 def test_observer_run_cache_survives_begin_battle_and_clears_on_reset_run() -> None:
     observer = BattleRosterObserver([1] * 12, no_revive=True)
-    observer._record_run_count(6, source="team_page")
-    observer._record_run_count(6, source="team_page")
+    observer._record_run_count(6, source="battle_row")
+    observer._record_run_count(6, source="battle_row")
 
     observer.begin_battle()
     assert observer.run_live_count == 6
@@ -754,20 +813,22 @@ def test_state_reuses_run_cache_for_every_battle() -> None:
     state = PseudoSoloDefenseState(base_state, observer)
 
     state.begin_battle()
-    assert observer.calls == 0
-    assert state.battle_observation_pending is False
+    assert state.battle_observation_pending is True
     assert state.live_count == 7
-    assert state.last_battle_live_count == 7
     assert base_state.remaining_turns == 6
     assert state.should_defend() is True
-    assert observer.calls == 0
+    # The cache is verified once per battle through the portrait row so a
+    # wrong locked value can still be corrected.
+    assert observer.calls == 1
+    assert state.battle_observation_pending is False
+    assert state.should_defend() is True
+    assert observer.calls == 1
 
-    # The next battle reuses the same count instead of re-observing.
+    # The next battle reuses the cached budget and verifies it once again.
     state.begin_battle()
-    assert observer.calls == 0
     assert base_state.remaining_turns == 6
     assert state.should_defend() is True
-    assert observer.calls == 0
+    assert observer.calls == 2
 
 
 def test_state_run_cache_stops_defense_for_single_survivor() -> None:
@@ -775,17 +836,46 @@ def test_state_run_cache_stops_defense_for_single_survivor() -> None:
         selected_count = 10
         last_battle_live_count = None
         run_live_count = 1
+        calls = 0
 
         def __call__(self) -> PseudoSoloObservation:
-            raise AssertionError("the cached count must not be re-observed")
+            self.calls += 1
+            return PseudoSoloObservation.SINGLE_SURVIVOR
 
+    observer = FakeRunObserver()
     base_state = FakeDefenseState(5)
-    state = PseudoSoloDefenseState(base_state, FakeRunObserver())
+    state = PseudoSoloDefenseState(base_state, observer)
 
     state.begin_battle()
     assert base_state.remaining_turns == 0
     assert state.should_defend() is False
+    assert observer.calls == 1
     assert state.battle_observation_pending is False
+
+
+def test_state_run_cache_is_corrected_by_the_battle_row() -> None:
+    class FakeRunObserver:
+        selected_count = 10
+        last_battle_live_count = None
+        run_live_count = 3
+        calls = 0
+
+        def __call__(self) -> PseudoSoloObservation:
+            # The portrait row only shows one ally; the ledger folds this in
+            # and the state must follow the corrected count.
+            self.calls += 1
+            self.run_live_count = 1
+            return PseudoSoloObservation.SINGLE_SURVIVOR
+
+    observer = FakeRunObserver()
+    base_state = FakeDefenseState(5)
+    state = PseudoSoloDefenseState(base_state, observer)
+
+    state.begin_battle()
+    assert base_state.remaining_turns == 2
+    assert state.should_defend() is False
+    assert base_state.remaining_turns == 0
+    assert state.live_count == 1
 
 
 def test_state_run_cache_ignores_floor_changes_with_the_same_count() -> None:
@@ -852,15 +942,15 @@ def test_state_run_cache_confirms_a_drop_after_two_team_page_readings() -> None:
     base_state = FakeDefenseState(5)
     state = PseudoSoloDefenseState(base_state, observer)
 
-    observer._record_run_count(7, source="team_page")
-    observer._record_run_count(7, source="team_page")
+    observer._record_run_count(7, source="battle_row")
+    observer._record_run_count(7, source="battle_row")
     assert observer.run_live_count == 7
 
     monkeypatch_counts = iter([7, 6, 6])
 
     def fake_team_page() -> int | None:
         value = next(monkeypatch_counts)
-        observer._record_run_count(value, source="team_page")
+        observer._record_run_count(value, source="battle_row")
         return value
 
     observer.read_team_page_live_count = fake_team_page

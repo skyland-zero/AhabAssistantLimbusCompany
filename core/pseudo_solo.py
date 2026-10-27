@@ -23,6 +23,7 @@ from module.automation import auto
 from module.config import cfg
 from module.logger import log
 from module.my_error.my_error import userStopError
+from utils.image_utils import ImageUtils
 
 # Kept as a compatibility constant for integrations that imported the old
 # setting.  Battle-row sampling is configured separately below.
@@ -37,6 +38,13 @@ TEAM_PAGE_LIVE_COUNT_THRESHOLD = 0.80
 # teams/10_sinner_live_assets.png (2366,1017)-(2421,1086 at 2560x1440) with a
 # small margin so the 1-2 digit number is readable at other resolutions.
 TEAM_PAGE_COUNT_CROP_RATIO = (0.90, 0.67, 0.97, 0.79)
+# Extra room around the packaged counter template bbox.  The ratio crop above
+# is only a fallback: it also covered neighbouring panel content, and OCR
+# picked a ``3`` from that area while a single ally was alive.
+TEAM_PAGE_COUNT_CROP_MARGIN = (70, 40)
+# A roster count is a bare 1-2 digit number.  Glued text such as ``3in`` means
+# the crop caught neighbouring UI, so that frame must not become a count.
+TEAM_PAGE_COUNT_TEXT_PATTERN = re.compile(r"^\s*(\d{1,2})\s*$")
 # The command row can remain hidden behind the battle-entry animation for
 # roughly one second.  Keep sampling the same battle-entry window a little
 # longer so a transient no-badge frame is not cached as UNKNOWN.
@@ -128,13 +136,30 @@ class SurvivorLedger:
     REASON_CONFIRMED = "confirmed"
     REASON_DECREASE_PENDING = "decrease_pending"
     REASON_DECREASE_CONFIRMED = "decrease_confirmed"
+    REASON_DECREASE_NEEDS_AUTHORITY = "decrease_needs_authoritative_source"
     REASON_IMPOSSIBLE_INCREASE = "impossible_increase"
 
-    def __init__(self, *, required_confirmations: int = 2) -> None:
+    def __init__(
+        self,
+        *,
+        required_confirmations: int = 2,
+        authoritative_sources: Sequence[str] = ("battle_row", "team_page_asset"),
+    ) -> None:
         self._required_confirmations = max(1, int(required_confirmations))
+        # Readers that may lower a confirmed count on their own.  The team page
+        # offers two very different readers: a template match against
+        # ``teams/{10,11,12}_sinner_live_assets.png`` (scores ~0.98) and a bare
+        # OCR digit from a narrow counter crop.  The OCR digit repeatedly
+        # reported ``3`` while a single ally was alive and then locked the
+        # whole run, so only the template match counts as authoritative.
+        self._authoritative_sources = frozenset(authoritative_sources)
         self._confirmed: int | None = None
         self._pending: int | None = None
         self._streak = 0
+        # Confidence is tracked per reader class.  Mixing both into one streak
+        # let stale OCR digits promote a single battle-row reading straight to
+        # a confirmed value.
+        self._authoritative_streak = 0
         self._source = ""
 
     @property
@@ -174,12 +199,14 @@ class SurvivorLedger:
             if normalized == self._confirmed:
                 self._pending = None
                 self._streak = 0
+                self._authoritative_streak = 0
                 return self._update(accepted=True, reason=self.REASON_MATCH, changed=False)
             if normalized > self._confirmed:
                 # Permanent deaths make an increase impossible; keeping the
                 # lower confirmed value also keeps the defense budget correct.
                 self._pending = None
                 self._streak = 0
+                self._authoritative_streak = 0
                 return self._update(
                     accepted=False,
                     reason=self.REASON_IMPOSSIBLE_INCREASE,
@@ -191,18 +218,47 @@ class SurvivorLedger:
         else:
             self._pending = normalized
             self._streak = 1
+            self._authoritative_streak = 0
+        if source in self._authoritative_sources:
+            self._authoritative_streak += 1
 
         if self._streak < self._required_confirmations:
             reason = self.REASON_DECREASE_PENDING if self._confirmed is not None else self.REASON_PENDING
             return self._update(accepted=True, reason=reason, changed=False)
+        if self._authoritative_streak < self._authoritative_confirmations():
+            # Readings from a non-authoritative reader (the team-page OCR
+            # counter) never lock a value on their own.  That counter reported
+            # ``3`` while a single ally was alive and then held the whole run at
+            # that number, so it may only corroborate the battle portrait row.
+            return self._update(
+                accepted=True,
+                reason=(
+                    self.REASON_DECREASE_NEEDS_AUTHORITY
+                    if self._confirmed is not None
+                    else self.REASON_PENDING
+                ),
+                changed=False,
+            )
 
         previous = self._confirmed
         self._confirmed = normalized
         self._pending = None
         self._streak = 0
+        self._authoritative_streak = 0
         self._source = source
         reason = self.REASON_DECREASE_CONFIRMED if previous is not None else self.REASON_CONFIRMED
         return self._update(accepted=True, reason=reason, changed=True)
+
+    def _authoritative_confirmations(self) -> int:
+        """Return how many authoritative readings a value needs on its own.
+
+        Non-authoritative readings (the team-page OCR counter) may keep a
+        pending value alive, but they never complete the confirmation window:
+        a value is only locked once the configured number of readings all came
+        from an authoritative reader.
+        """
+
+        return self._required_confirmations
 
     def reset(self) -> None:
         """Forget the run cache; used when the mirror run restarts."""
@@ -210,6 +266,7 @@ class SurvivorLedger:
         self._confirmed = None
         self._pending = None
         self._streak = 0
+        self._authoritative_streak = 0
         self._source = ""
 
     @staticmethod
@@ -862,11 +919,13 @@ class PseudoSoloDefenseState:
             begin_observation()
         cached_count = self._run_scoped_live_count()
         if cached_count is not None:
-            # The run-scoped cache is authoritative once a permanent-death
-            # roster has been confirmed; no per-battle sampling is needed.
+            # Seed the budget from the run cache, but leave the battle
+            # unobserved: ``should_defend`` still verifies the number once
+            # through the battle portrait row before any defense is submitted.
             self._apply_run_live_count(cached_count)
+            self._battle_observed = False
             log.info(
-                "伪单通本场战斗复用整局人数缓存："
+                "伪单通本场战斗复用整局人数缓存（待战斗行复核）："
                 f"存活{cached_count}，守备预算{self.remaining_turns}回合"
             )
             return
@@ -915,12 +974,31 @@ class PseudoSoloDefenseState:
         now = time.monotonic()
         cached_count = self._run_scoped_live_count()
         if cached_count is not None:
-            if not self._battle_observed or self._battle_live_count != cached_count:
+            if not self._battle_observed:
+                # Verify the cached count once per battle through the battle
+                # portrait row.  Skipping this made a wrong cached value
+                # impossible to correct, and the team-page OCR counter has
+                # already locked the run at ``3`` while a single ally was
+                # alive.  The battle row is the only authoritative reader, so
+                # a confirmed drop here also lowers the defense budget.
+                self._observation_attempts += 1
+                self._last_observation_at = now
+                self._observer()
+                recomputed = self._run_scoped_live_count()
+                if recomputed is not None and recomputed != cached_count:
+                    log.info(
+                        "伪单通整局人数缓存被战斗行读数修正："
+                        f"{cached_count}->{recomputed}，守备预算将按新人数重算"
+                    )
+                    cached_count = recomputed
+                self._battle_observed = True
                 self._apply_run_live_count(cached_count)
                 log.info(
                     "伪单通整局人数缓存生效："
                     f"存活{cached_count}，守备预算{self.remaining_turns}回合"
                 )
+            elif self._battle_live_count != cached_count:
+                self._apply_run_live_count(cached_count)
             observation = self._battle_observation
             observed_count = self._battle_live_count
             observed_now = False
@@ -1040,10 +1118,14 @@ class PseudoSoloDefenseState:
 
     @property
     def battle_observation_pending(self) -> bool:
-        """Return whether this battle still needs its first row observation."""
+        """Return whether this battle still needs its first row observation.
 
-        if self._run_scoped_live_count() is not None:
-            return False
+        A run-scoped cache still needs one verification frame per battle: the
+        battle loop waits for the command row before observing, so the cheap
+        single-frame check lands on a complete frame instead of the entry
+        animation.
+        """
+
         return not self._battle_observed
 
     def observe_team_page(self, floor: int) -> bool:
@@ -1202,6 +1284,7 @@ class BattleRosterObserver:
         self._battle_detection_attempted = False
         self._battle_detection_attempts = 0
         self._last_battle_live_count: int | None = None
+        self._last_battle_verification_reading: int | None = None
         self._last_battle_diagnostics: dict[str, object] = {}
         self._last_battle_slot_states: list[dict[str, object]] = []
         self._last_team_page_frame_token: tuple[object, int] | None = None
@@ -1285,6 +1368,7 @@ class BattleRosterObserver:
         self._battle_detection_attempted = False
         self._battle_detection_attempts = 0
         self._last_battle_live_count = None
+        self._last_battle_verification_reading = None
         self._last_battle_diagnostics = {}
         self._last_battle_slot_states = []
 
@@ -1306,10 +1390,13 @@ class BattleRosterObserver:
         frame_id, screenshot_id = frame_token
         run_count = self.run_live_count
         if run_count is not None:
-            # A confirmed run-scoped count only needs a cheap single-frame
-            # sanity check; the expensive multi-frame window is done once per
-            # run, not once per battle.
+            # A confirmed run-scoped count still needs one authoritative
+            # battle-row reading per battle.  The team-page OCR counter has
+            # locked the run at a wrong value (``3`` while a single ally was
+            # alive), so the row reading is kept and exposed to the caller as
+            # the authoritative correction.
             verified = self._verify_run_count_once()
+            self._last_battle_verification_reading = verified
             self._last_battle_live_count = run_count
             log.debug(
                 "伪单通战斗人数复用整局缓存: "
@@ -1594,6 +1681,12 @@ class BattleRosterObserver:
         return self._last_battle_live_count
 
     @property
+    def last_battle_verification_reading(self) -> int | None:
+        """Return the raw battle-row reading taken while the run cache was used."""
+
+        return self._last_battle_verification_reading
+
+    @property
     def last_observation(self) -> PseudoSoloObservation:
         """Return the last battle observation."""
 
@@ -1636,7 +1729,7 @@ class BattleRosterObserver:
                     threshold=TEAM_PAGE_LIVE_COUNT_THRESHOLD,
                 ):
                     self._last_team_page_live_count = live_count
-                    self._record_run_count(live_count, source="team_page")
+                    self._record_run_count(live_count, source="team_page_asset")
                     log.debug(
                         "伪单通队伍页人数识别: "
                         f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
@@ -1646,13 +1739,7 @@ class BattleRosterObserver:
 
             if max_count < 1:
                 return None
-            width, height = self._screenshot_size()
-            count_crop = (
-                max(0, int(width * TEAM_PAGE_COUNT_CROP_RATIO[0])),
-                max(0, int(height * TEAM_PAGE_COUNT_CROP_RATIO[1])),
-                min(width, int(width * TEAM_PAGE_COUNT_CROP_RATIO[2])),
-                min(height, int(height * TEAM_PAGE_COUNT_CROP_RATIO[3])),
-            )
+            count_crop = self._team_page_count_crop()
             texts = auto.get_text_from_screenshot(my_crop=count_crop)
         except Exception as error:
             log.debug(f"伪单通队伍页人数识别失败: {error}")
@@ -1674,7 +1761,7 @@ class BattleRosterObserver:
             live_count, total_count = (int(value) for value in slash_match.groups())
             if total_count == max_count and 1 <= live_count <= total_count:
                 self._last_team_page_live_count = live_count
-                self._record_run_count(live_count, source="team_page")
+                self._record_run_count(live_count, source="team_page_ocr")
                 log.debug(
                     "伪单通队伍页人数识别: "
                     f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
@@ -1689,23 +1776,92 @@ class BattleRosterObserver:
             )
             return None
 
-        for match in re.finditer(r"(?<!\d)(\d{1,2})(?!\d)", text):
-            live_count = int(match.group(1))
-            if 1 <= live_count <= max_count:
-                self._last_team_page_live_count = live_count
-                self._record_run_count(live_count, source="team_page")
-                log.debug(
-                    "伪单通队伍页人数识别: "
-                    f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
-                    f"source=ocr crop={count_crop} text={text!r} live_count={live_count}"
-                )
-                return live_count
+        bare_count = self._parse_bare_count(text, max_count)
+        if bare_count is not None:
+            self._last_team_page_live_count = bare_count
+            self._record_run_count(bare_count, source="team_page_ocr")
+            log.debug(
+                "伪单通队伍页人数识别: "
+                f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
+                f"source=ocr crop={count_crop} text={text!r} live_count={bare_count}"
+            )
+            return bare_count
         log.debug(
             "伪单通队伍页人数识别无有效结果: "
             f"frame_id={frame_token[0]} screenshot_id={frame_token[1]} "
             f"selected_count={self.selected_count} crop={count_crop} text={text!r}"
         )
         return None
+
+    @staticmethod
+    def _parse_bare_count(text: str, max_count: int) -> int | None:
+        """Return the count only when the crop read as one bare number.
+
+        OCR used to glue neighbouring panel glyphs onto the counter
+        (``3in``, ``0/12in preeee``) and the first digit was still accepted,
+        which is how a single-survivor run could be cached as ``3``.  Only an
+        exact digit string is treated as a roster count.
+        """
+
+        matched = TEAM_PAGE_COUNT_TEXT_PATTERN.match(text or "")
+        if matched is None:
+            return None
+        value = int(matched.group(1))
+        if not 1 <= value <= max(1, int(max_count)):
+            return None
+        return value
+
+    @staticmethod
+    def _team_page_count_crop() -> tuple[int, int, int, int]:
+        """Locate the roster counter from the packaged template bbox.
+
+        The ratio fallback also covered the neighbouring panel, which let OCR
+        report an unrelated ``3`` while a single ally was alive.  Preferring
+        the template's own bounding box keeps the crop on the counter itself
+        and degrades to the ratio crop only when the asset is unavailable.
+        """
+
+        width, height = BattleRosterObserver._screenshot_size()
+        ratio_crop = (
+            max(0, int(width * TEAM_PAGE_COUNT_CROP_RATIO[0])),
+            max(0, int(height * TEAM_PAGE_COUNT_CROP_RATIO[1])),
+            min(width, int(width * TEAM_PAGE_COUNT_CROP_RATIO[2])),
+            min(height, int(height * TEAM_PAGE_COUNT_CROP_RATIO[3])),
+        )
+        try:
+            bbox = ImageUtils.get_bbox_from_path("teams/10_sinner_live_assets.png")
+        except Exception as error:
+            log.debug(f"伪单通队伍页计数模板回退到比例区域: {error}")
+            return ratio_crop
+        if not bbox:
+            # ``get_bbox_from_path`` depends on the active resource path state.
+            # Resolve the packaged template directly so the counter crop stays
+            # tight even before the resource manager is primed.
+            try:
+                template = ImageUtils.load_from_specific_path(
+                    "teams/10_sinner_live_assets.png",
+                    "default/share",
+                    resize=False,
+                )
+            except Exception as error:
+                log.debug(f"伪单通队伍页计数模板加载失败: {error}")
+                template = None
+            if template is not None:
+                try:
+                    bbox = tuple(int(value) for value in ImageUtils.get_bbox(template))
+                except Exception as error:
+                    log.debug(f"伪单通队伍页计数模板包围盒计算失败: {error}")
+                    bbox = None
+        if not bbox:
+            return ratio_crop
+        margin_x = max(12, round(TEAM_PAGE_COUNT_CROP_MARGIN[0] * height / 1440))
+        margin_y = max(8, round(TEAM_PAGE_COUNT_CROP_MARGIN[1] * height / 1440))
+        return (
+            max(0, int(bbox[0]) - margin_x),
+            max(0, int(bbox[1]) - margin_y),
+            min(width, int(bbox[2]) + margin_x),
+            min(height, int(bbox[3]) + margin_y),
+        )
 
     @staticmethod
     def _frame_token() -> tuple[object, int]:
