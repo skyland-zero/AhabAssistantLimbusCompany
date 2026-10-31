@@ -278,3 +278,125 @@ def test_ipc_logging_handler_routes_records_to_event_sink() -> None:
     del host
     log_events = [fields for message_type, fields, _ in events if message_type == "log.entry"]
     assert log_events and log_events[0]["message"] == "hello from task"
+
+
+def test_preview_is_published_while_the_run_owns_the_device() -> None:
+    """The sidecar stops its own capture for the lease, so the Runner must produce frames.
+
+    Without this producer the GPUI live screen stayed empty for the whole run:
+    the sidecar preview is quiesced before the device handover and a lease
+    rejects every sidecar device write.
+    """
+
+    from PIL import Image
+
+    from module.execution.task_preview import TaskPreview
+
+    previews: list[TaskPreview] = []
+
+    def factory(_context) -> TaskPreview:
+        preview = TaskPreview(
+            run_id="run-host-preview",
+            device_id="pc:limbus",
+            emit_frame=lambda payload, jpeg: None,
+            emit_status=lambda payload: None,
+            capture=lambda: Image.new("RGB", (64, 36), (1, 2, 3)),
+            interval=0.01,
+        )
+        previews.append(preview)
+        return preview
+
+    host, events = _run_host(
+        lambda sink: RunnerTaskHost(
+            ExecutionSpec(
+                run_id="run-host-preview",
+                task_id="mirror",
+                device_target={"id": "pc:limbus", "name": "Limbus", "kind": "pc"},
+            ),
+            task_factory=lambda context: None,
+            mediator_bridge=_NoopBridge(),
+            event_sink=sink,
+            config={"ok": True},
+            device_runtime_factory=lambda *_args, **_kwargs: SimpleNamespace(
+                session=SimpleNamespace(controller=None),
+                reservation={},
+                close=lambda **_kwargs: True,
+            ),
+            task_preview_factory=factory,
+        )
+    )
+
+    assert host.finished
+    # The injected runtime factory never installs a device_manager session, so
+    # the host must not assume a capturable device just because a target exists.
+    assert previews == [], "a host without a private session must stay silent"
+    assert events[-1][0] == "finished"
+
+
+def test_preview_starts_and_stops_around_a_real_private_session(monkeypatch) -> None:
+    """A private session starts exactly one preview and stops it before cleanup."""
+
+    import module.device_manager as device_manager
+
+    lifecycle: list[str] = []
+    session = SimpleNamespace(controller=None)
+
+    class _Preview:
+        def __init__(self) -> None:
+            self.enabled = True
+
+        def set_enabled(self, enabled: bool) -> bool:
+            self.enabled = enabled
+            lifecycle.append(f"enabled={enabled}")
+            return True
+
+        def start(self) -> bool:
+            lifecycle.append("start")
+            return True
+
+        def stop(self, deadline=None, *, notify: bool = True) -> bool:
+            lifecycle.append("stop")
+            return True
+
+    monkeypatch.setattr(device_manager, "get_runner_session", lambda: session, raising=False)
+
+    host, events = _run_host(
+        lambda sink: RunnerTaskHost(
+            ExecutionSpec(
+                run_id="run-host-preview-2",
+                task_id="mirror",
+                device_target={"id": "pc:limbus", "name": "Limbus", "kind": "pc"},
+                preview_enabled=False,
+            ),
+            task_factory=lambda context: None,
+            mediator_bridge=_NoopBridge(),
+            event_sink=sink,
+            config={"ok": True},
+            device_runtime_factory=lambda *_args, **_kwargs: SimpleNamespace(
+                session=session,
+                reservation={},
+                close=lambda **_kwargs: True,
+            ),
+            task_preview_factory=lambda _context: _Preview(),
+        )
+    )
+
+    assert host.finished
+    # ``previewEnabled=false`` still starts the producer: the worker is the only
+    # way a re-enable can resume, and it is gated before any capture happens.
+    assert lifecycle == ["enabled=False", "start", "stop"]
+    assert events[-1][0] == "finished"
+
+
+def test_start_spec_carries_the_preview_preference() -> None:
+    spec = ExecutionSpec(
+        run_id="run-host-preview-3",
+        task_id="mirror",
+        preview_enabled=False,
+    )
+
+    assert spec.preview_enabled is False
+    assert spec.to_dict()["previewEnabled"] is False
+    assert ExecutionSpec.from_mapping(spec.to_dict()).preview_enabled is False
+    # Absent means "preview on": the sidecar default is enabled.
+    assert ExecutionSpec.from_mapping({"runId": "r", "taskId": "t"}).preview_enabled is True

@@ -285,6 +285,7 @@ class FakeRunnerSupervisor:
         }
         self.starts: list[dict[str, Any]] = []
         self.stop_requests: list[tuple[str, str]] = []
+        self.preview_requests: list[tuple[str, bool]] = []
 
     def get_state(self) -> dict[str, Any]:
         return dict(self._snapshot)
@@ -316,6 +317,10 @@ class FakeRunnerSupervisor:
 
     def request_resume(self, run_id):
         return FakeRunnerResult(True, self._set(state="running", runId=run_id, deviceLease="runner"))
+
+    def request_preview_enabled(self, run_id, enabled):
+        self.preview_requests.append((run_id, bool(enabled)))
+        return FakeRunnerResult(True, self.get_state())
 
     def request_stop(self, run_id, *, requested_by="user"):
         self.stop_requests.append((run_id, requested_by))
@@ -614,7 +619,20 @@ def test_runner_execution_uses_lease_sequence_and_idempotent_controls(tmp_path) 
     assert manager.suspend_calls == [first["runId"]]
     assert supervisor.starts[0]["runId"] == first["runId"]
     assert supervisor.starts[0]["taskId"] == "mirror"
+    # The leased device is captured by the Runner, so the user's current preview
+    # intent must travel with the start spec.
+    assert supervisor.starts[0]["previewEnabled"] is True
     assert preview.stop_count == 1
+
+    # While the lease is active the sidecar worker stays stopped but the Runner
+    # must receive the same intent; reporting ``running`` reflects the Runner.
+    assert app.preview_set_enabled({"enabled": False}) == {"enabled": False, "running": False}
+    assert supervisor.preview_requests[-1] == (first["runId"], False)
+    assert "pc:limbus" not in preview.started[1:], (
+        "a sidecar worker must never regain the leased device"
+    )
+    assert app.preview_set_enabled({"enabled": True}) == {"enabled": True, "running": True}
+    assert supervisor.preview_requests[-1] == (first["runId"], True)
 
     supervisor._set(state="running", deviceLease="runner")
     app.execution_get_state()

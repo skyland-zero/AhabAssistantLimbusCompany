@@ -28,7 +28,7 @@ _U32 = struct.Struct("!I")
 
 # These sets are part of the contract.  Keeping them in one place lets both the
 # bootstrap and the sidecar reject a typo before it can alter execution state.
-COMMAND_TYPES = frozenset({"attached", "start", "setPaused", "stop", "finishAck", "shutdown"})
+COMMAND_TYPES = frozenset({"attached", "start", "setPaused", "preview", "stop", "finishAck", "shutdown"})
 EVENT_TYPES = frozenset(
     {
         "hello",
@@ -402,6 +402,8 @@ def validate_message(
                 raise ProtocolError("start.spec must be an object")
         elif message_type == "setPaused" and not isinstance(message.get("paused"), bool):
             raise ProtocolError("setPaused.paused must be boolean")
+        elif message_type == "preview" and not isinstance(message.get("enabled"), bool):
+            raise ProtocolError("preview.enabled must be boolean")
         elif message_type == "stop":
             requested_by = message.get("requestedBy")
             if requested_by not in {"user", "shutdown", "watchdog"}:
@@ -436,6 +438,14 @@ def validate_message(
                 raise ProtocolError("preview.frame requires binaryLength")
             if binary_length > MAX_PREVIEW_BINARY_LENGTH:
                 raise FrameTooLarge("preview.frame payload exceeds limit")
+        if message_type == "preview.status":
+            if message.get("status") not in {"starting", "running", "error", "stopped"}:
+                raise ProtocolError("preview.status.status is invalid")
+            if not isinstance(message.get("deviceId"), str) or not message.get("deviceId"):
+                raise ProtocolError("preview.status.deviceId must be a non-empty string")
+            generation = message.get("generation")
+            if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
+                raise ProtocolError("preview.status.generation must be a non-negative integer")
     return message
 
 

@@ -32,6 +32,8 @@ class RunnerEventAdapter:
         "task.completed": "execution.taskCompleted",
         "mirror.progress": "execution.mirrorProgress",
         "mirror.floor": "execution.mirrorFloor",
+        "preview.frame": "screenshot.frame",
+        "preview.status": "preview.status",
         "warning": "app.notice",
         "hdr.warning": "app.notice",
         "app.focusRequested": "app.focusRequested",
@@ -75,7 +77,28 @@ class RunnerEventAdapter:
         destination = self.EVENT_MAP.get(message_type, message_type)
         fields = self._payload(message_type, event, payload)
         self._record_ledger(message_type, event, fields)
+        if destination == "screenshot.frame":
+            return self._forward_preview_frame(fields)
         return self._call_sink(destination, fields)
+
+    def _forward_preview_frame(self, fields: Mapping[str, Any]) -> Any:
+        """Deliver a Runner preview frame on the GPUI ``screenshot.frame`` contract.
+
+        The Runner sends ``preview.frame`` with the JPEG in the binary frame
+        payload because a base64 copy would double the pipe cost at the preview
+        cadence.  The GPUI contract is ``screenshot.frame`` with the identity
+        fields in the JSON payload and the JPEG kept separate for the binary
+        broadcast path, so the adapter moves the bytes into ``jpeg`` here.
+        """
+
+        payload = dict(fields)
+        jpeg = payload.get("payload")
+        payload.pop("payload", None)
+        if isinstance(jpeg, (bytes, bytearray, memoryview)):
+            # ``WebSocketServer._broadcast_event`` pops ``jpeg`` and sends it as
+            # the binary body of a length-prefixed envelope.
+            payload["jpeg"] = bytes(jpeg)
+        return self._call_sink("screenshot.frame", payload)
 
     def _record_ledger(self, message_type: str, event: Mapping[str, Any], fields: Mapping[str, Any]) -> None:
         ledger = self.ledger

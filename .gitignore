@@ -35,6 +35,9 @@ logs
 pythonlogs
 runtime_stats.json
 /screenshots/
+# Runner 配置快照和清理账本（module/backend_application.py 的 .aalc-runs/cleanup）。
+# 与 runtime_stats.json 一样属于运行时产物，任何一次真实运行都会生成。
+.aalc-runs/
 __main_dev_temp__.py
 /*.png
 

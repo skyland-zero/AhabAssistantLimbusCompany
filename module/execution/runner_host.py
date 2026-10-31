@@ -24,8 +24,14 @@ from .execution_control import ExecutionCancelled, ExecutionControl
 from .ipc_protocol import Frame, FrameIOError, FrameWriter, ProtocolError, read_frame, validate_message
 from .mediator_bridge import MediatorBridge
 from .supervisor import ExecutionSpec
+from .task_preview import TaskPreview
 
 _MISSING = object()
+
+# The Runner process installs its own IPC logging handler; the module-level
+# logger here is only the pre-init diagnostic channel.  Keeping it lazy avoids
+# importing any business package during bootstrap.
+log = logging.getLogger("AALC")
 
 # ``RunnerTaskHost`` normally lives in its own one-shot process, but keeping a
 # direct environment snapshot makes the host safe to exercise in-process too.
@@ -244,6 +250,7 @@ class RunnerTaskHost:
         initial_command_seq: int = 0,
         finalization_callback: Callable[..., Any] | None = None,
         after_completion_callback: Callable[..., Any] | None = None,
+        task_preview_factory: Callable[..., Any] | None = None,
         device_cleanup_timeout: float = 20.0,
     ) -> None:
         self.spec = spec if isinstance(spec, ExecutionSpec) else ExecutionSpec.from_mapping(spec)
@@ -302,6 +309,10 @@ class RunnerTaskHost:
         self._config_delta_counter = 0
         self._config_delta_fingerprints: set[str] = set()
         self._emitted_delta_ids: set[str] = set()
+        self._task_preview: TaskPreview | None = None
+        # Explicit seam for embedders/tests: the default producer talks to the
+        # shared automation screenshot path, which a unit test cannot install.
+        self.task_preview_factory = task_preview_factory
 
     @property
     def finished(self) -> bool:
@@ -680,6 +691,91 @@ class RunnerTaskHost:
             return close(*args, **kwargs)
         raise RunnerTaskError("device runtime close has an unsupported signature")
 
+    def _start_task_preview(self) -> None:
+        """Publish live frames while this run owns the leased device.
+
+        The sidecar stops its own capture before handing over the device and a
+        device lease rejects every sidecar device write, so without this
+        producer the GPUI live screen stays empty for the whole run.  Preview
+        is optional: any failure is reported through ``preview.status`` and
+        must never fail the run.
+        """
+
+        if self._task_preview is not None:
+            return
+        try:
+            preview = self._build_task_preview()
+        except Exception:
+            log.debug("创建 Runner 实时预览失败", exc_info=True)
+            return
+        if preview is None:
+            return
+        self._task_preview = preview
+        try:
+            if not self.spec.preview_enabled:
+                preview.set_enabled(False)
+            preview.start()
+        except Exception:
+            log.debug("启动 Runner 实时预览失败", exc_info=True)
+
+    def _build_task_preview(self) -> TaskPreview | None:
+        # Only a session created by the device manager can be screenshotted.
+        # Compatibility hosts pass a bare ``deviceTarget`` and must stay silent.
+        try:
+            module = importlib.import_module("module.device_manager")
+            get_runner_session = getattr(module, "get_runner_session", None)
+        except (ImportError, AttributeError):
+            return None
+        if not callable(get_runner_session):
+            return None
+        try:
+            session = get_runner_session()
+        except Exception:
+            return None
+        if session is None:
+            return None
+        target = self.spec.device_target
+        device_id = target.get("id") if isinstance(target, Mapping) else None
+        if not isinstance(device_id, str) or not device_id:
+            return None
+        factory = self.task_preview_factory
+        if factory is not None:
+            return self._invoke_factory(factory, self._make_context())
+        return TaskPreview(
+            run_id=self.spec.run_id,
+            device_id=device_id,
+            emit_frame=self._emit_preview_frame,
+            emit_status=self._emit_preview_status,
+        )
+
+    def _emit_preview_frame(self, payload: Mapping[str, Any], jpeg: bytes) -> int:
+        # ``runId`` is supplied by the frame writer from the spec identity; a
+        # duplicate keyword would be rejected by the protocol builder.
+        fields = {key: value for key, value in payload.items() if key != "runId"}
+        return self.emit_event("preview.frame", payload=bytes(jpeg), **fields)
+
+    def _emit_preview_status(self, payload: Mapping[str, Any]) -> int:
+        fields = {key: value for key, value in payload.items() if key != "runId"}
+        return self.emit_event("preview.status", **fields)
+
+    def _stop_task_preview(self) -> None:
+        preview = self._task_preview
+        self._task_preview = None
+        if preview is None:
+            return
+        # A capture already inside a driver call cannot be interrupted, so keep
+        # the join short: an in-flight frame is discarded by the generation
+        # check, and the thread is a daemon that cannot outlive this process.
+        # Waiting the full driver timeout here would only delay ``finished``
+        # past the supervisor's stop grace.
+        try:
+            stopped = preview.stop(time.monotonic() + 1.0, notify=False)
+        except Exception:
+            log.debug("停止 Runner 实时预览失败", exc_info=True)
+            return
+        if stopped is False:
+            log.debug("Runner 实时预览线程未在截止时间内退出（run=%s）", self.spec.run_id)
+
     def _close_device_runtime(self, *, emit_events: bool) -> bool:
         runtime = self.device_runtime
         if runtime is None or self._runtime_closed:
@@ -916,6 +1012,10 @@ class RunnerTaskHost:
             self._close_device_runtime(emit_events=False)
             self._teardown_runtime()
             raise
+        # Preview starts only after the private device session is installed and
+        # ready/status are on the wire, so every frame it publishes already has
+        # a valid execution identity for the GPUI gate.
+        self._start_task_preview()
         self._command_thread = threading.Thread(target=self._command_loop, name=f"runner-command-{self.spec.run_id}", daemon=True)
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, name=f"runner-heartbeat-{self.spec.run_id}", daemon=True)
         self._task_thread = threading.Thread(target=self._task_loop, name=f"runner-task-{self.spec.run_id}", daemon=True)
@@ -970,6 +1070,15 @@ class RunnerTaskHost:
             self.control.request_stop()
             # status=stopping is a report, not a replacement for finished.
             self.emit_event("status", status="stopping")
+        elif message_type == "preview":
+            # User intent changed while the panel was hidden or shown.  The
+            # worker keeps running so a re-enable resumes immediately.
+            preview = self._task_preview
+            if preview is not None:
+                try:
+                    preview.set_enabled(bool(message["enabled"]))
+                except Exception:
+                    log.debug("更新 Runner 实时预览开关失败", exc_info=True)
         elif message_type == "finishAck":
             self._finish_ack.set()
         elif message_type == "shutdown":
@@ -1025,6 +1134,10 @@ class RunnerTaskHost:
                 "phase": "task",
             }
         finally:
+            # Stop the preview before the device runtime is closed: a preview
+            # thread still holding the controller would capture against a
+            # cleaned-up session and can stall bounded cleanup.
+            self._stop_task_preview()
             if not self._close_device_runtime(emit_events=True):
                 cleanup_error = {
                     "code": "RUNNER_DEVICE_CLEANUP_FAILED",
@@ -1335,6 +1448,7 @@ class RunnerTaskHost:
 
     def close(self) -> None:
         self._closed.set()
+        self._stop_task_preview()
         self.control.request_stop() if not self._finished_sent else None
         if self._event_writer is not None:
             self._event_writer.close()

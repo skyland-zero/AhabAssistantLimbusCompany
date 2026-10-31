@@ -119,6 +119,8 @@ _EXECUTION_START_RESERVED_FIELDS = frozenset(
         "baseline_values",
         "taskId",
         "task_id",
+        "previewEnabled",
+        "preview_enabled",
     }
 )
 _RUNNER_SENSITIVE_SNAPSHOT_KEYS = frozenset(
@@ -946,6 +948,7 @@ class BackendApplication:
             raise ValueError("preview.setEnabled.enabled must be a boolean")
 
         action: str | None = None
+        runner_run_id: str | None = None
         with self._preview_lock:
             with self._lock:
                 if enabled != self._preview_enabled:
@@ -955,9 +958,12 @@ class BackendApplication:
                     elif self._preview_device_id:
                         # A Runner owns the device during an execution lease.  A
                         # user may change the desired preview preference, but no
-                        # preview worker may regain the device capability yet.
+                        # sidecar preview worker may regain the device capability
+                        # yet; the Runner keeps its own producer instead.
                         if not self._device_lease_active():
                             action = "start"
+                if self._device_lease_active():
+                    runner_run_id = self._execution_run_id
             # ``stop_and_wait`` joins the capture thread and can take seconds;
             # it must run outside ``_lock`` so execution state and device
             # operations are not blocked behind preview teardown.
@@ -970,11 +976,38 @@ class BackendApplication:
             elif action == "start":
                 self._preview_capture.start(self._preview_device_id)
 
+        # A leased device is captured by the Runner, so the same user intent must
+        # travel there: the sidecar worker stays stopped for the whole lease.
+        if runner_run_id:
+            self._forward_preview_intent(runner_run_id, enabled)
+
         with self._lock:
             fallback_running = self._preview_enabled and self._preview_device_id is not None
             enabled_value = self._preview_enabled
         running = bool(getattr(self._preview_capture, "running", fallback_running))
+        if runner_run_id:
+            # The sidecar capture worker is intentionally dormant while the
+            # Runner owns the device; reporting ``running=False`` would make the
+            # UI report a fault for a healthy run.
+            running = enabled
         return {"enabled": enabled_value, "running": running}
+
+    def _forward_preview_intent(self, run_id: str, enabled: bool) -> None:
+        """Relay live-preview intent to the Runner that currently owns the device."""
+
+        supervisor = self._runner_supervisor
+        method = getattr(supervisor, "request_preview_enabled", None) if supervisor is not None else None
+        if not callable(method):
+            return
+        try:
+            result = self._invoke_compatible(method, (run_id,), {"enabled": enabled})
+        except Exception:
+            # Preview is telemetry: never let intent relay fail the RPC.
+            log.debug("转发实时预览开关到 Runner 失败", exc_info=True)
+            return
+        accepted = getattr(result, "accepted", None)
+        if accepted is False:
+            log.debug("Runner 拒绝了实时预览开关（run=%s）", run_id)
 
     def stats_get_summary(self) -> dict[str, Any]:
         return self.stats.summary()
@@ -2037,6 +2070,9 @@ class BackendApplication:
             "resourceRoot": self._config_value("resource_root", None),
             "deviceTarget": target_value,
             "deviceLease": lease_value,
+            # The leased device is captured by the Runner for the whole run, so
+            # the user's current preview intent must travel with the spec.
+            "previewEnabled": bool(self._preview_enabled),
             # These sidecar-owned values are explicit even though the current
             # Runner implementation derives them from its launch context.
             # They can never be supplied through execution.start.options.

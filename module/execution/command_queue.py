@@ -84,6 +84,7 @@ class CommandQueue:
     NORMAL_PRIORITY = 20
     CRITICAL_TYPES = frozenset({"stop", "finishAck"})
     HANDSHAKE_TYPES = frozenset({"attached", "start"})
+    REPLACEABLE_TYPES = frozenset({"setPaused", "preview"})
 
     def __init__(
         self,
@@ -111,7 +112,7 @@ class CommandQueue:
         self._condition = threading.Condition(threading.RLock())
         self._items: list[_PendingCommand] = []
         self._next_order = 0
-        self._pending_pause: _PendingCommand | None = None
+        self._pending_replaceable: dict[str, _PendingCommand] = {}
         self._closed = False
         self._terminal_error: CommandQueueError | None = None
         self._thread = threading.Thread(target=self._run, name=name or f"runner-command-writer-{run_id}", daemon=True)
@@ -154,12 +155,13 @@ class CommandQueue:
         with self._condition:
             if self._closed:
                 raise self._closed_error_locked()
-            # Pause/resume is state, not a log.  Keep exactly one queued
-            # setPaused item and replace its value with the newest request.
-            if message_type == "setPaused" and self._pending_pause is not None:
-                previous = self._pending_pause
+            # Pause/resume and preview intent are state, not logs.  Keep exactly
+            # one queued item per type and replace its value with the newest
+            # request so a slow pipe cannot replay obsolete intent.
+            if message_type in self.REPLACEABLE_TYPES and message_type in self._pending_replaceable:
+                previous = self._pending_replaceable[message_type]
                 ticket = CommandQueueTicket()
-                previous.ticket._fail(CommandQueueError("IPC_COMMAND_SUPERSEDED", "setPaused was superseded"))
+                previous.ticket._fail(CommandQueueError("IPC_COMMAND_SUPERSEDED", f"{message_type} was superseded"))
                 previous.fields = command_fields
                 previous.payload = payload
                 previous.ticket = ticket
@@ -180,8 +182,8 @@ class CommandQueue:
                 ticket,
             )
             heapq.heappush(self._items, item)
-            if message_type == "setPaused":
-                self._pending_pause = item
+            if message_type in self.REPLACEABLE_TYPES:
+                self._pending_replaceable[message_type] = item
             self._condition.notify()
             return ticket
 
@@ -194,7 +196,7 @@ class CommandQueue:
                 self._closed = True
                 pending = list(self._items)
                 self._items.clear()
-                self._pending_pause = None
+                self._pending_replaceable.clear()
                 self._condition.notify_all()
             else:
                 pending = []
@@ -223,8 +225,8 @@ class CommandQueue:
                 if self._closed and not self._items:
                     return
                 item = heapq.heappop(self._items)
-                if self._pending_pause is item:
-                    self._pending_pause = None
+                if self._pending_replaceable.get(item.message_type) is item:
+                    del self._pending_replaceable[item.message_type]
             try:
                 # next_for validates the complete header before committing the
                 # sequence.  Once a command is selected, its sequence belongs to
@@ -249,7 +251,7 @@ class CommandQueue:
             self._closed = True
             pending = list(self._items)
             self._items.clear()
-            self._pending_pause = None
+            self._pending_replaceable.clear()
             callback = self.on_error
             self._condition.notify_all()
         for item in pending:

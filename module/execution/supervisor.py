@@ -101,6 +101,7 @@ class ExecutionSpec:
     allow_emulator_launch: bool = False
     device_target: Mapping[str, Any] = field(default_factory=dict)
     cleanup_reservation: Mapping[str, Any] = field(default_factory=dict)
+    preview_enabled: bool = True
     extra: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -112,6 +113,8 @@ class ExecutionSpec:
             raise ValueError("config_revision must be a non-negative integer")
         if not isinstance(self.allow_emulator_launch, bool):
             raise ValueError("allow_emulator_launch must be bool")
+        if not isinstance(self.preview_enabled, bool):
+            raise ValueError("preview_enabled must be bool")
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any], *, run_id: str | None = None) -> "ExecutionSpec":
@@ -133,6 +136,7 @@ class ExecutionSpec:
             ),
             "device_target": data.pop("deviceTarget", data.pop("device_target", {})),
             "cleanup_reservation": data.pop("cleanupReservation", data.pop("cleanup_reservation", {})),
+            "preview_enabled": data.pop("previewEnabled", data.pop("preview_enabled", True)),
             "extra": data,
         }
         return cls(run_id=actual_run_id, task_id=task_id, **known)
@@ -150,6 +154,7 @@ class ExecutionSpec:
             "allowEmulatorLaunch": self.allow_emulator_launch,
             "deviceTarget": dict(self.device_target),
             "cleanupReservation": dict(self.cleanup_reservation),
+            "previewEnabled": self.preview_enabled,
         }
         value.update(dict(self.extra))
         return value
@@ -1447,6 +1452,35 @@ class RunnerSupervisor:
         timer = threading.Timer(self.stop_grace, self._force_if_still_running, args=(session,))
         timer.daemon = True
         timer.start()
+        return CommandResult(True, self.snapshot)
+
+    def request_preview_enabled(self, run_id: str, enabled: bool) -> CommandResult:
+        """Forward the user's live-preview intent to the active Runner.
+
+        Preview is telemetry: an idle or already-finalized run is simply a
+        no-op, and a busy command pipe reports the structured queue error
+        instead of failing the run.  The Runner keeps the authoritative
+        ``previewEnabled`` value only for its own frame gating; the sidecar
+        still owns the durable user preference.
+        """
+
+        if not isinstance(enabled, bool):
+            raise TypeError("enabled must be bool")
+        with self._condition:
+            stale = self._check_run_locked(run_id, allow_recent_idle=True)
+            if stale is not None:
+                return stale
+            if self._snapshot.state is RunnerState.IDLE:
+                return CommandResult(True, self._snapshot)
+            session = self._session
+        if session is None:
+            return CommandResult(True, self.snapshot)
+        try:
+            self._enqueue_command(session, "preview", enabled=enabled)
+        except CommandQueueError as exc:
+            return CommandResult(False, self.snapshot, exc.as_dict())
+        except Exception as exc:
+            return CommandResult(False, self.snapshot, {"code": "RUNNER_SUPERVISION_FAILED", "message": str(exc)})
         return CommandResult(True, self.snapshot)
 
     def stop(self, run_id: str, *, requested_by: str = "user") -> ExecutionSnapshot:
