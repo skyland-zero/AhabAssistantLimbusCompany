@@ -64,6 +64,31 @@ def _theme_pack_card_point(pack: tuple[float, float], scale: float) -> tuple[flo
     return pack[0] - 30 * scale, pack[1] + 185 * scale
 
 
+# ``E.G.O Gift Info`` is a modal overlay.  While it is open every touchdown on
+# the pack cards is swallowed by the dialog, so a pull gesture reports success
+# while the page never advances.  Cap the dismissals so a dialog that keeps
+# reopening turns into a logged failure instead of an endless loop.
+_THEME_PACK_GIFT_INFO_DISMISS_LIMIT = 6
+
+
+def _dismiss_gift_info_dialog(*, take_screenshot: bool = False) -> bool:
+    """Close the modal ``E.G.O Gift Info`` dialog if it is on screen.
+
+    The dialog's Confirm button reuses the same check-mark artwork as
+    ``ego_gift_get_confirm_assets.png``: a 2560x1440 capture scored 0.987 with
+    the dialog open and 0.60 without it, so the existing template is both a
+    reliable probe and a clickable target and no extra asset is required.
+    """
+
+    return bool(
+        auto.click_element(
+            "mirror/road_in_mir/ego_gift_get_confirm_assets.png",
+            threshold=0.9,
+            take_screenshot=take_screenshot,
+        )
+    )
+
+
 def _theme_pack_aliases_for_floor(
     floor: int | None,
     route: MirrorRouteDefinition | None,
@@ -156,12 +181,23 @@ def select_theme_pack(
     # 游戏更新后新增的主题包尚未收录时的兜底权重，取自「未知 / unknown」配置项
     unknown_weight = int(theme_pack_list_zh.get("未知", theme_pack_list_en.get("unknown", -5)))
     refresh_times = 3
+    gift_info_dismissals = 0
     difficulty = None
     if auto.find_element("mirror/road_in_mir/legend_assets.png", take_screenshot=True):
         return
     while True:
         # 自动截图
         if auto.take_screenshot() is None:
+            continue
+
+        # 弹框是模态覆盖层，必须先关掉，否则后续点击和拖拽都会被它吞掉。
+        if _dismiss_gift_info_dialog():
+            gift_info_dismissals += 1
+            log.info("卡包页检测到 E.G.O Gift Info 弹框，已点击 Confirm 关闭")
+            if gift_info_dismissals > _THEME_PACK_GIFT_INFO_DISMISS_LIMIT:
+                log.error("E.G.O Gift Info 弹框反复出现，放弃本次主题包选择")
+                break
+            sleep(1)
             continue
 
         if (
@@ -230,6 +266,10 @@ def select_theme_pack(
                     auto.mouse_drag_down(*drag_point)
                     log.debug(f"选择卡包: {all_theme_pack[0]} drag_start={drag_point}")
                     sleep(3)
+                    if _dismiss_gift_info_dialog(take_screenshot=True):
+                        gift_info_dismissals += 1
+                        log.warning("拖拽后仍出现 E.G.O Gift Info 弹框，已关闭并重新选择卡包")
+                        continue
                     perf_log.record(
                         "theme_pack",
                         status="feature",
@@ -286,6 +326,10 @@ def select_theme_pack(
                     auto.mouse_drag_down(*drag_point)
                     log.debug(f"选择卡包: {pack} drag_start={drag_point}")
                     sleep(3)
+                    if _dismiss_gift_info_dialog(take_screenshot=True):
+                        gift_info_dismissals += 1
+                        log.warning("拖拽后仍出现 E.G.O Gift Info 弹框，已关闭并重新选择卡包")
+                        continue
                     perf_log.record(
                         "theme_pack",
                         status="preferred",
@@ -326,6 +370,10 @@ def select_theme_pack(
                 auto.mouse_drag_down(*drag_point)
                 log.debug(f"选择卡包: {pack} drag_start={drag_point}")
                 sleep(3)
+                if _dismiss_gift_info_dialog(take_screenshot=True):
+                    gift_info_dismissals += 1
+                    log.warning("拖拽后仍出现 E.G.O Gift Info 弹框，已关闭并重新选择卡包")
+                    continue
                 perf_log.record(
                     "theme_pack",
                     status="fallback",

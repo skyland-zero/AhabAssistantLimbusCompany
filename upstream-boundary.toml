@@ -77,6 +77,11 @@ allowed_protected_files = [
     # Fork-owned route adapter hooks.  The route catalog stays outside the
     # protected tree; these files only pass the selected route into existing
     # reward, theme, shop, fusion, and OCR operations.
+    # ``select_theme_pack.py`` additionally dismisses the modal ``E.G.O Gift
+    # Info`` dialog (reusing ego_gift_get_confirm_assets.png) before and after a
+    # pull, because the overlay swallows the drag and silently turns pack
+    # selection into an endless retry loop.  Replay that bounded guard together
+    # with the route hooks during synchronization.
     "module/automation/input_handlers/__init__.py",
     "tasks/mirror/in_shop.py",
     "tasks/mirror/select_theme_pack.py",
