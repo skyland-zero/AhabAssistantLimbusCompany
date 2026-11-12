@@ -13,7 +13,7 @@
 | P2 | TSX 设计系统：`components/` + `shell/` | [~] | 组件对照页与 `gpui-app` 截图逐个一致 |
 | P3 | 页面重写：home → teams → settings → theme_packs → help | [ ] | 每页截图 1:1 对照 + `nsh test` 用例 |
 | P4 | 打包切换：`nsh package`，替换发布流程里的 GPUI 可执行文件 | [ ] | 安装包可用；DPI/单实例/托盘/全局热键实机验证 |
-| P4.5 | 仓库级引用切换：9 处脚本/CI/文档改指向 `nsh-app/` | [ ] | `python3 scripts/check_no_gpui_app_refs.py` 通过 |
+| P4.5 | 仓库级引用切换：9 处脚本/CI/文档改指向 `nsh-app/` | [ ] | `python3 scripts/check_no_gpui_app_refs.py` 通过（对照图已归档，见 `nsh-app/docs/reference/gpui/`） |
 | P5 | `git rm -r gpui-app`，更新根 `AGENTS.md` | [ ] | 完整构建 + 冒烟通过，检查脚本无白名单 |
 
 ## 1. P0 已落地
