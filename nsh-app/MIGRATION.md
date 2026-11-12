@@ -79,6 +79,20 @@
   测试推送（需 sidecar），这几处按下去只写一行反馈，文案已写明「随 P1 接入」。
 - 语言切换只改状态：英文文案随 P1 的 i18n 模块。
 
+### P3 第二页：工具箱 + 资源中心
+
+- **`pages/toolbox/`**：2 列卡片网格 × 4 个工具（自动战斗、体力换饼、辅助截图、分辨率修改），
+  每张卡是「图标 + 状态徽标 / 标题 + 说明 / 动作」；分辨率卡给两个按钮，截图是一次性动作，
+  其余两个是运行/停止切换；底部一行 sidecar 说明 + 反馈行。
+- **`pages/resources/`**：工具栏卡片（左：同步进度徽标；右：检查更新 / 立即同步）+ 资源卡网格
+  （最小 380pt，`flex-wrap`），每张卡有名称 + 状态徽标、本地/远端版本、上次同步，同步中显示进度条。
+- **`toolbox.ts` / `resources.ts`**：工具运行状态与反馈、资源分组与同步进度；默认值与反馈文案取自
+  `state/other/toolbox.rs` 与 mock 资源数据，P1 换成 `Toolbox.*` / `Resources.*` RPC 与事件。同步的
+  分步进度是唯一保留的定时器，随 mock 一起删除。
+- **`Button` 的 `default` 变体改成 accent 实底**：对照参考图发现旧客户端的 `Default` 按钮就是
+  品牌色按钮（`运行` / `立即同步` / `修改 1080P` 都是红的），之前做成了中性黑。
+- 新增图标 `crosshair` `pill` `camera` `play` `stop` `rotateCcw` `searchCheck` `refresh`。
+
 这一轮**没有**做的（仍在 P2/P3 范围）：
 
 - 语言切换/`i18n`：标题栏文案暂时写死中文，等 P1 的 `i18n` 模块。
@@ -166,4 +180,6 @@
 | 队伍 teams | 784 | `pages/teams/` | [ ] | — | — |
 | 设置 settings | 360 + 1100 | `pages/settings/` | [x] | 对照 `docs/reference/gpui/settings-{light,dark}.png` | `settings.test.tsx` 4 条 |
 | 主题包 theme_packs | 423 | `pages/theme_packs/` | [ ] | — | — |
+| 工具箱 toolbox | 348 | `pages/toolbox/` | [x] | 对照 `docs/reference/gpui/toolbox-light.png` | `toolbox.test.tsx` 3 条 |
+| 资源中心 resources | 295 | `pages/resources/` | [x] | 对照 `docs/reference/gpui/resources-light.png` | `resources.test.tsx` 4 条 |
 | 帮助 help | 549 | `pages/help/` | [ ] | — | — |

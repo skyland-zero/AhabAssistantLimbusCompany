@@ -18,8 +18,8 @@ import type { IconName } from "./Icon";
 
 /** What the button means, not what it looks like. */
 export type ButtonVariant =
-  | "default" // the ordinary action: a filled neutral surface
-  | "primary" // the one default commit of a decision area
+  | "default" // the ordinary filled action, in the accent (the client's `Default`)
+  | "primary" // the one default commit of a decision area: the same look as `default`
   | "secondary" // a quieter filled action, and the "current" state of a choice
   | "outline" // an action that needs a boundary with less weight
   | "ghost" // a familiar, low-emphasis action
@@ -32,10 +32,13 @@ export type ButtonSize = "xs" | "sm" | "md" | "lg";
 type VariantStyle = { frame: string; icon: () => string };
 
 const VARIANT: Record<ButtonVariant, VariantStyle> = {
+  // The old client's `Default` button is its accent-filled one (GPUI Kit's
+  // `Primary` is projected onto the accent), so both names draw the same thing;
+  // call sites pick the one that says what they mean.
   default: {
     frame:
-      "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80 selected:bg-primary/90",
-    icon: () => token("primary-foreground"),
+      "bg-brand text-brand-foreground hover:bg-brand-hover active:bg-brand-hover selected:bg-brand-hover",
+    icon: () => token("brand-foreground"),
   },
   primary: {
     frame:

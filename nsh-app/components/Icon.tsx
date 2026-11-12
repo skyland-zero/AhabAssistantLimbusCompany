@@ -8,16 +8,23 @@
 import { Image, token } from "nsh";
 import check from "../assets/icons/check.svg";
 import chevronDown from "../assets/icons/chevron-down.svg";
+import camera from "../assets/icons/camera.svg";
 import circleQuestionMark from "../assets/icons/circle-question-mark.svg";
+import crosshair from "../assets/icons/crosshair.svg";
 import house from "../assets/icons/house.svg";
 import loaderCircle from "../assets/icons/loader-circle.svg";
 import minus from "../assets/icons/minus.svg";
 import monitor from "../assets/icons/monitor.svg";
 import moon from "../assets/icons/moon.svg";
 import packageIcon from "../assets/icons/package.svg";
+import pill from "../assets/icons/pill.svg";
+import play from "../assets/icons/play.svg";
 import paletteIcon from "../assets/icons/palette.svg";
 import settingsIcon from "../assets/icons/settings.svg";
 import square from "../assets/icons/square.svg";
+import refreshCw from "../assets/icons/refresh-cw.svg";
+import rotateCcw from "../assets/icons/rotate-ccw.svg";
+import searchCheck from "../assets/icons/search-check.svg";
 import squareStack from "../assets/icons/square-stack.svg";
 import sun from "../assets/icons/sun.svg";
 import users from "../assets/icons/users.svg";
@@ -26,7 +33,9 @@ import x from "../assets/icons/x.svg";
 
 /** Every glyph the UI may draw, named by what it means to the app. */
 const ICONS = {
+  camera,
   check,
+  crosshair,
   chevronDown,
   close: x,
   help: circleQuestionMark,
@@ -38,8 +47,14 @@ const ICONS = {
   moon,
   package: packageIcon,
   palette: paletteIcon,
+  pill,
+  play,
+  refresh: refreshCw,
   restore: squareStack,
+  rotateCcw,
+  searchCheck,
   settings: settingsIcon,
+  stop: square,
   sun,
   users,
   wrench,

@@ -19,7 +19,7 @@ test("pressing a destination switches the page", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.waitFor("主控台 页面尚未迁入");
   await app.press("role:button[资源中心]");
-  await app.waitFor("资源中心 页面尚未迁入");
+  await app.waitFor("模板资源");
   await app.press("role:button[帮助]");
   await app.waitFor("帮助 页面尚未迁入");
 });
@@ -42,6 +42,6 @@ test("the appearance toggle cycles through the three appearances", async () => {
 test("every destination keeps the shared window chrome", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.press("role:button[工具箱]");
-  await app.waitFor("工具箱 页面尚未迁入");
+  await app.waitFor("自动战斗");
   expect(app.texts()).toContain("AALC");
 });
