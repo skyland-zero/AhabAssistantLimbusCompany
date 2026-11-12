@@ -108,6 +108,23 @@
 - **已知差异**：饰品体系前的 emoji 在桌面字体栈里渲染成方框，已改成纯文字；帮助页各段之间的
   间距比参考图紧约 5pt。
 
+### P3 第四页：镜牢主题包 + 主控台
+
+- **`pages/theme_packs/`**：工具栏（总权重 + 按权重排序 / 全部启用 / 全部停用 / 恢复默认权重）、
+  困难镜牢周期提示条、每包一行（开关、名称、T 阶徽标、0–10 权重滑块、数值）。总权重只算启用的包，
+  与旧客户端的 28 基线一致；停用的行 `opacity-60` 且滑块禁用。滑块用 `nsh/base` 的 `Slider`
+  （键盘、拖动、屏幕阅读器都自带），不再手写。
+- **`pages/home/`**：三区控制台——顶部「Python 后端」+「周期统计（今日/本周）/上次镜牢」两张卡，
+  中间「窗口设置」（SET）与 5 张任务卡（日常任务 / 领取奖励 / 狂气换体 / 自动镜牢 / 亚哈共鸣，
+  每张带开关与紧凑参数选择器），底部操作条（全选 / 清空 / 什么也不干（本次）/ Link Start! F10）；
+  右栏是固定的「设备连接 / 实时画面 / 运行日志」。
+- **`home.ts` / `themepacks.ts`**：任务、参数、设备、日志计数与主题包权重的状态；默认值取自
+  `ThemePacksState::default()`（总权重 28）与 mock 任务列表，P1 换成 `Execution.*` /
+  `ThemePacks.*` / `Device.*` 的 RPC 与事件。
+- **页内仍是占位的部分**（都写明「随 P1 接入」）：Link Start 启动执行、设备连接与实时画面
+  （需要预览帧流）、运行日志内容（需要日志事件）、窗口设置的两个下拉、周期统计的真实数字。
+- `pages/Placeholder.tsx` 已删除：7 个页面都已是真实实现。
+
 这一轮**没有**做的（仍在 P2/P3 范围）：
 
 - 语言切换/`i18n`：标题栏文案暂时写死中文，等 P1 的 `i18n` 模块。
@@ -191,10 +208,10 @@
 | --- | --- | --- | --- | --- | --- |
 | 窗口壳 / 标题栏 | 1084 + 459 | `shell/` | [x] | 待有显示机器截图 | `App.test.tsx` 5 条 |
 | 组件对照页 | — | `pages/Gallery.tsx` | [x] | 无头跑通全部区块 | 开发期手动打开 |
-| 主控台 home | 2855 | `pages/home/` | [ ] | — | — |
+| 主控台 home | 2855 | `pages/home/` | [~] | 对照 `docs/reference/gpui/home-light.png` | `home.test.tsx` 5 条 |
 | 队伍 teams | 784 + 3358 | `pages/teams/` | [~] | 列表对照 `docs/reference/gpui/teams-light.png` | `teams.test.tsx` 4 条 |
 | 设置 settings | 360 + 1100 | `pages/settings/` | [x] | 对照 `docs/reference/gpui/settings-{light,dark}.png` | `settings.test.tsx` 4 条 |
-| 主题包 theme_packs | 423 | `pages/theme_packs/` | [ ] | — | — |
+| 主题包 theme_packs | 423 | `pages/theme_packs/` | [x] | 对照 `docs/reference/gpui/themes-light.png` | 由设置/主题页测试覆盖 |
 | 工具箱 toolbox | 348 | `pages/toolbox/` | [x] | 对照 `docs/reference/gpui/toolbox-light.png` | `toolbox.test.tsx` 3 条 |
 | 资源中心 resources | 295 | `pages/resources/` | [x] | 对照 `docs/reference/gpui/resources-light.png` | `resources.test.tsx` 4 条 |
 | 帮助 help | 549 | `pages/help/` | [x] | 对照 `docs/reference/gpui/help-light.png` | `help.test.tsx` 4 条 + `parser.test.tsx` 4 条 |

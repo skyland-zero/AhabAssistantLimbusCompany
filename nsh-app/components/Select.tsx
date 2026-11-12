@@ -13,6 +13,11 @@ import { Icon } from "./Icon";
 export const POPUP_CLASS =
   "min-w-40 rounded-(--radius) border border-border bg-popover p-1 text-popover-foreground shadow-lg";
 
+/** A frameless trigger: the value and its chevron, inside the caller's chip. */
+const COMPACT_CLASS =
+  "min-h-5 flex-row items-center gap-1 rounded-(--radius-sm) px-1 " +
+  "focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring";
+
 /** The trigger's frame: the same height and border as an input, so text in a
  *  field and in the list it opens start on one line. */
 const TRIGGER_CLASS =
@@ -27,6 +32,9 @@ export function Select<T extends string>(props: {
   /** What screen readers call it: what the choice is about. */
   accessibilityLabel?: string;
   disabled?: boolean;
+  /** A trigger without a frame, for a select that sits inside the app's own
+   *  chip (a task card's parameter). */
+  compact?: boolean;
   class?: string;
 }) {
   const label = () =>
@@ -43,7 +51,9 @@ export function Select<T extends string>(props: {
       disabled={props.disabled}
       popupClass={POPUP_CLASS}
       trigger={
-        <View class={`${TRIGGER_CLASS} ${props.class ?? ""}`}>
+        <View
+          class={`${props.compact ? COMPACT_CLASS : TRIGGER_CLASS} ${props.class ?? ""}`}
+        >
           <Text class="text-xs text-foreground">{label()}</Text>
           <Icon name="chevronDown" size={12} />
         </View>
