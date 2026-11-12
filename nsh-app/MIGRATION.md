@@ -93,6 +93,21 @@
   品牌色按钮（`运行` / `立即同步` / `修改 1080P` 都是红的），之前做成了中性黑。
 - 新增图标 `crosshair` `pill` `camera` `play` `stop` `rotateCcw` `searchCheck` `refresh`。
 
+### P3 第三页：帮助 + 队伍（列表）
+
+- **`pages/help/`**：208pt 目录卡（语言切换 + 二级标题列表）+ 672pt 文档卡；文档从
+  `assets/content/help-{zh,en}.md?url` 读取，`parser.ts` 是本客户端 Markdown 子集（标题/段落/有序无序
+  列表/代码块 + 行内加粗、代码、链接）的移植，纯函数、有单测。目录跟随滚动（按块 `onLayout` 上报偏移），
+  点击跳段；文档只有一级标题被隐藏，与旧客户端一致。
+- **`pages/teams/`**：筛选条（全部/镜牢/经验本/通用，带计数）+ 「新建队伍」，2 列编队槽网格
+  （14 个槽，空槽也给两种补位方式）；队伍卡有编号、启用开关、从预设覆盖、编辑、删除、名称、用途/体系/
+  人数/星光/舍弃/停用徽标与成员芯片。
+- **`pages/teams/TeamEditor.tsx`**：弹层里的「基础」段（名称、用途、饰品体系、启用、人格多选）+
+  保存/取消，新建队伍占用第一个空槽。**旧客户端的战斗 / 商店 / 策略 / 进阶 / 星光 / 统计六段
+  （`mirrorConfig`）还没迁**，它们属于镜牢任务配置，和主控台的任务卡一起做。
+- **已知差异**：饰品体系前的 emoji 在桌面字体栈里渲染成方框，已改成纯文字；帮助页各段之间的
+  间距比参考图紧约 5pt。
+
 这一轮**没有**做的（仍在 P2/P3 范围）：
 
 - 语言切换/`i18n`：标题栏文案暂时写死中文，等 P1 的 `i18n` 模块。
@@ -177,9 +192,9 @@
 | 窗口壳 / 标题栏 | 1084 + 459 | `shell/` | [x] | 待有显示机器截图 | `App.test.tsx` 5 条 |
 | 组件对照页 | — | `pages/Gallery.tsx` | [x] | 无头跑通全部区块 | 开发期手动打开 |
 | 主控台 home | 2855 | `pages/home/` | [ ] | — | — |
-| 队伍 teams | 784 | `pages/teams/` | [ ] | — | — |
+| 队伍 teams | 784 + 3358 | `pages/teams/` | [~] | 列表对照 `docs/reference/gpui/teams-light.png` | `teams.test.tsx` 4 条 |
 | 设置 settings | 360 + 1100 | `pages/settings/` | [x] | 对照 `docs/reference/gpui/settings-{light,dark}.png` | `settings.test.tsx` 4 条 |
 | 主题包 theme_packs | 423 | `pages/theme_packs/` | [ ] | — | — |
 | 工具箱 toolbox | 348 | `pages/toolbox/` | [x] | 对照 `docs/reference/gpui/toolbox-light.png` | `toolbox.test.tsx` 3 条 |
 | 资源中心 resources | 295 | `pages/resources/` | [x] | 对照 `docs/reference/gpui/resources-light.png` | `resources.test.tsx` 4 条 |
-| 帮助 help | 549 | `pages/help/` | [ ] | — | — |
+| 帮助 help | 549 | `pages/help/` | [x] | 对照 `docs/reference/gpui/help-light.png` | `help.test.tsx` 4 条 + `parser.test.tsx` 4 条 |

@@ -4,13 +4,22 @@ import { View } from "nsh";
 import type { PageId } from "../store";
 import { Gallery } from "./Gallery";
 import { Placeholder } from "./Placeholder";
+import { Help } from "./help/Help";
+import { Teams } from "./teams/Teams";
 import { Resources } from "./resources/Resources";
 import { Settings } from "./settings/Settings";
 import { Toolbox } from "./toolbox/Toolbox";
 
 /** The pages that are still placeholders. */
 function placed(page: PageId): boolean {
-  return page !== "settings" && page !== "toolbox" && page !== "resources" && page !== "gallery";
+  return (
+    page !== "settings" &&
+    page !== "toolbox" &&
+    page !== "resources" &&
+    page !== "teams" &&
+    page !== "help" &&
+    page !== "gallery"
+  );
 }
 
 export function PageHost(props: { page: PageId }) {
@@ -24,6 +33,12 @@ export function PageHost(props: { page: PageId }) {
       </If>
       <If when={props.page === "resources"}>
         <Resources />
+      </If>
+      <If when={props.page === "teams"}>
+        <Teams />
+      </If>
+      <If when={props.page === "help"}>
+        <Help />
       </If>
       <If when={props.page === "gallery"}>
         <Gallery />

@@ -17,8 +17,10 @@ import minus from "../assets/icons/minus.svg";
 import monitor from "../assets/icons/monitor.svg";
 import moon from "../assets/icons/moon.svg";
 import packageIcon from "../assets/icons/package.svg";
+import pencil from "../assets/icons/pencil.svg";
 import pill from "../assets/icons/pill.svg";
 import play from "../assets/icons/play.svg";
+import plus from "../assets/icons/plus.svg";
 import paletteIcon from "../assets/icons/palette.svg";
 import settingsIcon from "../assets/icons/settings.svg";
 import square from "../assets/icons/square.svg";
@@ -26,6 +28,7 @@ import refreshCw from "../assets/icons/refresh-cw.svg";
 import rotateCcw from "../assets/icons/rotate-ccw.svg";
 import searchCheck from "../assets/icons/search-check.svg";
 import squareStack from "../assets/icons/square-stack.svg";
+import trash from "../assets/icons/trash.svg";
 import sun from "../assets/icons/sun.svg";
 import users from "../assets/icons/users.svg";
 import wrench from "../assets/icons/wrench.svg";
@@ -47,8 +50,10 @@ const ICONS = {
   moon,
   package: packageIcon,
   palette: paletteIcon,
+  pencil,
   pill,
   play,
+  plus,
   refresh: refreshCw,
   restore: squareStack,
   rotateCcw,
@@ -56,6 +61,7 @@ const ICONS = {
   settings: settingsIcon,
   stop: square,
   sun,
+  trash,
   users,
   wrench,
 } as const;

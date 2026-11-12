@@ -21,7 +21,7 @@ test("pressing a destination switches the page", async () => {
   await app.press("role:button[资源中心]");
   await app.waitFor("模板资源");
   await app.press("role:button[帮助]");
-  await app.waitFor("帮助 页面尚未迁入");
+  await app.waitFor("目录");
 });
 
 test("the settings utility opens the settings page", async () => {

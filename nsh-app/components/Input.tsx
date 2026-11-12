@@ -21,6 +21,8 @@ export function Input(props: {
   masked?: boolean;
   onChange?: (event: { value: string }) => void;
   onSubmit?: (event: { text: string }) => void;
+  /** The id UI tests find the field by. */
+  testID?: string;
   ref?: InputRef;
   class?: string;
 }) {
@@ -34,6 +36,7 @@ export function Input(props: {
       masked={props.masked}
       onChange={props.onChange}
       onSubmit={props.onSubmit}
+      testID={props.testID}
       class={`${FRAME} ${props.class ?? ""}`}
     />
   );
