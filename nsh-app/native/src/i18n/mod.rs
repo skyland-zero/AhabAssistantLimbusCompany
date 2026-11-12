@@ -65,6 +65,9 @@ pub struct Catalog {
     pub tray_pause: &'static str,
     pub tray_resume: &'static str,
     pub tray_quit: &'static str,
+    pub preview_stopped: &'static str,
+    pub preview_starting: &'static str,
+    pub preview_error: &'static str,
 }
 
 /// A catalog key, as TSX names it (`navHome`).
@@ -99,6 +102,9 @@ pub enum Key {
     TrayPause,
     TrayResume,
     TrayQuit,
+    PreviewStopped,
+    PreviewStarting,
+    PreviewError,
 }
 
 impl Key {
@@ -133,6 +139,9 @@ impl Key {
             "trayPause" => Self::TrayPause,
             "trayResume" => Self::TrayResume,
             "trayQuit" => Self::TrayQuit,
+            "previewStopped" => Self::PreviewStopped,
+            "previewStarting" => Self::PreviewStarting,
+            "previewError" => Self::PreviewError,
             _ => return None,
         })
     }
@@ -177,6 +186,9 @@ pub fn text(language: Language, key: Key) -> &'static str {
         Key::TrayPause => catalog.tray_pause,
         Key::TrayResume => catalog.tray_resume,
         Key::TrayQuit => catalog.tray_quit,
+        Key::PreviewStopped => catalog.preview_stopped,
+        Key::PreviewStarting => catalog.preview_starting,
+        Key::PreviewError => catalog.preview_error,
     }
 }
 
@@ -232,6 +244,9 @@ mod tests {
             Key::TrayPause,
             Key::TrayResume,
             Key::TrayQuit,
+            Key::PreviewStopped,
+            Key::PreviewStarting,
+            Key::PreviewError,
         ] {
             let name = format!("{key:?}");
             let mut chars = name.chars();

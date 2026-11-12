@@ -1,12 +1,12 @@
 # 旧客户端参考图（1:1 对照基准）
 
-`gpui-app/` 在 **P5 删除**，删掉之后就再也生成不出这些图了，所以在这里归档一份：
+旧 GPUI 客户端在 **P5 删除**，删掉之后就再也生成不出这些图了，所以在这里归档一份：
 迁移期间每一页的验收标准就是和这里的图逐像素对照，而不是「看起来差不多」。
 
 | | |
 | --- | --- |
-| 来源 | `gpui-app/`（迁移前的 GPUI 客户端） |
-| 视口 | **820×680** —— 旧客户端的默认窗口（`gpui-app/src/main.rs` 的 `Bounds::centered(None, size(px(820.), px(680.)), cx)`，最小 800×560） |
+| 来源 | 迁移前的 GPUI 客户端（已删除） |
+| 视口 | **820×680** —— 旧客户端的默认窗口（最小 800×560） |
 | 数据 | `AHAB_BACKEND=mock`，确定性 mock 数据，不需要 Python sidecar |
 | 主题 | `AHAB_VISUAL_THEME=light` / `dark` |
 | 语言 | `AHAB_VISUAL_LANGUAGE=zh-CN` |
@@ -16,8 +16,10 @@
 
 ## 重新生成
 
+这些图只能在 P5 删除旧客户端之前重新生成；现在它们只作为归档基准。
+迁移期间使用的命令是：
+
 ```bash
-cargo build --manifest-path gpui-app/Cargo.toml     # 首次 ~11 分钟
 python3 scripts/capture_gpui.py --all --size 820x680 --out-dir nsh-app/docs/reference/gpui
 ```
 

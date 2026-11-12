@@ -2,7 +2,7 @@
 
 use nsh_core::prelude::*;
 
-use crate::model::{ConnectionStatus, ExecutionState};
+use crate::model::{ConnectionStatus, ExecutionState, PreviewStatus};
 
 use super::HomeState;
 
@@ -25,6 +25,16 @@ pub struct WindowView {
     pub resolution: String,
     pub async_input: bool,
     pub position: String,
+}
+
+#[derive(Clone, Debug, JsObject)]
+pub struct PreviewView {
+    pub status: String,
+    /// A `data:image/jpeg;base64,...` URL, or `null` before the first frame.
+    pub frame: Option<String>,
+    pub revision: u64,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, JsObject)]
@@ -76,6 +86,18 @@ impl HomeStore {
     /// Applies the five task cards to the contract's task config.
     pub fn configure(&mut self, selection: nsh_core::JsonValue) -> Result<(), String> {
         self.state.configure(selection)
+    }
+
+    /// Sets the game window's width (`1080` or `1440`) and returns the summary.
+    pub fn set_window_size(&mut self, size: u32) -> Result<WindowView, String> {
+        self.state.set_window_size(size)?;
+        Ok(self.window())
+    }
+
+    /// Toggles asynchronous input and returns the window summary.
+    pub fn toggle_async_input(&mut self) -> Result<WindowView, String> {
+        self.state.toggle_async_input()?;
+        Ok(self.window())
     }
 
     /// The window settings shown on the console.
@@ -162,6 +184,29 @@ impl HomeStore {
         Ok(self.device_state())
     }
 
+    /// Starts or stops the preview stream.
+    pub fn set_preview_enabled(&mut self, enabled: bool) -> Result<bool, String> {
+        self.state.set_preview_enabled(enabled)
+    }
+
+    /// Drains pending events and returns the latest preview frame and status.
+    pub fn poll_preview(&mut self) -> PreviewView {
+        let (status, frame) = self.state.poll_preview();
+        PreviewView {
+            status: match status {
+                PreviewStatus::Stopped => "stopped",
+                PreviewStatus::Starting => "starting",
+                PreviewStatus::Running => "running",
+                PreviewStatus::Error => "error",
+            }
+            .into(),
+            frame: frame.map(|frame| format!("data:image/jpeg;base64,{}", base64(&frame.jpeg))),
+            revision: frame.map(|frame| frame.revision).unwrap_or(0),
+            width: frame.map(|frame| frame.width).unwrap_or(0),
+            height: frame.map(|frame| frame.height).unwrap_or(0),
+        }
+    }
+
     /// The run log, oldest first.
     pub fn logs(&self) -> Vec<LogView> {
         self.state
@@ -216,5 +261,49 @@ impl HomeStore {
     /// Clears the feedback line.
     pub fn clear_feedback(&mut self) {
         self.state.clear_feedback();
+    }
+}
+
+impl Default for HomeStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+fn base64(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let a = chunk[0];
+        let b = chunk.get(1).copied().unwrap_or(0);
+        let c = chunk.get(2).copied().unwrap_or(0);
+        out.push(BASE64[(a >> 2) as usize] as char);
+        out.push(BASE64[(((a & 0b11) << 4) | (b >> 4)) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            BASE64[(((b & 0b1111) << 2) | (c >> 6)) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            BASE64[(c & 0b111111) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::base64;
+
+    #[test]
+    fn base64_matches_the_standard_padding() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(&[0xff, 0xd8, 0xff, 0xd9]), "/9j/2Q==");
     }
 }

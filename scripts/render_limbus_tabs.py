@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-LIM = ROOT / "gpui-app" / "resources" / "assets" / "themes" / "limbus"
+LIM = ROOT / "nsh-app" / "assets" / "themes" / "limbus"
 OUTDIR = ROOT / "artifacts" / "visual" / "limbus-tabs"
 
 W, H = 1440, 900
@@ -566,7 +566,7 @@ def pg_help():
     s.d.rectangle([296, y, 310, y + 108], fill=(52, 26, 14))
     s.d.text((322, y + 14), "git clone https://github.com/KIYI671/...", font=F_MONO, fill=GOLD_B)
     s.d.text((322, y + 42), "uv sync --frozen", font=F_MONO, fill=GOLD_B)
-    s.d.text((322, y + 70), ".\\run-gpui.bat", font=F_MONO, fill=GOLD_B)
+    s.d.text((322, y + 70), ".\\run-nsh.bat", font=F_MONO, fill=GOLD_B)
     y += 130
     s.d.text((296, y), "窗口识别失败？请以管理员身份运行，并确保游戏窗口未最小化。",
              font=F_S, fill=MUTED)

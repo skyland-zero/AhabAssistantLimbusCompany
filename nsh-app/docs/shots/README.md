@@ -1,8 +1,8 @@
 # 截图基线
 
 `nsh-app` 在 GPUI 开发宿主里的真实渲染结果。**统一 820×680** —— 与旧客户端的默认窗口
-（`gpui-app/src/main.rs`：`Bounds::centered(None, size(px(820.), px(680.)), cx)`，最小 800×560）
-以及 `docs/reference/gpui/` 的对照图同一个视口，`nsh.json` 的 `window` 已对齐。
+（820×680，最小 800×560）以及 `docs/reference/gpui/` 的对照图同一个视口，
+`nsh.json` 的 `window` 已对齐。
 
 | 文件 | 内容 |
 | --- | --- |

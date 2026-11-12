@@ -332,7 +332,7 @@ fn find_python(script_directory: Option<&Path>) -> PathBuf {
         .map(Path::to_path_buf)
         .into_iter()
         .collect();
-    if let Some(current) = env::current_dir().ok() {
+    if let Ok(current) = env::current_dir() {
         roots.push(current);
     }
     if let Some(exe) = env::current_exe()

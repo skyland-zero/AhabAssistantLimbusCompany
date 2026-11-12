@@ -4,7 +4,7 @@
 
 ## 1. 项目目标
 
-- 界面与交互 1:1 照搬原 GPUI 客户端（`gpui-app/`，迁移完成后删除），不新增功能、不改用户可见行为。
+- 界面与交互 1:1 照搬迁移前的客户端（参考图归档在 `docs/reference/gpui/`），不新增功能、不改用户可见行为。
 - Rust 拥有后端与状态，TSX 拥有页面与样式，两侧通过生成的 TypeScript 声明强类型对接。
 - Mock 与 Python sidecar 共用同一套 JSON-RPC 契约（仓库根 `contract/contract.json`）。
 - 浅色/深色、6 个强调色、5 个皮肤由 `theme.json` 的 token 驱动，页面里不出现硬编码色值。
@@ -70,11 +70,9 @@ nsh-app/
 
 ## 5. 零外部引用（硬约束）
 
-迁移完成后 `gpui-app/` 会被删除，因此：
-
-- 禁止引用 `../gpui-app`、`gpui-app/**` 的任何文件、路径或环境变量。
+- 不引用迁移前客户端的源码、路径或环境变量；只使用归档在 `docs/reference/gpui/` 的截图。
 - 资源一律从 `assets/` 读，不得回退到 checkout 目录（不用 `CARGO_MANIFEST_DIR` 拼运行时路径）。
-- `python3 scripts/check_no_gpui_app_refs.py` 必须在提交前通过（P5 删除后无白名单）。
+- `python3 scripts/check_no_legacy_client_refs.py` 必须在提交前通过。
 
 ## 6. 验证
 

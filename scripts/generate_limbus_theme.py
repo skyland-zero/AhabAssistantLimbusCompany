@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-OUT = Path(__file__).resolve().parents[1] / "gpui-app" / "resources" / "assets" / "themes" / "limbus"
+OUT = Path(__file__).resolve().parents[1] / "nsh-app" / "assets" / "themes" / "limbus"
 
 BG = (11, 10, 14)
 CARD = (27, 17, 20)
@@ -95,7 +95,7 @@ def make_bg() -> Image.Image:
 # bitmaps. Stretching an 800x72 band to the card width distorted its rivets and
 # smears, and a 256x256 frame tile could not be resized without the same
 # problem, so both are now drawn as resolution-independent geometry in
-# `gpui-app/src/components/base.rs`. Only the assets below are shipped.
+# the migration client's `components/base.rs`. Only the assets below are shipped.
 
 
 def make_divider() -> Image.Image:

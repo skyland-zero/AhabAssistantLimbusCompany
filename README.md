@@ -28,7 +28,7 @@
 
 > **关于本 Fork**
 >
-> 本项目是 [AhabAssistantLimbusCompany](https://github.com/KIYI671/AhabAssistantLimbusCompany) 的一个 Fork，主要使用 Rust/GPUI 重做桌面 UI。自动化任务、游戏识别、战斗流程等功能整体沿用上游实现；本 Fork 仅针对 GPUI 界面及其与后端的连接进行必要适配，不重新实现自动化逻辑。
+> 本项目是 [AhabAssistantLimbusCompany](https://github.com/KIYI671/AhabAssistantLimbusCompany) 的一个 Fork，桌面 UI 使用 Rust + Native Shell 重做。自动化任务、游戏识别、战斗流程等功能整体沿用上游实现；本 Fork 仅针对界面及其与后端的连接进行必要适配，不重新实现自动化逻辑。
 
   ---
 
@@ -183,7 +183,7 @@ AALC的项目离不开以下开源项目的帮助
 | 三月七小助手  | [March7thAssistant](https://github.com/moesnow/March7thAssistant)                 | 从大佬这里学到了挺多                                |
 | BAAS    | [blue_archive_auto_script](https://github.com/pur1fying/blue_archive_auto_script) | 从大佬这里学习了模拟器相关代码                           |
 
-AALC 的 GPUI 界面使用系统字体和 GPUI 内置资源，不再额外打包旧 Qt 字体。
+AALC 的 Native Shell 界面使用系统字体和内置资源，不再额外打包旧 Qt 字体。
 
 ### 统一致谢
 
@@ -227,7 +227,7 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # 需要 uv >= 0.12.8；按 .python-version 使用 Python 3.14.7 并安装项目依赖
 uv sync --frozen
-.\\run-gpui.bat
+.\\run-nsh.bat
 
 # 更新
 git pull
@@ -241,8 +241,8 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # 请使用 Python 3.14.x
 pip install -r requirements.txt
-# 需要预先安装 Rust nightly
-cargo +1.99.1 run --manifest-path gpui-app/Cargo.toml
+# 需要预先安装 Rust 1.99.1 与 Native Shell 0.5.0
+nsh run nsh-app
 
 # 更新
 git pull

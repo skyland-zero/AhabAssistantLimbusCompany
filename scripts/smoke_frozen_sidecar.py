@@ -1,7 +1,7 @@
 """Smoke-test a frozen onedir sidecar bundle.
 
 The check is intentionally black-box: it launches the packaged executable,
-verifies that the ready PID is the process GPUI would supervise, exercises a
+verifies that the ready PID is the process Native Shell would supervise, exercises a
 real WebSocket request, and then asserts a graceful ``app.shutdown`` exit.
 That is the property a one-file bundle could not guarantee.
 """

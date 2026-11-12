@@ -30,4 +30,7 @@ pub const CATALOG: Catalog = Catalog {
     tray_pause: "暂停任务",
     tray_resume: "继续任务",
     tray_quit: "退出 AALC",
+    preview_stopped: "已停止",
+    preview_starting: "启动中",
+    preview_error: "预览错误",
 };

@@ -5,8 +5,7 @@ mutating flags, events and error names. This script deliberately avoids
 importing the heavy Python backend: it parses the source files so it can run in
 CI before dependencies/configuration are initialized.
 
-Both the Native Shell backend and the frozen GPUI client are checked while
-both exist (P1 → P5); the GPUI entry disappears with the tree at P5.
+The Native Shell backend, the Python sidecar and both mocks are checked.
 
 Run directly (``python scripts/validate_contract.py``) or through
 ``tests/unit/test_contract_manifest.py``.
@@ -25,11 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "contract" / "contract.json"
 RUST_CONTRACTS = [
     ROOT / "nsh-app" / "native" / "src" / "ipc" / "contract.rs",
-    ROOT / "gpui-app" / "src" / "ipc" / "contract.rs",
 ]
 MOCK_DIRS = [
     ROOT / "nsh-app" / "native" / "src" / "ipc" / "mock",
-    ROOT / "gpui-app" / "src" / "ipc" / "mock",
 ]
 DISPATCHER_PY = ROOT / "module" / "rpc_dispatcher.py"
 RPC_CONTRACT_PY = ROOT / "module" / "rpc_contract.py"

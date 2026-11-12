@@ -126,3 +126,9 @@ impl TeamsStore {
         serde_json::to_value(stats).map_err(|error| error.to_string())
     }
 }
+
+impl Default for TeamsStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}

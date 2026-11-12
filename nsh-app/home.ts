@@ -157,6 +157,8 @@ const asyncInput = signal(false);
 const logs = signal<LogEntry[]>([]);
 const feedback = signal<string | null>(null);
 const tasks = signal<Task[]>(DEFAULT_TASKS.map((task) => ({ ...task })));
+const previewFrame = signal<string | null>(null);
+const previewStatus = signal("stopped");
 
 let store: HomeStore | null = null;
 let connecting = false;
@@ -284,6 +286,35 @@ export function currentResolution(): string {
 export function isAsyncInput(): boolean {
   ensureStore();
   return asyncInput();
+}
+
+/** Cycles 1080P ↔ 1440P through the task config. */
+export function cycleResolution(): void {
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    const next = resolution() === "1080P" ? 1440 : 1080;
+    const window = current.setWindowSize(next);
+    resolution.set(window.resolution);
+    asyncInput.set(window.asyncInput);
+    feedback.set("窗口设置已保存");
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Turns asynchronous input on or off through the task config. */
+export function toggleAsyncInput(): void {
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    const window = current.toggleAsyncInput();
+    resolution.set(window.resolution);
+    asyncInput.set(window.asyncInput);
+    feedback.set("窗口设置已保存");
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** How many log lines the panel holds (tracked). */
@@ -419,9 +450,32 @@ export function selectDevice(id: string): void {
   try {
     device.set(current.connectDevice(id) as DeviceState);
     feedback.set(current.feedback());
+    if (device() === "connected") current.setPreviewEnabled(true);
   } catch (error) {
     feedback.set(error instanceof Error ? error.message : String(error));
   }
+}
+
+/** The latest preview frame as a `data:` URL, or `null` before the first. */
+export function currentPreviewFrame(): string | null {
+  ensureStore();
+  return previewFrame();
+}
+
+/** The preview stream's status (`stopped`, `starting`, `running`, `error`). */
+export function currentPreviewStatus(): string {
+  ensureStore();
+  return previewStatus();
+}
+
+/** Drains queued events and updates the live preview and log mirror. */
+export function pollPreview(): void {
+  const current = ensureStore();
+  if (!current) return;
+  const view = current.pollPreview();
+  previewStatus.set(view.status);
+  if (view.frame) previewFrame.set(view.frame);
+  logs.set(current.logs());
 }
 
 /** The statistics summary shown on the console (tracked). */

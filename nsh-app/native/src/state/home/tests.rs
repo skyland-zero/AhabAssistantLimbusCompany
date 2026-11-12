@@ -104,6 +104,17 @@ fn device_refresh_and_connect_update_the_console() {
 }
 
 #[test]
+fn window_settings_are_saved_through_the_task_config() {
+    let mut state = state();
+    state.set_window_size(1440).unwrap();
+    assert_eq!(state.window_summary()["resolution"], "1440P");
+    state.toggle_async_input().unwrap();
+    assert_eq!(state.window_summary()["asyncInput"], true);
+    state.set_window_size(1080).unwrap();
+    assert_eq!(state.window_summary()["resolution"], "1080P");
+}
+
+#[test]
 fn logs_are_bounded_and_clearable() {
     let mut state = state();
     for index in 0..350 {

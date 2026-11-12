@@ -34,7 +34,7 @@ pub fn client() -> &'static BackendClient {
     CLIENT.get_or_init(|| match configured_mode().as_str() {
         "mock" => BackendClient::mock(),
         "unavailable" => BackendClient::unavailable("AHAB_BACKEND=unavailable"),
-        _ => BackendClient::try_sidecar().unwrap_or_else(|error| BackendClient::unavailable(error)),
+        _ => BackendClient::try_sidecar().unwrap_or_else(BackendClient::unavailable),
     })
 }
 

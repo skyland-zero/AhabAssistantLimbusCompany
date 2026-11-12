@@ -217,6 +217,12 @@ impl SettingsStore {
     }
 }
 
+impl Default for SettingsStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Mirror Dungeon theme-pack weights.
 #[class]
 pub struct ThemePacksStore {
@@ -302,6 +308,12 @@ impl ThemePacksStore {
     }
 }
 
+impl Default for ThemePacksStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn view(pack: &ThemePack) -> ThemePackView {
     ThemePackView {
         id: pack.id.clone(),
@@ -375,6 +387,12 @@ impl ResourcesStore {
     }
 }
 
+impl Default for ResourcesStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn group_view(group: &ResourceGroup) -> ResourceGroupView {
     ResourceGroupView {
         id: group.id.clone(),
@@ -437,5 +455,11 @@ impl ToolboxStore {
     /// Restores the device's resolution and DPI.
     pub fn reset_resolution(&mut self) -> Result<String, String> {
         self.state.reset_resolution()
+    }
+}
+
+impl Default for ToolboxStore {
+    fn default() -> Self {
+        Self::new()
     }
 }

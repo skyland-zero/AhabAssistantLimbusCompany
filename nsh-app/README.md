@@ -1,7 +1,7 @@
 # nsh-app
 
 AALC 的新前端：**Rust 后端（`native/`）+ TSX 前端**，基于 [Native Shell](https://nsh.dev)。
-界面按原 GPUI 客户端 1:1 重写，迁移完成后 `gpui-app/` 会被删除。
+界面按迁移前的客户端 1:1 重写，参考截图归档在 `docs/reference/gpui/`。
 
 开发约定见 [AGENTS.md](./AGENTS.md)，迁移进度与来源映射见 [MIGRATION.md](./MIGRATION.md)，
 设计标准（token、尺度、组件契约、动效清单）见 [DESIGN.md](./DESIGN.md)。
@@ -68,5 +68,5 @@ assets/          随包资源（icons/ 为 Lucide SVG）
 `theme.json` 与 `themes/skins.generated.ts` 是从原 GPUI 调色板机械导出的 shadcn `cssVars`
 （5 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token，另加 6 个强调色的差异表）。
 `themes/index.ts` 在运行时合成「皮肤 × 强调色」并调 `setTheme()`。
-导出脚本为 `scripts/export_nsh_theme.py`，随 `gpui-app/` 一起在 P5 删除；
-之后主题**只在本目录维护**（重跑脚本会覆盖 `theme.json` 与 `skins.generated.ts`）。
+导出脚本为一次性的 `scripts/export_nsh_theme.py`；迁移完成后主题**只在本目录维护**
+（重跑脚本会覆盖 `theme.json` 与 `skins.generated.ts`）。

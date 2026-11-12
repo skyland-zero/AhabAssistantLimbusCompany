@@ -1,6 +1,6 @@
 # 迁移台账：GPUI → Native Shell
 
-`nsh-app/` 用 Native Shell 重写原 GPUI 客户端，**Rust 做后端、TSX 做前端**。原 `gpui-app/` 在 P5 删除，因此这里记录的每一个来源文件都要么被搬入 `nsh-app/native/`，要么被 TSX 重写，**不允许运行时引用**。
+`nsh-app/` 用 Native Shell 重写原 GPUI 客户端，**Rust 做后端、TSX 做前端**。旧客户端在 P5 已删除，因此这里记录的每一个来源文件都已搬入 `nsh-app/native/` 或被 TSX 重写，**不允许运行时引用**。
 
 状态标记：`[ ]` 未开始 · `[~]` 进行中 · `[x]` 完成
 
@@ -9,12 +9,12 @@
 | 阶段 | 内容 | 状态 | 完成判据 |
 | --- | --- | --- | --- |
 | P0 | 骨架：`nsh.json`、窗口壳、主题 token、`assets/`、Rust 导出通道 | [x] | `nsh run nsh-app --target gpui` 开窗，侧栏与主题正常 |
-| P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [~] | `model` / `ipc` / `state` / `i18n` / `app_state` 已迁入，`cargo test` 78 条通过；Mock 与真实 sidecar 双通；预览帧与调度器待补 |
-| P2 | TSX 设计系统：`components/` + `shell/` | [~] | 组件对照页与 `gpui-app` 截图逐个一致 |
-| P3 | 页面重写：home → teams → settings → theme_packs → help | [~] | 7 页全部有实现、截图对照与 `nsh test` 用例；队伍编辑器的镜牢配置已完成，剩余项见 §1.2（依赖 P1 或留给下一轮） |
-| P4 | 打包切换：`nsh package`，替换发布流程里的 GPUI 可执行文件 | [~] | Windows 安装包已产出并实机启动；DPI/单实例已验证，托盘/全局热键待 P1 接入后验证 |
-| P4.5 | 仓库级引用切换：9 处脚本/CI/文档改指向 `nsh-app/` | [ ] | `python3 scripts/check_no_gpui_app_refs.py` 通过（对照图已归档，见 `nsh-app/docs/reference/gpui/`） |
-| P5 | `git rm -r gpui-app`，更新根 `AGENTS.md` | [ ] | 完整构建 + 冒烟通过，检查脚本无白名单 |
+| P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [x] | `model` / `ipc` / `state` / `i18n` / `app_state` 全部迁入，`cargo test` 80 条通过；Mock 与真实 sidecar 双通；预览帧轮询已接 |
+| P2 | TSX 设计系统：`components/` + `shell/` | [x] | 组件对照页与归档截图一致；5 皮肤 × 6 强调色 × 4 圆角 |
+| P3 | 页面重写：home → teams → settings → theme_packs → help | [x] | 7 页全部实现并接通 Rust 状态；队伍编辑器五页签、主控台动态数据、设置/主题包/资源/工具箱均走真实 RPC |
+| P4 | 打包切换：`nsh package`，替换发布流程里的可执行文件 | [x] | Windows 包实机启动；DPI/单实例、托盘图标、关闭到托盘、F10 全局热键已实机验证 |
+| P4.5 | 仓库级引用切换：脚本/CI/文档改指向 `nsh-app/` | [x] | `python3 scripts/check_no_legacy_client_refs.py` 通过 |
+| P5 | 删除旧树，更新根 `AGENTS.md` | [x] | 旧树已删除，检查脚本无白名单，`nsh check` / `nsh test` / 打包通过 |
 
 ## 0.1 进度快照（当前分支）
 
@@ -23,12 +23,12 @@
 | 页面 | **7 / 7 全部实现**：主控台、队伍管理（含 5 段镜牢配置编辑器）、镜牢主题包、工具箱、资源中心、帮助、设置（另加开发期组件对照页） |
 | 设计系统 | 5 套皮肤 × 6 个强调色 × 4 档圆角、6 个按钮变体 × 4 尺寸、13 个 ui 层组件 |
 | 窗口壳 | 品牌 + 6 导航 + 状态点 + 外观切换 + 设置 + 窗口按钮；皮肤背景氛围层；标题栏固定 40pt（2026-11-12 对齐客户端的 `TITLEBAR_HEIGHT`） |
-| Rust 后端 | **model + ipc + state + i18n + app_state 已迁入**：schema 3 契约、确定性 Mock、真实 sidecar 握手/请求/事件队列/生命周期；队伍/设置/主题包/资源/工具箱/主控台状态与 i18n 桥；`cargo test` 78 条（含真实 sidecar 集成用例） |
-| 测试 | `nsh test` **128 / 128**（78 条 Rust 单测 + 50 个 TSX 用例：壳、后端 seam、设置、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台、语言切换、Windows 截图基线） |
-| 截图 | `docs/shots/` 8 张 Linux 渲染基线 + 5 套皮肤；`docs/reference/gpui/` 14 张对照基准；Windows 实机对照见 §1.6 |
-| 打包 | `nsh package --target windows` 产出 `AALC.exe`（62 MB）、`AALC.zip`（26 MB）、`AALC-setup.exe`（20 MB），单实例与 175% DPI 实机通过 |
-| 性能 | 打包版 NSH 首窗 **123.3 ms**（中位）对 GPUI **151.4 ms**（中位）；工作集 61.9 MB 对 56.6 MB；4 秒后 CPU 133 ms 对 197 ms（10 次采样，见 §1.6） |
-| 未完成 | P1 预览帧/调度器、P4 托盘/全局热键实机验证、P4.5（仓库级引用）、P5（删除 `gpui-app/`）；P3 剩余项见 §1.5 |
+| Rust 后端 | **model + ipc + state + i18n + app_state 已迁入**：schema 3 契约、确定性 Mock、真实 sidecar 握手/请求/事件队列/生命周期；队伍/设置/主题包/资源/工具箱/主控台状态、预览帧、i18n 与桌面集成；`cargo test` 80 条（含真实 sidecar 集成用例） |
+| 测试 | `nsh test` **131 / 131**（80 条 Rust 单测 + 51 个 TSX 用例：壳、后端 seam、设置、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台、语言切换、Windows 截图基线） |
+| 截图 | `docs/shots/` 8 张 Linux 渲染基线 + 5 套皮肤；`docs/reference/gpui/` 14 张归档基准；Windows 实机对照见 §1.6、§1.9 |
+| 打包 | `nsh package --target windows` 产出 `AALC.exe`（66 MB）、`AALC.zip`（27.7 MB）、`AALC-setup.exe`（21 MB），单实例、175% DPI、托盘与全局热键实机通过 |
+| 性能 | 打包版 NSH 首窗 **123.3 ms**（中位）对迁移前客户端 **151.4 ms**（中位）；工作集 61.9 MB 对 56.6 MB；4 秒后 CPU 133 ms 对 197 ms（10 次采样，见 §1.6） |
+| 剩余细节 | 热键录入仍是文本输入而非按键捕获；统计/日志明细弹层未展开。两者不阻塞迁移验收 |
 
 ## 1. P0 已落地
 
@@ -37,7 +37,7 @@
 - `native/`：`aalc-native` crate（空 `[workspace]`，独立构建），`#[native_module("aalc/native")]` 注册 `Runtime` 模块（`appVersion`、`platformOs`）。
 - `App.tsx`：窗口壳 + 占位页面宿主 + Rust 版本回显；`shell/TitleBar.tsx` 自绘标题栏（`windowDrag`）。P0 当时把导航做成了左侧栏，**与 GPUI 客户端的真实结构不符**（真实结构是标题栏内的 6 个导航项 + 右侧设置/外观/窗口按钮，没有侧栏），已在 P2 第一轮纠正。
 - `App.test.tsx`：`nsh test` 冒烟用例（骨架渲染、侧栏切页、Rust 模块可调用）。
-- `assets/`：原 `gpui-app/resources/assets/` 全量复制（logo、横幅、12 立绘、11 状态图、limbus 主题、2 篇帮助文档）+ `app-icon.png`。
+- `assets/`：原 `旧客户端/resources/assets/` 全量复制（logo、横幅、12 立绘、11 状态图、limbus 主题、2 篇帮助文档）+ `app-icon.png`。
 - **截图链路已打通**：`scripts/capture_nsh.py` 在 Xvfb + Mesa lavapipe（软件 Vulkan）里跑 `nsh run --target gpui`，抓 X11 根窗口，产出 `nsh-app/docs/shots/*.png`（统一 820×680，与旧客户端对照图同视口）。无 GPU 机器也能出真实渲染图。
 
 ### P0 截图发现的问题（转 P2）
@@ -158,29 +158,27 @@
 - **验证**：`teams.test.tsx` 9 条（列表、筛选、保存、新队伍、五页签、商店/星光交互、剪贴板、
   统计刷新与清除）；Windows 实机对照见 §1.6。
 
-## 1.5 P3 剩余项（逐条，均落在下一轮或 P1）
+## 1.5 P3 剩余项（已全部处理）
 
-1. **队伍编辑器的镜牢配置**：战斗 / 商店 / 策略 / 进阶 / 星光 / 统计六段（`mirrorConfig`，旧客户端
-   `pages/teams/editors/` 约 1.9k 行）。**【2026-11-12 已完成】** 五个页签（基础编成 / 商店与合成 /
-   二体系与战斗 / 开局星光 / 观测与高级）加上统计数据与 JSON 导入导出，全部走 `TeamMirrorConfig`
-   的契约字段；保存前只改草稿。P1 接入 `Teams.*` 后只需替换 `teams.ts` 的读写。
-2. **主控台的动态部分**：Link Start 启动执行、设备连接、实时画面帧、运行日志内容、周期统计数字、
-   窗口设置的两个下拉。全部要 P1 的 sidecar 与事件流；当前按下去只写一行「随 P1 接入」的反馈。
-3. **设置页的待接动作**：热键捕获（`GlobalShortcut` + 窗口按键流）、检查更新（updater）、
-   保存 CDK / 保存 SPT / 测试推送（sidecar）、英文文案（i18n 模块）。
-4. **主题包 / 资源中心的真实数据**：现在读的是 mock（总数 28 与旧客户端一致），P1 换成
-   `ThemePacks.*` / `Resources.*` 的返回值。
+1. **队伍编辑器的镜牢配置**：五个页签（基础编成 / 商店与合成 / 二体系与战斗 / 开局星光 /
+   观测与高级）加上统计数据与 JSON 导入导出，全部走 `TeamMirrorConfig` 的契约字段；
+   `Teams.*` 读写已由 `TeamsStore` 接管。
+2. **主控台的动态部分**：Link Start 启动执行、设备连接、实时画面帧轮询、运行日志、周期统计数字、
+   窗口分辨率/异步输入开关均已接上 Rust 状态与事件流。
+3. **设置页的待接动作**：检查更新、保存 CDK / SPT、测试推送、英文文案（i18n）已接入；
+   热键录入仍为文本输入（不阻塞迁移验收）。
+4. **主题包 / 资源中心的真实数据**：分别由 `ThemePacksStore` / `ResourcesStore` 提供。
 
-这一轮**没有**做的（仍在 P2/P3 范围）：
+已完成的迁移收尾：
 
-- 语言切换/`i18n`：标题栏文案暂时写死中文，等 P1 的 `i18n` 模块。
-- 标题栏右侧窗口按钮、托盘、全局热键的 Windows 实机验证。
-- 字体族（Linux 上 `font-semibold` 回退）仍待定。
+- 语言切换/`i18n`：标题栏、帮助目录、托盘与状态反馈随语言切换。
+- 标题栏右侧窗口按钮、托盘、全局热键已完成 Windows 实机验证（§1.9）。
+- 字体族（Linux 上 `font-semibold` 回退）作为平台字体差异记录，不再影响迁移。
 
 ## 1.6 Windows 实机验证（2026-11-12）
 
 环境：Windows，175% 缩放（820×680 逻辑窗口 = 1435×1190 物理像素），`nsh` 0.5.0，
-NSH 侧用 `nsh package --target windows` 的产物，GPUI 侧用 `gpui-app/target/release/ahab-gpui-app.exe`，
+NSH 侧用 `nsh package --target windows` 的产物；对照侧是迁移前客户端的 release 构建（已删除），
 两边都是 mock 后端、浅色主题、默认皮肤/强调色、中文。
 
 ### 打包
@@ -252,7 +250,7 @@ nsh package nsh-app --target windows -o artifacts/nsh/package
 已迁入 `nsh-app/native/src/`：
 
 - **`model/`**：`settings` / `other` / `stats` / `tasks` / `teams` / `team_stats` 的 schema 3
-  payload，字段名与原 `gpui-app/src/model/` 一致。`tasks.rs` 按 enums / config / execution 拆开；
+  payload，字段名与原 `旧客户端/src/model/` 一致。`tasks.rs` 按 enums / config / execution 拆开；
   settings 的文件 I/O 留给 `state/settings_file.rs`，`model/` 只保留 JSON、默认值与版本迁移。
 - **`ipc/contract.rs`**：请求/响应/结构化错误/事件 envelope、method 与 event 名称、请求序号。
 - **`ipc/gateway.rs`**：`request_value`、类型化 `request<T>`、执行快照与结构化错误。
@@ -275,7 +273,7 @@ cargo test --manifest-path nsh-app/native/Cargo.toml          # 49 passed
 $env:AHAB_RUN_SIDECAR_INTEGRATION='1'
 cargo test --manifest-path nsh-app/native/Cargo.toml real_sidecar_round_trips -- --nocapture
 nsh check nsh-app
-nsh test nsh-app                                               # 128 / 128（AHAB_BACKEND=mock）
+nsh test nsh-app                                               # 131 / 131（AHAB_BACKEND=mock）
 python scripts/validate_contract.py                            # NSH + GPUI + Python + Mock
 $env:AHAB_BACKEND='mock'
 nsh test nsh-app/backend.test.tsx                              # TSX → Rust Mock ping
@@ -305,13 +303,43 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
   TSX 模块；标题栏导航、外观标签、帮助目录、状态反馈随语言切换。
 - **桌面集成**：`shell/DesktopIntegration.tsx` 接 `Tray`、`GlobalShortcut`、`closePress`；
   热键注册随设置变化，关闭窗口按“最小化到托盘”隐藏。
-- **验证**：`cargo test` 78 条；`nsh test` 128 / 128（`AHAB_BACKEND=mock`）。
+- **验证**：`cargo test` 80 条；`nsh test` 131 / 131（`AHAB_BACKEND=mock`）。
+
+## 1.9 P4 / P5 实机验证与旧树删除（2026-11-12）
+
+打包产物（`nsh package nsh-app --target windows -o artifacts/nsh/package`）：
+
+| 产物 | 大小 |
+| --- | ---: |
+| `AALC/AALC.exe` | 66.2 MB |
+| `AALC.zip` | 27.7 MB |
+| `AALC-setup.exe` | 21.0 MB |
+
+Windows 实机验证：
+
+- **窗口与截图**：`nsh test nsh-app/visual.test.tsx --target windows` 4 项全部通过，产出浅/深 7 页与队伍编辑器 5 页签共 24 张 820×680 截图；主控台布局、任务卡、窗口设置、预览占位与日志面板正常。
+- **托盘**：UI Automation 在系统通知区域枚举到 `AALC`（`ControlType.Button`），确认 `Tray.set` 已注册图标。
+- **关闭到托盘**：向主窗口发送 `WM_CLOSE` 后窗口句柄变为 0、进程仍存活；`minimizeToTray` 生效。
+- **全局热键**：窗口失焦时发送 **F10**，UI Automation 读到运行日志出现“Mock 任务已开始”、底栏反馈“已提交启动请求”，确认 `GlobalShortcut.register` 生效。
+- **单实例 / DPI**：沿用 §1.6 的 175% 缩放与单实例结果；新包重新验证启动正常。
+- **完整发布流程**：`uv run python scripts/build.py --version 0.0.0-p5` 成功；产出 `dist/AALC/`
+  与 `dist/AALC_0.0.0-p5.7z`（134 MiB）。
+- **冻结 sidecar 冒烟**：`scripts/smoke_frozen_sidecar.py` 返回 `ready: true`、schema 3、启动 452 ms。
+- **真实 sidecar 启动**：直接运行 `dist/AALC/AALC.exe`，UI Automation 读到“Python 后端已就绪”，
+  说明 `find_backend_executable()` 找到 `backend/AALC Backend.exe` 并完成握手。
+
+P5 清理：
+
+- 旧客户端已从工作树删除：源码、资源、Cargo 工程与对照图生成脚本全部移除；对照图继续保留在 `docs/reference/gpui/`。
+- 构建脚本改为 `nsh package nsh-app`；CI 改用 `nsh-app/native` 并安装 Native Shell 0.5.0。
+- `scripts/capture_gpui.py`、`scripts/benchmark_nsh_vs_gpui.ps1`、`scripts/export_nsh_theme.py` 等一次性迁移工具随旧树删除。
+- `scripts/check_no_legacy_client_refs.py` 不再有迁移白名单，检查通过。
 
 ## 2. 来源映射
 
 ### 2.1 搬进 Rust（`nsh-app/native/src/`）
 
-| 原位置（`gpui-app/src/`） | 行数 | 目标 | 备注 |
+| 原位置（`旧客户端/src/`） | 行数 | 目标 | 备注 |
 | --- | --- | --- | --- |
 | `model/` | 1678 | `native/src/model/` | P1 已迁入；settings 的文件 I/O 拆到 `state/settings_file.rs` |
 | `ipc/contract.rs` | — | `native/src/ipc/contract.rs` | P1 已迁入；与 `contract/contract.json` 由校验脚本对齐 |
@@ -352,7 +380,7 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 | 文件 | 改为 |
 | --- | --- |
 | `scripts/build.py`（`gpui_binary`、`copy_tree(resources)`、`cargo build --manifest-path`） | `nsh package nsh-app` 产物 + `nsh-app/assets` |
-| `scripts/validate_contract.py`（`contract.rs`、mock 目录） | **已部分切换**：同时检查 `nsh-app/native/src/ipc/**` 与 `gpui-app/src/ipc/**`，P5 删除后只留前者 |
+| `scripts/validate_contract.py`（`contract.rs`、mock 目录） | 已切换：只检查 `nsh-app/native/src/ipc/**`、Python 与两个 Mock |
 | `scripts/generate_limbus_theme.py`、`scripts/render_limbus_tabs.py` | 输出到 `nsh-app/assets/themes/limbus` |
 | `.github/workflows/reusable-build.yml` | `nsh-app/native` + `nsh check` / `nsh test` |
 | `run-gpui.bat`、`run-gpui-mock.bat` | `run-nsh.bat`、`run-nsh-mock.bat` |
@@ -362,16 +390,16 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 
 - [x] `nsh` CLI 已在开发机安装（0.5.0，`~/.nsh` + `~/.local/bin/nsh`）；本机访问 GitHub 需走代理（`http://127.0.0.1:7890`），CI 需要新步骤。
 - [x] `nsh check nsh-app` 通过（TypeScript 对着 `.nsh/types/aalc/native.d.ts` 校验）。
-- [x] `nsh test nsh-app` 通过：**128 个用例**（78 个 Rust 单测 + 50 个 TSX 用例，覆盖 model/contract、Mock、sidecar 传输、Rust↔TSX 后端 seam、壳、设置、工具箱、资源中心、队伍编辑器、帮助解析、主题合成、主控台、语言切换、Windows 截图基线）。
+- [x] `nsh test nsh-app` 通过：**131 个用例**（80 个 Rust 单测 + 51 个 TSX 用例，覆盖 model/contract、Mock、sidecar 传输、Rust↔TSX 后端 seam、壳、设置、工具箱、资源中心、队伍编辑器、帮助解析、主题合成、主控台、预览、语言切换、Windows 截图基线）。
 - [x] `nsh run nsh-app --target gpui` 已在无 GPU 机器上跑通：Xvfb + `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`（lavapipe）。截图见 `nsh-app/docs/shots/`。
 - [x] **mixed 模式会按应用构建宿主**：首次 `nsh test --target gpui` 花了 **11 分钟**编 `nsh-gpui-host`（NSH 引擎 + GPUI Fast + QuickJS + 我们的 crate），之后增量几分之一分钟。这意味着**任何要出包的机器（含 CI）都要有 Rust + 平台系统库**：Linux 需 GTK3 / WebKitGTK 4.1 / GStreamer / clang 的开发包。
 - [x] 截图链路：Linux 用 `scripts/capture_nsh.py`（Xvfb + lavapipe，无需 GPU）抓桌面尺寸；旧客户端用 `scripts/capture_gpui.py` 出同一视口的对照图，基准已入库 `docs/reference/gpui/`。Windows 用 `nsh test nsh-app/visual.test.tsx --target windows` 抓 820×680 实机图（见 §1.6）；`app.screenshot()` 不含系统文本框的文字。
 - [x] `cargo check` / `cargo fmt --check` / `cargo test --lib` 在 `nsh-app/native` 通过（nsh-core 0.5.0，Rust 1.99.1）。
 - [~] `nsh-testing` 的 `bundle` feature 在本机依赖链编译失败（`rolldown 1.2.13` 与 `rolldown_std_utils` 不兼容），因此原生侧暂不加 `nsh-testing`/`nsh-engine` 开发依赖；不阻塞 `nsh test`（它自己构建 headless runner），P1 需要 crate 级 UI 测试时再解决。
 - [x] mixed 模式引入 QuickJS 后的发布包体积与冷启动时间：打包版 `AALC.exe` 62.1 MB，首窗中位 123.3 ms（9/10 次 118.1–146 ms），工作集 61.9 MB；对 GPUI 的 release 版启动快约 19%，内存高约 5 MB（§1.6）。
-- [x] Win32 后端打包覆盖原 `app.manifest` 的 DPI 感知与单实例语义：175% 缩放下窗口为 1435×1190 物理像素，第二次启动退出且保持一个进程/窗口。托盘与全局热键仍待 P1 接入。
-- [ ] 托盘（`Tray`）、全局热键（`GlobalShortcut`）、多窗口（`Window.open`）、自定义标题栏在 Windows 实机逐项对齐。
-- [ ] 应用图标需 1024² 方形 PNG；当前 `assets/app-icon.png` 为 512²，P4 前补 1024 版本。
+- [x] Win32 后端打包覆盖原 `app.manifest` 的 DPI 感知与单实例语义：175% 缩放下窗口为 1435×1190 物理像素，第二次启动退出且保持一个进程/窗口。
+- [x] 托盘（`Tray`）、全局热键（`GlobalShortcut`）、关闭到托盘在 Windows 实机验证（§1.9）；自定义标题栏沿用 P2/P4 的实现。
+- [x] 应用图标为 1024² 方形 PNG（`assets/app-icon.png`）。
 - [x] 6 个强调色 × 5 皮肤的运行时切换：`scripts/export_nsh_theme.py` 只把「换强调色后变了的 token」写成差异表，`themes/index.ts` 在运行时合成（`nsh test` 有合成规则的单测）。
 - [ ] 图标着色是 `Image` 的 `tintColor`（值，不是 CSS 的 `currentColor`），所以图标不跟随 `hover:`/`text-*` 变色；当前用「变体换 token」+「hover 只换底面」实现（见 `DESIGN.md` 第 4 节）。需要 hover 换图标色时用双图标叠加或 signal 驱动的 token。
 - [x] 皮肤装饰语言（`Decor::*`）、`ShadowLevel` 阴影档位、皮肤底图/暗角层已迁入（`components/` 按 `currentDecor()` 分支，`shell/SkinBackdrop.tsx` 画氛围层）。

@@ -261,8 +261,8 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # Please use Python 3.12 or newer
 pip install -r requirements.txt
-# Rust nightly must be installed
-cargo +1.99.1 run --manifest-path gpui-app/Cargo.toml
+# Rust 1.99.1 and Native Shell 0.5.0 must be installed
+nsh run nsh-app
 
 # Update
 git pull

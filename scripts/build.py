@@ -1,4 +1,4 @@
-"""Build the Windows GPUI application, Python sidecar and updater."""
+"""Build the Windows Native Shell application, Python sidecar and updater."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ RUNNER_BUNDLE = DIST / "AALCRunner"
 RUNNER_RELEASE_DIR = RELEASE / "runner"
 RUNNER_ENTRY = "runner/AALCRunner.exe"
 SHARED_RUNNER_ENTRY = "backend/AALCRunner.exe"
+NSH_PACKAGE_DIR = ROOT / "artifacts" / "nsh" / "build"
 
 
 def run(command: list[str], *, cwd: Path = ROOT) -> None:
@@ -251,16 +252,18 @@ def stage_runner_bundle(source: Path | None = None, destination: Path | None = N
 def stage_release(version: str, *, shared_runtime: bool = True) -> None:
     RELEASE.mkdir(parents=True, exist_ok=True)
 
-    gpui_binary = ROOT / "gpui-app" / "target" / "release" / "ahab-gpui-app.exe"
+    nsh_binary = NSH_PACKAGE_DIR / "AALC" / "AALC.exe"
+    nsh_bundle = NSH_PACKAGE_DIR / "AALC" / "nsh"
     bundle = SHARED_RUNTIME_BUNDLE if shared_runtime else BACKEND_BUNDLE
     backend_binary = bundle / "AALC Backend.exe"
     updater_binary = DIST / "AALC Updater.exe"
     runner_binary = bundle / "AALCRunner.exe" if shared_runtime else RUNNER_BUNDLE / "AALCRunner.exe"
-    for path in (gpui_binary, backend_binary, updater_binary, runner_binary):
-        if not path.is_file():
+    for path in (nsh_binary, nsh_bundle, backend_binary, updater_binary, runner_binary):
+        if not path.exists():
             raise FileNotFoundError(f"required build output is missing: {path}")
 
-    shutil.copy2(gpui_binary, RELEASE / "AALC.exe")
+    shutil.copy2(nsh_binary, RELEASE / "AALC.exe")
+    copy_tree(nsh_bundle, RELEASE / "nsh")
     stage_bundle(
         bundle,
         BACKEND_RELEASE_DIR,
@@ -277,7 +280,6 @@ def stage_release(version: str, *, shared_runtime: bool = True) -> None:
         RELEASE / "assets",
         ignore=shutil.ignore_patterns("wheels", "*.whl"),
     )
-    copy_tree(ROOT / "gpui-app" / "resources", RELEASE / "resources")
 
     version_file = RELEASE / "assets" / "config" / "version.txt"
     version_file.parent.mkdir(parents=True, exist_ok=True)
@@ -326,14 +328,17 @@ def build(version: str, *, separate_bundles: bool = False) -> Path:
     if DIST.exists():
         shutil.rmtree(DIST)
 
+    if NSH_PACKAGE_DIR.exists():
+        shutil.rmtree(NSH_PACKAGE_DIR)
     run(
         [
-            "cargo",
-            "+1.99.1",
-            "build",
-            "--release",
-            "--manifest-path",
-            "gpui-app/Cargo.toml",
+            "nsh",
+            "package",
+            "nsh-app",
+            "--target",
+            "windows",
+            "-o",
+            str(NSH_PACKAGE_DIR),
         ]
     )
     build_native_decoder()
@@ -351,7 +356,7 @@ def build(version: str, *, separate_bundles: bool = False) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build AALC GPUI + Python sidecar")
+    parser = argparse.ArgumentParser(description="Build AALC Native Shell + Python sidecar")
     parser.add_argument("--version", default="dev", help="release version")
     parser.add_argument(
         "--separate-bundles",

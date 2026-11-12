@@ -231,18 +231,18 @@ fn complete(
     if let Some(sender) = pending.response_tx {
         let _ = sender.send(response.clone());
     }
-    if pending.report_completion {
-        if let Ok(mut queue) = completions.lock() {
-            if queue.len() >= MAX_EVENT_QUEUE {
-                queue.pop_front();
-            }
-            queue.push_back(RpcCompletion {
-                request_id: response.id,
-                method: pending.method,
-                params: pending.params,
-                response,
-            });
+    if pending.report_completion
+        && let Ok(mut queue) = completions.lock()
+    {
+        if queue.len() >= MAX_EVENT_QUEUE {
+            queue.pop_front();
         }
+        queue.push_back(RpcCompletion {
+            request_id: response.id,
+            method: pending.method,
+            params: pending.params,
+            response,
+        });
     }
 }
 

@@ -41,19 +41,31 @@ jobs:
           toolchain: 1.99.1
           components: rustfmt, clippy
 
+      - name: Install Native Shell 0.5.0
+        shell: pwsh
+        env:
+          NSH_VERSION: v0.5.0
+        run: |
+          irm https://nsh.dev/install.ps1 | iex
+          "$env:LOCALAPPDATA\nsh\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          nsh --version
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
-          workspaces: gpui-app
+          workspaces: nsh-app/native
 
-      - name: Run backend and GPUI tests
+      - name: Run backend and Native Shell tests
+        env:
+          AHAB_BACKEND: mock
         run: |
           uv run pytest -q
           uv run python scripts/check_upstream_boundary.py
-          cargo fmt --manifest-path gpui-app/Cargo.toml -- --check
-          cargo check --manifest-path gpui-app/Cargo.toml --all-targets
-          cargo test --manifest-path gpui-app/Cargo.toml --all-targets
-          cargo clippy --manifest-path gpui-app/Cargo.toml --all-targets -- -D warnings
+          cargo fmt --manifest-path nsh-app/native/Cargo.toml -- --check
+          cargo check --manifest-path nsh-app/native/Cargo.toml --all-targets
+          cargo clippy --manifest-path nsh-app/native/Cargo.toml --all-targets -- -D warnings
+          nsh check nsh-app
+          nsh test nsh-app
       
       # 构建并打包程序
       - name: build & bundle

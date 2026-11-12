@@ -5,7 +5,7 @@
 // (backend link and this week's statistics), the window settings and the task
 // queue under them, the run bar at the bottom, and a fixed rail for the device,
 // the live preview and the log.
-import { Scroll, Text, View, token } from "nsh";
+import { Image, Scroll, Text, View, effect, token } from "nsh";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
@@ -14,6 +14,7 @@ import type { IconName } from "../../components/Icon";
 import { PageRoot } from "../../components/Page";
 import { Select } from "../../components/Select";
 import { Switch } from "../../components/Switch";
+import { t } from "../../settings";
 import {
   backendState,
   clearLog,
@@ -21,17 +22,22 @@ import {
   consoleFeedback,
   consoleStats,
   consoleTasks,
+  currentPreviewFrame,
+  currentPreviewStatus,
   currentResolution,
+  cycleResolution,
   deviceList,
   deviceState,
   isAsyncInput,
   logEntries,
   logLines,
+  pollPreview,
   refreshDevices,
   selectAllTasks,
   selectDevice,
   setTaskParam,
   startQueue,
+  toggleAsyncInput,
   toggleTask,
 } from "../../home";
 import type { Task, TaskParam } from "../../home";
@@ -40,6 +46,12 @@ import type { Task, TaskParam } from "../../home";
 const RAIL = "w-56";
 
 export function Home() {
+  // Poll the event queue while the console is on screen: preview frames and
+  // log lines arrive as sidecar events and are mirrored into signals.
+  effect(() => {
+    const timer = setInterval(() => pollPreview(), 200);
+    return () => clearInterval(timer);
+  });
   return (
     <PageRoot>
       <View class="min-h-0 flex-1 flex-row gap-2">
@@ -165,25 +177,36 @@ function WindowCard() {
         <Icon name="settings2" size={14} />
         <Text class="text-xs font-medium text-foreground">窗口设置</Text>
         <View class="flex-1" />
-        <WindowSetting label="分辨率" value={currentResolution()} testID="window-resolution" />
+        <WindowSetting
+          label="分辨率"
+          value={currentResolution()}
+          testID="window-resolution"
+          onPress={() => cycleResolution()}
+        />
         <WindowSetting
           label="异步输入"
           value={isAsyncInput() ? "开" : "关"}
           testID="window-async-input"
+          onPress={() => toggleAsyncInput()}
         />
       </View>
     </Card>
   );
 }
 
-function WindowSetting(props: { label: string; value: string; testID: string }) {
+function WindowSetting(props: {
+  label: string;
+  value: string;
+  testID: string;
+  onPress: () => void;
+}) {
   return (
     <Button
       label={`${props.label} ${props.value}`}
       variant="ghost"
       size="xs"
       testID={props.testID}
-      onPress={() => undefined}
+      onPress={props.onPress}
     />
   );
 }
@@ -301,18 +324,45 @@ function deviceLabel(): string {
   return "未连接";
 }
 
+/** The preview status chip in the current language. */
+function previewLabel(status: string): string {
+  if (status === "running") return t("homeRunning");
+  if (status === "starting") return t("previewStarting");
+  if (status === "error") return t("previewError");
+  return t("previewStopped");
+}
+
 /** The live preview: frames arrive from the sidecar once a device is connected. */
 function PreviewCard() {
+  const frame = () => currentPreviewFrame();
   return (
     <Card class={`${RAIL} w-full p-3`}>
       <View class="flex-col gap-2">
-        <View class="flex-row items-center gap-1.5">
-          <Icon name="monitorPlay" size={14} />
-          <Text class="text-xs font-medium text-foreground">实时画面</Text>
+        <View class="w-full flex-row items-center justify-between gap-2">
+          <View class="flex-row items-center gap-1.5">
+            <Icon name="monitorPlay" size={14} />
+            <Text class="text-xs font-medium text-foreground">实时画面</Text>
+          </View>
+          <Badge label={previewLabel(currentPreviewStatus())} />
         </View>
-        <View class="h-40 w-full items-center justify-center gap-2 rounded-(--radius) bg-muted">
-          <Icon name="monitorPlay" size={28} color={token("muted-foreground")} />
-          <Text class="text-xs text-muted-foreground">连接设备后显示实时画面</Text>
+        <View class="h-40 w-full items-center justify-center overflow-hidden rounded-(--radius) bg-muted">
+          <If
+            when={frame()}
+            else={
+              <View class="items-center gap-2">
+                <Icon name="monitorPlay" size={28} color={token("muted-foreground")} />
+                <Text class="text-xs text-muted-foreground">连接设备后显示实时画面</Text>
+              </View>
+            }
+          >
+            {(src) => (
+              <Image
+                src={src()}
+                style={{ width: 200, height: 160 }}
+                fadeDuration={0}
+              />
+            )}
+          </If>
         </View>
       </View>
     </Card>

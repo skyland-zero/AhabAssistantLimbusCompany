@@ -172,6 +172,12 @@ impl AppStore {
     }
 }
 
+impl Default for AppStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

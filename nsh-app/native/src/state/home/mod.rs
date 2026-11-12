@@ -15,11 +15,20 @@ use crate::{
     },
     model::{
         ConnectionStatus, DeviceInfo, ExecutionState, ExecutionStatsPayload,
-        ExecutionStatusPayload, LogEntryPayload, TasksConfig,
+        ExecutionStatusPayload, LogEntryPayload, PreviewStatus, PreviewStatusPayload, TasksConfig,
     },
 };
 
 const MAX_LOGS: usize = 300;
+
+/// A decoded preview frame, kept until the next one arrives.
+#[derive(Clone, Debug)]
+pub struct PreviewFrame {
+    pub jpeg: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub revision: u64,
+}
 
 pub struct HomeState {
     rpc: RpcGateway,
@@ -30,6 +39,9 @@ pub struct HomeState {
     pub devices: Vec<DeviceInfo>,
     pub selected_device: Option<String>,
     pub device_status: ConnectionStatus,
+    pub preview_status: PreviewStatus,
+    pub preview_frame: Option<PreviewFrame>,
+    pub preview_revision: u64,
     pub feedback: Option<String>,
     pub error: Option<String>,
     next_client_request: u64,
@@ -46,6 +58,9 @@ impl HomeState {
             devices: Vec::new(),
             selected_device: None,
             device_status: ConnectionStatus::Disconnected,
+            preview_status: PreviewStatus::Stopped,
+            preview_frame: None,
+            preview_revision: 0,
             feedback: None,
             error: None,
             next_client_request: 0,
@@ -150,6 +165,29 @@ impl HomeState {
                 "voice": if self.tasks.resonate_with_Ahab.enabled { "on" } else { "off" },
             },
         })
+    }
+
+    /// Sets the game window's width (`1080` or `1440`) and persists the tasks.
+    pub fn set_window_size(&mut self, size: u32) -> Result<(), String> {
+        self.tasks.set_windows.set_win_size = match size {
+            1440 => 1440,
+            _ => 1080,
+        };
+        self.save_tasks()
+    }
+
+    /// Toggles asynchronous input and persists the tasks.
+    pub fn toggle_async_input(&mut self) -> Result<(), String> {
+        self.tasks.set_windows.use_post_message = !self.tasks.set_windows.use_post_message;
+        self.save_tasks()
+    }
+
+    fn save_tasks(&mut self) -> Result<(), String> {
+        let value = serde_json::to_value(&self.tasks).map_err(|error| error.to_string())?;
+        self.rpc
+            .request_value(method::TASKS_SET_CONFIG, Some(value))
+            .map_err(|error| error.message)?;
+        Ok(())
     }
 
     /// Window settings shown on the console.
@@ -286,6 +324,39 @@ impl HomeState {
         Ok(())
     }
 
+    /// Ask the sidecar to start or stop the preview stream.
+    pub fn set_preview_enabled(&mut self, enabled: bool) -> Result<bool, String> {
+        let response = self
+            .rpc
+            .request_value(
+                method::PREVIEW_SET_ENABLED,
+                Some(json!({ "enabled": enabled })),
+            )
+            .map_err(|error| error.message)?
+            .unwrap_or_default();
+        self.preview_status = if enabled {
+            if response
+                .get("running")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
+                PreviewStatus::Running
+            } else {
+                PreviewStatus::Starting
+            }
+        } else {
+            PreviewStatus::Stopped
+        };
+        self.drain_events();
+        Ok(self.preview_status == PreviewStatus::Running)
+    }
+
+    /// Drain the event queue and return the latest preview state.
+    pub fn poll_preview(&mut self) -> (PreviewStatus, Option<&PreviewFrame>) {
+        self.drain_events();
+        (self.preview_status, self.preview_frame.as_ref())
+    }
+
     pub fn clear_logs(&mut self) {
         self.logs.clear();
         self.feedback = Some("日志已清空".to_owned());
@@ -350,6 +421,40 @@ impl HomeState {
                         if status.deviceId.is_some() {
                             self.selected_device = status.deviceId;
                         }
+                    }
+                }
+                event::PREVIEW_STATUS => {
+                    if let Ok(status) =
+                        serde_json::from_value::<PreviewStatusPayload>(envelope.payload)
+                    {
+                        if let Some(error) = status.error {
+                            self.feedback = Some(error);
+                        }
+                        self.preview_status = status.status;
+                    }
+                }
+                event::SCREENSHOT_FRAME => {
+                    if let Some(binary) = envelope.binary
+                        && !binary.is_empty()
+                    {
+                        let width = envelope
+                            .payload
+                            .get("width")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0) as u32;
+                        let height = envelope
+                            .payload
+                            .get("height")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0) as u32;
+                        self.preview_revision = self.preview_revision.wrapping_add(1);
+                        self.preview_frame = Some(PreviewFrame {
+                            jpeg: binary,
+                            width,
+                            height,
+                            revision: self.preview_revision,
+                        });
+                        self.preview_status = PreviewStatus::Running;
                     }
                 }
                 _ => {}

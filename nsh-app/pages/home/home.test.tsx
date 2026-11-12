@@ -47,6 +47,16 @@ test("starting the queue says what it did", async () => {
   expect(app.texts()).toContain("F10");
 });
 
+test("the window card cycles resolution and async input", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:window-resolution");
+  await app.waitFor("分辨率 1440P");
+  await app.press("id:window-resolution");
+  await app.waitFor("分辨率 1080P");
+  await app.press("id:window-async-input");
+  await app.waitFor("异步输入 开");
+});
+
 test("the device picker lists a device once refreshed", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[刷新]");
