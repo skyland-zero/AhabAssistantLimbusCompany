@@ -122,7 +122,7 @@ function Combo(props: {
   // lifetime. The handlers are removed when capture ends.
   effect(() => {
     const target = currentHotkeyCapture();
-    if (target === null) return;
+    if (target === null || target !== props.target) return;
     const stops: (() => void)[] = [];
     try {
       stops.push(keymap.bind("escape", () => cancelHotkeyCapture()));
