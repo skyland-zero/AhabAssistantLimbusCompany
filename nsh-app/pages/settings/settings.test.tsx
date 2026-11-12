@@ -26,8 +26,9 @@ test("the quick navigation reaches a section and says what it edited", async () 
   await app.press("role:button[设置]");
   await app.press("role:button[任务通知]");
   await app.waitFor("WxPusher SPT");
+  await app.type("label:WxPusher SPT", "SPT_demo");
   await app.press("role:button[发送测试通知]");
-  await app.waitFor("测试推送随 P1 的通知服务接入");
+  await app.waitFor("测试通知已发送");
 });
 
 test("choosing an interface skin applies it", async () => {

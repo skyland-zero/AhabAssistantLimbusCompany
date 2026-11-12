@@ -10,7 +10,7 @@ import {
   systemIndex,
 } from "./teams-mirror";
 import type { TeamMirrorConfig } from "./teams-mirror";
-import { blankTeam, setTeamsFeedback, teams } from "./teams-store";
+import { blankTeam, saveTeam, setTeamsFeedback } from "./teams-store";
 import type { Team, TeamPurpose } from "./teams-store";
 
 /** The editor's five sections. */
@@ -223,10 +223,7 @@ export function saveDraft(): void {
     name,
     mirrorConfig: current.purpose === "luxcavation" ? null : current.mirrorConfig,
   };
-  teams.update((list) => {
-    const existing = list.some((team) => team.id === saved.id);
-    return existing ? list.map((team) => (team.id === saved.id ? saved : team)) : [...list, saved];
-  });
+  if (!saveTeam(saved, draftIsNew())) return;
   draft.set(null);
   setTeamsFeedback("队伍已保存");
 }

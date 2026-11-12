@@ -8,6 +8,7 @@
 //! (the mock and the real sidecar transport) land first, then `state`, `i18n`
 //! and the app lifecycle. See `MIGRATION.md` for the source mapping.
 
+pub mod i18n;
 pub mod ipc;
 pub mod model;
 pub mod state;
@@ -23,5 +24,13 @@ pub use crate::runtime::Runtime;
 fn native(registry: &mut Registry) {
     registry
         .module::<Runtime>()
-        .module::<crate::ipc::bridge::Backend>();
+        .module::<crate::ipc::bridge::Backend>()
+        .module::<crate::i18n::I18n>()
+        .class::<crate::state::teams::TeamsStore>()
+        .class::<crate::state::other::SettingsStore>()
+        .class::<crate::state::other::ThemePacksStore>()
+        .class::<crate::state::other::ResourcesStore>()
+        .class::<crate::state::other::ToolboxStore>()
+        .class::<crate::state::home::HomeStore>()
+        .class::<crate::state::app_state::AppStore>();
 }

@@ -1,10 +1,9 @@
 // A team's accumulated mirror-run statistics.
 //
-// The shape is the contract's `TeamStats` (`TEAM_STATS_GET` /
-// `TEAM_STATS_CLEAR`). P1 replaces the fixture below with the RPC's answer; the
-// editor keeps reading the same functions.
+// Rust owns the `TEAM_STATS_GET` / `TEAM_STATS_CLEAR` calls; this module mirrors
+// the answer into signals and formats durations for the advanced tab.
 import { signal } from "nsh";
-import { setTeamsFeedback } from "./teams";
+import { setTeamsFeedback, teamsBackend } from "./teams";
 
 export type TeamStatsBucket = {
   count: number;
@@ -26,23 +25,6 @@ const EMPTY_BUCKET: TeamStatsBucket = {
   last10AverageSeconds: 0,
 };
 
-/** The stats the mock backend has for a team. */
-const MOCK: TeamStats = {
-  totalCount: 6,
-  hard: {
-    count: 3,
-    averageSeconds: 120.5,
-    last5AverageSeconds: 118.2,
-    last10AverageSeconds: 121.4,
-  },
-  normal: {
-    count: 3,
-    averageSeconds: 95,
-    last5AverageSeconds: 94.8,
-    last10AverageSeconds: 96.1,
-  },
-};
-
 const EMPTY: TeamStats = {
   totalCount: 0,
   hard: EMPTY_BUCKET,
@@ -51,6 +33,28 @@ const EMPTY: TeamStats = {
 
 const stats = signal<Record<string, TeamStats>>({});
 const clearRequested = signal(false);
+
+function bucket(value: Partial<TeamStatsBucket> | undefined): TeamStatsBucket {
+  return {
+    count: value?.count ?? 0,
+    averageSeconds: value?.averageSeconds ?? 0,
+    last5AverageSeconds: value?.last5AverageSeconds ?? 0,
+    last10AverageSeconds: value?.last10AverageSeconds ?? 0,
+  };
+}
+
+function toStats(value: unknown): TeamStats {
+  const payload = value as { totalCount?: number; hard?: Partial<TeamStatsBucket>; normal?: Partial<TeamStatsBucket> };
+  return {
+    totalCount: payload.totalCount ?? 0,
+    hard: bucket(payload.hard),
+    normal: bucket(payload.normal),
+  };
+}
+
+function failure(error: unknown): void {
+  setTeamsFeedback(error instanceof Error ? error.message : String(error));
+}
 
 /** A team's stats (tracked); an unloaded team has zeroes, like the client
  *  before its first `TEAM_STATS_GET` answer. */
@@ -63,11 +67,18 @@ export function statsClearRequested(): boolean {
   return clearRequested();
 }
 
-/** Loads the team's stats. In the mock this is the only load there is. */
+/** Loads the team's stats from the backend. */
 export function refreshTeamStats(id: string | null): void {
   if (id === null) return;
-  stats.update((all) => ({ ...all, [id]: MOCK }));
-  setTeamsFeedback(null);
+  const backend = teamsBackend();
+  if (!backend) return;
+  try {
+    const value = toStats(backend.stats(id));
+    stats.update((all) => ({ ...all, [id]: value }));
+    setTeamsFeedback(null);
+  } catch (error) {
+    failure(error);
+  }
 }
 
 /** Opens the confirmation for clearing a team's history. */
@@ -85,8 +96,15 @@ export function cancelClearTeamStats(): void {
 export function clearTeamStats(id: string | null): void {
   clearRequested.set(false);
   if (id === null) return;
-  stats.update((all) => ({ ...all, [id]: EMPTY }));
-  setTeamsFeedback("队伍统计已清空");
+  const backend = teamsBackend();
+  if (!backend) return;
+  try {
+    const value = toStats(backend.clearStats(id));
+    stats.update((all) => ({ ...all, [id]: value }));
+    setTeamsFeedback("队伍统计已清空");
+  } catch (error) {
+    failure(error);
+  }
 }
 
 /** A duration as `m:ss.cc`, or `暂无` when there is none. */

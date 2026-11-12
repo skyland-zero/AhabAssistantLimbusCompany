@@ -11,7 +11,7 @@ import helpEn from "../../assets/content/help-en.md?url";
 import helpZh from "../../assets/content/help-zh.md?url";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
-import { currentLanguage, setLanguage } from "../../settings";
+import { currentLanguage, setLanguage, t } from "../../settings";
 import type { Language } from "../../settings";
 import { activeToc, parseHelp, parseInline } from "./parser";
 import type { InlinePart } from "./parser";
@@ -73,7 +73,7 @@ export function Help() {
       <Card class="h-full w-52 flex-none p-3">
         <View class="flex-col gap-2">
           <View class="w-full flex-row items-center justify-between gap-2">
-            <Text class="text-xs font-medium text-muted-foreground">目录</Text>
+            <Text class="text-xs font-medium text-muted-foreground">{t("contents")}</Text>
             <View class="flex-row items-center gap-1">
               <Each of={LANGUAGES}>
                 {(entry) => (

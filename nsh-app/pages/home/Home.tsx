@@ -19,11 +19,13 @@ import {
   clearLog,
   clearTasks,
   consoleFeedback,
+  consoleStats,
   consoleTasks,
   currentResolution,
   deviceList,
   deviceState,
   isAsyncInput,
+  logEntries,
   logLines,
   refreshDevices,
   selectAllTasks,
@@ -105,6 +107,7 @@ function backendDetail(): string {
 
 /** This week's summary: how many runs finished, and the last mirror run. */
 function StatsCard() {
+  const stats = () => consoleStats();
   return (
     <Card class="min-w-0 flex-1 p-3">
       <View class="flex-col gap-2">
@@ -116,9 +119,18 @@ function StatsCard() {
           <Button label="明细" variant="ghost" size="xs" />
         </View>
         <View class="w-full flex-row gap-4">
-          <StatColumn label="经验本" value="0 / 0" />
-          <StatColumn label="纽本" value="0 / 0" />
-          <StatColumn label="镜牢（累计）" value="0 / 0" />
+          <StatColumn
+            label="经验本"
+            value={`${stats().today.exp} / ${stats().week.exp}`}
+          />
+          <StatColumn
+            label="纽本"
+            value={`${stats().today.thread} / ${stats().week.thread}`}
+          />
+          <StatColumn
+            label="镜牢（累计）"
+            value={`${stats().today.mirror} / ${stats().week.mirror}`}
+          />
         </View>
         <View class="w-full flex-row items-center justify-between gap-2 border-t border-border pt-2">
           <View class="flex-row items-center gap-1.5">
@@ -127,7 +139,9 @@ function StatsCard() {
           </View>
           <Button label="明细" variant="ghost" size="xs" />
         </View>
-        <Text class="text-center text-xs text-muted-foreground">暂无完成记录</Text>
+        <Text class="text-center text-xs text-muted-foreground">
+          {stats().lastMirror ?? "暂无完成记录"}
+        </Text>
       </View>
     </Card>
   );
@@ -330,6 +344,16 @@ function LogCard() {
             <If when={logLines() === 0}>
               <Text class="text-xs text-muted-foreground">暂无日志</Text>
             </If>
+            <Each of={logEntries()} key={(entry) => `${entry.ts}-${entry.message}`}>
+              {(entry) => (
+                <View class="w-full flex-row items-start gap-1">
+                  <Badge label={entry().level} />
+                  <Text class="min-w-0 flex-1 text-xs text-muted-foreground">
+                    {entry().message}
+                  </Text>
+                </View>
+              )}
+            </Each>
           </View>
         </Scroll>
       </View>

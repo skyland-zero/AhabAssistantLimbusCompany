@@ -42,7 +42,8 @@ test("select all and clear act on the queue", async () => {
 test("starting the queue says what it did", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("id:link-start");
-  await app.waitFor("已提交启动请求（执行随 P1 的 sidecar 接入）");
+  await app.waitFor("已提交启动请求");
+  await app.waitFor("Mock 任务已开始");
   expect(app.texts()).toContain("F10");
 });
 

@@ -1,10 +1,11 @@
 // The toolbox page's state: which tools run, and what the last action said.
 //
-// A tool is a request to the sidecar (`Toolbox.start` / `Toolbox.stop` /
-// `Toolbox.screenshot` / device resolution). P1 replaces the mock below with
-// those calls and feeds `running` from the `tool.status` events; the page keeps
-// reading the same functions.
+// A tool request goes through the Rust toolbox store (`tool.start` /
+// `tool.stop` / `tool.screenshot` / resolution commands); the page keeps reading
+// the same functions.
 import { signal } from "nsh";
+import { Backend, ToolboxStore } from "aalc/native";
+import { translatedFeedback } from "./settings";
 
 /** The four tools the page offers, as the sidecar names them. */
 export type ToolId = "infiniteBattle" | "enkephalin" | "screenshot" | "resolution";
@@ -52,34 +53,99 @@ const running = signal<Record<ToolId, boolean>>({
 
 const feedback = signal<string | null>(null);
 
+let store: ToolboxStore | null = null;
+let connecting = false;
+
+function ensureStore(): ToolboxStore | null {
+  if (store) return store;
+  if (Backend.mode() === "mock") {
+    store = new ToolboxStore();
+    syncRunning();
+  } else if (!connecting) {
+    connecting = true;
+    ToolboxStore.connect()
+      .then((created) => {
+        store = created;
+      })
+      .catch((error) => {
+        feedback.set(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        connecting = false;
+      });
+  }
+  return store;
+}
+
+function syncRunning(): void {
+  if (!store) return;
+  running.set({
+    infiniteBattle: store.running("infiniteBattle"),
+    enkephalin: store.running("enkephalin"),
+    screenshot: store.running("screenshot"),
+    resolution: store.running("resolution"),
+  });
+}
+
+if (Backend.mode() === "mock") ensureStore();
+
 /** Whether `id` is running (tracked where it is read). */
 export function isToolRunning(id: ToolId): boolean {
+  ensureStore();
   return running()[id];
 }
 
 /** The line under the tool grid, when the last action left something to say. */
 export function toolboxFeedback(): string | null {
-  return feedback();
+  return translatedFeedback(feedback());
 }
 
 /** Starts or stops a tool. */
 export function toggleTool(id: ToolId): void {
-  const next = !running()[id];
-  running.update((current) => ({ ...current, [id]: next }));
-  feedback.set(next ? "工具已启动" : "工具已停止");
+  if (id === "screenshot") return;
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    backend.toggle(id);
+    syncRunning();
+    feedback.set(backend.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Captures the game window. */
 export function screenshot(): void {
-  feedback.set("截图完成：AALC/screenshot.png");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    backend.screenshot();
+    feedback.set(backend.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Switches the device to 1080P landscape through ADB. */
 export function applyResolution(): void {
-  feedback.set("已修改分辨率为 1080P (240 DPI)");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    backend.applyResolution();
+    feedback.set(backend.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Puts the device's resolution and DPI back. */
 export function resetResolution(): void {
-  feedback.set("已还原设备分辨率与 DPI");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    backend.resetResolution();
+    feedback.set(backend.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }

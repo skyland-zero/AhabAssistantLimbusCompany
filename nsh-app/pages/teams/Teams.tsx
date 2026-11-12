@@ -7,6 +7,7 @@ import { Scroll, Text, View, token } from "nsh";
 import { Badge } from "../../components/Badge";
 import { Button, IconButton } from "../../components/Button";
 import { Card } from "../../components/Card";
+import { EmptyState } from "../../components/EmptyState";
 import { PageRoot, PageToolbar } from "../../components/Page";
 import { Switch } from "../../components/Switch";
 import {
@@ -16,12 +17,14 @@ import {
   countFor,
   deleteTeam,
   discardCount,
+  extrasFor,
   hasStarlight,
   openEditor,
   setTeamEnabled,
   setTeamFilter,
   slotsFor,
   teamFilter,
+  teamNumber,
   teamsFeedback,
 } from "../../teams";
 import type { Team, TeamFilter } from "../../teams";
@@ -37,6 +40,7 @@ const FILTERS: { value: TeamFilter; label: string }[] = [
 
 export function Teams() {
   const slots = () => slotsFor(teamFilter());
+  const extras = () => extrasFor(teamFilter());
   return (
     <PageRoot>
       <PageToolbar>
@@ -62,14 +66,37 @@ export function Teams() {
         )}
       </If>
       <Scroll class="min-h-0 flex-1">
-        <View class="grid w-full grid-cols-2 items-stretch gap-3">
-          <Each of={slots()} key={(slot) => slot.number}>
-            {(slot) => (
-              <If when={slot().team} else={<EmptySlot number={slot().number} />}>
-                {(team) => <TeamCard team={team()} slot={slot().number} />}
-              </If>
-            )}
-          </Each>
+        <View class="w-full flex-col gap-3">
+          <If
+            when={slots().length > 0 || extras().length > 0}
+            else={
+              <EmptyState
+                title="该分类没有队伍"
+                detail="切换分类或创建一支新队伍。"
+                class="min-h-60"
+              />
+            }
+          >
+            <View class="grid w-full grid-cols-2 items-stretch gap-3">
+              <Each of={slots()} key={(slot) => slot.number}>
+                {(slot) => (
+                  <If when={slot().team} else={<EmptySlot number={slot().number} />}>
+                    {(team) => <TeamCard team={team()} slot={slot().number} />}
+                  </If>
+                )}
+              </Each>
+            </View>
+          </If>
+          <If when={extras().length > 0}>
+            <If when={teamFilter() !== "general"}>
+              <Text class="text-xs font-medium text-muted-foreground">额外编队</Text>
+            </If>
+            <View class="grid w-full grid-cols-2 items-stretch gap-3">
+              <Each of={extras()} key={(team) => team.id}>
+                {(team) => <TeamCard team={team()} slot={teamNumber(team().id) ?? 0} />}
+              </Each>
+            </View>
+          </If>
         </View>
       </Scroll>
       <TeamEditor />

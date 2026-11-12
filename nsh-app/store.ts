@@ -5,6 +5,7 @@
 //
 // Signals stay private: pages call the functions, they never write the signal.
 import { setColorScheme, signal } from "nsh";
+import { AppStore, I18n } from "aalc/native";
 import { DECOR_OF, SKIN_DEFAULT_ACCENT, applyTheme } from "./themes";
 import type { AccentName, Decor, SkinName } from "./themes";
 
@@ -24,6 +25,25 @@ export type PageId = (typeof PAGES)[number]["id"] | "settings" | "gallery";
 
 const page = signal<PageId>("home");
 
+/** The persisted app-shell settings (`settings.json`). */
+const appSettings = new AppStore();
+
+/** The interface language, persisted with the rest of the shell settings. */
+export type Language = "zhCn" | "enUs";
+
+const language = signal<Language>(appSettings.language() as Language);
+
+/** The interface language (tracked where it is read). */
+export function currentLanguage(): Language {
+  return language();
+}
+
+/** Chooses the interface language and persists it. */
+export function setLanguage(next: Language): void {
+  language.set(next);
+  appSettings.setLanguage(next);
+}
+
 /** The page on screen (tracked where it is read). */
 export function currentPage(): PageId {
   return page();
@@ -39,9 +59,21 @@ export function isCurrent(id: PageId): boolean {
   return page() === id;
 }
 
-/** The page's title-bar label, or one of the two pages that are not in it. */
+/** The catalog key for each title-bar destination. */
+const PAGE_KEY: Record<string, string> = {
+  home: "navHome",
+  teams: "navTeams",
+  "theme-packs": "navThemes",
+  toolbox: "navToolbox",
+  resources: "navResources",
+  help: "navHelp",
+  settings: "navSettings",
+};
+
+/** The page's title-bar label, or the gallery's development-only name. */
 export function pageLabel(id: PageId): string {
-  return PAGES.find((entry) => entry.id === id)?.label ?? (id === "settings" ? "设置" : "组件对照");
+  if (id === "gallery") return "组件对照";
+  return I18n.text(language(), PAGE_KEY[id] ?? "navHome");
 }
 
 /** What the title bar's status dot shows: the console's execution state. */
@@ -56,9 +88,16 @@ export function currentHomeStatus(): HomeStatus {
   return homeStatus();
 }
 
+/** Mirrors the Rust execution state into the title bar's status dot. */
+export function mirrorHomeStatus(next: string): void {
+  homeStatus.set(next === "paused" ? "paused" : next === "running" || next === "starting" ? "running" : "idle");
+}
+
 /** The visual skin (surface, geometry, decoration), and the accent over it. */
-const skin = signal<SkinName>("default");
-const accent = signal<AccentName>(SKIN_DEFAULT_ACCENT.default);
+const storedSkin = appSettings.skin() as SkinName;
+const initialSkin: SkinName = storedSkin in SKIN_DEFAULT_ACCENT ? storedSkin : "default";
+const skin = signal<SkinName>(initialSkin);
+const accent = signal<AccentName>(appSettings.accent() as AccentName);
 
 /** The skin in effect (tracked where it is read). */
 export function currentSkin(): SkinName {
@@ -89,17 +128,19 @@ export function setSkin(next: SkinName): void {
   if (accent() === SKIN_DEFAULT_ACCENT[skin()]) accent.set(SKIN_DEFAULT_ACCENT[next]);
   skin.set(next);
   applyTheme(skin(), accent());
+  appSettings.setSkin(skin(), accent());
 }
 
 /** Switches the accent, leaving the skin alone. */
 export function setAccent(next: AccentName): void {
   accent.set(next);
   applyTheme(skin(), accent());
+  appSettings.setSkin(skin(), accent());
 }
 
 /** Light, dark, or the system's own appearance. */export type Appearance = "light" | "dark" | "system";
 
-const appearance = signal<Appearance>("system");
+const appearance = signal<Appearance>(appSettings.appearance() as Appearance);
 
 /** The appearance in effect (tracked where it is read). */
 export function currentAppearance(): Appearance {
@@ -110,6 +151,7 @@ export function currentAppearance(): Appearance {
 export function applyAppearance(next: Appearance): void {
   appearance.set(next);
   setColorScheme(next);
+  appSettings.setAppearance(next);
 }
 
 /** Light → Dark → System → Light, as the title bar's toggle cycles it. */

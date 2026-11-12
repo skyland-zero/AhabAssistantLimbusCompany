@@ -20,7 +20,7 @@ test("a filter narrows the grid to its purpose", async () => {
   await app.press("role:button[队伍管理]");
   await app.press("id:team-filter-luxcavation");
   await app.waitFor("编队 2 (烧伤)");
-  await app.waitFor("未配置");
+  await app.waitFor("额外编队");
   expect(app.texts()).not.toContain("编队 1 (震颤)");
 });
 

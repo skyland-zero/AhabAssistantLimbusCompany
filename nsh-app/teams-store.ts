@@ -1,8 +1,10 @@
-// The saved teams and the list-level state: the fixtures, the filter, the
-// formation slots and the names the list shows. The editor's draft lives in
-// `teams-editor.ts`; both are re-exported by `teams.ts` so pages keep one
-// import path.
+// The saved teams: Rust owns the list, the formation slots and every
+// `team.*` mutation. This module mirrors the returned arrays into signals and
+// keeps the labels the list shows. The editor's draft stays in
+// `teams-editor.ts`; both are re-exported by `teams.ts`.
 import { signal } from "nsh";
+import { Backend, TeamsStore } from "aalc/native";
+import type { TeamSlotView, TeamView } from "aalc/native";
 import { SYSTEM_LABELS, defaultMirrorConfig } from "./teams-mirror";
 import type { TeamMirrorConfig } from "./teams-mirror";
 
@@ -29,63 +31,75 @@ export type Team = {
 /** The filter above the grid: one shared slot per formation, or one category. */
 export type TeamFilter = "all" | TeamPurpose;
 
-/** How many formation slots the game has. */
-export const SLOT_COUNT = 14;
-
-/** The saved teams (the editor writes through `teams` too). */
-export const teams = signal<Team[]>([
-  {
-    id: "team-1",
-    name: "编队 1 (震颤)",
-    purpose: "mirror",
-    accessoryScheme: "tremor",
-    sinners: ["faust", "ishmael", "ryoshu", "hong_lu"],
-    enabled: true,
-    teamCode: "",
-    mirrorConfig: defaultMirrorConfig({
-      team_system: 2,
-      discard_systems: {
-        burn: false,
-        bleed: false,
-        tremor: false,
-        rupture: false,
-        sinking: true,
-        poise: true,
-        charge: false,
-        slash: false,
-        pierce: false,
-        blunt: false,
-      },
-      opening_bonus: [2, 2, 1, 1, 0, 0, 0, 0, 0, 0],
-    }),
-  },
-  {
-    id: "team-2",
-    name: "编队 2 (烧伤)",
-    purpose: "luxcavation",
-    accessoryScheme: "burn",
-    sinners: ["heathcliff", "rodion", "gregor"],
-    enabled: false,
-    teamCode: "",
-    mirrorConfig: null,
-  },
-  {
-    id: "team-3",
-    name: "编队 3 (呼吸)",
-    purpose: "general",
-    accessoryScheme: "poise",
-    sinners: ["yi_sang", "don_quixote", "meursault", "sinclair", "outis"],
-    enabled: false,
-    teamCode: "",
-    mirrorConfig: defaultMirrorConfig({ team_system: 5 }),
-  },
-]);
+/** The saved teams, mirrored from the Rust store. */
+export const teams = signal<Team[]>([]);
 
 const filter = signal<TeamFilter>("all");
 const feedback = signal<string | null>(null);
 
+let store: TeamsStore | null = null;
+let connecting = false;
+
+function toTeam(view: TeamView): Team {
+  return {
+    id: view.id,
+    name: view.name,
+    purpose: view.purpose as TeamPurpose,
+    accessoryScheme: view.accessoryScheme,
+    sinners: view.sinners,
+    enabled: view.enabled,
+    teamCode: view.teamCode,
+    mirrorConfig: view.mirrorConfig as TeamMirrorConfig | null,
+  };
+}
+
+function hydrate(list: TeamView[]): void {
+  teams.set(list.map(toTeam));
+}
+
+function failure(error: unknown): void {
+  feedback.set(error instanceof Error ? error.message : String(error));
+}
+
+/** The Rust store once it is loaded, or `null` while a sidecar connects. */
+function ensureStore(): TeamsStore | null {
+  if (store) return store;
+  if (Backend.mode() === "mock") {
+    try {
+      store = new TeamsStore();
+      const error = store.error();
+      if (error) feedback.set(error);
+      hydrate(store.teams());
+    } catch (error) {
+      failure(error);
+    }
+  } else if (!connecting) {
+    connecting = true;
+    TeamsStore.connect()
+      .then((created) => {
+        store = created;
+        hydrate(created.teams());
+      })
+      .catch(failure)
+      .finally(() => {
+        connecting = false;
+      });
+  }
+  return store;
+}
+
+/** The Rust store for the stats module; `null` while a sidecar connects. */
+export function teamsBackend(): TeamsStore | null {
+  return ensureStore();
+}
+
+// Mock mode loads synchronously so the first render, tests and offline
+// development see the saved teams. A real sidecar loads through `connect()`.
+if (Backend.mode() === "mock") ensureStore();
+
 /** Every saved team (tracked where it is read). */
 export function allTeams(): Team[] {
+  ensureStore();
   return teams();
 }
 
@@ -101,25 +115,37 @@ export function setTeamFilter(next: TeamFilter): void {
 
 /** How many teams a filter holds, for its tab's count. */
 export function countFor(next: TeamFilter): number {
-  if (next === "all") return teams().length;
-  return teams().filter((team) => team.purpose === next).length;
+  const list = allTeams();
+  if (next === "all") return list.length;
+  return list.filter((team) => team.purpose === next).length;
 }
 
 /** The teams a filter shows. */
 export function teamsFor(next: TeamFilter): Team[] {
-  return next === "all" ? teams() : teams().filter((team) => team.purpose === next);
+  const list = allTeams();
+  return next === "all" ? list : list.filter((team) => team.purpose === next);
 }
 
-/** The formation numbers that filter owns, with the team saved there (if any).
- *
- *  Every formation slot is shown whether or not it holds a team, so an empty
- *  slot is a place to create one rather than a gap. */
+/** The fixed formation numbers a filter owns, with the team saved there. */
 export function slotsFor(next: TeamFilter): { number: number; team: Team | null }[] {
-  const shown = teamsFor(next);
-  return Array.from({ length: SLOT_COUNT }, (_, index) => {
-    const number = index + 1;
-    return { number, team: shown.find((team) => teamNumber(team.id) === number) ?? null };
-  });
+  // Reading the mirrored list keeps this binding reactive after every save,
+  // delete or enabled toggle; the slot rules themselves stay in Rust.
+  teams();
+  const backend = ensureStore();
+  if (backend) {
+    return backend.slots(next).map((slot: TeamSlotView) => ({
+      number: slot.number,
+      team: slot.team ? toTeam(slot.team) : null,
+    }));
+  }
+  return [];
+}
+
+/** The teams outside the fixed formation numbers a filter shows. */
+export function extrasFor(next: TeamFilter): Team[] {
+  teams();
+  const backend = ensureStore();
+  return backend ? backend.extras(next).map(toTeam) : [];
 }
 
 /** The formation number of `id` (`team-4` → 4), or `null`. */
@@ -129,18 +155,52 @@ export function teamNumber(id: string): number | null {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 
-/** Turns a team on or off. */
+/** Turns a team on or off through the partial `team.save` update. */
 export function setTeamEnabled(id: string, enabled: boolean): void {
-  teams.update((list) =>
-    list.map((team) => (team.id === id ? { ...team, enabled } : team)),
-  );
-  feedback.set(enabled ? "已启用队伍" : "已停用队伍");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.setEnabled(id, enabled));
+    feedback.set(enabled ? "队伍已启用" : "队伍已停用");
+  } catch (error) {
+    failure(error);
+  }
 }
 
 /** Removes a team from its formation slot. */
 export function deleteTeam(id: string): void {
-  teams.update((list) => list.filter((team) => team.id !== id));
-  feedback.set("队伍已删除");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.delete(id));
+    feedback.set("队伍已删除");
+  } catch (error) {
+    failure(error);
+  }
+}
+
+/** Saves a draft team; `isNew` clears the provisional slot id so the backend
+ *  assigns the requested formation number. */
+export function saveTeam(team: Team, isNew: boolean): boolean {
+  const backend = ensureStore();
+  if (!backend) {
+    feedback.set("队伍数据尚未加载");
+    return false;
+  }
+  const number = teamNumber(team.id);
+  const payload = {
+    ...team,
+    id: isNew ? "" : team.id,
+    ...(isNew && number !== null ? { teamNumber: number } : {}),
+  };
+  try {
+    hydrate(backend.save(payload));
+    feedback.set("队伍已保存");
+    return true;
+  } catch (error) {
+    failure(error);
+    return false;
+  }
 }
 
 /** The line under the toolbar, when the last action left something to say. */
@@ -155,7 +215,7 @@ export function setTeamsFeedback(message: string | null): void {
 
 /** A blank team for the first formation slot that holds nothing. */
 export function blankTeam(): Team {
-  const used = new Set(teams().map((team) => teamNumber(team.id)));
+  const used = new Set(allTeams().map((team) => teamNumber(team.id)));
   let number = 1;
   while (used.has(number)) number += 1;
   return {

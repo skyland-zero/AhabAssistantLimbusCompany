@@ -1,11 +1,11 @@
-// The console page's state: the backend link, the device, the five tasks and
-// the run log.
+// The console page's state: the backend link, the device, the five tasks, the
+// run log and the statistics summary.
 //
-// Every value here is what the sidecar reports (`Device.*`, `Execution.*`,
-// `Stats.*`, `Settings.*`) or what the user set for the next run. P1 replaces
-// the fixtures and the writes with RPC calls and the execution events; the page
-// keeps reading the same functions.
+// Rust owns the task config, execution, devices, log events and stats; this
+// module mirrors the snapshots into signals and writes through the store.
 import { signal } from "nsh";
+import { Backend, HomeStore } from "aalc/native";
+import { mirrorHomeStatus } from "./store";
 
 /** What the Python sidecar link is doing. */
 export type BackendState = "mock" | "starting" | "ready" | "failed";
@@ -33,15 +33,10 @@ export type Task = {
   params: TaskParam[];
 };
 
-const backend = signal<BackendState>("mock");
-const devices = signal<{ id: string; name: string }[]>([]);
-const device = signal<DeviceState>("disconnected");
-const resolution = signal("1080P");
-const asyncInput = signal(false);
-const logCount = signal(0);
-const feedback = signal<string | null>(null);
+/** One log line. */
+export type LogEntry = { level: string; message: string; ts: number };
 
-const tasks = signal<Task[]>([
+const DEFAULT_TASKS: Task[] = [
   {
     id: "daily",
     icon: "listChecks",
@@ -152,7 +147,116 @@ const tasks = signal<Task[]>([
       },
     ],
   },
-]);
+];
+
+const backend = signal<BackendState>(Backend.mode() === "mock" ? "mock" : "starting");
+const devices = signal<{ id: string; name: string }[]>([]);
+const device = signal<DeviceState>("disconnected");
+const resolution = signal("1080P");
+const asyncInput = signal(false);
+const logs = signal<LogEntry[]>([]);
+const feedback = signal<string | null>(null);
+const tasks = signal<Task[]>(DEFAULT_TASKS.map((task) => ({ ...task })));
+
+let store: HomeStore | null = null;
+let connecting = false;
+
+function selectionFrom(list: Task[]): Record<string, Record<string, unknown>> {
+  const byId = Object.fromEntries(list.map((task) => [task.id, task]));
+  const value = (id: TaskId, param: string) =>
+    byId[id]?.params.find((entry) => entry.id === param)?.value ?? "";
+  return {
+    daily: {
+      enabled: byId.daily?.enabled ?? false,
+      exp: value("daily", "exp"),
+      thread: value("daily", "thread"),
+      chain: value("daily", "chain"),
+    },
+    rewards: {
+      enabled: byId.rewards?.enabled ?? false,
+      mode: value("rewards", "mode"),
+    },
+    enkephalin: {
+      enabled: byId.enkephalin?.enabled ?? false,
+      times: value("enkephalin", "times"),
+      grandet: value("enkephalin", "grandet"),
+    },
+    mirror: {
+      enabled: byId.mirror?.enabled ?? false,
+      runs: value("mirror", "runs"),
+      difficulty: value("mirror", "difficulty"),
+    },
+    resonance: {
+      enabled: byId.resonance?.enabled ?? false,
+      voice: value("resonance", "voice"),
+    },
+  };
+}
+
+function hydrateSelection(selection: Record<string, Record<string, unknown>>): void {
+  tasks.update((list) =>
+    list.map((task) => {
+      const node = selection[task.id];
+      if (!node) return task;
+      return {
+        ...task,
+        enabled: Boolean(node.enabled),
+        params: task.params.map((param) => ({
+          ...param,
+          value: String(node[param.id] ?? param.value),
+        })),
+      };
+    }),
+  );
+}
+
+function syncTasks(): void {
+  if (!store) return;
+  try {
+    store.configure(selectionFrom(tasks()));
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function hydrateFrom(created: HomeStore): void {
+  store = created;
+  hydrateSelection(created.selection() as Record<string, Record<string, unknown>>);
+  devices.set(created.devices().map((entry) => ({ id: entry.id, name: entry.name })));
+  device.set(created.deviceState() as DeviceState);
+  const window = created.window();
+  resolution.set(window.resolution);
+  asyncInput.set(window.asyncInput);
+  logs.set(created.logs());
+  mirrorHomeStatus(created.executionState());
+  backend.set(Backend.mode() === "mock" ? "mock" : "ready");
+}
+
+function ensureStore(): HomeStore | null {
+  if (store) return store;
+  if (Backend.mode() === "mock") {
+    try {
+      hydrateFrom(new HomeStore());
+    } catch (error) {
+      backend.set("failed");
+      feedback.set(error instanceof Error ? error.message : String(error));
+    }
+  } else if (!connecting) {
+    connecting = true;
+    HomeStore.connect()
+      .then(hydrateFrom)
+      .catch((error) => {
+        backend.set("failed");
+        feedback.set(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        connecting = false;
+      });
+  }
+  return store;
+}
+
+if (Backend.mode() === "mock") ensureStore();
 
 /** The sidecar link's state (tracked). */
 export function backendState(): BackendState {
@@ -161,6 +265,7 @@ export function backendState(): BackendState {
 
 /** The device list the selector offers (tracked). */
 export function deviceList(): { id: string; name: string }[] {
+  ensureStore();
   return devices();
 }
 
@@ -171,21 +276,31 @@ export function deviceState(): DeviceState {
 
 /** The window resolution shown in the window card (tracked). */
 export function currentResolution(): string {
+  ensureStore();
   return resolution();
 }
 
 /** Whether asynchronous input is on (tracked). */
 export function isAsyncInput(): boolean {
+  ensureStore();
   return asyncInput();
 }
 
 /** How many log lines the panel holds (tracked). */
 export function logLines(): number {
-  return logCount();
+  ensureStore();
+  return logs().length;
+}
+
+/** The log lines, oldest first (tracked). */
+export function logEntries(): LogEntry[] {
+  ensureStore();
+  return logs();
 }
 
 /** The console's tasks (tracked). */
 export function consoleTasks(): Task[] {
+  ensureStore();
   return tasks();
 }
 
@@ -199,6 +314,7 @@ export function toggleTask(id: TaskId): void {
   tasks.update((list) =>
     list.map((task) => (task.id === id ? { ...task, enabled: !task.enabled } : task)),
   );
+  syncTasks();
 }
 
 /** Sets one of a task's parameters. */
@@ -215,42 +331,117 @@ export function setTaskParam(id: TaskId, paramId: string, value: string): void {
         : task,
     ),
   );
+  syncTasks();
 }
 
 /** Enables every task. */
 export function selectAllTasks(): void {
   tasks.update((list) => list.map((task) => ({ ...task, enabled: true })));
+  syncTasks();
   feedback.set("已全选任务");
 }
 
 /** Empties the queue's selection without deleting the tasks. */
 export function clearTasks(): void {
   tasks.update((list) => list.map((task) => ({ ...task, enabled: false })));
+  syncTasks();
   feedback.set("已清空任务");
 }
 
 /** Starts the queue. */
 export function startQueue(): void {
-  feedback.set("已提交启动请求（执行随 P1 的 sidecar 接入）");
+  const current = ensureStore();
+  if (!current) return;
+  syncTasks();
+  try {
+    current.start();
+    mirrorHomeStatus(current.executionState());
+    logs.set(current.logs());
+    feedback.set(current.feedback() ?? "已提交启动请求");
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Pauses a running queue or resumes a paused one. */
+export function pauseOrResumeQueue(): void {
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    current.pauseOrResume();
+    mirrorHomeStatus(current.executionState());
+    logs.set(current.logs());
+    feedback.set(current.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Stops the running queue. */
+export function stopQueue(): void {
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    current.stop();
+    mirrorHomeStatus(current.executionState());
+    logs.set(current.logs());
+    feedback.set(current.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Empties the run log. */
 export function clearLog(): void {
-  logCount.set(0);
-  feedback.set("日志已清空");
+  const current = ensureStore();
+  if (!current) return;
+  current.clearLogs();
+  logs.set(current.logs());
+  feedback.set(current.feedback());
 }
 
 /** Re-reads the device list. */
 export function refreshDevices(): void {
-  devices.set([
-    { id: "mumu", name: "MuMu 模拟器" },
-    { id: "scrcpy", name: "Scrcpy 窗口" },
-  ]);
-  feedback.set("已刷新设备列表");
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    devices.set(current.refreshDevices().map((entry) => ({ id: entry.id, name: entry.name })));
+    feedback.set(current.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Picks a device to drive. */
 export function selectDevice(id: string): void {
-  device.set(id === "" ? "disconnected" : "connecting");
-  feedback.set("正在连接设备…");
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    device.set(current.connectDevice(id) as DeviceState);
+    feedback.set(current.feedback());
+  } catch (error) {
+    feedback.set(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** The statistics summary shown on the console (tracked). */
+export function consoleStats(): {
+  today: { exp: number; thread: number; mirror: number };
+  week: { exp: number; thread: number; mirror: number };
+  lastMirror: string | null;
+} {
+  const current = ensureStore();
+  if (!current) {
+    return {
+      today: { exp: 0, thread: 0, mirror: 0 },
+      week: { exp: 0, thread: 0, mirror: 0 },
+      lastMirror: null,
+    };
+  }
+  const stats = current.stats();
+  return {
+    today: { exp: stats.todayExp, thread: stats.todayThread, mirror: stats.todayMirror },
+    week: { exp: stats.weekExp, thread: stats.weekThread, mirror: stats.weekMirror },
+    lastMirror: stats.lastMirror ?? null,
+  };
 }

@@ -11,7 +11,6 @@ import { Switch } from "../../../components/Switch";
 import {
   clearHotkey,
   currentHotkeys,
-  setFeedback,
   setHotkeysEnabled,
 } from "../../../settings";
 import { SettingsCard } from "../SettingsCard";
@@ -68,10 +67,7 @@ function Combo(props: {
         label="清除"
         variant="ghost"
         disabled={props.disabled || !props.value}
-        onPress={() => {
-          clearHotkey(props.target);
-          setFeedback("已清除热键（保存与全局注册随 P1 接入）");
-        }}
+        onPress={() => clearHotkey(props.target)}
       />
     </View>
   );

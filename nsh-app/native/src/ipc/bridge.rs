@@ -15,7 +15,7 @@ use super::{BackendClient, contract, contract::method};
 #[module]
 pub struct Backend;
 
-fn configured_mode() -> String {
+pub(crate) fn configured_mode() -> String {
     match std::env::var("AHAB_BACKEND")
         .unwrap_or_default()
         .to_ascii_lowercase()
@@ -36,6 +36,16 @@ pub fn client() -> &'static BackendClient {
         "unavailable" => BackendClient::unavailable("AHAB_BACKEND=unavailable"),
         _ => BackendClient::try_sidecar().unwrap_or_else(|error| BackendClient::unavailable(error)),
     })
+}
+
+/// The transport a state object uses. The mock is per state object so tests and
+/// two app instances stay independent; the real sidecar is process-wide.
+pub(crate) fn state_client() -> BackendClient {
+    if configured_mode() == "mock" {
+        BackendClient::mock()
+    } else {
+        client().shared()
+    }
 }
 
 #[module]

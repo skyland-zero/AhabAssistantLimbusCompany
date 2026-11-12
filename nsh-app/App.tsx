@@ -3,6 +3,7 @@
 // `store.ts`.
 import { mount, View } from "nsh";
 import { PageHost } from "./pages/PageHost";
+import { DesktopIntegration } from "./shell/DesktopIntegration";
 import { SkinBackdrop } from "./shell/SkinBackdrop";
 import { TitleBar } from "./shell/TitleBar";
 import { currentPage, initTheme } from "./store";
@@ -13,6 +14,7 @@ function App() {
   initTheme();
   return (
     <View class="relative flex-1 overflow-hidden bg-background">
+      <DesktopIntegration />
       <SkinBackdrop />
       <TitleBar />
       <View class="min-h-0 flex-1">

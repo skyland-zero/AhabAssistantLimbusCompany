@@ -1,11 +1,12 @@
 // The resources page's state: the resource groups, their versions and the sync
 // in flight.
 //
-// Resource groups and the sync progress come from the sidecar
-// (`Resources.status`, `Resources.sync`); P1 replaces the fixtures and the timer
-// below with those calls and their `resources.sync` events. The page keeps
-// reading the same functions.
+// Rust owns the groups and the sync (`resource.status` / `resource.checkUpdate`
+// / `resource.syncStart`); this module mirrors the snapshots and gives the
+// terminal 100% a short moment on screen.
 import { signal } from "nsh";
+import { Backend, ResourcesStore } from "aalc/native";
+import { translatedFeedback } from "./settings";
 
 /** One synchronised resource set. */
 export type ResourceGroup = {
@@ -19,28 +20,66 @@ export type ResourceGroup = {
   lastSyncAt: number | null;
 };
 
-const groups = signal<ResourceGroup[]>([
-  {
-    id: "templates",
-    name: "模板资源",
-    localVersion: "v2025.06.1",
-    remoteVersion: null,
-    lastSyncAt: null,
-  },
-  {
-    id: "onnx",
-    name: "ONNX 模型",
-    localVersion: "v1.2.0",
-    remoteVersion: null,
-    lastSyncAt: null,
-  },
-]);
-
+const groups = signal<ResourceGroup[]>([]);
 const syncProgress = signal<number | null>(null);
 const feedback = signal<string | null>(null);
 
+let store: ResourcesStore | null = null;
+let connecting = false;
+
+function toGroup(view: {
+  id: string;
+  name: string;
+  localVersion: string;
+  remoteVersion?: string | null;
+  lastSyncAt?: number | null;
+}): ResourceGroup {
+  return {
+    id: view.id,
+    name: view.name,
+    localVersion: view.localVersion,
+    remoteVersion: view.remoteVersion ?? null,
+    lastSyncAt: view.lastSyncAt ?? null,
+  };
+}
+
+function hydrate(view: ReturnType<ResourcesStore["groups"]>): void {
+  groups.set(view.map(toGroup));
+}
+
+function failure(error: unknown): void {
+  feedback.set(error instanceof Error ? error.message : String(error));
+}
+
+function ensureStore(): ResourcesStore | null {
+  if (store) return store;
+  if (Backend.mode() === "mock") {
+    try {
+      store = new ResourcesStore();
+      hydrate(store.groups());
+    } catch (error) {
+      failure(error);
+    }
+  } else if (!connecting) {
+    connecting = true;
+    ResourcesStore.connect()
+      .then((created) => {
+        store = created;
+        hydrate(created.groups());
+      })
+      .catch(failure)
+      .finally(() => {
+        connecting = false;
+      });
+  }
+  return store;
+}
+
+if (Backend.mode() === "mock") ensureStore();
+
 /** The resource groups (tracked where they are read). */
 export function resourceGroups(): ResourceGroup[] {
+  ensureStore();
   return groups();
 }
 
@@ -51,7 +90,7 @@ export function currentSyncProgress(): number | null {
 
 /** The line under the grid, when the last action left something to say. */
 export function resourcesFeedback(): string | null {
-  return feedback();
+  return translatedFeedback(feedback());
 }
 
 /** Whether `group` has a newer version than the one on disk. */
@@ -61,31 +100,32 @@ export function hasUpdate(group: ResourceGroup): boolean {
 
 /** Re-reads the remote versions. */
 export function checkResources(): void {
-  feedback.set("资源更新状态已刷新");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.check());
+    feedback.set(backend.feedback());
+  } catch (error) {
+    failure(error);
+  }
 }
 
-/** Starts a sync; the progress runs to 100% and then settles.
- *
- *  A stand-in for the sidecar's `resources.sync` events: it is the one place in
- *  this page that keeps a timer, and P1 deletes it with the rest of the mock. */
+/** Starts a sync; the terminal progress settles after a short beat. */
 export function syncResources(): void {
   if (syncProgress() !== null) return;
-  feedback.set("正在同步资源…");
-  syncProgress.set(0);
-  const step = () => {
-    const current = syncProgress();
-    if (current === null) return;
-    const next = current + 25;
-    if (next >= 100) {
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    const progress = backend.syncNow();
+    feedback.set(backend.feedback());
+    syncProgress.set(progress);
+    setTimeout(() => {
+      hydrate(backend.finishSync());
       syncProgress.set(null);
-      groups.update((list) =>
-        list.map((group) => ({ ...group, lastSyncAt: Date.now() })),
-      );
-      feedback.set("资源同步完成");
-      return;
-    }
-    syncProgress.set(next);
-    setTimeout(step, 150);
-  };
-  setTimeout(step, 150);
+      feedback.set(backend.feedback());
+    }, 450);
+  } catch (error) {
+    syncProgress.set(null);
+    failure(error);
+  }
 }

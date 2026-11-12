@@ -12,10 +12,11 @@ import { Switch } from "../../../components/Switch";
 import { UPDATE_SOURCE_LABELS } from "../../../model/types";
 import type { UpdateSource } from "../../../model/types";
 import {
+  checkForUpdates,
   currentCdk,
   currentUpdateSource,
+  saveCdk,
   setCdk,
-  setFeedback,
   setUpdateSource,
   systemFlag,
   toggleSystemFlag,
@@ -44,10 +45,7 @@ export function UpdatesCard() {
             accessibilityLabel="更新源选择"
             items={SOURCES}
             value={currentUpdateSource()}
-            onChange={(next) => {
-              setUpdateSource(next);
-              setFeedback(`更新源：${UPDATE_SOURCE_LABELS[next]}`);
-            }}
+            onChange={(next) => setUpdateSource(next)}
             class="w-44"
           />
         </SettingLine>
@@ -62,10 +60,7 @@ export function UpdatesCard() {
                 onChange={({ value }) => setCdk(value)}
                 class="w-60"
               />
-              <Button
-                label="保存 CDK"
-                onPress={() => setFeedback("CDK 已记录（保存随 P1 接入）")}
-              />
+              <Button label="保存 CDK" onPress={() => saveCdk()} />
             </View>
           </SettingLine>
         </If>
@@ -75,7 +70,7 @@ export function UpdatesCard() {
           label="检查更新"
           icon="check"
           variant="outline"
-          onPress={() => setFeedback("更新检查随 P1 的 updater 接入")}
+          onPress={() => checkForUpdates()}
         />
       </View>
     </SettingsCard>

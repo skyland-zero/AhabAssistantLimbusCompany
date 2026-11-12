@@ -39,6 +39,16 @@ test("the appearance toggle cycles through the three appearances", async () => {
   await app.waitFor("role:button[外观：深色]");
 });
 
+test("the language switch updates the title bar and page copy", async () => {
+  const app = await open("./App.tsx", DESKTOP);
+  await app.press("role:button[设置]");
+  await app.press("role:button[English]");
+  await app.waitFor("Teams");
+  await app.press("role:button[Help]");
+  await app.waitFor("Contents");
+  expect(app.texts()).not.toContain("队伍管理");
+});
+
 test("every destination keeps the shared window chrome", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.press("role:button[工具箱]");

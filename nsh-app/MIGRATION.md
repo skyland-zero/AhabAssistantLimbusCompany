@@ -9,7 +9,7 @@
 | 阶段 | 内容 | 状态 | 完成判据 |
 | --- | --- | --- | --- |
 | P0 | 骨架：`nsh.json`、窗口壳、主题 token、`assets/`、Rust 导出通道 | [x] | `nsh run nsh-app --target gpui` 开窗，侧栏与主题正常 |
-| P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [~] | `model` + `ipc` 已迁入，`cargo test` 49 条通过；Mock 与真实 sidecar 双通；`state` / `i18n` / `app` 待迁 |
+| P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [~] | `model` / `ipc` / `state` / `i18n` / `app_state` 已迁入，`cargo test` 78 条通过；Mock 与真实 sidecar 双通；预览帧与调度器待补 |
 | P2 | TSX 设计系统：`components/` + `shell/` | [~] | 组件对照页与 `gpui-app` 截图逐个一致 |
 | P3 | 页面重写：home → teams → settings → theme_packs → help | [~] | 7 页全部有实现、截图对照与 `nsh test` 用例；队伍编辑器的镜牢配置已完成，剩余项见 §1.2（依赖 P1 或留给下一轮） |
 | P4 | 打包切换：`nsh package`，替换发布流程里的 GPUI 可执行文件 | [~] | Windows 安装包已产出并实机启动；DPI/单实例已验证，托盘/全局热键待 P1 接入后验证 |
@@ -23,12 +23,12 @@
 | 页面 | **7 / 7 全部实现**：主控台、队伍管理（含 5 段镜牢配置编辑器）、镜牢主题包、工具箱、资源中心、帮助、设置（另加开发期组件对照页） |
 | 设计系统 | 5 套皮肤 × 6 个强调色 × 4 档圆角、6 个按钮变体 × 4 尺寸、13 个 ui 层组件 |
 | 窗口壳 | 品牌 + 6 导航 + 状态点 + 外观切换 + 设置 + 窗口按钮；皮肤背景氛围层；标题栏固定 40pt（2026-11-12 对齐客户端的 `TITLEBAR_HEIGHT`） |
-| Rust 后端 | **model + ipc 已迁入**：schema 3 契约、确定性 Mock、真实 sidecar 握手/请求/事件队列/生命周期；`cargo test` 49 条（含真实 sidecar 集成用例） |
-| 测试 | `nsh test` **98 / 98**（49 条 Rust 单测 + 49 个 TSX 用例：壳、后端 seam、设置、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台、Windows 截图基线） |
+| Rust 后端 | **model + ipc + state + i18n + app_state 已迁入**：schema 3 契约、确定性 Mock、真实 sidecar 握手/请求/事件队列/生命周期；队伍/设置/主题包/资源/工具箱/主控台状态与 i18n 桥；`cargo test` 78 条（含真实 sidecar 集成用例） |
+| 测试 | `nsh test` **128 / 128**（78 条 Rust 单测 + 50 个 TSX 用例：壳、后端 seam、设置、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台、语言切换、Windows 截图基线） |
 | 截图 | `docs/shots/` 8 张 Linux 渲染基线 + 5 套皮肤；`docs/reference/gpui/` 14 张对照基准；Windows 实机对照见 §1.6 |
 | 打包 | `nsh package --target windows` 产出 `AALC.exe`（62 MB）、`AALC.zip`（26 MB）、`AALC-setup.exe`（20 MB），单实例与 175% DPI 实机通过 |
 | 性能 | 打包版 NSH 首窗 **123.3 ms**（中位）对 GPUI **151.4 ms**（中位）；工作集 61.9 MB 对 56.6 MB；4 秒后 CPU 133 ms 对 197 ms（10 次采样，见 §1.6） |
-| 未完成 | P1（`state` / `i18n` / `app`）、P4 托盘/全局热键实机验证、P4.5（仓库级引用）、P5（删除 `gpui-app/`）；P3 剩余项见 §1.5 |
+| 未完成 | P1 预览帧/调度器、P4 托盘/全局热键实机验证、P4.5（仓库级引用）、P5（删除 `gpui-app/`）；P3 剩余项见 §1.5 |
 
 ## 1. P0 已落地
 
@@ -275,7 +275,7 @@ cargo test --manifest-path nsh-app/native/Cargo.toml          # 49 passed
 $env:AHAB_RUN_SIDECAR_INTEGRATION='1'
 cargo test --manifest-path nsh-app/native/Cargo.toml real_sidecar_round_trips -- --nocapture
 nsh check nsh-app
-nsh test nsh-app                                               # 98 / 98
+nsh test nsh-app                                               # 128 / 128（AHAB_BACKEND=mock）
 python scripts/validate_contract.py                            # NSH + GPUI + Python + Mock
 $env:AHAB_BACKEND='mock'
 nsh test nsh-app/backend.test.tsx                              # TSX → Rust Mock ping
@@ -286,6 +286,26 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 
 尚未迁入：`state/`（teams / home / other）、`i18n/`、`app/`。下一步先迁 `state/teams`，
 再把 `teams.ts` 的列表、保存、删除与统计换成 Rust 调用；编辑器草稿仍留在 TSX（屏幕级状态）。
+
+## 1.8 P1 第二轮：state / i18n / app_state（2026-11-12）
+
+- **`state/teams/`**：保存队伍、20 个固定编队位、额外编队、保存/删除/启用、`team.stats.*`；
+  `#[class] TeamsStore` 暴露 `teams()` / `slots()` / `extras()` / `save()` / `delete()` /
+  `setEnabled()` / `stats()` / `clearStats()`。编辑器草稿仍留在 TSX（屏幕级状态）。
+  TSX `teams-store.ts`、`teams-stats.ts` 改为镜像 Rust 返回值；`Teams.tsx` 补上额外编队区。
+- **`state/other/`**：设置标志/热键/CDK/SPT/更新检查、主题包权重、资源组与同步、四个工具；
+  四个 `#[class]`（`SettingsStore` / `ThemePacksStore` / `ResourcesStore` / `ToolboxStore`）。
+  TSX 设置页的保存 CDK/SPT、测试通知、检查更新、主题包、资源、工具箱均改为真实调用。
+- **`state/home/`**：`TasksConfig` 五张任务卡的映射、`execution.start/pause/resume/stop`、设备列表与
+  连接、日志事件、统计摘要；`#[class] HomeStore`。TSX 主控台的 Link Start、清空日志、设备刷新/连接
+  与日志列表已接上；预览帧仍待下一轮。
+- **`state/app_state.rs`**：`settings.json` 的加载/保存（`%APPDATA%/AhabAssistant/settings.json`）；
+  `#[class] AppStore` 持久化皮肤/强调色/外观/语言。Mock 模式使用内存默认值，避免测试读到开发机配置。
+- **`i18n/`**：`zh_cn` / `en_us` 目录、`messages::feedback` 动态反馈翻译、`I18n.text/feedback`
+  TSX 模块；标题栏导航、外观标签、帮助目录、状态反馈随语言切换。
+- **桌面集成**：`shell/DesktopIntegration.tsx` 接 `Tray`、`GlobalShortcut`、`closePress`；
+  热键注册随设置变化，关闭窗口按“最小化到托盘”隐藏。
+- **验证**：`cargo test` 78 条；`nsh test` 128 / 128（`AHAB_BACKEND=mock`）。
 
 ## 2. 来源映射
 
@@ -298,11 +318,11 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 | `ipc/gateway.rs` | — | `native/src/ipc/gateway.rs` | P1 已迁入 |
 | `ipc/websocket/` | — | `native/src/ipc/websocket/` | P1 已迁入；阻塞 worker + std mpsc，去掉 Entity/async-channel |
 | `ipc/mock/` | 647 | `native/src/ipc/mock/` | P1 已迁入；供 `nsh test` 与无后端开发 |
-| `state/teams/` | 1967 | `native/src/state/teams/` | 待迁：`Entity<State>` → `#[class]` + 信号回调 |
-| `state/home/` | 926 | `native/src/state/home/` | 待迁：执行状态机、预览、统计 |
-| `state/other/` | 924 | `native/src/state/other/` | 待迁：设置、工具箱、资源、主题包 |
-| `state/app_state.rs` | 88 | `native/src/state/app_state.rs` | 待迁 |
-| `i18n/` | 400 | `native/src/i18n/` | 额外导出 `I18n.t()` module 给 TSX |
+| `state/teams/` | 1967 | `native/src/state/teams/` | 已迁：`TeamsStore` 持有保存队伍/槽位/统计，编辑器草稿留在 TSX |
+| `state/home/` | 926 | `native/src/state/home/` | 已迁：任务映射、执行命令、设备、日志、统计；预览帧待补 |
+| `state/other/` | 924 | `native/src/state/other/` | 已迁：`SettingsStore` / `ThemePacksStore` / `ResourcesStore` / `ToolboxStore` |
+| `state/app_state.rs` | 88 | `native/src/state/app_state.rs` | 已迁：`AppStore` 读写 `settings.json` |
+| `i18n/` | 400 | `native/src/i18n/` | 已迁：`I18n.text()` / `I18n.feedback()` module |
 | `app/lifecycle/` | 897 | `native/src/app/lifecycle/` | 启动/恢复/关闭，去 `cx` 依赖 |
 | `app/{scheduling,device,preview,stats}.rs` | — | `native/src/app/` | 调度、设备、预览帧 |
 | `assets.rs` | — | `native/src/assets.rs` | 路径改为 `assets!()` 内嵌 |
@@ -342,7 +362,7 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 
 - [x] `nsh` CLI 已在开发机安装（0.5.0，`~/.nsh` + `~/.local/bin/nsh`）；本机访问 GitHub 需走代理（`http://127.0.0.1:7890`），CI 需要新步骤。
 - [x] `nsh check nsh-app` 通过（TypeScript 对着 `.nsh/types/aalc/native.d.ts` 校验）。
-- [x] `nsh test nsh-app` 通过：**98 个用例**（49 个 Rust 单测 + 49 个 TSX 用例，覆盖 model/contract、Mock、sidecar 传输、Rust↔TSX 后端 seam、壳、设置、工具箱、资源中心、队伍编辑器、帮助解析、主题合成、主控台、Windows 截图基线）。
+- [x] `nsh test nsh-app` 通过：**128 个用例**（78 个 Rust 单测 + 50 个 TSX 用例，覆盖 model/contract、Mock、sidecar 传输、Rust↔TSX 后端 seam、壳、设置、工具箱、资源中心、队伍编辑器、帮助解析、主题合成、主控台、语言切换、Windows 截图基线）。
 - [x] `nsh run nsh-app --target gpui` 已在无 GPU 机器上跑通：Xvfb + `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`（lavapipe）。截图见 `nsh-app/docs/shots/`。
 - [x] **mixed 模式会按应用构建宿主**：首次 `nsh test --target gpui` 花了 **11 分钟**编 `nsh-gpui-host`（NSH 引擎 + GPUI Fast + QuickJS + 我们的 crate），之后增量几分之一分钟。这意味着**任何要出包的机器（含 CI）都要有 Rust + 平台系统库**：Linux 需 GTK3 / WebKitGTK 4.1 / GStreamer / clang 的开发包。
 - [x] 截图链路：Linux 用 `scripts/capture_nsh.py`（Xvfb + lavapipe，无需 GPU）抓桌面尺寸；旧客户端用 `scripts/capture_gpui.py` 出同一视口的对照图，基准已入库 `docs/reference/gpui/`。Windows 用 `nsh test nsh-app/visual.test.tsx --target windows` 抓 820×680 实机图（见 §1.6）；`app.screenshot()` 不含系统文本框的文字。

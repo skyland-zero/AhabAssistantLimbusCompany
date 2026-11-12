@@ -13,6 +13,7 @@ import { Button, IconButton } from "../components/Button";
 import { Icon } from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import { PAGES, currentAppearance, currentDecor, currentHomeStatus, currentPage, cycleAppearance, navigate, pageLabel } from "../store";
+import { t } from "../settings";
 import type { Appearance, HomeStatus, PageId } from "../store";
 import type { Decor } from "../themes";
 import { StatusDot } from "./StatusDot";
@@ -38,10 +39,10 @@ const SEPARATOR: Record<Decor, string> = {
 };
 
 /** The appearance toggle's glyph and label, in the order it cycles. */
-const APPEARANCE: Record<Appearance, { icon: IconName; label: string }> = {
-  light: { icon: "sun", label: "浅色" },
-  dark: { icon: "moon", label: "深色" },
-  system: { icon: "monitor", label: "跟随系统" },
+const APPEARANCE: Record<Appearance, { icon: IconName; key: string }> = {
+  light: { icon: "sun", key: "themeLight" },
+  dark: { icon: "moon", key: "themeDark" },
+  system: { icon: "monitor", key: "themeSystem" },
 };
 
 export function TitleBar() {
@@ -63,7 +64,7 @@ export function TitleBar() {
           {(entry) => (
             <NavItem
               id={entry().id}
-              label={entry().label}
+              label={pageLabel(entry().id)}
               icon={entry().icon}
               status={entry().id === "home" ? currentHomeStatus() : null}
             />
@@ -89,9 +90,9 @@ export function TitleBar() {
 
       <If when={drawsWindowButtons}>
         <View class="h-full flex-row">
-          <WindowButton control="minimize" icon="minimize" label="最小化" />
-          <WindowButton control="maximize" icon="maximize" label="最大化" />
-          <WindowButton control="close" icon="close" label="关闭" danger />
+          <WindowButton control="minimize" icon="minimize" label={t("titlebarMinimize")} />
+          <WindowButton control="maximize" icon="maximize" label={t("titlebarMaximize")} />
+          <WindowButton control="close" icon="close" label={t("titlebarClose")} danger />
         </View>
       </If>
     </View>
@@ -135,7 +136,7 @@ function AppearanceButton() {
   return (
     <IconButton
       name={appearance().icon}
-      label={`外观：${appearance().label}`}
+      label={`${t("appearanceLabel")}：${t(appearance().key)}`}
       size="md"
       onPress={() => {
         cycleAppearance();

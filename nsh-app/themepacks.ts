@@ -1,9 +1,9 @@
 // The theme-pack page's state: each pack's switch and weight.
 //
-// Theme packs are the Mirror Dungeon pack filter: only enabled packs are picked,
-// each with a weight 0–10. The payload is the sidecar's (`ThemePacks.*`); P1
-// replaces the fixtures and writes with RPC calls.
+// Rust owns the pack list and persists every change (`themePack.updateAll`,
+// `themePack.resetWeights`); this module mirrors the returned list into signals.
 import { signal } from "nsh";
+import { Backend, ThemePacksStore } from "aalc/native";
 
 /** One Mirror Dungeon theme pack. */
 export type ThemePack = {
@@ -19,34 +19,75 @@ export type ThemePack = {
 /** The weights a pack can take. */
 export const MAX_WEIGHT = 10;
 
-const packs = signal<ThemePack[]>([
-  { id: "black-cloud", name: "黑云会", tier: "T1", enabled: true, weight: 5 },
-  { id: "thumb", name: "拇指", tier: "T2", enabled: true, weight: 3 },
-  { id: "blade-brotherhood", name: "利刃兄弟会", tier: "T2", enabled: true, weight: 4 },
-  { id: "wu-merchant", name: "厄伍商会", tier: "T3", enabled: false, weight: 2 },
-  { id: "district-20", name: "二十区福利机构", tier: "T1", enabled: true, weight: 6 },
-  { id: "tech-liberator", name: "技术科学解放者联盟", tier: "T4", enabled: false, weight: 1 },
-  { id: "company-hq", name: "公司总部", tier: "T3", enabled: true, weight: 3 },
-  { id: "resonance", name: "残响乐团", tier: "T1", enabled: true, weight: 7 },
-]);
-
+const packs = signal<ThemePack[]>([]);
 const sortByWeight = signal(false);
 const feedback = signal<string | null>(null);
-
-/** Whether the Mirror Dungeon is in its hard cycle, which the page warns about. */
 const hardMirrorActive = signal(true);
+
+let store: ThemePacksStore | null = null;
+let connecting = false;
+
+function toPack(view: {
+  id: string;
+  name: string;
+  tier: string;
+  enabled: boolean;
+  weight: number;
+}): ThemePack {
+  return {
+    id: view.id,
+    name: view.name,
+    tier: view.tier,
+    enabled: view.enabled,
+    weight: view.weight,
+  };
+}
+
+function hydrate(view: ReturnType<ThemePacksStore["packs"]>): void {
+  packs.set(view.map(toPack));
+}
+
+function failure(error: unknown): void {
+  feedback.set(error instanceof Error ? error.message : String(error));
+}
+
+function ensureStore(): ThemePacksStore | null {
+  if (store) return store;
+  if (Backend.mode() === "mock") {
+    try {
+      store = new ThemePacksStore();
+      hydrate(store.packs());
+      hardMirrorActive.set(store.hardMirrorActive());
+    } catch (error) {
+      failure(error);
+    }
+  } else if (!connecting) {
+    connecting = true;
+    ThemePacksStore.connect()
+      .then((created) => {
+        store = created;
+        hydrate(created.packs());
+        hardMirrorActive.set(created.hardMirrorActive());
+      })
+      .catch(failure)
+      .finally(() => {
+        connecting = false;
+      });
+  }
+  return store;
+}
+
+if (Backend.mode() === "mock") ensureStore();
 
 /** The packs, in the order the page draws them (by weight when sorted). */
 export function themePacks(): ThemePack[] {
-  const list = packs();
-  return sortByWeight()
-    ? [...list].sort((left, right) => right.weight - left.weight)
-    : list;
+  ensureStore();
+  return packs();
 }
 
 /** The weight the enabled packs add up to, which is what the run rolls against. */
 export function totalWeight(): number {
-  return packs()
+  return themePacks()
     .filter((pack) => pack.enabled)
     .reduce((sum, pack) => sum + pack.weight, 0);
 }
@@ -58,12 +99,19 @@ export function isSortedByWeight(): boolean {
 
 /** Turns the weight sort on or off. */
 export function toggleSortByWeight(): void {
-  sortByWeight.update((current) => !current);
+  const next = !sortByWeight();
+  sortByWeight.set(next);
+  const backend = ensureStore();
+  if (backend) {
+    backend.setSortByWeight(next);
+    hydrate(backend.packs());
+  }
   feedback.set("主题包排序已更新");
 }
 
 /** Whether the hard-cycle warning shows (tracked). */
 export function hardMirror(): boolean {
+  ensureStore();
   return hardMirrorActive();
 }
 
@@ -74,9 +122,14 @@ export function themePacksFeedback(): string | null {
 
 /** Turns one pack on or off. */
 export function togglePack(id: string): void {
-  packs.update((list) =>
-    list.map((pack) => (pack.id === id ? { ...pack, enabled: !pack.enabled } : pack)),
-  );
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.toggle(id));
+    feedback.set(backend.feedback());
+  } catch (error) {
+    failure(error);
+  }
 }
 
 /** Sets one pack's weight, held inside the range. */
@@ -85,28 +138,36 @@ export function setPackWeight(id: string, weight: number): void {
   packs.update((list) =>
     list.map((pack) => (pack.id === id ? { ...pack, weight: held } : pack)),
   );
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.setWeight(id, held));
+    feedback.set(backend.feedback());
+  } catch (error) {
+    failure(error);
+  }
 }
 
 /** Turns every pack on or off. */
 export function setAllEnabled(enabled: boolean): void {
-  packs.update((list) => list.map((pack) => ({ ...pack, enabled })));
-  feedback.set(enabled ? "主题包已全部启用" : "主题包已全部停用");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.setAll(enabled));
+    feedback.set(backend.feedback());
+  } catch (error) {
+    failure(error);
+  }
 }
 
-/** Puts the shipped weights back. */
+/** Puts the backend's default weights back. */
 export function resetWeights(): void {
-  packs.update((list) => list.map((pack) => ({ ...pack, weight: defaults[pack.id] ?? pack.weight })));
-  feedback.set("主题包权重已恢复");
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    hydrate(backend.resetWeights());
+    feedback.set(backend.feedback());
+  } catch (error) {
+    failure(error);
+  }
 }
-
-/** The weights the packs ship with (`ThemePacksState::default`). */
-const defaults: Record<string, number> = {
-  "black-cloud": 5,
-  thumb: 3,
-  "blade-brotherhood": 4,
-  "wu-merchant": 2,
-  "district-20": 6,
-  "tech-liberator": 1,
-  "company-hq": 3,
-  resonance: 7,
-};

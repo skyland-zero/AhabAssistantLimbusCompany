@@ -20,7 +20,7 @@ test("checking for updates says what it did", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[资源中心]");
   await app.press("role:button[检查更新]");
-  await app.waitFor("资源更新状态已刷新");
+  await app.waitFor("发现资源更新");
 });
 
 test("a sync reports progress and settles", async () => {
