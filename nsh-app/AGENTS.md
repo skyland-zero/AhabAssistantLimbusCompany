@@ -86,3 +86,12 @@ nsh run nsh-app --target gpui
 ```
 
 页面改动的验收标准是与原客户端截图 1:1 对照（见 `MIGRATION.md` 的进度表），而不是「看起来差不多」。
+
+## 7. 参考：项目级 Agent Skills
+
+仓库内置了 Native Shell 官方 Agent Skills（`.agents/skills/`，随仓库提交）：
+
+- `nsh`：Rust/TSX/混合三模式、响应式、组件、样式、工具链与测试。**混合模式的边界规则先读 `references/mixed.md`。**
+- `nsh-design-guides`：层级、色彩 token、间距、密度、交互状态、动效规范，以及改完 UI 必走的完成检查清单。
+
+改 `nsh-app/` 的 Rust 或 TSX 代码前先读对应 skill；它们来自上游，不要手改（见 `.agents/skills/README.md`）。

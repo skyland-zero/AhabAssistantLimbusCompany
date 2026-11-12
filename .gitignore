@@ -3,7 +3,9 @@
 .venv
 .vscode
 .agent
-.agents
+# 其余 agent 目录不入库，但项目级 Agent Skills 要跟着仓库走（见 .agents/skills/README.md）
+.agents/*
+!.agents/skills/
 .idea
 .claude
 
