@@ -1,0 +1,23 @@
+{
+  "name": "AALC",
+  "id": "com.kiyi671.aalc",
+  "version": "0.1.0",
+  "build": 1,
+  "rust": "native",
+  "theme": "theme.json",
+  "icon": "assets/app-icon.png",
+  "appearance": "system",
+  "singleInstance": true,
+  "window": {
+    "title": "AALC",
+    "defaultSize": { "width": 1100, "height": 720 },
+    "minSize": { "width": 960, "height": 640 },
+    "titleBar": { "style": "hidden" }
+  },
+  "capabilities": {
+    "network": {
+      "hosts": ["127.0.0.1", "localhost"]
+    },
+    "windows": true
+  }
+}

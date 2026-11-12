@@ -1,0 +1,26 @@
+[package]
+name = "aalc-native"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "AALC's Native Shell backend: RPC transport, execution state and domain models."
+
+# An empty workspace table so this crate builds on its own: `nsh` links it into
+# the hosts it builds (nsh.json `"rust": "native"`), and the repository keeps
+# other Cargo projects next to it that must not join this build.
+[workspace]
+
+[dependencies]
+nsh-base = "0.5.0"
+nsh-core = "0.5.0"
+
+[dev-dependencies]
+# No crate-level UI tests yet: the headless `App.test.tsx` runs through the
+# `nsh test` CLI, which builds its own host. Re-add `nsh-testing` +
+# `nsh-engine` (and `nsh-core` with `declarations`) when P1 adds Rust tests
+# that drive `App.tsx` against this crate's set — see
+# examples/rust-exports/native/tests in the NSH repository.
+
+[lints.rust]
+unsafe_code = "forbid"
