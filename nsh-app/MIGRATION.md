@@ -24,6 +24,13 @@
 - `App.tsx`：窗口壳 + 侧栏 + 占位页面宿主 + Rust 版本回显；`shell/TitleBar.tsx` 自绘标题栏（`windowDrag`）。
 - `App.test.tsx`：`nsh test` 冒烟用例（骨架渲染、侧栏切页、Rust 模块可调用）。
 - `assets/`：原 `gpui-app/resources/assets/` 全量复制（logo、横幅、12 立绘、11 状态图、limbus 主题、2 篇帮助文档）+ `app-icon.png`。
+- **截图链路已打通**：`scripts/capture_nsh.py` 在 Xvfb + Mesa lavapipe（软件 Vulkan）里跑 `nsh run --target gpui`，抓 X11 根窗口，产出 `nsh-app/docs/shots/p0-desktop.png`（1100×720）。无 GPU 机器也能出真实渲染图。
+
+### P0 截图发现的问题（转 P2）
+
+- `shell/TitleBar.tsx` 的配色是硬编码的 limbus 色值，浅色主题下与页面背景冲突 → 改主题 token。
+- `font-semibold` 在 Linux 上回退（宿主日志 `.SystemUIFont` weight 600 缺失），标题没有真正加粗 → P2 定字体族。
+- 侧栏无选中态、内容区留白过多 → P2/P3 落实。
 
 ## 2. 来源映射
 
@@ -81,7 +88,9 @@
 - [x] `nsh` CLI 已在开发机安装（0.5.0，`~/.nsh` + `~/.local/bin/nsh`）；本机访问 GitHub 需走代理（`http://127.0.0.1:7890`），CI 需要新步骤。
 - [x] `nsh check nsh-app` 通过（TypeScript 对着 `.nsh/types/aalc/native.d.ts` 校验）。
 - [x] `nsh test nsh-app` 通过：5 个用例（2 个 Rust 单测 + 3 个 TSX UI 用例）。
-- [ ] `nsh run nsh-app --target gpui` 需 GPU/显示环境，无头开发机上待在有桌面的机器验证。
+- [x] `nsh run nsh-app --target gpui` 已在无 GPU 机器上跑通：Xvfb + `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`（lavapipe）。截图见 `nsh-app/docs/shots/`。
+- [x] **mixed 模式会按应用构建宿主**：首次 `nsh test --target gpui` 花了 **11 分钟**编 `nsh-gpui-host`（NSH 引擎 + GPUI Fast + QuickJS + 我们的 crate），之后增量几分之一分钟。这意味着**任何要出包的机器（含 CI）都要有 Rust + 平台系统库**：Linux 需 GTK3 / WebKitGTK 4.1 / GStreamer / clang 的开发包。
+- [ ] 截图链路目前只在 Linux（Xvfb + lavapipe）验证；Windows/macOS 要走 `nsh test --target gpui` + `app.screenshot()`，且测试宿主窗口固定 390×800，拿不到桌面尺寸对照图，P3 前需要定方案。
 - [x] `cargo check` / `cargo fmt --check` / `cargo test --lib` 在 `nsh-app/native` 通过（nsh-core 0.5.0，Rust 1.99.1）。
 - [~] `nsh-testing` 的 `bundle` feature 在本机依赖链编译失败（`rolldown 1.2.13` 与 `rolldown_std_utils` 不兼容），因此原生侧暂不加 `nsh-testing`/`nsh-engine` 开发依赖；不阻塞 `nsh test`（它自己构建 headless runner），P1 需要 crate 级 UI 测试时再解决。
 - [ ] mixed 模式引入 QuickJS 后的发布包体积与冷启动时间（原 `gpui-app` 为纯 Rust）。

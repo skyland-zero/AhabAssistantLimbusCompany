@@ -87,6 +87,12 @@ nsh run nsh-app --target gpui
 
 页面改动的验收标准是与原客户端截图 1:1 对照（见 `MIGRATION.md` 的进度表），而不是「看起来差不多」。
 
+截图（Linux 无 GPU 也可以，Xvfb + Mesa lavapipe）：
+
+```bash
+python3 scripts/capture_nsh.py     # → nsh-app/docs/shots/p0-desktop.png
+```
+
 ## 7. 参考：项目级 Agent Skills
 
 仓库内置了 Native Shell 官方 Agent Skills（`.agents/skills/`，随仓库提交）：
