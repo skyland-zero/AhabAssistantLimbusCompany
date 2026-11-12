@@ -10,8 +10,8 @@ It reads the static token tables of the GPUI client -- the per-skin
 and the accent ramps / shapes in ``gpui-app/src/components/style/tokens.rs``
 -- and writes:
 
-    nsh-app/theme.json          the app's default theme (``default`` skin)
-    nsh-app/theme/<skin>.json   one theme per skin, for ``setTheme()``
+    nsh-app/theme.json              the app's boot theme (``default`` skin)
+    nsh-app/theme/skins.generated.ts  every skin x accent table, for ``setTheme()``
 
 Token names are the shadcn/ui CSS variable names NSH resolves classes
 against, so ``text-muted-foreground`` / ``bg-brand`` behave the same in TSX
@@ -29,7 +29,8 @@ TOKENS_RS = GPUI / "tokens.rs"
 SKINS_RS = GPUI / "palette" / "skins.rs"
 OUT_DIR = ROOT / "nsh-app"
 OUT_DEFAULT = OUT_DIR / "theme.json"
-OUT_DIR_SKINS = OUT_DIR / "theme"
+OUT_DIR_SKINS = OUT_DIR / "themes"
+OUT_TS = OUT_DIR_SKINS / "skins.generated.ts"
 
 # Rust field -> theme token name. ``accent_surface`` is shadcn's ``accent``:
 # the subtle surface behind hover and selection, not the brand colour.
@@ -85,6 +86,15 @@ SKIN_SLUG = {
     "Archive": "archive",
     "Mist": "mist",
     "Limbus": "limbus",
+}
+
+ACCENT_SLUG = {
+    "Crimson": "crimson",
+    "Blue": "blue",
+    "Amber": "amber",
+    "Emerald": "emerald",
+    "Violet": "violet",
+    "LimbusBrass": "limbus-brass",
 }
 
 SKIN_TITLE = {
@@ -203,6 +213,52 @@ def resolve(
     raise ValueError(f"unsupported token expression: {expression}")
 
 
+# Decoration tokens NSH needs but the GPUI `Palette` keeps as constants or
+# builds in code. They are theme tokens here so presentation code never writes a
+# colour literal: the card-header band (limbus), the skin's top-edge wash and
+# its grain (mist). `None` means "derive from the palette or the accent".
+#
+# `(skin, scheme)` -> {token: 0xRRGGBBAA or "glow"}. Limbus keeps the band
+# values from `palette/mod.rs` (`LIMBUS_BAND_*`); every other skin leaves the
+# band transparent because nothing draws it.
+DECOR_TOKENS: dict[tuple[str, str], dict[str, int | str]] = {
+    ("Limbus", "Dark"): {
+        "band-top": 0x3E0D0DFF,
+        "band-bottom": 0x240A0AFF,
+        "wash": 0x00000000,
+        "grain": 0x00000000,
+    },
+    ("Limbus", "Light"): {
+        "band-top": 0xE6DCC8FF,
+        "band-bottom": 0xD8C9ABFF,
+        "wash": 0x00000000,
+        "grain": 0x00000000,
+    },
+    # The mist wash is the accent-tinted red plate `skin_background` lays over
+    # the page; the grain is its 2%-white one-pixel hatch.
+    ("Mist", "Dark"): {"wash": 0x8C1D1D5C, "grain": 0xFFFFFF05},
+    ("Mist", "Light"): {"wash": 0x8C1D1D5C, "grain": 0xFFFFFF05},
+    # Glass paints its top wash from `glow`, which is accent-tinted.
+    ("Glass", "Dark"): {"wash": "glow"},
+    ("Glass", "Light"): {"wash": "glow"},
+}
+
+
+def resolve_decor(skin: str, scheme: str, accent: dict[str, int]) -> dict[str, str]:
+    """The decoration tokens for one skin and scheme, accent included."""
+    transparent = "rgba(0, 0, 0, 0.000)"
+    values: dict[str, str] = {}
+    for token in ("band-top", "band-bottom", "wash", "grain"):
+        value = DECOR_TOKENS.get((skin, scheme), {}).get(token, 0)
+        if value == "glow":
+            value = (accent["decor"] & 0x00FF_FFFF) << 8 | 0x3D
+        if isinstance(value, int) and value & 0xFF == 0:
+            values[token] = transparent
+        else:
+            values[token] = css(int(value))
+    return values
+
+
 def css(value: int) -> str:
     red, green, blue, alpha = (
         (value >> 24) & 0xFF,
@@ -215,6 +271,28 @@ def css(value: int) -> str:
     return f"rgba({red}, {green}, {blue}, {alpha / 255:.3f})"
 
 
+def resolve_scheme(
+    skin: str,
+    scheme: str,
+    accent_id: str,
+    palettes: dict[tuple[str, str], dict[str, str]],
+    accents: dict[tuple[str, str], dict[str, int]],
+    locals_: dict[str, str],
+) -> dict[str, str]:
+    """Every colour token of one skin, scheme and accent, in CSS form."""
+    palette = palettes.get((skin, scheme))
+    if palette is None:
+        raise ValueError(f"missing Palette arm for {skin}/{scheme}")
+    accent = accents[(accent_id, scheme)]
+    resolved: dict[str, str] = {}
+    for field, token in FIELD_TO_TOKEN.items():
+        if field not in palette:
+            raise ValueError(f"{skin}/{scheme}: palette has no field {field}")
+        resolved[token] = css(resolve(palette[field], accent, locals_))
+    resolved.update(resolve_decor(skin, scheme, accent))
+    return resolved
+
+
 def build_theme(
     name: str,
     skin: str,
@@ -223,23 +301,116 @@ def build_theme(
     shapes: dict[str, dict[str, int]],
     locals_: dict[str, str],
 ) -> dict[str, object]:
-    accent_id = SKIN_ACCENT[skin]
-    theme_vars: dict[str, str] = {}
-    for token, points in shapes[skin].items():
-        theme_vars[token] = f"{points}px"
+    theme_vars = {token: f"{points}px" for token, points in shapes[skin].items()}
     css_vars: dict[str, dict[str, str]] = {"theme": theme_vars}
     for scheme in ("Light", "Dark"):
-        palette = palettes.get((skin, scheme))
-        if palette is None:
-            raise ValueError(f"missing Palette arm for {skin}/{scheme}")
-        accent = accents[(accent_id, scheme)]
-        resolved: dict[str, str] = {}
-        for field, token in FIELD_TO_TOKEN.items():
-            if field not in palette:
-                raise ValueError(f"{skin}/{scheme}: palette has no field {field}")
-            resolved[token] = css(resolve(palette[field], accent, locals_))
-        css_vars[scheme.lower()] = resolved
+        css_vars[scheme.lower()] = resolve_scheme(
+            skin, scheme, SKIN_ACCENT[skin], palettes, accents, locals_
+        )
     return {"name": name, "cssVars": css_vars}
+
+
+def ts_tokens(tokens: dict[str, str], indent: str) -> str:
+    lines = ["{"]
+    for token, value in tokens.items():
+        lines.append(f'{indent}  "{token}": "{value}",')
+    lines.append(f"{indent}}}")
+    return "\n".join(lines)
+
+
+def build_ts(
+    palettes: dict[tuple[str, str], dict[str, str]],
+    accents: dict[tuple[str, str], dict[str, int]],
+    shapes: dict[str, dict[str, int]],
+    locals_: dict[str, str],
+) -> str:
+    """The skin x accent table the app composes its runtime theme from."""
+    accent_slugs = {accent: slug for accent, slug in ACCENT_SLUG.items()}
+    skins = list(SKIN_SLUG)
+
+    out = [
+        "// Generated by `python3 scripts/export_nsh_theme.py` from the GPUI",
+        "// palette tables. Do not edit: rerun the script instead.",
+        "//",
+        "// `SKIN_TOKENS` holds every colour token of each skin and appearance for",
+        "// the accent that skin ships with; `ACCENT_OVERRIDES` holds only what",
+        "// another accent changes, so `theme/index.ts` can compose skin x accent",
+        "// at run time instead of carrying 5 x 6 copies of the same table.",
+        "",
+        "export type SkinName = "
+        + " | ".join(f'"{SKIN_SLUG[skin]}"' for skin in skins)
+        + ";",
+        'export type AccentName = "'
+        + '" | "'.join(accent_slugs[accent] for accent in ACCENT_SLUG)
+        + '";',
+        "",
+        "/** Colour tokens by the theme's CSS variable name, without the `--`. */",
+        "export type SchemeTokens = Record<string, string>;",
+        "",
+        "/** Radius scale per skin, in points. */",
+        "export const SKIN_RADII: Record<SkinName, Record<string, string>> = {",
+    ]
+    for skin in skins:
+        key = SKIN_SLUG[skin]
+        radii = ", ".join(f'"{token}": "{points}px"' for token, points in shapes[skin].items())
+        out.append(f'  "{key}": {{ {radii} }},')
+    out += [
+        "};",
+        "",
+        "/** The accent a skin is designed around (Limbus is brass, the rest crimson). */",
+        "export const SKIN_DEFAULT_ACCENT: Record<SkinName, AccentName> = {",
+    ]
+    for skin in skins:
+        out.append(f'  "{SKIN_SLUG[skin]}": "{accent_slugs[SKIN_ACCENT[skin]]}",')
+    out += [
+        "};",
+        "",
+        "/** Every colour token of each skin, for its own accent. */",
+        "export const SKIN_TOKENS: Record<SkinName, { light: SchemeTokens; dark: SchemeTokens }> = {",
+    ]
+    for skin in skins:
+        default = SKIN_ACCENT[skin]
+        out.append(f'  "{SKIN_SLUG[skin]}": {{')
+        for scheme in ("Light", "Dark"):
+            tokens = resolve_scheme(skin, scheme, default, palettes, accents, locals_)
+            out.append(f"    {scheme.lower()}: {ts_tokens(tokens, '    ')},")
+        out.append("  },")
+    out += [
+        "};",
+        "",
+        "/** What an accent other than the skin's own changes (empty when it is the same). */",
+        "export const ACCENT_OVERRIDES: Record<",
+        "  SkinName,",
+        "  Partial<Record<AccentName, { light?: SchemeTokens; dark?: SchemeTokens }>>",
+        "> = {",
+    ]
+    for skin in skins:
+        out.append(f'  "{SKIN_SLUG[skin]}": {{')
+        default = SKIN_ACCENT[skin]
+        base = {
+            scheme: resolve_scheme(skin, scheme, default, palettes, accents, locals_)
+            for scheme in ("Light", "Dark")
+        }
+        for accent in ACCENT_SLUG:
+            if accent == default:
+                continue
+            diffs = {}
+            for scheme in ("Light", "Dark"):
+                tokens = resolve_scheme(skin, scheme, accent, palettes, accents, locals_)
+                diffs[scheme.lower()] = {
+                    token: value
+                    for token, value in tokens.items()
+                    if base[scheme].get(token) != value
+                }
+            out.append(f'    "{accent_slugs[accent]}": {{')
+            for scheme_key, tokens in diffs.items():
+                if not tokens:
+                    continue
+                out.append(f"      {scheme_key}: {ts_tokens(tokens, '      ')},")
+            out.append("    },")
+        out.append("  },")
+    out.append("};")
+    return "\n".join(out) + "\n"
 
 
 def main() -> None:
@@ -263,17 +434,18 @@ def main() -> None:
     OUT_DIR_SKINS.mkdir(parents=True, exist_ok=True)
     import json
 
-    for skin, slug in SKIN_SLUG.items():
-        theme = build_theme(SKIN_TITLE[skin], skin, palettes, accents, shapes, locals_)
-        target = OUT_DEFAULT if skin == "Default" else OUT_DIR_SKINS / f"{slug}.json"
-        target.write_text(
-            json.dumps(theme, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
-        print(f"wrote {target.relative_to(ROOT)}")
+    theme = build_theme(SKIN_TITLE["Default"], "Default", palettes, accents, shapes, locals_)
+    OUT_DEFAULT.write_text(
+        json.dumps(theme, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(f"wrote {OUT_DEFAULT.relative_to(ROOT)}")
+
+    OUT_TS.write_text(build_ts(palettes, accents, shapes, locals_), encoding="utf-8")
+    print(f"wrote {OUT_TS.relative_to(ROOT)}")
 
     print(
-        f"exported {len(SKIN_SLUG)} skins x 2 schemes x "
-        f"{len(FIELD_TO_TOKEN)} colour tokens"
+        f"exported {len(SKIN_SLUG)} skins x {len(ACCENT_SLUG)} accents x 2 schemes, "
+        f"{len(FIELD_TO_TOKEN)} colour tokens + {len(DECOR_TOKENS[('Limbus', 'Dark')])} decoration tokens"
     )
 
 

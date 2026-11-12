@@ -41,7 +41,11 @@
       "brand": "#c8354f",
       "brand-hover": "#a92b42",
       "brand-light": "#fbe9ec",
-      "brand-foreground": "#fafafa"
+      "brand-foreground": "#fafafa",
+      "band-top": "rgba(0, 0, 0, 0.000)",
+      "band-bottom": "rgba(0, 0, 0, 0.000)",
+      "wash": "rgba(0, 0, 0, 0.000)",
+      "grain": "rgba(0, 0, 0, 0.000)"
     },
     "dark": {
       "background": "#0a0707",
@@ -77,7 +81,11 @@
       "brand": "#e05a72",
       "brand-hover": "#c8354f",
       "brand-light": "#3a1e24",
-      "brand-foreground": "#2a0c12"
+      "brand-foreground": "#2a0c12",
+      "band-top": "rgba(0, 0, 0, 0.000)",
+      "band-bottom": "rgba(0, 0, 0, 0.000)",
+      "wash": "rgba(0, 0, 0, 0.000)",
+      "grain": "rgba(0, 0, 0, 0.000)"
     }
   }
 }

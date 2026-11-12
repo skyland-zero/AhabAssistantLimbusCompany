@@ -10,8 +10,8 @@
   "singleInstance": true,
   "window": {
     "title": "AALC",
-    "defaultSize": { "width": 1100, "height": 720 },
-    "minSize": { "width": 960, "height": 640 },
+    "defaultSize": { "width": 820, "height": 680 },
+    "minSize": { "width": 800, "height": 560 },
     "titleBar": { "style": "hidden" }
   },
   "capabilities": {

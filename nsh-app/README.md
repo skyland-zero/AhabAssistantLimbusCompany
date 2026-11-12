@@ -3,7 +3,8 @@
 AALC 的新前端：**Rust 后端（`native/`）+ TSX 前端**，基于 [Native Shell](https://nsh.dev)。
 界面按原 GPUI 客户端 1:1 重写，迁移完成后 `gpui-app/` 会被删除。
 
-开发约定见 [AGENTS.md](./AGENTS.md)，迁移进度与来源映射见 [MIGRATION.md](./MIGRATION.md)。
+开发约定见 [AGENTS.md](./AGENTS.md)，迁移进度与来源映射见 [MIGRATION.md](./MIGRATION.md)，
+设计标准（token、尺度、组件契约、动效清单）见 [DESIGN.md](./DESIGN.md)。
 
 ## 环境
 
@@ -42,17 +43,20 @@ Rust 改动会重启应用，TSX 改动是热更新。
 
 ```text
 nsh.json         应用清单（窗口、图标、主题、capabilities、Rust crate）
-App.tsx          入口：mount(App)
-theme.json       默认主题（其余皮肤在 theme/）
+App.tsx          入口：mount(App)，只做窗口壳与页面宿主
+store.ts         屏幕级共享状态（当前页面、外观），信号私有、只暴露函数
+theme.json       默认主题（启动用；其余皮肤在 themes/）
 native/          Rust 后端 crate —— RPC、状态、领域模型、i18n
-shell/           标题栏、侧栏、Toast
-components/      设计系统
-pages/           页面
-assets/          随包资源
+shell/           标题栏、状态点、Toast
+components/      应用自己的 ui 层（Button/Card/Badge/Icon/Page/EmptyState）
+pages/           页面（含开发期的组件对照页 Gallery.tsx）
+assets/          随包资源（icons/ 为 Lucide SVG）
 ```
 
 ## 主题
 
-`theme.json` 与 `theme/*.json` 是从原 GPUI 调色板机械导出的 shadcn `cssVars`
-（5 皮肤 × 浅/深 × 34 个颜色 token）。导出脚本为 `scripts/export_nsh_theme.py`，
-随 `gpui-app/` 一起在 P5 删除；之后主题**只在本目录维护**。
+`theme.json` 与 `themes/skins.generated.ts` 是从原 GPUI 调色板机械导出的 shadcn `cssVars`
+（5 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token，另加 6 个强调色的差异表）。
+`themes/index.ts` 在运行时合成「皮肤 × 强调色」并调 `setTheme()`。
+导出脚本为 `scripts/export_nsh_theme.py`，随 `gpui-app/` 一起在 P5 删除；
+之后主题**只在本目录维护**（重跑脚本会覆盖 `theme.json` 与 `skins.generated.ts`）。
