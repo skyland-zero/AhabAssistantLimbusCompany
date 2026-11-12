@@ -2,13 +2,14 @@
 
 ## 1. 本分支工作范围
 
-`dev-gpui` 分支的产品形态是 **Rust/GPUI 桌面端 + Python 无界面后端（sidecar）**。日常开发只围绕这两块，其他历史代码保持上游原样。
+`dev-nsh` 分支的产品形态是 **Rust/Native Shell 桌面端 + Python 无界面后端（sidecar）**。前端用 Native Shell 重写（`nsh-app/`：Rust 后端 + TSX 前端），旧 GPUI 客户端 `gpui-app/` 自迁移开始冻结、只作截图对照基线，迁移完成后删除。日常开发围绕 `nsh-app/` 与 Python 后端，其他历史代码保持上游原样。
 
 ### 1.1 主要改动区域
 
 | 区域 | 负责内容 | 规范 |
 | --- | --- | --- |
-| `gpui-app/` | 窗口、页面、组件、主题、状态、IPC 客户端和发布资源 | 先读 `gpui-app/AGENTS.md` |
+| `nsh-app/` | 窗口、页面、组件、主题、状态、IPC 客户端和发布资源；Rust 后端在 `nsh-app/native/`，界面在 TSX | 先读 `nsh-app/AGENTS.md` 与 `nsh-app/MIGRATION.md` |
+| `gpui-app/` | 迁移前的旧客户端，**冻结**：只允许为了对照/取素材而读取，不再改代码或加功能 | 见 `gpui-app/AGENTS.md`（历史约定） |
 | Python 后端 | sidecar/Runner 入口、RPC 契约与分发、设备、任务编排、资源同步、预览、热键和更新 | 保持无界面，不导入 Qt |
 
 Python 后端的主要入口：
@@ -18,7 +19,7 @@ Python 后端的主要入口：
 - `module/rpc_contract.py`、`module/rpc_dispatcher.py`、`module/websocket_server.py`：RPC 契约与传输；
 - `module/backend_application.py`、`module/backend_services/`、`module/execution/`、`module/device_manager.py`、`module/preview_capture.py`、`module/resource_sync/`：后端服务。
 
-跨两端的接口以 `contract/contract.json` 为准。新增或修改 RPC 时，先改契约，再同步 `gpui-app/src/ipc/contract.rs`、`module/rpc_contract.py`、Mock 和契约测试。
+跨两端的接口以 `contract/contract.json` 为准。新增或修改 RPC 时，先改契约，再同步 `nsh-app/native/src/ipc/contract.rs`、`module/rpc_contract.py`、Mock 和契约测试；`gpui-app/` 删除前，其 `src/ipc/contract.rs` 与 mock 也要同步，否则现有客户端会与后端脱节。
 
 ### 1.2 沿用的上游代码
 
@@ -27,8 +28,9 @@ Python 后端的主要入口：
 ### 1.3 不在本分支范围
 
 - 旧 Qt 界面（`app/`）已在产品分支删除，不恢复、不补功能。
-- 与本分支目标无关的文档、资源、脚本和上游业务优化不在本分支处理；只有 GPUI 或后端功能确实依赖时才同步修改。
-- 判断标准：一项改动如果落不到 `gpui-app/` 或 Python 后端，就先确认它是否真的属于本分支。
+- 与本分支目标无关的文档、资源、脚本和上游业务优化不在本分支处理；只有 `nsh-app/` 或后端功能确实依赖时才同步修改。
+- 判断标准：一项改动如果落不到 `nsh-app/` 或 Python 后端，就先确认它是否真的属于本分支。
+- `nsh-app/` 不得引用 `gpui-app/` 的任何文件：`python3 scripts/check_no_gpui_app_refs.py` 必须在提交前通过（该脚本 P4.5 起作为门禁，P5 后无白名单）。
 
 ## 2. 镜牢 E.G.O 饰品图标（从 wiki 取图）
 
@@ -93,12 +95,13 @@ assets/images/default/share/mirror/ego_gifts/{gift_id}.png
 
 | 分支 | 角色 | 说明 |
 | --- | --- | --- |
-| `dev-gpui` | **日常开发分支** | 所有本地改动、提交都提交到这里，并推送到 `origin/dev-gpui` |
-| `main` | **上游同步分支** | 只用来拉取上游更新，保持与 `origin/main` 一致，**不在 `main` 上提交任何本地改动** |
-| `feat/gpui-kit-0.8` | 创建 `dev-gpui` 时的起点 | 只是当时最新提交所在的分支，`dev-gpui` 从它拉出；它不是长期基线，不需要特殊维护 |
+| `dev-nsh` | **日常开发分支** | 所有本地改动、提交都提交到这里，并推送到 `origin/dev-nsh` |
+| `main` | **上游同步分支** | 只用来拉取上游更新，保持与 `upstream/main` 一致，**不在 `main` 上提交任何本地改动** |
+| `dev-gpui` | **冻结基线** | 迁移前基于 GPUI 的客户端，只用于界面/行为对照和取素材；不再合入新功能 |
+| `feat/gpui-kit-0.8` | 历史起点 | 当时创建 `dev-gpui` 的起点分支，已删除，不需要维护 |
 
 约定：
 
-- 开始工作前先确认当前在 `dev-gpui` 分支，不要直接在 `main` 上修改代码。
-- 同步上游流程：切到 `main` 执行 `git pull`（或 `git fetch`）后，再切回 `dev-gpui` 合并或变基，`main` 本身不产生新提交。
+- 开始工作前先确认当前在 `dev-nsh` 分支，不要直接在 `main` 上修改代码。
+- 同步上游流程：切到 `main` 执行 `git pull`（`main` 已跟踪 `upstream/main`）后，再切回 `dev-nsh` 合并或变基，`main` 本身不产生新提交。
 - 如果 `main` 出现任何本地提交或未提交改动，应先处理干净再继续，保持其作为纯上游镜像。
