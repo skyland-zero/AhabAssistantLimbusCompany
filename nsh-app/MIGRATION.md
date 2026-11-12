@@ -24,7 +24,7 @@
 - `App.tsx`：窗口壳 + 占位页面宿主 + Rust 版本回显；`shell/TitleBar.tsx` 自绘标题栏（`windowDrag`）。P0 当时把导航做成了左侧栏，**与 GPUI 客户端的真实结构不符**（真实结构是标题栏内的 6 个导航项 + 右侧设置/外观/窗口按钮，没有侧栏），已在 P2 第一轮纠正。
 - `App.test.tsx`：`nsh test` 冒烟用例（骨架渲染、侧栏切页、Rust 模块可调用）。
 - `assets/`：原 `gpui-app/resources/assets/` 全量复制（logo、横幅、12 立绘、11 状态图、limbus 主题、2 篇帮助文档）+ `app-icon.png`。
-- **截图链路已打通**：`scripts/capture_nsh.py` 在 Xvfb + Mesa lavapipe（软件 Vulkan）里跑 `nsh run --target gpui`，抓 X11 根窗口，产出 `nsh-app/docs/shots/p0-desktop.png`（1100×720）。无 GPU 机器也能出真实渲染图。
+- **截图链路已打通**：`scripts/capture_nsh.py` 在 Xvfb + Mesa lavapipe（软件 Vulkan）里跑 `nsh run --target gpui`，抓 X11 根窗口，产出 `nsh-app/docs/shots/*.png`（统一 820×680，与旧客户端对照图同视口）。无 GPU 机器也能出真实渲染图。
 
 ### P0 截图发现的问题（转 P2）
 

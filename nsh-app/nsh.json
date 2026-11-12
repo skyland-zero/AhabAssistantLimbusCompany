@@ -10,13 +10,24 @@
   "singleInstance": true,
   "window": {
     "title": "AALC",
-    "defaultSize": { "width": 820, "height": 680 },
-    "minSize": { "width": 800, "height": 560 },
-    "titleBar": { "style": "hidden" }
+    "defaultSize": {
+      "width": 820,
+      "height": 680
+    },
+    "minSize": {
+      "width": 800,
+      "height": 560
+    },
+    "titleBar": {
+      "style": "hidden"
+    }
   },
   "capabilities": {
     "network": {
-      "hosts": ["127.0.0.1", "localhost"]
+      "hosts": [
+        "127.0.0.1",
+        "localhost"
+      ]
     },
     "statusBar": true,
     "windows": true

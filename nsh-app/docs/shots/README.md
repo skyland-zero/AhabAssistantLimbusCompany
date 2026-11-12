@@ -1,53 +1,54 @@
 # 截图基线
 
-P0 骨架在 GPUI 开发宿主里的真实渲染结果，作为 P2/P3 逐页重写的对照基准。
+`nsh-app` 在 GPUI 开发宿主里的真实渲染结果。**统一 820×680** —— 与旧客户端的默认窗口
+（`gpui-app/src/main.rs`：`Bounds::centered(None, size(px(820.), px(680.)), cx)`，最小 800×560）
+以及 `docs/reference/gpui/` 的对照图同一个视口，`nsh.json` 的 `window` 已对齐。
 
-尺寸统一为 **820×680** —— 原 GPUI 客户端的默认窗口（`gpui-app/src/main.rs`：`size(px(820.), px(680.))`，最小 800×560），
-`nsh-app/nsh.json` 的 `window` 已对齐。
+| 文件 | 内容 |
+| --- | --- |
+| `home-light.png` / `home-dark.png` | 主控台（P3 待迁入的占位） |
+| `gallery-light.png` / `gallery-dark.png` | 组件对照页：变体 / 尺寸 / 状态 / 图标 / token 色板 / 圆角 |
+| `skin-archive-light.png` | Archive 皮肤（纸张与墨线，无阴影） |
+| `skin-glass-dark.png` | Glass 皮肤（半透明层叠、发丝高光、大圆角） |
+| `skin-limbus-dark.png` | Limbus 皮肤（暗色羊皮纸、黄铜角框、红色印章） |
+| `skin-mist-dark.png` | Mist 皮肤 |
+| `titlebar-light.png` | 标题栏：品牌、6 个导航项、状态点、外观切换、设置、窗口按钮 |
 
-| 文件 | 尺寸 | 怎么来的 |
-| --- | --- | --- |
-| `p0-desktop.png` | 820×680 | `nsh run nsh-app --target gpui --window-size 820x680`，在 Xvfb + lavapipe（软件 Vulkan）里跑，抓 X11 根窗口 |
-
-重新生成（Linux，无需 GPU）：
-
-```bash
-python3 scripts/capture_nsh.py                        # → nsh-app/docs/shots/p0-desktop.png
-python3 scripts/capture_nsh.py --size 1400x900 --out /tmp/big.png
-```
-
-跨平台（Windows/macOS，需要能显示窗口的会话）用 nsh 自带的截图 API：
+## 重新生成（Linux，无需 GPU）
 
 ```bash
-printf 'await app.screenshot("nsh-app/docs/shots/p0-test-host.png")\n' \
-  | nsh test nsh-app/App.tsx --target gpui
+python3 scripts/capture_nsh.py --size 820x680 --out nsh-app/docs/shots/home-light.png
 ```
 
-注意：`nsh test` 的宿主窗口尺寸固定（390×800），桌面尺寸的对照图要走 `nsh run --window-size`。
+`capture_nsh.py` 会自己起 Xvfb（屏幕尺寸 = 窗口尺寸，产物无桌面留白）、设置
+`VK_ICD_FILENAMES` 指向 Mesa 的 lavapipe 软件 Vulkan、等宿主 `connected` 后抓 X11 根窗口，
+结束清理进程组。
 
-## 原客户端的对照图
-
-同一台机器上原 GPUI 客户端也能无头出图（mock 后端，不需要 Python sidecar）：
+**换页面 / 外观 / 皮肤**目前靠临时改 `store.ts` 的初始值（拍完 `git checkout` 还原）：
 
 ```bash
-cargo build --manifest-path gpui-app/Cargo.toml     # 首次 ~11 分钟
-export PATH="$HOME/.local/bin:$PATH"
-python3 scripts/capture_gpui.py --all               # → artifacts/visual/gpui/{page}-{light,dark}.png
-python3 scripts/capture_gpui.py --page home --state home-running
+# page: home | teams | theme-packs | toolbox | resources | help | settings | gallery
+sed -i 's|const page = signal<PageId>("home");|const page = signal<PageId>("gallery");|' nsh-app/store.ts
+# appearance: light | dark | system
+sed -i 's|const appearance = signal<Appearance>("system");|const appearance = signal<Appearance>("dark");|' nsh-app/store.ts
+# skin: default | glass | archive | limbus | mist
+sed -i 's|const skin = signal<SkinName>("default");|const skin = signal<SkinName>("limbus");|' nsh-app/store.ts
+
+python3 scripts/capture_nsh.py --size 820x680 --out nsh-app/docs/shots/skin-limbus-dark.png
+git checkout nsh-app/store.ts
 ```
 
-原客户端自带一套可视化捕获开关（`AHAB_VISUAL_PAGE` / `_STATE` / `_THEME` / `_LANGUAGE` / `_SKIN` / `_ACCENT`），
-Windows 版驱动脚本是 `gpui-app/scripts/capture_visual.ps1`，`scripts/capture_gpui.py` 是它的 Linux 等价实现。
+> P3 之前值得加一个正式的捕获入口（`nsh test` 步骤驱动导航 + `app.screenshot()`，
+> 或者让 `store.ts` 的初始值可从外部覆盖），这样就不用手改源码了。
 
-一组 14 张（7 页 × 浅/深，820×680）已归档进仓库：**`nsh-app/docs/reference/gpui/`**，
-`gpui-app/` 删掉后仍然可以对照。随手实验的图仍写到 `artifacts/`（仓库忽略）。
+## 与原客户端的对照
 
-## P0 截图暴露的问题（转 P2）
+`docs/reference/gpui/` 存着旧客户端的 7 页 × 浅/深（同为 820×680）参考图，
+P3 逐页迁移时按同名文件两两对照（`home-light.png` ↔ `reference/gpui/home-light.png` 等）。
+参考图生成方式见 `docs/reference/gpui/README.md`。
 
-- **窗口壳结构不对**：原客户端是**顶部标签栏**（主控台 / 队伍管理 / 镜牢主题包 / 工具箱 / 资源中心 / 帮助，
-  右侧是设置、主题与窗口按钮）+ 页面内底部操作栏；P0 占位用的是左侧栏。P2 按 `docs/reference/gpui/*.png` 重做。
-- **标题栏配色硬编码**（`shell/TitleBar.tsx` 里的 `#1b1114` / `#d8d0bc` / `#462c2c`，取自 limbus 皮肤），
-  浅色主题下与页面背景冲突。P2 改走主题 token（`bg-card` / `border-border` / `text-foreground`）。
+## 已知问题（P2/P3 要修）
+
 - **`font-semibold` 在 Linux 上回退**：宿主日志 `failed to load font ... ".SystemUIFont" ... weight 600`，
-  标题没有真正加粗。P2 定下字体族后显式声明，或改用宿主存在的字重。
-- 侧栏无选中态、内容区留白过多：P0 占位，P2/P3 落实。
+  标题没有真正加粗。定下字体族后显式声明，或改用宿主存在的字重。
+- 页面内容还是占位：P3 逐页迁入，底座与标题栏已就位。
