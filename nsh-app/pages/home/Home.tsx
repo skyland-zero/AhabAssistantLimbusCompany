@@ -31,6 +31,8 @@ import {
   isAsyncInput,
   logEntries,
   logLines,
+  openLogDetails,
+  openStatsDetails,
   pollPreview,
   refreshDevices,
   selectAllTasks,
@@ -41,6 +43,7 @@ import {
   toggleTask,
 } from "../../home";
 import type { Task, TaskParam } from "../../home";
+import { LogDetailsDialog, StatsDetailsDialog } from "./HomeDetails";
 
 /** The rail's width: the device, preview and log column. */
 const RAIL = "w-56";
@@ -79,6 +82,8 @@ export function Home() {
           <LogCard />
         </View>
       </View>
+      <StatsDetailsDialog />
+      <LogDetailsDialog />
     </PageRoot>
   );
 }
@@ -128,7 +133,13 @@ function StatsCard() {
             <Icon name="target" size={14} color={token("brand")} />
             <Text class="text-xs font-medium text-foreground">周期统计（今日/本周）</Text>
           </View>
-          <Button label="明细" variant="ghost" size="xs" />
+          <Button
+            label="明细"
+            variant="ghost"
+            size="xs"
+            testID="stats-daily-details"
+            onPress={() => openStatsDetails("daily")}
+          />
         </View>
         <View class="w-full flex-row gap-4">
           <StatColumn
@@ -149,7 +160,13 @@ function StatsCard() {
             <Icon name="target" size={14} color={token("brand")} />
             <Text class="text-xs font-medium text-foreground">上次镜牢</Text>
           </View>
-          <Button label="明细" variant="ghost" size="xs" />
+          <Button
+            label="明细"
+            variant="ghost"
+            size="xs"
+            testID="stats-last-mirror-details"
+            onPress={() => openStatsDetails("mirror")}
+          />
         </View>
         <Text class="text-center text-xs text-muted-foreground">
           {stats().lastMirror ?? "暂无完成记录"}
@@ -380,14 +397,23 @@ function LogCard() {
             <Text class="text-xs font-medium text-foreground">运行日志</Text>
             <Badge label={String(logLines())} />
           </View>
-          <Button
-            label="清空"
-            icon="eraser"
-            variant="ghost"
-            size="xs"
-            testID="clear-log"
-            onPress={() => clearLog()}
-          />
+          <View class="flex-row items-center gap-1">
+            <Button
+              label="明细"
+              variant="ghost"
+              size="xs"
+              testID="log-details"
+              onPress={() => openLogDetails()}
+            />
+            <Button
+              label="清空"
+              icon="eraser"
+              variant="ghost"
+              size="xs"
+              testID="clear-log"
+              onPress={() => clearLog()}
+            />
+          </View>
         </View>
         <Scroll class="min-h-0 flex-1">
           <View class="flex-col gap-1">

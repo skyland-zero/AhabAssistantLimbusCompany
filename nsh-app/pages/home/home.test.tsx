@@ -47,6 +47,31 @@ test("starting the queue says what it did", async () => {
   expect(app.texts()).toContain("F10");
 });
 
+test("the statistics cards open their detail dialogs", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:stats-daily-details");
+  await app.waitFor("每日刷本明细");
+  await app.waitFor("暂无每日数据");
+  await app.press("id:stats-details-close");
+  await app.press("id:stats-last-mirror-details");
+  await app.waitFor("镜牢完成记录");
+  await app.waitFor("暂无镜牢完成记录");
+  await app.press("id:stats-details-close");
+});
+
+test("the log card opens a full run-log dialog", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:log-details");
+  await app.waitFor("运行日志明细");
+  await app.waitFor("暂无日志");
+  await app.press("id:log-details-close");
+  await app.press("id:link-start");
+  await app.waitFor("Mock 任务已开始");
+  await app.press("id:log-details");
+  await app.waitFor("运行日志明细");
+  expect(app.texts()).toContain("Mock 任务已开始");
+});
+
 test("the window card cycles resolution and async input", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("id:window-resolution");

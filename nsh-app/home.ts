@@ -36,6 +36,36 @@ export type Task = {
 /** One log line. */
 export type LogEntry = { level: string; message: string; ts: number };
 
+/** One day of the daily statistics. */
+export type DailyStatEntry = {
+  date: string;
+  exp: number;
+  thread: number;
+  mirror: number;
+  total: number;
+};
+
+/** The daily statistics dialog payload. */
+export type DailyStats = {
+  dateFrom: string;
+  dateTo: string;
+  days: DailyStatEntry[];
+  updatedAt: number;
+};
+
+/** One completed (or failed) mirror run. */
+export type MirrorHistoryEntry = {
+  completedAt: string;
+  totalSeconds: number;
+  hardMode: boolean;
+  failed?: boolean;
+  team?: { name?: string; number?: number } | null;
+  failureReason?: string | null;
+};
+
+/** Which statistics dialog is open. */
+export type StatsDetailsMode = "daily" | "mirror";
+
 const DEFAULT_TASKS: Task[] = [
   {
     id: "daily",
@@ -159,6 +189,10 @@ const feedback = signal<string | null>(null);
 const tasks = signal<Task[]>(DEFAULT_TASKS.map((task) => ({ ...task })));
 const previewFrame = signal<string | null>(null);
 const previewStatus = signal("stopped");
+const statsDetailsMode = signal<StatsDetailsMode | null>(null);
+const dailyStats = signal<DailyStats | null>(null);
+const statsDetailsError = signal<string | null>(null);
+const logDetailsOpen = signal(false);
 
 let store: HomeStore | null = null;
 let connecting = false;
@@ -498,4 +532,62 @@ export function consoleStats(): {
     week: { exp: stats.weekExp, thread: stats.weekThread, mirror: stats.weekMirror },
     lastMirror: stats.lastMirror ?? null,
   };
+}
+
+/** The statistics dialog currently open, or `null` (tracked). */
+export function currentStatsDetails(): StatsDetailsMode | null {
+  return statsDetailsMode();
+}
+
+/** The daily statistics loaded for the dialog (tracked). */
+export function currentDailyStats(): DailyStats | null {
+  return dailyStats();
+}
+
+/** The daily statistics load error, when there is one (tracked). */
+export function currentStatsDetailsError(): string | null {
+  return statsDetailsError();
+}
+
+/** Opens one of the two statistics detail dialogs. */
+export function openStatsDetails(mode: StatsDetailsMode): void {
+  statsDetailsMode.set(mode);
+  statsDetailsError.set(null);
+  dailyStats.set(null);
+  if (mode !== "daily") return;
+  const current = ensureStore();
+  if (!current) return;
+  try {
+    dailyStats.set(current.dailyStats() as DailyStats);
+  } catch (error) {
+    statsDetailsError.set(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Closes the statistics dialog. */
+export function closeStatsDetails(): void {
+  statsDetailsMode.set(null);
+}
+
+/** The mirror run history shown in the "上次镜牢" dialog (tracked). */
+export function mirrorHistory(): MirrorHistoryEntry[] {
+  const current = ensureStore();
+  if (!current) return [];
+  const payload = current.statsPayload() as { mirrorHistory?: MirrorHistoryEntry[] };
+  return payload.mirrorHistory ?? [];
+}
+
+/** Whether the full log dialog is open (tracked). */
+export function isLogDetailsOpen(): boolean {
+  return logDetailsOpen();
+}
+
+/** Opens the full log dialog. */
+export function openLogDetails(): void {
+  logDetailsOpen.set(true);
+}
+
+/** Closes the full log dialog. */
+export function closeLogDetails(): void {
+  logDetailsOpen.set(false);
 }

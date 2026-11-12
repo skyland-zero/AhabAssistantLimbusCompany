@@ -14,7 +14,7 @@ use crate::{
         contract::{event, method},
     },
     model::{
-        ConnectionStatus, DeviceInfo, ExecutionState, ExecutionStatsPayload,
+        ConnectionStatus, DailyStatsPayload, DeviceInfo, ExecutionState, ExecutionStatsPayload,
         ExecutionStatusPayload, LogEntryPayload, PreviewStatus, PreviewStatusPayload, TasksConfig,
     },
 };
@@ -355,6 +355,19 @@ impl HomeState {
     pub fn poll_preview(&mut self) -> (PreviewStatus, Option<&PreviewFrame>) {
         self.drain_events();
         (self.preview_status, self.preview_frame.as_ref())
+    }
+
+    /// The full statistics payload, including mirror history, for the detail
+    /// dialogs.
+    pub fn stats_payload(&self) -> Value {
+        serde_json::to_value(&self.stats).unwrap_or(Value::Null)
+    }
+
+    /// Load the daily statistics for the detail dialog.
+    pub fn load_daily_stats(&mut self) -> Result<DailyStatsPayload, String> {
+        self.rpc
+            .request(method::STATS_GET_DAILY_SUMMARY, None)
+            .map_err(|error| error.message)
     }
 
     pub fn clear_logs(&mut self) {

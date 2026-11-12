@@ -58,7 +58,28 @@ function editorTest(name: string, scheme: "light" | "dark"): void {
   });
 }
 
+function detailsTest(name: string, scheme: "light" | "dark"): void {
+  test(name, async () => {
+    const app = await open("./App.tsx", { ...DESKTOP, colorScheme: scheme });
+    await app.press("id:stats-daily-details");
+    await app.waitFor("每日刷本明细");
+    await shot(app, `${scheme}-stats-daily`);
+    await app.press("id:stats-details-close");
+    await app.press("id:stats-last-mirror-details");
+    await app.waitFor("镜牢完成记录");
+    await shot(app, `${scheme}-stats-mirror`);
+    await app.press("id:stats-details-close");
+    await app.press("id:link-start");
+    await app.waitFor("Mock 任务已开始");
+    await app.press("id:log-details");
+    await app.waitFor("运行日志明细");
+    await shot(app, `${scheme}-log-details`);
+  });
+}
+
 pagesTest("visual baseline: pages in light", "light");
 pagesTest("visual baseline: pages in dark", "dark");
 editorTest("visual baseline: team editor in light", "light");
 editorTest("visual baseline: team editor in dark", "dark");
+detailsTest("visual baseline: console details in light", "light");
+detailsTest("visual baseline: console details in dark", "dark");

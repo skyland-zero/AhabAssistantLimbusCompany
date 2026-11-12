@@ -9,7 +9,7 @@
 | 阶段 | 内容 | 状态 | 完成判据 |
 | --- | --- | --- | --- |
 | P0 | 骨架：`nsh.json`、窗口壳、主题 token、`assets/`、Rust 导出通道 | [x] | `nsh run nsh-app --target gpui` 开窗，侧栏与主题正常 |
-| P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [x] | `model` / `ipc` / `state` / `i18n` / `app_state` 全部迁入，`cargo test` 80 条通过；Mock 与真实 sidecar 双通；预览帧轮询已接 |
+| P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [x] | `model` / `ipc` / `state` / `i18n` / `app_state` 全部迁入，`cargo test` 81 条通过；Mock 与真实 sidecar 双通；预览帧轮询已接 |
 | P2 | TSX 设计系统：`components/` + `shell/` | [x] | 组件对照页与归档截图一致；5 皮肤 × 6 强调色 × 4 圆角 |
 | P3 | 页面重写：home → teams → settings → theme_packs → help | [x] | 7 页全部实现并接通 Rust 状态；队伍编辑器五页签、主控台动态数据、设置/主题包/资源/工具箱均走真实 RPC |
 | P4 | 打包切换：`nsh package`，替换发布流程里的可执行文件 | [x] | Windows 包实机启动；DPI/单实例、托盘图标、关闭到托盘、F10 全局热键已实机验证 |
@@ -23,12 +23,12 @@
 | 页面 | **7 / 7 全部实现**：主控台、队伍管理（含 5 段镜牢配置编辑器）、镜牢主题包、工具箱、资源中心、帮助、设置（另加开发期组件对照页） |
 | 设计系统 | 5 套皮肤 × 6 个强调色 × 4 档圆角、6 个按钮变体 × 4 尺寸、13 个 ui 层组件 |
 | 窗口壳 | 品牌 + 6 导航 + 状态点 + 外观切换 + 设置 + 窗口按钮；皮肤背景氛围层；标题栏固定 40pt（2026-11-12 对齐客户端的 `TITLEBAR_HEIGHT`） |
-| Rust 后端 | **model + ipc + state + i18n + app_state 已迁入**：schema 3 契约、确定性 Mock、真实 sidecar 握手/请求/事件队列/生命周期；队伍/设置/主题包/资源/工具箱/主控台状态、预览帧、i18n 与桌面集成；`cargo test` 80 条（含真实 sidecar 集成用例） |
-| 测试 | `nsh test` **131 / 131**（80 条 Rust 单测 + 51 个 TSX 用例：壳、后端 seam、设置、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台、语言切换、Windows 截图基线） |
+| Rust 后端 | **model + ipc + state + i18n + app_state 已迁入**：schema 3 契约、确定性 Mock、真实 sidecar 握手/请求/事件队列/生命周期；队伍/设置/主题包/资源/工具箱/主控台状态、预览帧、i18n 与桌面集成；`cargo test` 81 条（含真实 sidecar 集成用例） |
+| 测试 | `nsh test` **137 / 137**（81 条 Rust 单测 + 56 个 TSX 用例：壳、后端 seam、设置与热键捕获、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台与明细弹层、语言切换、Windows 截图基线） |
 | 截图 | `docs/shots/` 8 张 Linux 渲染基线 + 5 套皮肤；`docs/reference/gpui/` 14 张归档基准；Windows 实机对照见 §1.6、§1.9 |
 | 打包 | `nsh package --target windows` 产出 `AALC.exe`（66 MB）、`AALC.zip`（27.7 MB）、`AALC-setup.exe`（21 MB），单实例、175% DPI、托盘与全局热键实机通过 |
 | 性能 | 打包版 NSH 首窗 **123.3 ms**（中位）对迁移前客户端 **151.4 ms**（中位）；工作集 61.9 MB 对 56.6 MB；4 秒后 CPU 133 ms 对 197 ms（10 次采样，见 §1.6） |
-| 剩余细节 | 热键行目前只读展示与清除，未做按键捕获；统计/日志明细弹层未展开。两者不阻塞迁移验收 |
+| 明细 | 设置页热键支持按键捕获（Esc 取消）；主控台新增每日统计、镜牢历史与运行日志三个弹层 |
 
 ## 1. P0 已落地
 
@@ -166,7 +166,7 @@
 2. **主控台的动态部分**：Link Start 启动执行、设备连接、实时画面帧轮询、运行日志、周期统计数字、
    窗口分辨率/异步输入开关均已接上 Rust 状态与事件流。
 3. **设置页的待接动作**：检查更新、保存 CDK / SPT、测试推送、英文文案（i18n）已接入；
-   热键行目前只读展示与清除，未做按键捕获（不阻塞迁移验收）。
+   热键行支持按键捕获（捕获时绑定窗口按键流，Esc 取消），并写回 `SettingsStore.setHotkey`。
 4. **主题包 / 资源中心的真实数据**：分别由 `ThemePacksStore` / `ResourcesStore` 提供。
 
 已完成的迁移收尾：
@@ -273,7 +273,7 @@ cargo test --manifest-path nsh-app/native/Cargo.toml          # 49 passed
 $env:AHAB_RUN_SIDECAR_INTEGRATION='1'
 cargo test --manifest-path nsh-app/native/Cargo.toml real_sidecar_round_trips -- --nocapture
 nsh check nsh-app
-nsh test nsh-app                                               # 131 / 131（AHAB_BACKEND=mock）
+nsh test nsh-app                                               # 137 / 137（AHAB_BACKEND=mock）
 python scripts/validate_contract.py                            # NSH + GPUI + Python + Mock
 $env:AHAB_BACKEND='mock'
 nsh test nsh-app/backend.test.tsx                              # TSX → Rust Mock ping
@@ -303,7 +303,7 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
   TSX 模块；标题栏导航、外观标签、帮助目录、状态反馈随语言切换。
 - **桌面集成**：`shell/DesktopIntegration.tsx` 接 `Tray`、`GlobalShortcut`、`closePress`；
   热键注册随设置变化，关闭窗口按“最小化到托盘”隐藏。
-- **验证**：`cargo test` 80 条；`nsh test` 131 / 131（`AHAB_BACKEND=mock`）。
+- **验证**：`cargo test` 81 条；`nsh test` 137 / 137（`AHAB_BACKEND=mock`）。
 
 ## 1.9 P4 / P5 实机验证与旧树删除（2026-11-12）
 
@@ -317,7 +317,8 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 
 Windows 实机验证：
 
-- **窗口与截图**：`nsh test nsh-app/visual.test.tsx --target windows` 4 项全部通过，产出浅/深 7 页与队伍编辑器 5 页签共 24 张 820×680 截图；主控台布局、任务卡、窗口设置、预览占位与日志面板正常。
+- **窗口与截图**：`nsh test nsh-app/visual.test.tsx --target windows` 6 项全部通过，产出浅/深 7 页、队伍编辑器 5 页签与每日统计/镜牢历史/日志明细弹层共 30 张 820×680 截图；主控台布局、任务卡、窗口设置、预览占位与日志面板正常。
+- **热键捕获**：`nsh test nsh-app/pages/settings/settings.test.tsx --target windows` 5 项通过；在真实 Windows 宿主按 `Ctrl+F9` 后设置页显示 `Ctrl+F9`，Esc 取消不改变原值。
 - **托盘**：UI Automation 在系统通知区域枚举到 `AALC`（`ControlType.Button`），确认 `Tray.set` 已注册图标。
 - **关闭到托盘**：向主窗口发送 `WM_CLOSE` 后窗口句柄变为 0、进程仍存活；`minimizeToTray` 生效。
 - **全局热键**：窗口失焦时发送 **F10**，UI Automation 读到运行日志出现“Mock 任务已开始”、底栏反馈“已提交启动请求”，确认 `GlobalShortcut.register` 生效。
@@ -390,7 +391,7 @@ P5 清理：
 
 - [x] `nsh` CLI 已在开发机安装（0.5.0，`~/.nsh` + `~/.local/bin/nsh`）；本机访问 GitHub 需走代理（`http://127.0.0.1:7890`），CI 需要新步骤。
 - [x] `nsh check nsh-app` 通过（TypeScript 对着 `.nsh/types/aalc/native.d.ts` 校验）。
-- [x] `nsh test nsh-app` 通过：**131 个用例**（80 个 Rust 单测 + 51 个 TSX 用例，覆盖 model/contract、Mock、sidecar 传输、Rust↔TSX 后端 seam、壳、设置、工具箱、资源中心、队伍编辑器、帮助解析、主题合成、主控台、预览、语言切换、Windows 截图基线）。
+- [x] `nsh test nsh-app` 通过：**137 个用例**（81 个 Rust 单测 + 56 个 TSX 用例，覆盖 model/contract、Mock、sidecar 传输、Rust↔TSX 后端 seam、壳、设置与热键捕获、工具箱、资源中心、队伍编辑器、帮助解析、主题合成、主控台与明细弹层、预览、语言切换、Windows 截图基线）。
 - [x] `nsh run nsh-app --target gpui` 已在无 GPU 机器上跑通：Xvfb + `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`（lavapipe）。截图见 `nsh-app/docs/shots/`。
 - [x] **mixed 模式会按应用构建宿主**：首次 `nsh test --target gpui` 花了 **11 分钟**编 `nsh-gpui-host`（NSH 引擎 + GPUI Fast + QuickJS + 我们的 crate），之后增量几分之一分钟。这意味着**任何要出包的机器（含 CI）都要有 Rust + 平台系统库**：Linux 需 GTK3 / WebKitGTK 4.1 / GStreamer / clang 的开发包。
 - [x] 截图链路：Linux 用 `scripts/capture_nsh.py`（Xvfb + lavapipe，无需 GPU）抓桌面尺寸；旧客户端用 `scripts/capture_gpui.py` 出同一视口的对照图，基准已入库 `docs/reference/gpui/`。Windows 用 `nsh test nsh-app/visual.test.tsx --target windows` 抓 820×680 实机图（见 §1.6）；`app.screenshot()` 不含系统文本框的文字。

@@ -43,6 +43,8 @@ const hotkeys = signal({
   pauseResume: "F11",
 });
 
+const hotkeyCapture = signal<"startStop" | "pauseResume" | null>(null);
+
 const feedback = signal<string | null>(null);
 
 let store: SettingsStore | null = null;
@@ -266,6 +268,30 @@ export function setHotkey(target: "startStop" | "pauseResume", value: string): v
   } catch (error) {
     failure(error);
   }
+}
+
+/** The hotkey row currently listening for a combination (tracked). */
+export function currentHotkeyCapture(): "startStop" | "pauseResume" | null {
+  return hotkeyCapture();
+}
+
+/** Starts listening for a combination for `target`. */
+export function beginHotkeyCapture(target: "startStop" | "pauseResume"): void {
+  hotkeyCapture.set(target);
+}
+
+/** Stops listening without changing the hotkey. */
+export function cancelHotkeyCapture(): void {
+  hotkeyCapture.set(null);
+}
+
+/** Saves the combination captured for `target`. */
+export function finishHotkeyCapture(
+  target: "startStop" | "pauseResume",
+  value: string,
+): void {
+  hotkeyCapture.set(null);
+  setHotkey(target, value);
 }
 
 /** The line under the card stack, in the current language. */

@@ -231,6 +231,17 @@ impl HomeStore {
         self.state.clear_logs();
     }
 
+    /// The full statistics payload, including the mirror history.
+    pub fn stats_payload(&self) -> nsh_core::JsonValue {
+        self.state.stats_payload()
+    }
+
+    /// Loads the daily statistics for the detail dialog.
+    pub fn daily_stats(&mut self) -> Result<nsh_core::JsonValue, String> {
+        let stats = self.state.load_daily_stats()?;
+        serde_json::to_value(stats).map_err(|error| error.to_string())
+    }
+
     /// The statistics summary shown on the console.
     pub fn stats(&self) -> StatsSummaryView {
         let stats = &self.state.stats;

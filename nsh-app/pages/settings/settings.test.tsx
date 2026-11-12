@@ -1,6 +1,6 @@
 // The settings page's contract: every section is reachable, the quick
 // navigation jumps to one, and a choice that changes the theme takes effect.
-import { open, test } from "nsh/test";
+import { expect, open, test } from "nsh/test";
 
 /** The window the desktop client runs in (`nsh.json` 820×680). */
 const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
@@ -36,6 +36,19 @@ test("choosing an interface skin applies it", async () => {
   await app.press("role:button[设置]");
   await app.press("role:button[边狱 / limbus]");
   await app.waitFor("界面皮肤：边狱");
+});
+
+test("a hotkey row captures the next combination", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("role:button[设置]");
+  await app.press("id:hotkey-capture-startStop");
+  await app.keyboard.press("ctrl+f9");
+  await app.waitFor("Ctrl+F9");
+  await app.waitFor("设置已保存");
+
+  await app.press("id:hotkey-capture-startStop");
+  await app.keyboard.press("escape");
+  expect(app.texts()).toContain("Ctrl+F9");
 });
 
 test("the update mirror reveals its CDK field", async () => {

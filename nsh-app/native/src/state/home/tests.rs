@@ -115,6 +115,18 @@ fn window_settings_are_saved_through_the_task_config() {
 }
 
 #[test]
+fn statistics_payload_and_daily_summary_are_available_for_details() {
+    let mut state = state();
+    let payload = state.stats_payload();
+    assert!(payload["today"].is_object());
+    assert!(payload["mirrorHistory"].is_array());
+
+    let daily = state.load_daily_stats().unwrap();
+    assert_eq!(daily.schemaVersion, 1);
+    assert!(daily.days.is_empty());
+}
+
+#[test]
 fn logs_are_bounded_and_clearable() {
     let mut state = state();
     for index in 0..350 {
