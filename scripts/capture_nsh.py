@@ -7,7 +7,7 @@ lavapipe). NSH's own `app.screenshot()` needs a real platform host to draw, and
 the test host is fixed at its own window size, so desktop-size captures go
 through `nsh run --window-size` plus an X11 root-window grab.
 
-    python3 scripts/capture_nsh.py                     # nsh-app/docs/shots/p0-desktop.png
+    python3 scripts/capture_nsh.py                     # nsh-app/docs/shots/p0-desktop.png at 820x680
     python3 scripts/capture_nsh.py --size 1400x900 --out /tmp/big.png
     python3 scripts/capture_nsh.py --serve-only        # leave the app running
 
@@ -70,7 +70,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--app", default=DEFAULT_APP, help=f"the app directory (default: {DEFAULT_APP})")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"where to write the PNG (default: {DEFAULT_OUT.relative_to(ROOT)})")
-    parser.add_argument("--size", default="1100x720", help="the window's size in points, WxH (default: 1100x720)")
+    parser.add_argument("--size", default="820x680", help="the window's size in points, WxH (default: 820x680, the old client's window)")
     parser.add_argument("--screen", default=None, help="the Xvfb screen, WxH (default: the window's size, so the grab is exactly the window)")
     parser.add_argument("--target", default="gpui", help="the nsh target (default: gpui)")
     parser.add_argument("--timeout", type=float, default=900.0, help="seconds to wait for the host to open its window (default: 900)")
