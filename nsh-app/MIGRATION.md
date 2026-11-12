@@ -11,10 +11,22 @@
 | P0 | 骨架：`nsh.json`、窗口壳、主题 token、`assets/`、Rust 导出通道 | [x] | `nsh run nsh-app --target gpui` 开窗，侧栏与主题正常 |
 | P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [ ] | `cargo test` 通过；Mock 与真实 sidecar 双通 |
 | P2 | TSX 设计系统：`components/` + `shell/` | [~] | 组件对照页与 `gpui-app` 截图逐个一致 |
-| P3 | 页面重写：home → teams → settings → theme_packs → help | [~] | 每页截图 1:1 对照 + `nsh test` 用例 |
+| P3 | 页面重写：home → teams → settings → theme_packs → help | [~] | 7 页全部有实现、截图对照与 `nsh test` 用例；剩余项见 §1.2（依赖 P1 或留给下一轮） |
 | P4 | 打包切换：`nsh package`，替换发布流程里的 GPUI 可执行文件 | [ ] | 安装包可用；DPI/单实例/托盘/全局热键实机验证 |
 | P4.5 | 仓库级引用切换：9 处脚本/CI/文档改指向 `nsh-app/` | [ ] | `python3 scripts/check_no_gpui_app_refs.py` 通过（对照图已归档，见 `nsh-app/docs/reference/gpui/`） |
 | P5 | `git rm -r gpui-app`，更新根 `AGENTS.md` | [ ] | 完整构建 + 冒烟通过，检查脚本无白名单 |
+
+## 0.1 进度快照（当前分支）
+
+| 项 | 状态 |
+| --- | --- |
+| 页面 | **7 / 7 全部实现**：主控台、队伍管理、镜牢主题包、工具箱、资源中心、帮助、设置（另加开发期组件对照页） |
+| 设计系统 | 5 套皮肤 × 6 个强调色 × 4 档圆角、6 个按钮变体 × 4 尺寸、12 个 ui 层组件 |
+| 窗口壳 | 品牌 + 6 导航 + 状态点 + 外观切换 + 设置 + 窗口按钮；皮肤背景氛围层 |
+| 测试 | `nsh test` **40 / 40**（2 条 Rust 单测 + 9 个 TSX 测试文件：壳、设置、工具箱、资源中心、队伍、帮助页、帮助解析、主题合成、主控台） |
+| 截图 | `docs/shots/` 8 张渲染基线 + 5 套皮肤；对照基准见 `docs/reference/gpui/` |
+| 静态检查 | `nsh check` / `nsh build` 通过（无未知 class 警告） |
+| 未完成 | P1（Rust 后端）、P4（打包）、P4.5（仓库级引用）、P5（删除 `gpui-app/`）；P3 剩余项见 §1.5 |
 
 ## 1. P0 已落地
 
@@ -125,6 +137,18 @@
   （需要预览帧流）、运行日志内容（需要日志事件）、窗口设置的两个下拉、周期统计的真实数字。
 - `pages/Placeholder.tsx` 已删除：7 个页面都已是真实实现。
 
+## 1.5 P3 剩余项（逐条，均落在下一轮或 P1）
+
+1. **队伍编辑器的镜牢配置**：战斗 / 商店 / 策略 / 进阶 / 星光 / 统计六段（`mirrorConfig`，旧客户端
+   `pages/teams/editors/` 约 1.9k 行）。目前编辑器只有「基础」段（名称、用途、饰品体系、启用、
+   人格）。这一项与镜牢任务配置同源，建议和 P1 的 `Teams.*` RPC 一起做。
+2. **主控台的动态部分**：Link Start 启动执行、设备连接、实时画面帧、运行日志内容、周期统计数字、
+   窗口设置的两个下拉。全部要 P1 的 sidecar 与事件流；当前按下去只写一行「随 P1 接入」的反馈。
+3. **设置页的待接动作**：热键捕获（`GlobalShortcut` + 窗口按键流）、检查更新（updater）、
+   保存 CDK / 保存 SPT / 测试推送（sidecar）、英文文案（i18n 模块）。
+4. **主题包 / 资源中心的真实数据**：现在读的是 mock（总数 28 与旧客户端一致），P1 换成
+   `ThemePacks.*` / `Resources.*` 的返回值。
+
 这一轮**没有**做的（仍在 P2/P3 范围）：
 
 - 语言切换/`i18n`：标题栏文案暂时写死中文，等 P1 的 `i18n` 模块。
@@ -186,10 +210,10 @@
 
 - [x] `nsh` CLI 已在开发机安装（0.5.0，`~/.nsh` + `~/.local/bin/nsh`）；本机访问 GitHub 需走代理（`http://127.0.0.1:7890`），CI 需要新步骤。
 - [x] `nsh check nsh-app` 通过（TypeScript 对着 `.nsh/types/aalc/native.d.ts` 校验）。
-- [x] `nsh test nsh-app` 通过：5 个用例（2 个 Rust 单测 + 3 个 TSX UI 用例）。
+- [x] `nsh test nsh-app` 通过：**40 个用例**（2 个 Rust 单测 + 38 个 TSX 用例，覆盖壳、设置、工具箱、资源中心、队伍、帮助解析、主题合成、主控台）。
 - [x] `nsh run nsh-app --target gpui` 已在无 GPU 机器上跑通：Xvfb + `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`（lavapipe）。截图见 `nsh-app/docs/shots/`。
 - [x] **mixed 模式会按应用构建宿主**：首次 `nsh test --target gpui` 花了 **11 分钟**编 `nsh-gpui-host`（NSH 引擎 + GPUI Fast + QuickJS + 我们的 crate），之后增量几分之一分钟。这意味着**任何要出包的机器（含 CI）都要有 Rust + 平台系统库**：Linux 需 GTK3 / WebKitGTK 4.1 / GStreamer / clang 的开发包。
-- [ ] 截图链路目前只在 Linux（Xvfb + lavapipe）验证；Windows/macOS 要走 `nsh test --target gpui` + `app.screenshot()`，且测试宿主窗口固定 390×800，拿不到桌面尺寸对照图，P3 前需要定方案。
+- [x] 截图链路：Linux 用 `scripts/capture_nsh.py`（Xvfb + lavapipe，无需 GPU）抓桌面尺寸；旧客户端用 `scripts/capture_gpui.py` 出同一视口的对照图，基准已入库 `docs/reference/gpui/`。Windows/macOS 仍需在有显示的机器上人工确认。
 - [x] `cargo check` / `cargo fmt --check` / `cargo test --lib` 在 `nsh-app/native` 通过（nsh-core 0.5.0，Rust 1.99.1）。
 - [~] `nsh-testing` 的 `bundle` feature 在本机依赖链编译失败（`rolldown 1.2.13` 与 `rolldown_std_utils` 不兼容），因此原生侧暂不加 `nsh-testing`/`nsh-engine` 开发依赖；不阻塞 `nsh test`（它自己构建 headless runner），P1 需要 crate 级 UI 测试时再解决。
 - [ ] mixed 模式引入 QuickJS 后的发布包体积与冷启动时间（原 `gpui-app` 为纯 Rust）。
@@ -208,7 +232,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 窗口壳 / 标题栏 | 1084 + 459 | `shell/` | [x] | 待有显示机器截图 | `App.test.tsx` 5 条 |
 | 组件对照页 | — | `pages/Gallery.tsx` | [x] | 无头跑通全部区块 | 开发期手动打开 |
-| 主控台 home | 2855 | `pages/home/` | [~] | 对照 `docs/reference/gpui/home-light.png` | `home.test.tsx` 5 条 |
+| 主控台 home | 2855 | `pages/home/` | [~] | 对照 `docs/reference/gpui/home-light.png` | `home.test.tsx` 5 条；动态部分待 P1 |
 | 队伍 teams | 784 + 3358 | `pages/teams/` | [~] | 列表对照 `docs/reference/gpui/teams-light.png` | `teams.test.tsx` 4 条 |
 | 设置 settings | 360 + 1100 | `pages/settings/` | [x] | 对照 `docs/reference/gpui/settings-{light,dark}.png` | `settings.test.tsx` 4 条 |
 | 主题包 theme_packs | 423 | `pages/theme_packs/` | [x] | 对照 `docs/reference/gpui/themes-light.png` | 由设置/主题页测试覆盖 |
