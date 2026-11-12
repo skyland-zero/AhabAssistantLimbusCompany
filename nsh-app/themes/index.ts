@@ -54,6 +54,15 @@ export const SKIN_LABELS: Record<SkinName, string> = {
   mist: "血雾",
 };
 
+/** Each skin's one-line description, as the appearance page shows it. */
+export const SKIN_BLURBS: Record<SkinName, string> = {
+  default: "扁平平铺 · 圆角 · 轻描边",
+  glass: "分层半透 · 大圆角 · 真投影",
+  archive: "纸墨发丝线 · 靠留白分层",
+  limbus: "冷黑暗红 · 黄铜角框 · 直角",
+  mist: "近黑血雾 · 暗角颗粒 · 锐角",
+};
+
 /** Each accent's name, as the appearance page shows it. */
 export const ACCENT_LABELS: Record<AccentName, string> = {
   crimson: "赤红",
@@ -64,15 +73,29 @@ export const ACCENT_LABELS: Record<AccentName, string> = {
   "limbus-brass": "边狱黄铜",
 };
 
+/** One skin's colour tokens for one appearance, with `accent` laid over them.
+ *
+ *  `setTheme` reads these as the running theme; the skin picker also reads them
+ *  directly, because it draws a miniature of every other skin and those cannot
+ *  come from the active theme's classes. */
+export function tokensFor(
+  skin: SkinName,
+  accent: AccentName,
+  appearance: "light" | "dark",
+): Record<string, string> {
+  const base = SKIN_TOKENS[skin][appearance];
+  const override =
+    accent === SKIN_DEFAULT_ACCENT[skin] ? undefined : ACCENT_OVERRIDES[skin][accent];
+  return { ...base, ...(override?.[appearance] ?? {}) };
+}
+
 /** The theme object for one skin and accent, in both appearances. */
 export function themeFor(skin: SkinName, accent: AccentName): Theme {
-  const base = SKIN_TOKENS[skin];
-  const override = accent === SKIN_DEFAULT_ACCENT[skin] ? undefined : ACCENT_OVERRIDES[skin][accent];
   return {
     cssVars: {
       theme: { ...SKIN_RADII[skin] },
-      light: { ...base.light, ...(override?.light ?? {}) },
-      dark: { ...base.dark, ...(override?.dark ?? {}) },
+      light: tokensFor(skin, accent, "light"),
+      dark: tokensFor(skin, accent, "dark"),
     },
   };
 }

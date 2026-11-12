@@ -11,7 +11,7 @@
 | P0 | 骨架：`nsh.json`、窗口壳、主题 token、`assets/`、Rust 导出通道 | [x] | `nsh run nsh-app --target gpui` 开窗，侧栏与主题正常 |
 | P1 | Rust 后端平移：`model` → `ipc` → `state` → `i18n` → `app` | [ ] | `cargo test` 通过；Mock 与真实 sidecar 双通 |
 | P2 | TSX 设计系统：`components/` + `shell/` | [~] | 组件对照页与 `gpui-app` 截图逐个一致 |
-| P3 | 页面重写：home → teams → settings → theme_packs → help | [ ] | 每页截图 1:1 对照 + `nsh test` 用例 |
+| P3 | 页面重写：home → teams → settings → theme_packs → help | [~] | 每页截图 1:1 对照 + `nsh test` 用例 |
 | P4 | 打包切换：`nsh package`，替换发布流程里的 GPUI 可执行文件 | [ ] | 安装包可用；DPI/单实例/托盘/全局热键实机验证 |
 | P4.5 | 仓库级引用切换：9 处脚本/CI/文档改指向 `nsh-app/` | [ ] | `python3 scripts/check_no_gpui_app_refs.py` 通过（对照图已归档，见 `nsh-app/docs/reference/gpui/`） |
 | P5 | `git rm -r gpui-app`，更新根 `AGENTS.md` | [ ] | 完整构建 + 冒烟通过，检查脚本无白名单 |
@@ -60,6 +60,24 @@
   `store.ts` 的初始 page 改成 `"gallery"` 打开。
 - **测试**：`App.test.tsx` 5 条（导航齐全、切页、设置入口、外观循环、共享窗口壳），
   `nsh test` 全绿（含 2 条 Rust 单测）。
+
+### P3 第一页：设置
+
+- **`pages/settings/`**：快速导航（200pt）+ 卡片栈（7 段：外观、全局热键、系统与防护、实验性功能、
+  更新与源配置、任务通知、关于），卡片头走当前皮肤的装饰语言。导航高亮跟随滚动（每张卡片
+  `onLayout` 上报偏移，`onScroll` 取最后一个已开始的段），点击跳段。
+- **新增 ui 层组件**：`Field`（设置行网格）、`Segmented`、`Switch`、`Input`、`Select`（统一浮层表面）、
+  `Swatch`；`Button` 补上 GPUI 就有的 `secondary` 变体。
+- **`settings.ts`**：设置页编辑的值（系统开关、更新源、CDK、SPT、语言、热键），默认值取自
+  `model/settings.rs` 与 `SystemSettingsConfig::default()`；P1 换成 RPC 与后端初值，页面不改。
+- **皮肤选择器**：每张卡片用该皮肤自己的 token 画 78pt 缩略图（含标题条、两个面板、底部两颗
+  accent 芯片），不截屏、不依赖当前主题。
+- **对照**：与 `docs/reference/gpui/settings-{light,dark}.png` 逐项比对后修正了 4 处——导航居中
+  （原实现左对齐）、分段选择去掉容器边框（只有选中的一段是胶囊）、开关选中色改为 `primary`
+  （不是 `brand`）、皮肤缩略图补上外框与底部芯片。
+- **仍是占位**：热键捕获（需 P1 的 `GlobalShortcut` 与窗口按键流）、检查更新 / 保存 CDK / SPT 保存与
+  测试推送（需 sidecar），这几处按下去只写一行反馈，文案已写明「随 P1 接入」。
+- 语言切换只改状态：英文文案随 P1 的 i18n 模块。
 
 这一轮**没有**做的（仍在 P2/P3 范围）：
 
@@ -146,6 +164,6 @@
 | 组件对照页 | — | `pages/Gallery.tsx` | [x] | 无头跑通全部区块 | 开发期手动打开 |
 | 主控台 home | 2855 | `pages/home/` | [ ] | — | — |
 | 队伍 teams | 784 | `pages/teams/` | [ ] | — | — |
-| 设置 settings | 360 | `pages/settings/` | [ ] | — | — |
+| 设置 settings | 360 + 1100 | `pages/settings/` | [x] | 对照 `docs/reference/gpui/settings-{light,dark}.png` | `settings.test.tsx` 4 条 |
 | 主题包 theme_packs | 423 | `pages/theme_packs/` | [ ] | — | — |
 | 帮助 help | 549 | `pages/help/` | [ ] | — | — |

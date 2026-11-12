@@ -100,7 +100,13 @@
 
 | 文件 | 组件 | 说明 |
 | --- | --- | --- |
-| `Button.tsx` | `Button` / `IconButton` | 变体 `default` `primary` `outline` `ghost` `danger` `link`，尺寸 `xs`–`lg`，状态 `disabled` `selected` |
+| `Button.tsx` | `Button` / `IconButton` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link`，尺寸 `xs`–`lg`，状态 `disabled` `selected` |
+| `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 设置页的标签/控件网格（行距 12pt，控件固定尾列） |
+| `Segmented.tsx` | `Segmented` / `SwatchRow` | 分段选择（容器透明，选中的一段是 `secondary` 胶囊） |
+| `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
+| `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
+| `Select.tsx` | `Select` | 下拉选择，弹出层用统一浮层表面 |
+| `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
 | `Card.tsx` | `Card` / `CardHeader` / `Rule` | 卡片表面、44pt 标题带、发丝线 |
 | `Badge.tsx` | `Badge` | 六种语义色，默认 `neutral` |
 | `Icon.tsx` | `Icon` | Lucide SVG 资产 + `tintColor` |
@@ -145,7 +151,22 @@ token；不要为此改 `nsh`。
 
 `motion-reduce:` 与 `reduceMotion()` 必须写到每一处动效上；减少动效时状态仍要看得懂。
 
-### 动效清单（窗口壳，本轮）
+### 动效清单（设置页，本轮）
+
+| 变化 | 动效 |
+| --- | --- |
+| 导航项 hover / 按下 | 淡洗 + `active:scale-[0.97]`，`duration-150` |
+| 导航项选中 | 换变体（`ghost`→`secondary`），颜色 `duration-150` 过渡 |
+| 导航项点击跳段 | `scrollTo({ animated: true })`，原生滚动，非信号驱动 |
+| 滚动改变当前段 | 高亮瞬时切换（不做淡入：滚动手势中再叠动画会晃） |
+| 开关翻转 | 轨道 `transition-colors duration-150`，滑块 `transition-transform duration-150`，位移 16pt |
+| 分段选择 | 选中段变色 `duration-150`，不位移、不缩放容器 |
+| 强调色色块 | hover 透明度、按下 `scale-[0.92]`，选中环由 `outline` 立即出现（无动画：环是状态而非过程） |
+| 皮肤卡片 | hover 边框变亮，按下 `scale-[0.99]`，选中 `border-2` + `ring` 色 |
+| 反馈行 | 出现在卡片栈下方，颜色由 token 决定，无入场动画（一行文字，动效无信息量） |
+| 减少动效 | 以上全部瞬时；颜色变化保留 |
+
+### 动效清单（窗口壳）
 
 | 变化 | 动效 |
 | --- | --- |

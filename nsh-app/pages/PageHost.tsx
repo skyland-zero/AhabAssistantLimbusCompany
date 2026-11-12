@@ -4,14 +4,18 @@ import { View } from "nsh";
 import type { PageId } from "../store";
 import { Gallery } from "./Gallery";
 import { Placeholder } from "./Placeholder";
+import { Settings } from "./settings/Settings";
 
 export function PageHost(props: { page: PageId }) {
   return (
     <View class="min-h-0 flex-1">
+      <If when={props.page === "settings"}>
+        <Settings />
+      </If>
       <If when={props.page === "gallery"}>
         <Gallery />
       </If>
-      <If when={props.page !== "gallery"}>
+      <If when={props.page !== "gallery" && props.page !== "settings"}>
         <Placeholder page={props.page} />
       </If>
     </View>

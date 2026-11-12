@@ -20,6 +20,7 @@ import type { IconName } from "./Icon";
 export type ButtonVariant =
   | "default" // the ordinary action: a filled neutral surface
   | "primary" // the one default commit of a decision area
+  | "secondary" // a quieter filled action, and the "current" state of a choice
   | "outline" // an action that needs a boundary with less weight
   | "ghost" // a familiar, low-emphasis action
   | "danger" // a destructive commitment
@@ -40,6 +41,11 @@ const VARIANT: Record<ButtonVariant, VariantStyle> = {
     frame:
       "bg-brand text-brand-foreground hover:bg-brand-hover active:bg-brand-hover selected:bg-brand-hover",
     icon: () => token("brand-foreground"),
+  },
+  secondary: {
+    frame:
+      "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70 selected:bg-secondary/80",
+    icon: () => token("secondary-foreground"),
   },
   outline: {
     frame:

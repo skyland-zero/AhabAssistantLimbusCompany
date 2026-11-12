@@ -27,7 +27,8 @@ test("pressing a destination switches the page", async () => {
 test("the settings utility opens the settings page", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.press("role:button[设置]");
-  await app.waitFor("设置 页面尚未迁入");
+  await app.waitFor("快速导航");
+  await app.waitFor("主题模式");
 });
 
 test("the appearance toggle cycles through the three appearances", async () => {

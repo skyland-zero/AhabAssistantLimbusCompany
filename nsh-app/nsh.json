@@ -29,6 +29,9 @@
         "localhost"
       ]
     },
+    "openUrl": {
+      "schemes": ["https"]
+    },
     "statusBar": true,
     "windows": true
   }
