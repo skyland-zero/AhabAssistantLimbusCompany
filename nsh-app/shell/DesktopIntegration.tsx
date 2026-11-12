@@ -35,10 +35,18 @@ export function DesktopIntegration() {
     const state = currentHomeStatus();
     currentLanguageTracked();
     const running = state !== "idle";
+    const window = Window.get("main");
+    const visible = window?.state()?.visible ?? true;
     Tray.set({
       tooltip: "AALC",
       menu: [
-        { label: t("trayShow"), onSelect: () => Window.get("main")?.focus() },
+        {
+          label: visible ? t("trayHide") : t("trayShow"),
+          onSelect: () => {
+            if (visible) window?.hide();
+            else window?.focus();
+          },
+        },
         { type: "separator" },
         {
           label: running ? t("trayStop") : t("trayStart"),
