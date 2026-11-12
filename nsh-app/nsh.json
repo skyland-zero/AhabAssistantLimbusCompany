@@ -33,6 +33,7 @@
       "schemes": ["https"]
     },
     "statusBar": true,
-    "windows": true
+    "windows": true,
+    "clipboard": true
   }
 }

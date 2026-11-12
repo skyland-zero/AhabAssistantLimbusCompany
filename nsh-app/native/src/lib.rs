@@ -4,8 +4,13 @@
 //! TypeScript declarations are generated from these Rust types into
 //! `.nsh/types/aalc/native.d.ts`, so the TSX is checked against them.
 //!
-//! P0 registers only [`Runtime`]. The RPC gateway, the execution state and the
-//! domain stores are ported in P1 — see `MIGRATION.md`.
+//! P1 is being ported bottom-up: `model` (the contract's payloads) and `ipc`
+//! (the mock and the real sidecar transport) land first, then `state`, `i18n`
+//! and the app lifecycle. See `MIGRATION.md` for the source mapping.
+
+pub mod ipc;
+pub mod model;
+pub mod state;
 
 mod runtime;
 
@@ -16,5 +21,7 @@ pub use crate::runtime::Runtime;
 /// The crate's UI set: what `App.tsx` imports from `aalc/native`.
 #[native_module("aalc/native")]
 fn native(registry: &mut Registry) {
-    registry.module::<Runtime>();
+    registry
+        .module::<Runtime>()
+        .module::<crate::ipc::bridge::Backend>();
 }

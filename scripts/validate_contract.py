@@ -1,9 +1,12 @@
-"""Validate the GPUI ↔ sidecar contract against both implementations.
+"""Validate the client ↔ sidecar contract against every implementation.
 
 ``contract/contract.json`` is the single reviewable source for RPC methods,
-mutating flags, events and error names.  This script deliberately avoids
+mutating flags, events and error names. This script deliberately avoids
 importing the heavy Python backend: it parses the source files so it can run in
 CI before dependencies/configuration are initialized.
+
+Both the Native Shell backend and the frozen GPUI client are checked while
+both exist (P1 → P5); the GPUI entry disappears with the tree at P5.
 
 Run directly (``python scripts/validate_contract.py``) or through
 ``tests/unit/test_contract_manifest.py``.
@@ -20,11 +23,17 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "contract" / "contract.json"
-CONTRACT_RS = ROOT / "gpui-app" / "src" / "ipc" / "contract.rs"
+RUST_CONTRACTS = [
+    ROOT / "nsh-app" / "native" / "src" / "ipc" / "contract.rs",
+    ROOT / "gpui-app" / "src" / "ipc" / "contract.rs",
+]
+MOCK_DIRS = [
+    ROOT / "nsh-app" / "native" / "src" / "ipc" / "mock",
+    ROOT / "gpui-app" / "src" / "ipc" / "mock",
+]
 DISPATCHER_PY = ROOT / "module" / "rpc_dispatcher.py"
 RPC_CONTRACT_PY = ROOT / "module" / "rpc_contract.py"
 BACKEND_APPLICATION_PY = ROOT / "module" / "backend_application.py"
-MOCK_DIR = ROOT / "gpui-app" / "src" / "ipc" / "mock"
 
 
 def load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
@@ -125,33 +134,47 @@ def _python_class_methods(path: Path, class_name: str) -> set[str]:
 
 def validate(root: Path = ROOT) -> list[str]:
     contract = load_contract(root / "contract" / "contract.json")
-    rust = (root / "gpui-app" / "src" / "ipc" / "contract.rs").read_text(encoding="utf-8")
     findings: list[str] = []
 
     methods: dict[str, dict[str, Any]] = contract["methods"]
     events: dict[str, dict[str, Any]] = contract["events"]
     errors: dict[str, dict[str, Any]] = contract["errors"]
-
-    rust_methods = _rust_module_constants(rust, "method")
-    rust_events = _rust_module_constants(rust, "event")
-    rust_capabilities = _rust_module_constants(rust, "capability")
-
-    if set(rust_methods.values()) != set(methods):
-        findings.append(
-            "Rust method constants differ: "
-            f"missing={sorted(set(methods) - set(rust_methods.values()))}, "
-            f"extra={sorted(set(rust_methods.values()) - set(methods))}"
-        )
-    if set(rust_events.values()) != set(events):
-        findings.append(
-            "Rust event constants differ: "
-            f"missing={sorted(set(events) - set(rust_events.values()))}, "
-            f"extra={sorted(set(rust_events.values()) - set(events))}"
-        )
-
     expected_capabilities = set(contract["capabilities"])
-    if set(rust_capabilities.values()) != expected_capabilities:
-        findings.append("Rust capability constants differ from the manifest")
+    python_schema = _python_assignment(root / "module" / "rpc_contract.py", "SCHEMA_VERSION")
+
+    rust_methods: dict[str, str] = {}
+    for path in RUST_CONTRACTS:
+        if not path.is_file():
+            continue
+        label = path.relative_to(root).as_posix()
+        rust = path.read_text(encoding="utf-8")
+        contract_methods = _rust_module_constants(rust, "method")
+        contract_events = _rust_module_constants(rust, "event")
+        contract_capabilities = _rust_module_constants(rust, "capability")
+        if not rust_methods:
+            rust_methods = contract_methods
+
+        if set(contract_methods.values()) != set(methods):
+            findings.append(
+                f"{label}: Rust method constants differ: "
+                f"missing={sorted(set(methods) - set(contract_methods.values()))}, "
+                f"extra={sorted(set(contract_methods.values()) - set(methods))}"
+            )
+        if set(contract_events.values()) != set(events):
+            findings.append(
+                f"{label}: Rust event constants differ: "
+                f"missing={sorted(set(events) - set(contract_events.values()))}, "
+                f"extra={sorted(set(contract_events.values()) - set(events))}"
+            )
+        if set(contract_capabilities.values()) != expected_capabilities:
+            findings.append(f"{label}: Rust capability constants differ from the manifest")
+
+        rust_schema = re.search(r"pub const RPC_SCHEMA_VERSION: u32 = (\d+);", rust)
+        if rust_schema is None or int(rust_schema.group(1)) != python_schema:
+            findings.append(f"{label}: Rust/Python/manifest schema versions differ")
+
+    if not rust_methods:
+        findings.append("no Rust contract implementation found")
 
     python_routes, python_mutating, python_errors = _python_dispatch_tables(
         root / "module" / "rpc_dispatcher.py"
@@ -183,26 +206,26 @@ def validate(root: Path = ROOT) -> list[str]:
     if python_capabilities != expected_capabilities:
         findings.append("Python capabilities differ from the manifest")
 
-    python_schema = _python_assignment(root / "module" / "rpc_contract.py", "SCHEMA_VERSION")
-    rust_schema = re.search(r"pub const RPC_SCHEMA_VERSION: u32 = (\d+);", rust)
-    if rust_schema is None or int(rust_schema.group(1)) != python_schema:
-        findings.append("Rust/Python/manifest schema versions differ")
     if contract.get("schemaVersion") != python_schema:
         findings.append("Manifest schemaVersion differs from the runtime constants")
 
-    # Every RPC method must be accepted by the deterministic Mock as well.
-    mock_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted(MOCK_DIR.rglob("*.rs"))
-        if path.name != "tests.rs"
-    )
+    # Every RPC method must be accepted by each deterministic Mock as well.
     method_const_by_value = {value: name for name, value in rust_methods.items()}
-    for method in methods:
-        const_name = method_const_by_value.get(method)
-        if const_name is None:
+    for mock_dir in MOCK_DIRS:
+        if not mock_dir.is_dir():
             continue
-        if f"method::{const_name}" not in mock_source:
-            findings.append(f"Mock does not handle {method} ({const_name})")
+        mock_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(mock_dir.rglob("*.rs"))
+            if path.name != "tests.rs"
+        )
+        label = mock_dir.relative_to(ROOT).as_posix()
+        for method in methods:
+            const_name = method_const_by_value.get(method)
+            if const_name is None:
+                continue
+            if f"method::{const_name}" not in mock_source:
+                findings.append(f"{label}: Mock does not handle {method} ({const_name})")
 
     # Python handlers referenced by the route table must exist on the class.
     backend_methods = _python_class_methods(

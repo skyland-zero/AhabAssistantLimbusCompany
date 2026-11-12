@@ -100,7 +100,7 @@
 
 | 文件 | 组件 | 说明 |
 | --- | --- | --- |
-| `Button.tsx` | `Button` / `IconButton` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link`，尺寸 `xs`–`lg`，状态 `disabled` `selected` |
+| `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用） |
 | `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 设置页的标签/控件网格（行距 12pt，控件固定尾列） |
 | `Segmented.tsx` | `Segmented` / `SwatchRow` | 分段选择（容器透明，选中的一段是 `secondary` 胶囊） |
 | `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
@@ -222,6 +222,19 @@ token；不要为此改 `nsh`。
 
 组件对照页（`pages/Gallery.tsx`）每个变体/尺寸/状态都是静态展示，无动效。
 
+### 动效清单（队伍编辑器，本轮）
+
+| 变化 | 动效 |
+| --- | --- |
+| 编辑器打开/关闭 | `Dialog` 自带进出（NSH 默认）；不叠自定义过渡 |
+| 页签切换 | 选中页签换 `card` 底 + `shadow-sm`，颜色 `duration-150`；内容整块替换（无滑动指示条） |
+| 系统/人格选择 | 选中换边框与浅色底（`brand` / `danger`），`duration-150`；按下 `active:scale-[0.97]` |
+| 开关 / 下拉 | 同 `Switch` / `Select`：轨道与滑块 150ms，弹层由 NSH 默认进出 |
+| 星光等级 / 一键设置 | 选中描边与底色即时切换；总消耗数字随状态更新，不做数字滚动 |
+| 统计刷新 / 清空 | 数值与确认框瞬时出现；清除后反馈行替换，无入场动画 |
+| JSON 面板展开 | 展开/收起瞬时（面板高度由布局决定，不做高度动画） |
+| 减少动效 | 以上全部瞬时；颜色与边框变化保留 |
+
 ## 6. 校验
 
 ```bash
@@ -241,7 +254,8 @@ nsh run nsh-app       # 开窗看
 
 ## 7. 本轮校验结果
 
-- `nsh check` / `nsh build` 通过（无未知 class 告警）；`nsh test` 7 项全过（5 条 TSX + 2 条 Rust）。
+- `nsh check` / `nsh build` 通过（无未知 class 告警）；P2 时 `nsh test` 7 项全过（5 条 TSX + 2 条 Rust；
+  当前总数与后端覆盖见 `MIGRATION.md`）。
 - 截图（浅色/深色）逐项对照 Finishing checklist：
   - **圆角**：全部来自 `--radius-sm` / `--radius` / `--radius-lg` / `--radius-xl`；状态点、开关滑块用
     `rounded-full`。通过。

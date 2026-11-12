@@ -147,11 +147,11 @@ function TeamCard(props: { team: Team; slot: number }) {
             {SCHEME_LABELS[team().accessoryScheme] ?? team().accessoryScheme}
           </Text>
           <Text class="text-xs text-muted-foreground">{team().sinners.length} 人格</Text>
-          <If when={hasStarlight(team())}>
+          <If when={hasStarlight(team().mirrorConfig)}>
             <Badge label="已配星光" tone="success" />
           </If>
-          <If when={discardCount(team()) > 0}>
-            <Badge label={`舍弃 ${discardCount(team())} 项`} tone="danger" />
+          <If when={discardCount(team().mirrorConfig) > 0}>
+            <Badge label={`舍弃 ${discardCount(team().mirrorConfig)} 项`} tone="danger" />
           </If>
           <If when={!team().enabled && !luxcavation()}>
             <Badge label="已停用" />

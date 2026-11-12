@@ -25,6 +25,7 @@ native/**/target/
 
 # 运行时生成的文件
 *.dll
+/.nsh/
 !3rdparty/PaddleOCR-json_v1.4.1/*.dll
 !assets/binary/scrcpy-ffmpeg/
 !assets/binary/scrcpy-ffmpeg/*.dll

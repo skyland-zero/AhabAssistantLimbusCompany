@@ -1,0 +1,292 @@
+//! Team formations, the mirror-run configuration and the built-in presets.
+
+#![allow(non_snake_case)]
+
+use serde::{Deserialize, Serialize};
+
+use super::Language;
+
+pub const SPIDERWEB_ENTANGLED_IN_RED_GIFT_ID: &str = "spiderweb_entangled_in_red";
+pub const MAX_OBSERVE_EGO_GIFTS: usize = 3;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct LocalizedText {
+    pub zhCn: String,
+    pub enUs: String,
+}
+
+impl LocalizedText {
+    pub fn get(&self, language: Language) -> &str {
+        match language {
+            Language::ZhCn => &self.zhCn,
+            Language::EnUs => &self.enUs,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TeamPreset {
+    pub presetId: String,
+    pub routeId: String,
+    pub name: LocalizedText,
+    pub description: LocalizedText,
+    pub floorHint: LocalizedText,
+    pub routeName: LocalizedText,
+    pub team: TeamDetail,
+}
+
+/// The formation page reserves the first twenty numbers as stable UI slots.
+/// This is intentionally a presentation limit; the backend may still expose
+/// teams outside this range.
+pub const TEAM_SLOT_COUNT: u32 = 20;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TeamMirrorConfig {
+    pub team_system: u8,
+    pub shop_strategy: u8,
+    #[serde(default)]
+    pub reward_cards: bool,
+    #[serde(default)]
+    pub reward_cards_select: u8,
+    #[serde(default)]
+    pub shopping_strategy: bool,
+    #[serde(default)]
+    pub shopping_strategy_select: u8,
+    #[serde(default)]
+    pub opening_items: bool,
+    #[serde(default)]
+    pub opening_items_select: u8,
+    #[serde(default)]
+    pub opening_items_system: u8,
+    pub discard_systems: DiscardSystems,
+    pub do_not_heal: bool,
+    pub do_not_buy: bool,
+    pub do_not_fuse: bool,
+    pub do_not_sell: bool,
+    pub do_not_enhance: bool,
+    pub only_aggressive_fuse: bool,
+    pub do_not_system_fuse: bool,
+    pub only_system_fuse: bool,
+    pub aggressive_also_enhance: bool,
+    pub aggressive_save_systems: bool,
+    pub after_level_IV: bool,
+    pub after_level_IV_select: u8,
+    pub ignore_shop: Vec<bool>,
+    pub max_keyword_refresh: u8,
+    pub max_normal_refresh: u8,
+    pub second_system: bool,
+    pub second_system_select: u8,
+    pub second_system_setting: u8,
+    pub second_system_fuse_IV: bool,
+    pub second_system_buy: bool,
+    pub second_system_select_reward: bool,
+    pub second_system_power_up: bool,
+    pub avoid_skill_3: bool,
+    pub prioritize_skill_3: bool,
+    #[serde(default)]
+    pub use_damage_p: bool,
+    pub re_formation_each_floor: bool,
+    pub defense_first_round: bool,
+    pub defense_for_solo: bool,
+    pub defense_for_solo_turns: u8,
+    pub skill_replacement: bool,
+    pub skill_replacement_select: u8,
+    pub skill_replacement_mode: u8,
+    pub use_starlight: bool,
+    pub opening_bonus: Vec<u8>,
+    pub fixed_team_use: bool,
+    pub fixed_team_use_select: u8,
+    pub use_team_code: bool,
+    pub team_code: String,
+    pub use_custom_theme_pack_weight: bool,
+    pub observe_ego_gift: bool,
+    pub observe_ego_gift_selected: Vec<String>,
+    #[serde(default)]
+    pub mirror_route_profile: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct DiscardSystems {
+    pub burn: bool,
+    pub bleed: bool,
+    pub tremor: bool,
+    pub rupture: bool,
+    pub sinking: bool,
+    pub poise: bool,
+    pub charge: bool,
+    pub slash: bool,
+    pub pierce: bool,
+    pub blunt: bool,
+}
+
+impl Default for TeamMirrorConfig {
+    fn default() -> Self {
+        Self {
+            team_system: 0,
+            shop_strategy: 0,
+            reward_cards: false,
+            reward_cards_select: 0,
+            shopping_strategy: false,
+            shopping_strategy_select: 0,
+            opening_items: false,
+            opening_items_select: 0,
+            opening_items_system: 0,
+            discard_systems: Default::default(),
+            do_not_heal: false,
+            do_not_buy: false,
+            do_not_fuse: false,
+            do_not_sell: false,
+            do_not_enhance: false,
+            only_aggressive_fuse: false,
+            do_not_system_fuse: false,
+            only_system_fuse: false,
+            aggressive_also_enhance: false,
+            aggressive_save_systems: false,
+            after_level_IV: false,
+            after_level_IV_select: 0,
+            ignore_shop: vec![false; 5],
+            max_keyword_refresh: 1,
+            max_normal_refresh: 1,
+            second_system: false,
+            second_system_select: 0,
+            second_system_setting: 0,
+            second_system_fuse_IV: false,
+            second_system_buy: false,
+            second_system_select_reward: false,
+            second_system_power_up: false,
+            avoid_skill_3: false,
+            prioritize_skill_3: false,
+            use_damage_p: false,
+            re_formation_each_floor: false,
+            defense_first_round: false,
+            defense_for_solo: false,
+            defense_for_solo_turns: 5,
+            skill_replacement: false,
+            skill_replacement_select: 0,
+            skill_replacement_mode: 0,
+            use_starlight: false,
+            opening_bonus: vec![1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+            fixed_team_use: false,
+            fixed_team_use_select: 0,
+            use_team_code: false,
+            team_code: String::new(),
+            use_custom_theme_pack_weight: false,
+            observe_ego_gift: false,
+            observe_ego_gift_selected: Vec::new(),
+            mirror_route_profile: String::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TeamSummary {
+    pub id: String,
+    pub name: String,
+    pub sinners: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TeamPurpose {
+    #[default]
+    Mirror,
+    Luxcavation,
+    General,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TeamDetail {
+    #[serde(default = "schema_version")]
+    pub schemaVersion: u32,
+    pub id: String,
+    pub name: String,
+    pub sinners: Vec<String>,
+    #[serde(default)]
+    pub purpose: TeamPurpose,
+    pub accessoryScheme: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub teamCode: String,
+    pub mirrorConfig: Option<TeamMirrorConfig>,
+}
+
+/// Backend team IDs are derived from the persisted formation number
+/// (`team-<number>`). Keeping the parser next to the payload model avoids
+/// making each caller reimplement that contract detail.
+pub fn team_number_from_id(id: &str) -> Option<u32> {
+    let number = id.strip_prefix("team-")?.parse::<u32>().ok()?;
+    (number > 0).then_some(number)
+}
+
+fn schema_version() -> u32 {
+    // The sidecar advertises schema 3 for this payload; keep the default in
+    // lockstep so a round-trip cannot silently downgrade the contract.
+    3
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SinnerInfo {
+    pub id: String,
+    pub name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mirror_defaults_have_expected_collection_sizes() {
+        let config = TeamMirrorConfig::default();
+        assert_eq!(config.ignore_shop, vec![false; 5]);
+        assert_eq!(config.opening_bonus.len(), 10);
+        assert_eq!(config.opening_bonus[..4], [1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn team_config_round_trips_json() {
+        let team = TeamDetail {
+            schemaVersion: 1,
+            id: "t1".into(),
+            name: "队伍".into(),
+            sinners: vec!["faust".into()],
+            purpose: TeamPurpose::General,
+            accessoryScheme: "poise".into(),
+            enabled: true,
+            teamCode: "code".into(),
+            mirrorConfig: Some(Default::default()),
+        };
+        let json = serde_json::to_string(&team).unwrap();
+        assert_eq!(serde_json::from_str::<TeamDetail>(&json).unwrap(), team);
+    }
+
+    #[test]
+    fn old_mirror_payloads_default_new_python_fields() {
+        let mut value = serde_json::to_value(TeamMirrorConfig::default()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        for key in [
+            "reward_cards",
+            "reward_cards_select",
+            "shopping_strategy",
+            "shopping_strategy_select",
+            "opening_items",
+            "opening_items_select",
+            "opening_items_system",
+            "use_damage_p",
+        ] {
+            object.remove(key);
+        }
+        let config: TeamMirrorConfig = serde_json::from_value(value).unwrap();
+        assert!(!config.reward_cards);
+        assert_eq!(config.shopping_strategy_select, 0);
+        assert_eq!(config.opening_items_system, 0);
+        assert!(!config.use_damage_p);
+    }
+
+    #[test]
+    fn team_ids_expose_persisted_numbers() {
+        assert_eq!(team_number_from_id("team-1"), Some(1));
+        assert_eq!(team_number_from_id("team-20"), Some(20));
+        assert_eq!(team_number_from_id("team-0"), None);
+        assert_eq!(team_number_from_id("team-invalid"), None);
+    }
+}

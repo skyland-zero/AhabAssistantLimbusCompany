@@ -17,9 +17,9 @@ import type { Appearance, HomeStatus, PageId } from "../store";
 import type { Decor } from "../themes";
 import { StatusDot } from "./StatusDot";
 
-/** The bar's area: the platform's own when it has a title bar (a hidden one on
- *  the desktops), a fixed 40pt otherwise (the headless runner, a browser). */
-const FALLBACK_HEIGHT = 40;
+/** The bar's area: the client's fixed 40pt bar. The platform still supplies
+ *  the left/right insets for its own window buttons (traffic lights). */
+const TITLEBAR_HEIGHT = 40;
 
 /** macOS keeps the system's traffic lights on the left, so the app draws no
  *  window buttons there. */
@@ -46,11 +46,11 @@ const APPEARANCE: Record<Appearance, { icon: IconName; label: string }> = {
 
 export function TitleBar() {
   const bar = () =>
-    hasDesktop ? titleBar() : { height: FALLBACK_HEIGHT, left: 0, right: 0 };
+    hasDesktop ? titleBar() : { height: TITLEBAR_HEIGHT, left: 0, right: 0 };
   return (
     <View
       class={`flex-none flex-row items-center gap-1 border-b bg-card ${SEPARATOR[currentDecor()]}`}
-      style={{ height: bar().height || FALLBACK_HEIGHT, paddingLeft: bar().left }}
+      style={{ height: TITLEBAR_HEIGHT, paddingLeft: bar().left }}
     >
       {/* Brand: a drag region, as the platform's own title bar was. */}
       <View class="h-full flex-row items-center gap-2 ps-3 pe-3" desktop={{ windowDrag: true }}>
@@ -114,7 +114,7 @@ function NavItem(props: {
       variant={active() ? "primary" : "ghost"}
       selected={active()}
       onPress={() => navigate(props.id)}
-      class="px-2"
+      class="h-8 px-2"
     >
       <If when={props.status}>
         {(status) => <StatusDot status={status()} />}

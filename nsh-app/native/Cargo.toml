@@ -12,7 +12,14 @@ description = "AALC's Native Shell backend: RPC transport, execution state and d
 [workspace]
 
 [dependencies]
-nsh-base = "0.5.0"
+# The external contract (and the deterministic mock) are serde JSON payloads.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Blocking WebSocket for the loopback Python sidecar. The transport runs on its
+# own thread; TSX calls reach it through an async class method that uses
+# `nsh`'s `blocking` helper.
+getrandom = "0.4"
+tungstenite = "0.28"
 nsh-core = "0.5.0"
 
 [dev-dependencies]

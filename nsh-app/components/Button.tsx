@@ -132,6 +132,39 @@ export function Button(props: {
   );
 }
 
+/** A press target with page-owned content: no frame, label or variant. Use it
+ *  for a dense option card whose whole surface is the control (a sinner
+ *  portrait, a system chip) when neither `Button` nor `IconButton` can hold the
+ *  content. The caller still owns the look, and must give it an accessible
+ *  name. */
+export function Pressable(props: {
+  /** What screen readers announce. */
+  accessibilityLabel?: string;
+  disabled?: boolean;
+  selected?: boolean;
+  onPress?: () => void;
+  testID?: string;
+  class?: string;
+  children?: JSX.Element;
+}) {
+  return (
+    <BaseButton
+      onPress={props.onPress}
+      disabled={props.disabled}
+      selected={props.selected}
+      accessibilityLabel={props.accessibilityLabel}
+      testID={props.testID}
+      class={
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
+        "disabled:pointer-events-none disabled:opacity-50 " +
+        (props.class ?? "")
+      }
+    >
+      {props.children}
+    </BaseButton>
+  );
+}
+
 /** A square icon-only control: the same frames and states, no label. Its
  *  accessible name is required, since nothing on screen states it. */
 export function IconButton(props: {

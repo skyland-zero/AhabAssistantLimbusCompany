@@ -6,8 +6,10 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `home-light.png` / `home-dark.png` | 主控台（P3 待迁入的占位） |
+| `home-light.png` / `home-dark.png` | 主控台（P3 已迁入；动态部分等 P1） |
 | `gallery-light.png` / `gallery-dark.png` | 组件对照页：变体 / 尺寸 / 状态 / 图标 / token 色板 / 圆角 |
+| `p2-settings-*.png` | P2 设置页基线 |
+| `p3-*.png` | P3 逐页迁移后的基线（队伍编辑器的 Windows 实机图见 `artifacts/nsh/`，不入库） |
 | `skin-archive-light.png` | Archive 皮肤（纸张与墨线，无阴影） |
 | `skin-glass-dark.png` | Glass 皮肤（半透明层叠、发丝高光、大圆角） |
 | `skin-limbus-dark.png` | Limbus 皮肤（暗色羊皮纸、黄铜角框、红色印章） |
@@ -24,31 +26,34 @@ python3 scripts/capture_nsh.py --size 820x680 --out nsh-app/docs/shots/home-ligh
 `VK_ICD_FILENAMES` 指向 Mesa 的 lavapipe 软件 Vulkan、等宿主 `connected` 后抓 X11 根窗口，
 结束清理进程组。
 
-**换页面 / 外观 / 皮肤**目前靠临时改 `store.ts` 的初始值（拍完 `git checkout` 还原）：
+**换页面 / 外观 / 皮肤**：Linux 无 GPU 截图仍靠临时改 `store.ts` 初始值；Windows 用
+`nsh-app/visual.test.tsx` 的 `open(..., { colorScheme })` 和逐页 `press` 驱动，不再手改源码。
+`store.ts` 的初始值保持默认（`home` / `system` / `default`）。
 
-```bash
-# page: home | teams | theme-packs | toolbox | resources | help | settings | gallery
-sed -i 's|const page = signal<PageId>("home");|const page = signal<PageId>("gallery");|' nsh-app/store.ts
-# appearance: light | dark | system
-sed -i 's|const appearance = signal<Appearance>("system");|const appearance = signal<Appearance>("dark");|' nsh-app/store.ts
-# skin: default | glass | archive | limbus | mist
-sed -i 's|const skin = signal<SkinName>("default");|const skin = signal<SkinName>("limbus");|' nsh-app/store.ts
-
-python3 scripts/capture_nsh.py --size 820x680 --out nsh-app/docs/shots/skin-limbus-dark.png
-git checkout nsh-app/store.ts
-```
-
-> P3 之前值得加一个正式的捕获入口（`nsh test` 步骤驱动导航 + `app.screenshot()`，
-> 或者让 `store.ts` 的初始值可从外部覆盖），这样就不用手改源码了。
-
-## 与原客户端的对照
+## 在原客户端上对照
 
 `docs/reference/gpui/` 存着旧客户端的 7 页 × 浅/深（同为 820×680）参考图，
 P3 逐页迁移时按同名文件两两对照（`home-light.png` ↔ `reference/gpui/home-light.png` 等）。
 参考图生成方式见 `docs/reference/gpui/README.md`。
 
-## 已知问题（P2/P3 要修）
+## Windows 实机截图
+
+```powershell
+New-Item -ItemType Directory -Force artifacts/nsh | Out-Null
+nsh test nsh-app/visual.test.tsx --target windows
+```
+
+`visual.test.tsx` 在真实 Windows 宿主里逐页（浅/深）和队伍编辑器五个页签截图，统一 820×680，
+输出到 `artifacts/nsh/`（仓库忽略）。同一测试在无头 `nsh test` 里会跳过截图并保持通过。
+
+> `app.screenshot()` 只抓应用绘制面；Windows 的系统文本框是独立 HWND，所以输入框里的文字不会
+> 出现在截图里。真实窗口正常，截图对照时把输入框内容视为已知差异。
+
+2026-11-12 的对照与性能数据见 `MIGRATION.md` §1.6。
+
+## 已知问题
 
 - **`font-semibold` 在 Linux 上回退**：宿主日志 `failed to load font ... ".SystemUIFont" ... weight 600`，
   标题没有真正加粗。定下字体族后显式声明，或改用宿主存在的字重。
-- 页面内容还是占位：P3 逐页迁入，底座与标题栏已就位。
+- **Windows 截图不含系统文本框文字**：`app.screenshot()` 只抓应用绘制面；真实窗口正常。
+- **Linux 与 Windows 的像素差**：字体栅格化不同，逐像素对照看布局/颜色/层级，不看字形。

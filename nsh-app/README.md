@@ -39,6 +39,16 @@ cargo test --manifest-path nsh-app/native/Cargo.toml    # 后端单元测试
 首次 `nsh check` / `nsh test` 会编译 `native/` 与 NSH 核心，之后再跑会复用缓存。
 Rust 改动会重启应用，TSX 改动是热更新。
 
+## 后端模式
+
+Rust 侧 `ipc/` 已迁入 schema 3 契约、确定性 Mock 与真实 sidecar：
+
+- 默认连接 Python sidecar；也可以用 `AHAB_BACKEND_URL` + `AHAB_BACKEND_TOKEN` 接管外部实例。
+- `AHAB_BACKEND=mock` 使用 Rust 内的确定性 Mock，不启动 Python（无后端开发、`nsh test`）。
+- TSX 可 import `Backend`（`schemaVersion()` / `mode()` / `ping()`）检查当前传输；
+  P1 的 state 层会复用同一个 `BackendClient`。
+- `cargo test` 含真实 sidecar 集成用例；设 `AHAB_RUN_SIDECAR_INTEGRATION=1` 才会启动 Python。
+
 ## 结构
 
 ```text

@@ -29,6 +29,10 @@ ALLOWED = {
     "nsh-app/MIGRATION.md",
     # The one-time theme exporter reads the GPUI palette tables.
     "scripts/export_nsh_theme.py",
+    # A migration-time benchmark compares the packaged app with the old client.
+    "scripts/benchmark_nsh_vs_gpui.ps1",
+    # Contract validation checks both Rust implementations until the old tree goes.
+    "scripts/validate_contract.py",
     # This checker.
     "scripts/check_no_gpui_app_refs.py",
 }

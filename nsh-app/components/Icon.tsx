@@ -8,6 +8,7 @@
 import { Image, token } from "nsh";
 import check from "../assets/icons/check.svg";
 import chevronDown from "../assets/icons/chevron-down.svg";
+import copy from "../assets/icons/copy.svg";
 import audioLines from "../assets/icons/audio-lines.svg";
 import bookOpen from "../assets/icons/book-open.svg";
 import camera from "../assets/icons/camera.svg";
@@ -49,6 +50,7 @@ const ICONS = {
   bookOpen,
   camera,
   check,
+  copy,
   crosshair,
   chevronDown,
   eraser,
