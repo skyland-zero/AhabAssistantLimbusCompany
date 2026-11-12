@@ -1,7 +1,7 @@
 // The P0 shell: window chrome, the sidebar and one placeholder page host.
 // The real pages land one at a time in P3 (MIGRATION.md); until then this file
 // only has to prove the Rust ↔ TSX seam and the theme tokens.
-import { computed, Scroll, signal, Text, View } from "nsh";
+import { computed, mount, Scroll, signal, Text, View } from "nsh";
 import { Button } from "nsh/base";
 import { Runtime } from "aalc/native";
 import { TitleBar } from "./shell/TitleBar";
@@ -45,7 +45,7 @@ function App() {
         </View>
         <Scroll class="flex-1">
           <View class="flex-col gap-3 p-6">
-            <Text class="text-lg font-semibold text-foreground">{current().label}</Text>
+            <Text class="text-lg font-semibold text-foreground">当前页面：{current().label}</Text>
             <Text class="text-muted-foreground">页面迁入进度</Text>
             <Text class="text-sm text-muted-foreground">
               P0 骨架已完成：窗口壳、侧栏、主题 token、Rust 导出通道。{current().label}

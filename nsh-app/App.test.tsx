@@ -14,12 +14,14 @@ test("the shell lists every page and shows the backend version", async () => {
 
 test("pressing a sidebar entry switches the page", async () => {
   const app = await open("./App.tsx");
+  await app.waitFor("当前页面：主控台");
   await app.press("队伍");
-  await app.waitFor("队伍页面在 P3 按 MIGRATION.md 逐页迁入");
+  await app.waitFor("当前页面：队伍");
 });
 
 test("the Rust module reports a platform", async () => {
   const app = await open("./App.tsx");
-  const shown = app.text("后端（Rust）");
-  expect(shown).toBeDefined();
+  const texts = app.texts();
+  expect(texts).toContain("后端（Rust）");
+  expect(texts.some((line) => line.includes("aalc-native v"))).toBe(true);
 });

@@ -14,6 +14,13 @@ curl -fsSL https://nsh.dev/install.sh | sh
 irm https://nsh.dev/install.ps1 | iex
 ```
 
+安装到 `~/.nsh`，并在 `~/.local/bin/nsh` 建一个链接（确保 `~/.local/bin` 在 `PATH` 里）。
+本机访问 GitHub 受限时需要代理：
+
+```bash
+export http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
+```
+
 还需要 Rust（`rustup`，本目录的 `rust-toolchain.toml` 固定 1.99.1）。
 
 ## 常用命令

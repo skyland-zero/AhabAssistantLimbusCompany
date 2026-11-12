@@ -78,9 +78,12 @@
 
 ## 3. 待验证风险
 
-- [ ] `nsh` CLI 是否在构建机上可用（Windows/macOS/Linux 三平台安装脚本），CI 需要新步骤。**当前开发机未安装，P0 的 `nsh check` / `nsh test` 尚未跑过。**
+- [x] `nsh` CLI 已在开发机安装（0.5.0，`~/.nsh` + `~/.local/bin/nsh`）；本机访问 GitHub 需走代理（`http://127.0.0.1:7890`），CI 需要新步骤。
+- [x] `nsh check nsh-app` 通过（TypeScript 对着 `.nsh/types/aalc/native.d.ts` 校验）。
+- [x] `nsh test nsh-app` 通过：5 个用例（2 个 Rust 单测 + 3 个 TSX UI 用例）。
+- [ ] `nsh run nsh-app --target gpui` 需 GPU/显示环境，无头开发机上待在有桌面的机器验证。
 - [x] `cargo check` / `cargo fmt --check` / `cargo test --lib` 在 `nsh-app/native` 通过（nsh-core 0.5.0，Rust 1.99.1）。
-- [ ] `nsh-testing` 的 `bundle` feature 在本机依赖链编译失败（`rolldown 1.2.13` 与 `rolldown_std_utils` 不兼容），因此原生侧暂不加 `nsh-testing`/`nsh-engine` 开发依赖；P1 需要时再解决（升级工具链或换镜像源）。
+- [~] `nsh-testing` 的 `bundle` feature 在本机依赖链编译失败（`rolldown 1.2.13` 与 `rolldown_std_utils` 不兼容），因此原生侧暂不加 `nsh-testing`/`nsh-engine` 开发依赖；不阻塞 `nsh test`（它自己构建 headless runner），P1 需要 crate 级 UI 测试时再解决。
 - [ ] mixed 模式引入 QuickJS 后的发布包体积与冷启动时间（原 `gpui-app` 为纯 Rust）。
 - [ ] Win32 后端打包能否覆盖原 `app.manifest` 的 DPI 感知与单实例语义；不行则退回 `--target gpui` 自建宿主（需重新评估）。
 - [ ] 托盘（`Tray`）、全局热键（`GlobalShortcut`）、多窗口（`Window.open`）、自定义标题栏在 Windows 实机逐项对齐。
