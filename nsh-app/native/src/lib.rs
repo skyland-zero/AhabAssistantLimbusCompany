@@ -16,6 +16,7 @@
 pub mod i18n;
 pub mod ipc;
 pub mod state;
+pub mod window;
 
 mod runtime;
 

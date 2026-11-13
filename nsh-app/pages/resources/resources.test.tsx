@@ -4,7 +4,7 @@ import { open, test } from "nsh/test";
 import { expect } from "nsh/test";
 import { formatSyncTime } from "./Resources";
 
-const DESKTOP = { width: 844, height: 704, platform: "windows" as const };
+const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
 test("the page lists the resource groups and their versions", async () => {
   const app = await open("../../App.tsx", DESKTOP);

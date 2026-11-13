@@ -2,7 +2,7 @@
 // editor that writes a team back.
 import { expect, open, test } from "nsh/test";
 
-const DESKTOP = { width: 844, height: 704, platform: "windows" as const };
+const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
 // The page swap commits after `press` returns; under the full suite the grid is
 // still empty when the next press runs, so every test waits for the first card.

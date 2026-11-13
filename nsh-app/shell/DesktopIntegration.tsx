@@ -4,6 +4,7 @@
 // `isAvailable`; on a target without it the component draws nothing.
 import { View, effect } from "nsh";
 import { Application, GlobalShortcut, Tray, Window, isAvailable } from "nsh/desktop";
+import { Runtime } from "aalc/native";
 import {
   pauseOrResumeQueue,
   startQueue,
@@ -29,6 +30,20 @@ function toggleQueue(): void {
 }
 
 export function DesktopIntegration() {
+  // On Windows 10/11, enable DWM per-pixel alpha desktop compositing on the
+  // main window so the corners outside the card's rounded radius blend cleanly
+  // with the desktop instead of showing solid black.
+  effect(() => {
+    if (!isAvailable || Runtime.platformOs() !== "windows") return;
+    Runtime.enableTransparency();
+    Runtime.applyRoundedCorners(20);
+    const timer = setTimeout(() => {
+      Runtime.enableTransparency();
+      Runtime.applyRoundedCorners(20);
+    }, 100);
+    return () => clearTimeout(timer);
+  });
+
   // The tray icon and its menu follow the queue state and the language.
   effect(() => {
     if (!isAvailable) return;

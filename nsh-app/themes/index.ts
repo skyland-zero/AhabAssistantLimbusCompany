@@ -1,6 +1,6 @@
 // The app's runtime theme: a skin's token table with an accent laid over it.
 //
-// `nsh.json` bootstraps the default skin; the user's skin and accent are
+// `nsh.json` bootstraps Bettbox (`theme.json`); the user's skin and accent are
 // applied with `setTheme()`, which replaces the theme wholesale — so the object
 // built here carries the radius scale too. `skins.ts` is the table (38 tokens
 // per skin: 34 colour + 4 decoration, plus what each accent changes), kept by
@@ -86,7 +86,7 @@ export const ACCENT_LABELS: Record<AccentName, string> = {
 
 /** The window's own shadow: it is the app's to draw, since a transparent
  *  window has none of the system's. Not a skin's token — every skin floats the
- *  same way — and the default skin's boot theme carries the same values in
+ *  same way — and Bettbox's boot theme carries the same values in
  *  `theme.json`. */
 const WINDOW_SHADOW: Record<"light" | "dark", string> = {
   light: "rgba(0, 0, 0, 0.30)",

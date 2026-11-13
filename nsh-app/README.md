@@ -65,8 +65,9 @@ assets/          随包资源（icons/ 为 Lucide SVG）
 
 ## 主题
 
-`theme.json`（启动时的默认皮肤）与 `themes/skins.ts` 是 shadcn `cssVars` 形态的皮肤表
-（7 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token，另加 7 个强调色的差异表）。
+`theme.json`（`nsh.json` 的启动主题，只含默认皮肤 Bettbox）与 `themes/skins.ts` 是 shadcn
+`cssVars` 形态的皮肤表（7 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token，另加 7 个强调色的差异表）。
+首次启动写下的 `settings.json` 里 `skinId` 是 `bettbox`、`accentId` 是 `rose`；用户改过之后按文件来。
 `themes/index.ts` 在运行时合成「皮肤 × 强调色 × 颜色主题」并调 `setTheme()`；颜色主题的
 种子（`themeSeed`）由 `themes/seed.ts` 换算成品牌色相关的七个 token。
 

@@ -6,7 +6,7 @@
 // Signals stay private: pages call the functions, they never write the signal.
 import { setColorScheme, signal } from "nsh";
 import { AppStore, I18n } from "aalc/native";
-import { DECOR_OF, SKIN_DEFAULT_ACCENT, applyTheme } from "./themes";
+import { ACCENT_LABELS, DECOR_OF, SKIN_DEFAULT_ACCENT, applyTheme } from "./themes";
 import type { AccentName, Decor, SkinName } from "./themes";
 
 /** A destination in the title bar, in the order the shell draws them. */
@@ -93,11 +93,17 @@ export function mirrorHomeStatus(next: string): void {
   homeStatus.set(next === "paused" ? "paused" : next === "running" || next === "starting" ? "running" : "idle");
 }
 
-/** The visual skin (surface, geometry, decoration), and the accent over it. */
+/** The visual skin (surface, geometry, decoration), and the accent over it.
+ *  Rust owns the stored pair; these fallbacks only cover a file whose ids the
+ *  theme table does not know (an older or hand-edited value). */
+const FALLBACK_SKIN: SkinName = "bettbox";
 const storedSkin = appSettings.skin() as SkinName;
-const initialSkin: SkinName = storedSkin in SKIN_DEFAULT_ACCENT ? storedSkin : "default";
+const initialSkin: SkinName = storedSkin in SKIN_DEFAULT_ACCENT ? storedSkin : FALLBACK_SKIN;
+const storedAccent = appSettings.accent() as AccentName;
 const skin = signal<SkinName>(initialSkin);
-const accent = signal<AccentName>(appSettings.accent() as AccentName);
+const accent = signal<AccentName>(
+  storedAccent in ACCENT_LABELS ? storedAccent : SKIN_DEFAULT_ACCENT[initialSkin],
+);
 /** The colour theme's seed, or `""` for "follow the skin's accent". */
 const seed = signal<string>(appSettings.themeSeed());
 
@@ -122,10 +128,10 @@ export function currentDecor(): Decor {
 }
 
 /** Applies the skin, accent and appearance the app starts with. `theme.json`
- *  bootstraps only the default skin, so the run starts from the composed theme
- *  instead of whatever `nsh.json` declared; the stored appearance has to be
- *  pushed the same way, or a user who picked dark gets the system's choice
- *  until the next toggle. Call once, when the root is created. */
+ *  bootstraps Bettbox alone, so the run starts from the composed theme instead
+ *  of whatever `nsh.json` declared; the stored appearance has to be pushed the
+ *  same way, or a user who picked dark gets the system's choice until the next
+ *  toggle. Call once, when the root is created. */
 export function initTheme(): void {
   applyTheme(skin(), accent(), currentSeed());
   // A stored light/dark wins over the platform's appearance; `system` leaves it

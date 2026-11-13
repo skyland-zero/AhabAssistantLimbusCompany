@@ -19,7 +19,8 @@
 
 ## 2. Token
 
-`theme.json`（默认皮肤，`nsh.json` 的 `"theme"`）与 `themes/skins.ts` 一起构成皮肤表。
+`theme.json`（Bettbox，`nsh.json` 的 `"theme"`，即首启与热重载前的启动主题）与 `themes/skins.ts`
+一起构成皮肤表。
 这张表原本由 `scripts/export_nsh_theme.py` 从 GPUI 调色板机械导出，脚本随旧树删除后改为手写：
 
 - 7 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token（`band-top` `band-bottom` `wash` `grain`）

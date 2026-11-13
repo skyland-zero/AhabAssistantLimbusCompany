@@ -2,8 +2,8 @@
 // navigation jumps to one, and a choice that changes the theme takes effect.
 import { expect, open, test } from "nsh/test";
 
-/** The window the desktop client runs in (`nsh.json` 844×704). */
-const DESKTOP = { width: 844, height: 704, platform: "windows" as const };
+/** The window the desktop client runs in (`nsh.json` 820×680). */
+const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
 /** Opens the app on the settings page. The page swap lands after `press`
  *  returns, so every test waits for the first card before touching it. */

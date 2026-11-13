@@ -2,6 +2,7 @@
 // and the page host. Page logic lives in `pages/`, the shell in `shell/`,
 // shared state in `store.ts`.
 import { mount, View } from "nsh";
+import { Runtime } from "aalc/native";
 import { PageHost } from "./pages/PageHost";
 import { DesktopIntegration } from "./shell/DesktopIntegration";
 import { SkinBackdrop } from "./shell/SkinBackdrop";
@@ -14,6 +15,8 @@ function App() {
   // boot theme, which only carries the default skin, and the stored appearance
   // replaces the system's.
   initTheme();
+  Runtime.enableTransparency();
+  Runtime.applyRoundedCorners(20);
   return (
     <View class="relative flex-1">
       <WindowFrame>

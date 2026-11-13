@@ -29,6 +29,16 @@ getrandom = "0.4"
 tungstenite = "0.28"
 nsh-core = "0.5.0"
 
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+]
+
 [dev-dependencies]
 # No crate-level UI tests yet: the headless `App.test.tsx` runs through the
 # `nsh test` CLI, which builds its own host. Re-add `nsh-testing` +
@@ -37,4 +47,4 @@ nsh-core = "0.5.0"
 # examples/rust-exports/native/tests in the NSH repository.
 
 [lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"

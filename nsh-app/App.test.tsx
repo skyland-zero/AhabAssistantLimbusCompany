@@ -3,10 +3,9 @@
 // toggle cycles and reports what it shows.
 import { expect, open, test } from "nsh/test";
 
-/** The window the desktop client runs in (`nsh.json` 844×704: an 820×680 card
- *  inside the window frame's band); the headless default is a phone, where the
- *  title bar would be clipped. */
-const DESKTOP = { width: 844, height: 704, platform: "windows" as const };
+/** The window the desktop client runs in (`nsh.json` 820×680); the headless
+ *  default is a phone, where the title bar would be clipped. */
+const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
 test("the title bar lists every destination", async () => {
   const app = await open("./App.tsx", DESKTOP);

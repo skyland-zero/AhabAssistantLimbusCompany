@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 pub const APP_SETTINGS_FILE: &str = "settings.json";
 pub const MIN_RIGHT_PANEL_WIDTH: u32 = 280;
 pub const MAX_RIGHT_PANEL_WIDTH: u32 = 800;
+/// The appearance a fresh install starts with: Bettbox's theme-coloured wash
+/// under white cards, in its own rose accent. A file that predates the skin
+/// picker (no `skinId`) gets these too, via `migrate`.
+pub const DEFAULT_SKIN_ID: &str = "bettbox";
+pub const DEFAULT_ACCENT_ID: &str = "rose";
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -55,8 +60,8 @@ impl Default for AppSettings {
             rightPanelWidth: 280,
             rightPanelCollapsed: false,
             themeMode: ThemeMode::System,
-            accentId: "crimson".into(),
-            skinId: "default".into(),
+            accentId: DEFAULT_ACCENT_ID.into(),
+            skinId: DEFAULT_SKIN_ID.into(),
             themeSeed: None,
             language: Language::ZhCn,
             lastDeviceId: None,
@@ -98,6 +103,9 @@ fn migrate(version: u32, mut settings: AppSettings) -> AppSettings {
     if version == 0 && settings.rightPanelWidth == 0 {
         settings.rightPanelWidth = MIN_RIGHT_PANEL_WIDTH;
     }
+    // The skin picker arrived after the files this reads: one without a
+    // `skinId` already arrives as the default skin from the serde defaults, so
+    // there is nothing to rewrite here.
     settings.rightPanelWidth = settings
         .rightPanelWidth
         .clamp(MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH);
@@ -115,8 +123,8 @@ mod tests {
         assert_eq!(settings.rightPanelWidth, 280);
         assert!(!settings.rightPanelCollapsed);
         assert_eq!(settings.themeMode, ThemeMode::System);
-        assert_eq!(settings.accentId, "crimson");
-        assert_eq!(settings.skinId, "default");
+        assert_eq!(settings.accentId, DEFAULT_ACCENT_ID);
+        assert_eq!(settings.skinId, DEFAULT_SKIN_ID);
         assert_eq!(settings.language, Language::ZhCn);
         assert_eq!(settings.lastDeviceId, None);
     }
@@ -143,8 +151,16 @@ mod tests {
         };
         let json = settings.to_json().unwrap();
         assert_eq!(AppSettings::from_json(&json).unwrap(), settings);
+        // A file without the skin fields opens on the default skin; one with
+        // them keeps what the user picked.
         let legacy = AppSettings::from_json(r#"{"accentId":"blue"}"#).unwrap();
-        assert_eq!(legacy.skinId, "default");
+        assert_eq!(legacy.skinId, DEFAULT_SKIN_ID);
+        let picked = AppSettings::from_json(
+            r#"{"skinId":"limbus","accentId":"limbus-brass"}"#,
+        )
+        .unwrap();
+        assert_eq!(picked.skinId, "limbus");
+        assert_eq!(picked.accentId, "limbus-brass");
     }
 
     #[test]
