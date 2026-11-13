@@ -3,9 +3,28 @@
 version = 4
 
 [[package]]
+name = "aalc-contract"
+version = "0.1.0"
+dependencies = [
+ "aalc-model",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aalc-model"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aalc-native"
 version = "0.1.0"
 dependencies = [
+ "aalc-contract",
+ "aalc-model",
  "getrandom 0.4.3",
  "nsh-core",
  "serde",

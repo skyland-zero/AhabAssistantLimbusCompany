@@ -1,9 +1,10 @@
-//! The external JSON-RPC contract's serializable payloads.
+//! The external JSON-RPC contract's serializable payloads (crate `aalc-model`).
 //!
 //! These are the field-for-field Rust `serde` types the Python sidecar and the
 //! deterministic mock both speak (schema 3). They are pure data: no RPC, no
-//! signals, no rendering. The state layer builds on them in P1's next step, so
-//! some payloads are not referenced yet.
+//! signals, no rendering, and no `nsh-core` dependency, so they build and test
+//! on their own (`cargo test -p aalc-model`). The app crate re-exports this
+//! crate as `crate::model`, which is the path its code uses.
 
 #![allow(dead_code)]
 

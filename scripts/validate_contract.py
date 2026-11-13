@@ -23,7 +23,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "contract" / "contract.json"
 RUST_CONTRACTS = [
-    ROOT / "nsh-app" / "native" / "src" / "ipc" / "contract.rs",
+    ROOT / "nsh-app" / "native" / "crates" / "contract" / "src" / "lib.rs",
 ]
 MOCK_DIRS = [
     ROOT / "nsh-app" / "native" / "src" / "ipc" / "mock",

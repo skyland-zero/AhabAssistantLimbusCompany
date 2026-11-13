@@ -15,8 +15,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 RELEASE = DIST / "AALC"
-NATIVE_DECODER_MANIFEST = ROOT / "native" / "scrcpy_decoder" / "Cargo.toml"
-NATIVE_DECODER_BINARY = ROOT / "native" / "scrcpy_decoder" / "target" / "release" / "scrcpy_decoder.dll"
+NATIVE_DECODER_DIR = ROOT / "native" / "scrcpy_decoder"
+NATIVE_DECODER_MANIFEST = NATIVE_DECODER_DIR / "Cargo.toml"
+# The decoder keeps its own target directory: `.cargo/config.toml` sends every
+# other cargo build in this checkout to `nsh-app/target`, while the Python sidecar
+# loads the DLL from here (`module/automation/.../native_scrcpy_decoder.py`).
+NATIVE_DECODER_TARGET_DIR = NATIVE_DECODER_DIR / "target"
+NATIVE_DECODER_BINARY = NATIVE_DECODER_TARGET_DIR / "release" / "scrcpy_decoder.dll"
 SCRCPY_RUNTIME_DIR = ROOT / "assets" / "binary" / "scrcpy-ffmpeg"
 BACKEND_BUNDLE = DIST / "AALCBackend"
 SHARED_RUNTIME_BUNDLE = DIST / "AALCRuntime"
@@ -29,10 +34,10 @@ SHARED_RUNNER_ENTRY = "backend/AALCRunner.exe"
 NSH_PACKAGE_DIR = ROOT / "artifacts" / "nsh" / "build"
 
 
-def run(command: list[str], *, cwd: Path = ROOT) -> None:
+def run(command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> None:
     sys.stdout.write(f"+ {' '.join(command)}\n")
     sys.stdout.flush()
-    subprocess.run(command, cwd=cwd, check=True)
+    subprocess.run(command, cwd=cwd, check=True, env=env)
 
 
 def build_python_executable(spec: str) -> None:
@@ -57,7 +62,8 @@ def build_native_decoder() -> None:
             "--release",
             "--manifest-path",
             str(NATIVE_DECODER_MANIFEST),
-        ]
+        ],
+        env={**os.environ, "CARGO_TARGET_DIR": str(NATIVE_DECODER_TARGET_DIR)},
     )
     if not NATIVE_DECODER_BINARY.is_file():
         raise FileNotFoundError(f"native decoder build output is missing: {NATIVE_DECODER_BINARY}")

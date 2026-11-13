@@ -1,7 +1,7 @@
 // The mirror-team configuration model and the labels its editor shows.
 //
 // The field names are the contract's (`TeamMirrorConfig` in
-// `native/src/model/teams.rs` and `contract/contract.json`), so a future
+// `native/crates/model/src/teams.rs` and `contract/contract.json`), so a future
 // `Teams.*` RPC can replace the fixtures without renaming anything. Defaults
 // and label tables are ported 1:1 from the GPUI client's `model/teams.rs` and
 // `pages/teams/shared.rs`.

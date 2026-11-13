@@ -1,0 +1,24 @@
+# Build settings shared by every Cargo project in this checkout: the Native
+# Shell app crate (`nsh-app/native`), the hosts `nsh` generates for it, and
+# `native/scrcpy_decoder`.
+#
+# Written for machines where the target directories are the bottleneck (an HDD
+# or a small SSD): they avoid a second copy of the dependency tree and cut the
+# link time of the multi-hundred-megabyte debug hosts.
+
+[build]
+# One artifact directory for the app crate and the hosts `nsh` builds for it.
+# Without this, `cargo test --manifest-path nsh-app/native/Cargo.toml` compiles
+# tokio/tungstenite/rustls and `nsh-core` again into `nsh-app/native/target`
+# instead of reusing what the host build already produced. Paths here are
+# resolved against this file's directory, so any working directory works.
+# `nsh` passes its own `--target-dir` for the host workspaces, which wins.
+target-dir = "nsh-app/target"
+
+# Line-tables-only debug info for the app's Rust crates. The `dev` hosts are
+# otherwise ~1.6 GB of debug info, and linking that dominates a Rust rebuild;
+# `1` keeps file/line in panic backtraces and drops the rest. Raise it to
+# `debuginfo=2` in `RUSTFLAGS` for one session when you need variables in a
+# debugger. `native/scrcpy_decoder` is a `cdylib` with `strip = true` in its own
+# release profile, so its artifacts are unaffected.
+rustflags = ["-C", "debuginfo=1"]

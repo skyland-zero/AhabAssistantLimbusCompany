@@ -247,12 +247,14 @@ nsh package nsh-app --target windows -o artifacts/nsh/package
 
 ## 1.7 P1 第一块：model + ipc（2026-11-12）
 
-已迁入 `nsh-app/native/src/`：
+已迁入 `nsh-app/native/`（`aalc-native` 工作区，纯数据部分在 `crates/`）：
 
-- **`model/`**：`settings` / `other` / `stats` / `tasks` / `teams` / `team_stats` 的 schema 3
+- **`crates/model/`（`aalc-model`）**：`settings` / `other` / `stats` / `tasks` / `teams` / `team_stats` 的 schema 3
   payload，字段名与原 `旧客户端/src/model/` 一致。`tasks.rs` 按 enums / config / execution 拆开；
-  settings 的文件 I/O 留给 `state/settings_file.rs`，`model/` 只保留 JSON、默认值与版本迁移。
-- **`ipc/contract.rs`**：请求/响应/结构化错误/事件 envelope、method 与 event 名称、请求序号。
+  settings 的文件 I/O 留给 `state/settings_file.rs`，model 只保留 JSON、默认值与版本迁移。
+  不依赖 `nsh-core`，应用侧以 `crate::model` 重新导出。
+- **`crates/contract/`（`aalc-contract`）**：请求/响应/结构化错误/事件 envelope、method 与 event 名称、请求序号；
+  只依赖 `serde`，应用侧以 `crate::ipc::contract` 重新导出。
 - **`ipc/gateway.rs`**：`request_value`、类型化 `request<T>`、执行快照与结构化错误。
 - **`ipc/mock/`**：确定性 Mock：团队/预设（6 个）/统计、任务、执行状态机、设备、主题包、资源、设置；
   事件带单调 `seq`，`submit` 走与真实 sidecar 相同的完成队列。
@@ -342,8 +344,8 @@ P5 清理：
 
 | 原位置（`旧客户端/src/`） | 行数 | 目标 | 备注 |
 | --- | --- | --- | --- |
-| `model/` | 1678 | `native/src/model/` | P1 已迁入；settings 的文件 I/O 拆到 `state/settings_file.rs` |
-| `ipc/contract.rs` | — | `native/src/ipc/contract.rs` | P1 已迁入；与 `contract/contract.json` 由校验脚本对齐 |
+| `model/` | 1678 | `native/crates/model/` | P1 已迁入；settings 的文件 I/O 拆到 `state/settings_file.rs` |
+| `ipc/contract.rs` | — | `native/crates/contract/` | P1 已迁入；与 `contract/contract.json` 由校验脚本对齐 |
 | `ipc/gateway.rs` | — | `native/src/ipc/gateway.rs` | P1 已迁入 |
 | `ipc/websocket/` | — | `native/src/ipc/websocket/` | P1 已迁入；阻塞 worker + std mpsc，去掉 Entity/async-channel |
 | `ipc/mock/` | 647 | `native/src/ipc/mock/` | P1 已迁入；供 `nsh test` 与无后端开发 |
@@ -381,7 +383,7 @@ P5 清理：
 | 文件 | 改为 |
 | --- | --- |
 | `scripts/build.py`（`gpui_binary`、`copy_tree(resources)`、`cargo build --manifest-path`） | `nsh package nsh-app` 产物 + `nsh-app/assets` |
-| `scripts/validate_contract.py`（`contract.rs`、mock 目录） | 已切换：只检查 `nsh-app/native/src/ipc/**`、Python 与两个 Mock |
+| `scripts/validate_contract.py`（`contract.rs`、mock 目录） | 已切换：只检查 `nsh-app/native/crates/contract`、`src/ipc/**`、Python 与两个 Mock |
 | `scripts/generate_limbus_theme.py`、`scripts/render_limbus_tabs.py` | 输出到 `nsh-app/assets/themes/limbus` |
 | `.github/workflows/reusable-build.yml` | `nsh-app/native` + `nsh check` / `nsh test` |
 | `run-gpui.bat`、`run-gpui-mock.bat` | `run-nsh.bat`、`run-nsh-mock.bat` |

@@ -1,0 +1,21 @@
+[package]
+name = "aalc-contract"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "AALC's client ↔ sidecar JSON-RPC contract: envelopes, method and event names, structured errors."
+
+# Member of the `nsh-app/native` workspace. The contract is checked against
+# `contract/contract.json` by `scripts/validate_contract.py`; it depends only on
+# `aalc-model` for fixtures, not on the transport or the state layer.
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+aalc-model = { path = "../model" }
+
+[lints.rust]
+unsafe_code = "forbid"

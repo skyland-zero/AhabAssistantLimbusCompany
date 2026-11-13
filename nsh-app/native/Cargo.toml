@@ -6,13 +6,20 @@ rust-version = "1.97"
 publish = false
 description = "AALC's Native Shell backend: RPC transport, execution state and domain models."
 
-# An empty workspace table so this crate builds on its own: `nsh` links it into
-# the hosts it builds (nsh.json `"rust": "native"`), and the repository keeps
-# other Cargo projects next to it that must not join this build.
+# The app crate is the root of its own workspace, closed to the repository's
+# other Cargo projects: `nsh` links only this package into the hosts it builds
+# (nsh.json `"rust": "native"`). The two crates it builds on are members, so
+# one `cargo test`/`cargo clippy --workspace` covers the whole Rust side while
+# `nsh` still sees a single app crate.
 [workspace]
+members = ["crates/contract", "crates/model"]
 
 [dependencies]
 # The external contract (and the deterministic mock) are serde JSON payloads.
+# `aalc-contract` holds the envelopes and names, `aalc-model` the payloads; both
+# are re-exported below as `ipc::contract` and `model`.
+aalc-contract = { path = "crates/contract" }
+aalc-model = { path = "crates/model" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Blocking WebSocket for the loopback Python sidecar. The transport runs on its

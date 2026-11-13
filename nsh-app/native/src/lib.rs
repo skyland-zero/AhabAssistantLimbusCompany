@@ -7,10 +7,14 @@
 //! P1 is being ported bottom-up: `model` (the contract's payloads) and `ipc`
 //! (the mock and the real sidecar transport) land first, then `state`, `i18n`
 //! and the app lifecycle. See `MIGRATION.md` for the source mapping.
+//!
+//! The two pure-data crates live in `crates/` and are re-exported at their old
+//! paths, so `crate::model::..` and `crate::ipc::contract::..` keep working:
+//! [`aalc_model`] has no `nsh-core` dependency at all, and [`aalc_contract`]
+//! only what `serde` needs.
 
 pub mod i18n;
 pub mod ipc;
-pub mod model;
 pub mod state;
 
 mod runtime;
@@ -18,6 +22,8 @@ mod runtime;
 use nsh_core::prelude::*;
 
 pub use crate::runtime::Runtime;
+/// The contract's payloads, as `crate::model` (crate `aalc-model`).
+pub use aalc_model as model;
 
 /// The crate's UI set: what `App.tsx` imports from `aalc/native`.
 #[native_module("aalc/native")]

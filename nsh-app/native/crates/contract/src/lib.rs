@@ -1,9 +1,13 @@
-//! The external JSON-RPC contract (schema 3).
+//! The external JSON-RPC contract (schema 3), crate `aalc-contract`.
 //!
 //! Method and event names are shared by the Python sidecar, the deterministic
 //! mock and the Rust state layer. `scripts/validate_contract.py` checks this
 //! file against `contract/contract.json`; changing one without the other is a
-//! contract break.
+//! contract break. The app crate re-exports this crate as `crate::ipc::contract`.
+//!
+//! Only `serde` is needed to build it, so the contract and its fixture tests
+//! run without the transport, the state layer or `nsh-core`:
+//! `cargo test -p aalc-contract`.
 
 #![allow(dead_code)]
 
@@ -304,7 +308,7 @@ mod tests {
 
     #[test]
     fn python_schema_three_fixtures_decode_at_the_rust_boundary() {
-        use crate::model::{
+        use aalc_model::{
             ExecutionStatsPayload, ExecutionStatusPayload, LogEntryPayload, LogLevel,
             PreviewStatusPayload, ScreenshotFrame,
         };

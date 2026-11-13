@@ -1,0 +1,17 @@
+[package]
+name = "aalc-model"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "AALC's JSON-RPC payloads: pure serde types shared by the app crate, the mock and the sidecar boundary."
+
+# Member of the `nsh-app/native` workspace; nothing here touches `nsh-core`, so
+# payload changes and their fixture tests build without the UI stack.
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints.rust]
+unsafe_code = "forbid"

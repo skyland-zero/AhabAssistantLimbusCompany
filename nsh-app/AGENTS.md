@@ -20,11 +20,14 @@ nsh-app/
 ├── shell/              TSX：标题栏、侧栏、Toast 等窗口级 UI
 ├── components/         TSX：设计系统（按钮、控件、弹层、文本输入、图标）
 ├── pages/              TSX：home / teams / settings / theme_packs / help
-├── native/             Rust 后端 crate（nsh.json `"rust": "native"`）
+├── native/             Rust 后端 crate 工作区（nsh.json `"rust": "native"`）
+│   ├── Cargo.toml      工作区根包 `aalc-native`，members 为 `crates/*`
+│   ├── crates/
+│   │   ├── contract/   `aalc-contract`：RPC 信封、方法/事件名、结构化错误（只依赖 serde）
+│   │   └── model/      `aalc-model`：契约 payload，纯 serde 数据，不依赖 nsh-core
 │   └── src/
 │       ├── lib.rs      唯一的 #[native_module("aalc/native")] 注册点
-│       ├── ipc/        契约、网关、WebSocket 传输、sidecar 生命周期、mock
-│       ├── model/      可序列化领域模型与纯数据类型
+│       ├── ipc/        网关、WebSocket 传输、sidecar 生命周期、mock（契约见 crates/contract）
 │       ├── state/      状态容器、状态变更、持久化
 │       ├── i18n/       双语文案表
 │       ├── assets.rs   资源身份表（assets!() 内嵌）
@@ -36,6 +39,7 @@ nsh-app/
 职责边界：
 
 - `native/` 不 `use` 任何渲染类型（`nsh-core` 之外的 GPUI/平台 crate），只依赖 `nsh-core`、`nsh-base` 与纯 Rust 库。
+- `crates/model/` 与 `crates/contract/` 不依赖 `nsh-core`：payload 与契约的改动、契约一致性测试可以用 `cargo test -p aalc-model -p aalc-contract` 秒级验证，不需要 UI 栈。
 - `model/` 不发起 RPC，不持有信号，不渲染。
 - `state/` 负责状态变更、RPC 调用与持久化，不构建元素。
 - `pages/` 只把状态渲染成 UI；事件闭包调用 `state`/`native` 的方法，不得在页面内复制业务状态。
@@ -79,9 +83,12 @@ nsh-app/
 ```bash
 nsh check nsh-app            # TSX 对着 .nsh/types 里的 Rust 声明做类型检查
 nsh test nsh-app             # App.test.tsx：无头跑真实 UI
-cargo test --manifest-path nsh-app/native/Cargo.toml
+cargo test --manifest-path nsh-app/native/Cargo.toml   # 工作区全部成员
 nsh run nsh-app --target gpui
 ```
+
+`cargo test` 在 `native` 工作区里跑 `aalc-native` 与 `crates/*`；只改契约或 payload 时用
+`cargo test -p aalc-model -p aalc-contract`，不编译 UI 栈。
 
 页面改动的验收标准是与原客户端截图 1:1 对照（见 `MIGRATION.md` 的进度表），而不是「看起来差不多」。
 
@@ -91,7 +98,24 @@ nsh run nsh-app --target gpui
 python3 scripts/capture_nsh.py     # → nsh-app/docs/shots/p0-desktop.png
 ```
 
-## 7. 参考：项目级 Agent Skills
+## 7. 构建速度
+
+改 Rust 后 `nsh run` 要重新编译并链接一个完整 host，慢的是链接与重复的依赖编译，不是应用
+代码（`aalc-native` 本身几秒就能编完）。仓库已按这一点做了三件事，改动时不要退回去：
+
+| 机制 | 位置 | 作用 |
+| --- | --- | --- |
+| 统一 target 目录 | 根 `.cargo/config.toml` 的 `build.target-dir` | native crate 与 host 共用 `nsh-app/target`，不再把 tokio/rustls/`nsh-core` 再编一遍；`nsh` 自己传 `--target-dir`，以它的为准 |
+| `debuginfo=1` | 同上 `build.rustflags` | dev host 的调试信息从约 1.6 GB 降到几百 MB，链接时间随之下降；保留行号，没有变量值 |
+| lld-link | `scripts/build-env.bat`（由 `run-nsh.bat` / `run-nsh-mock.bat` 调用） | PATH 上有 `lld-link` 就用它链接；`set AALC_LINKER=default` 回到 `link.exe`，`set AALC_LINKER=<lld-link 路径>` 指定 Visual Studio 自带的那份（通常在 `VC\Tools\Llvm\x64\bin`），`set AALC_DEBUGINFO=2` 临时恢复完整调试信息 |
+
+`native/scrcpy_decoder` 是例外：产物固定在自己的 `target/release`（`scripts/build.py` 显式传
+`CARGO_TARGET_DIR`），因为 Python 侧按这个路径加载 DLL。
+
+拆分边界同理：`crates/model`、`crates/contract` 只放纯 serde 数据（不依赖 `nsh-core`），
+`src/` 里的 state/ipc 依赖 UI 栈。往 `crates/` 里加 `nsh-core` 依赖会让快编译路径失效。
+
+## 8. 参考：项目级 Agent Skills
 
 仓库内置了 Native Shell 官方 Agent Skills（`.agents/skills/`，随仓库提交）：
 

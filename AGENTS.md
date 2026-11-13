@@ -18,7 +18,7 @@ Python 后端的主要入口：
 - `module/rpc_contract.py`、`module/rpc_dispatcher.py`、`module/websocket_server.py`：RPC 契约与传输；
 - `module/backend_application.py`、`module/backend_services/`、`module/execution/`、`module/device_manager.py`、`module/preview_capture.py`、`module/resource_sync/`：后端服务。
 
-跨两端的接口以 `contract/contract.json` 为准。新增或修改 RPC 时，先改契约，再同步 `nsh-app/native/src/ipc/contract.rs`、`module/rpc_contract.py`、Mock 和契约测试。
+跨两端的接口以 `contract/contract.json` 为准。新增或修改 RPC 时，先改契约，再同步 `nsh-app/native/crates/contract/src/lib.rs`、`module/rpc_contract.py`、Mock 和契约测试。
 
 ### 1.2 沿用的上游代码
 
