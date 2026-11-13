@@ -22,9 +22,9 @@
 `theme.json`（默认皮肤，`nsh.json` 的 `"theme"`）与 `themes/skins.ts` 一起构成皮肤表。
 这张表原本由 `scripts/export_nsh_theme.py` 从 GPUI 调色板机械导出，脚本随旧树删除后改为手写：
 
-- 6 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token（`band-top` `band-bottom` `wash` `grain`）
+- 7 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token（`band-top` `band-bottom` `wash` `grain`）
   + 4 档圆角（`radius-sm` `radius` `radius-lg` `radius-xl`）。
-- 6 个强调色不各存一份全表：`ACCENT_OVERRIDES` 只记「换强调色后变了的 token」
+- 7 个强调色不各存一份全表：`ACCENT_OVERRIDES` 只记「换强调色后变了的 token」
   （`brand*` `decor-line` `ring` `selection`，以及 limbus 的 `accent-foreground`、glass 的 `wash`），
   运行时由 `themes/index.ts` 的 `themeFor(skin, accent)` 合成，`applyTheme()` 调 `setTheme()`。
 - token 名就是 shadcn 的名字，TSX 直接用类：`bg-card` `text-muted-foreground` `border-border`
@@ -48,7 +48,7 @@
 
 ### 皮肤装饰语言
 
-6 个皮肤共用同一套组件结构（同样的内边距、同样的 44pt 标题带），只换装饰语言；组件用
+7 个皮肤共用同一套组件结构（同样的内边距、同样的 44pt 标题带），只换装饰语言；组件用
 `currentDecor()` 分支，**不按皮肤 id 分支**：
 
 | 皮肤 | decor | 卡片 | 标题带 | 空状态标记 | 分隔符 |
@@ -59,11 +59,24 @@
 | 边狱 | `limbus` | 无阴影 + 四角 L 形角框 | 渐变带（`band-top`→`band-bottom`）+ 左侧 3px 竖条 + 污渍 | 封蜡图 | 金色花纹图 |
 | 血雾 | `mist` | `shadow-md` + 顶部红色氛围 | 左侧 3px 竖条 + 底部 `border` | 细横杠 | 发丝线 |
 | NSH | `hairline` | 无阴影 + 1px `border` 描边 | 底部 `border` 发丝线 | 无 | 发丝线 |
+| Bettbox | `gradient` | `shadow-sm`，无边框 | 无分隔线 | 无 | 发丝线 |
 
 `nsh` 是唯一不来自 GPUI 的皮肤：它按设计指南新增，用结构而非装饰分层。浅色下也有可见描边
 （其余平皮肤浅色 `border` 是透明的）、卡片不投影、六个装饰 token（含 `hilite` `glow`）全透明；
 状态色直接沿用 `default`，强调色默认赤红，所以皮肤之间切换只换表面。圆角 4/6/10/14：
 控件 6 是指南起点，容器再柔一档。
+
+`bettbox` 是第二套不来自 GPUI 的皮肤：页面底色不画在卡片上，而由 `SkinBackdrop` 用
+`wash` 画一条横向渐变（0% 到 85% 宽度），标题栏透明让它穿过；卡片无边框、只有一层软阴影。
+`wash` 因此是这皮肤的结构 token；换强调色/颜色主题时渐变跟着变色。
+
+### 颜色主题
+
+设置页「颜色主题」用一份 11 色的预设（Bettbox 的色板）加自定义 `#RRGGBB`，写入
+`settings.json` 的 `themeSeed`。`themes/seed.ts` 把种子转成 OKLCH，按「浅色 L∈[0.45,0.57]、
+深色 L∈[0.74,0.86]，并且品牌色上的文字至少 4.5:1」推出 `brand` 系列、`primary`、
+`ring`、`selection`、`wash` 七个 token，再由 `themeFor(skin, accent, seed)` 覆盖在皮肤表之上。
+颜色主题只改色相，不改表面层级：`background`、`card`、`muted` 仍来自皮肤。
 
 皮肤背景层由 `shell/SkinBackdrop.tsx` 统一画（页面不参与）：边狱深色铺星云原图（浅色不铺，否则
 羊皮纸会被压成灰褐）、血雾红色顶部渐晕 + 1px 斜纹颗粒、玻璃顶部 accent 渐晕。
@@ -278,6 +291,6 @@ nsh run nsh-app       # 开窗看
     用 `role:button[...]` 选择，名字不对就会失败。
 - **未通过 / 未验证**：
   - `font-semibold` 在 Linux 宿主回退（`.SystemUIFont` 缺 600 字重），粗体实际没生效 → 待定字体族。
-  - 6 个皮肤（`nsh` 为新增）、6 个强调色、DPI 缩放、Windows 实机（窗口按钮 / 托盘 / 全局热键）均未验证。
+  - 7 个皮肤（`nsh`、`bettbox` 为新增）、7 个强调色、DPI 缩放、Windows 实机（窗口按钮 / 托盘 / 全局热键）均未验证。
   - 键盘 Tab 顺序与屏幕阅读器朗读未在本轮验证。
 

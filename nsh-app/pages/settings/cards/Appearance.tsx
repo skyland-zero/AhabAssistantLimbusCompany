@@ -4,8 +4,10 @@
 // the theme follows on the next frame. The skin grid is drawn from the theme
 // table rather than from screenshots, so a miniature always matches the accent
 // and appearance in effect.
-import { Text, View, colorScheme } from "nsh";
+import { Text, View, colorScheme, signal } from "nsh";
+import { Button } from "../../../components/Button";
 import { SettingLine, SettingList } from "../../../components/Field";
+import { Input } from "../../../components/Input";
 import { Segmented, SwatchRow } from "../../../components/Segmented";
 import { Swatch } from "../../../components/Swatch";
 import { currentLanguage, setFeedback, setLanguage } from "../../../settings";
@@ -13,15 +15,19 @@ import type { Language } from "../../../settings";
 import {
   ACCENTS,
   ACCENT_LABELS,
+  SEED_PRESETS,
   SKIN_DEFAULT_ACCENT,
+  normaliseSeed,
   tokensFor,
 } from "../../../themes";
 import {
   applyAppearance,
   currentAccent,
   currentAppearance,
+  currentSeed,
   currentSkin,
   setAccent,
+  setThemeSeed,
 } from "../../../store";
 import type { Appearance } from "../../../store";
 import { SkinPicker } from "./SkinPicker";
@@ -68,6 +74,57 @@ export function AppearanceCard() {
             </If>
           </SwatchRow>
         </SettingLine>
+        <SettingLine label="颜色主题">
+          <View class="flex-col gap-1.5">
+            <View class="flex-row flex-wrap items-center gap-2">
+              <Each of={SEED_PRESETS}>
+                {(preset) => (
+                  <Swatch
+                    label={preset().label}
+                    color={preset().hex}
+                    selected={currentSeed() === preset().hex}
+                    onPress={() => {
+                      setThemeSeed(preset().hex);
+                      setFeedback(`颜色主题：${preset().label}`);
+                    }}
+                  />
+                )}
+              </Each>
+              <If when={currentSeed()}>
+                <Button
+                  label="清除"
+                  size="xs"
+                  variant="ghost"
+                  onPress={() => {
+                    setThemeSeed(null);
+                    setFeedback("颜色主题：随皮肤");
+                  }}
+                />
+              </If>
+            </View>
+            <Text class="text-xs text-muted-foreground">
+              主题色会覆盖强调色，决定品牌色与页面渐变；清除后回到皮肤自带的配色。
+            </Text>
+          </View>
+        </SettingLine>
+        <SettingLine label="自定义颜色">
+          <View class="flex-row items-center gap-2">
+            <Input
+              value={customSeed()}
+              placeholder="#RRGGBB"
+              accessibilityLabel="颜色主题自定义色值"
+              onChange={(event) => {
+                customSeed.set(event.value);
+                customSeedHint.set(null);
+              }}
+              class="w-28"
+            />
+            <Button label="应用" size="sm" variant="outline" onPress={applyCustomSeed} />
+            <If when={customSeedHint()}>
+              {(text) => <Text class="text-xs text-warning">{text()}</Text>}
+            </If>
+          </View>
+        </SettingLine>
         <SettingLine label="语言 / Language">
           <Segmented<Language>
             accessibilityLabel="语言"
@@ -90,6 +147,20 @@ export function AppearanceCard() {
       </View>
     </SettingsCard>
   );
+}
+
+/** The custom colour the user is typing, and why it was refused. */
+const customSeed = signal("");
+const customSeedHint = signal<string | null>(null);
+
+function applyCustomSeed(): void {
+  const next = normaliseSeed(customSeed());
+  if (!next) {
+    customSeedHint.set("颜色值要写成 #RRGGBB");
+    return;
+  }
+  setThemeSeed(next);
+  setFeedback(`颜色主题：${next}`);
 }
 
 const APPEARANCE_LABELS: Record<Appearance, string> = {

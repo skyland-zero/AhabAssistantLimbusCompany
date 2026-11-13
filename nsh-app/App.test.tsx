@@ -43,6 +43,7 @@ test("the appearance toggle cycles through the three appearances", async () => {
 test("the language switch updates the title bar and page copy", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.press("role:button[设置]");
+  await app.waitFor("外观");
   await app.press("role:button[English]");
   await app.waitFor("Teams");
   await app.press("role:button[Help]");

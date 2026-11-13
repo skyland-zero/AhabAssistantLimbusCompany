@@ -66,8 +66,9 @@ assets/          随包资源（icons/ 为 Lucide SVG）
 ## 主题
 
 `theme.json`（启动时的默认皮肤）与 `themes/skins.ts` 是 shadcn `cssVars` 形态的皮肤表
-（6 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token，另加 6 个强调色的差异表）。
-`themes/index.ts` 在运行时合成「皮肤 × 强调色」并调 `setTheme()`。
+（7 皮肤 × 浅/深 × 34 个颜色 token + 4 个装饰 token，另加 7 个强调色的差异表）。
+`themes/index.ts` 在运行时合成「皮肤 × 强调色 × 颜色主题」并调 `setTheme()`；颜色主题的
+种子（`themeSeed`）由 `themes/seed.ts` 换算成品牌色相关的七个 token。
 
 这张表早期由一次性的 `scripts/export_nsh_theme.py` 从 GPUI 调色板导出，脚本已随旧客户端删除，
 之后**直接在 `themes/skins.ts` 手写维护**：`nsh` 皮肤就是按设计指南新增的，不再有可重跑的生成器。

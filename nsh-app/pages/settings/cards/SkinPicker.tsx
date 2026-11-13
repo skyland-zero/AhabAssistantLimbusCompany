@@ -9,7 +9,7 @@ import { Button } from "nsh/base";
 import { DECOR_OF, SKINS, SKIN_BLURBS, SKIN_LABELS, tokensFor } from "../../../themes";
 import type { SkinName } from "../../../themes";
 import { setFeedback } from "../../../settings";
-import { currentAccent, currentSkin, setSkin } from "../../../store";
+import { currentAccent, currentSeed, currentSkin, setSkin } from "../../../store";
 
 export function SkinPicker() {
   return (
@@ -31,7 +31,7 @@ export function SkinPicker() {
 }
 
 function SkinOption(props: { skin: SkinName; active: boolean; onPress: () => void }) {
-  const tokens = () => tokensFor(props.skin, currentAccent(), colorScheme());
+  const tokens = () => tokensFor(props.skin, currentAccent(), colorScheme(), currentSeed());
   return (
     <Button
       onPress={props.onPress}
@@ -65,7 +65,7 @@ function SkinOption(props: { skin: SkinName; active: boolean; onPress: () => voi
 
 /** The preview's own frame: a card-coloured plate holding the wireframe. */
 function Frame(props: { skin: SkinName }) {
-  const t = () => tokensFor(props.skin, currentAccent(), colorScheme());
+  const t = () => tokensFor(props.skin, currentAccent(), colorScheme(), currentSeed());
   return (
     <View
       style={{
@@ -86,7 +86,7 @@ function Frame(props: { skin: SkinName }) {
 
 /** A 78pt-tall wireframe of the app: title bar, two panels, one control. */
 function Miniature(props: { skin: SkinName }) {
-  const t = () => tokensFor(props.skin, currentAccent(), colorScheme());
+  const t = () => tokensFor(props.skin, currentAccent(), colorScheme(), currentSeed());
   return (
     <View
       style={{
@@ -156,7 +156,7 @@ function Miniature(props: { skin: SkinName }) {
 
 /** The miniature title bar: the skin's rule, a brand chip and two nav ticks. */
 function TitleStrip(props: { skin: SkinName }) {
-  const t = () => tokensFor(props.skin, currentAccent(), colorScheme());
+  const t = () => tokensFor(props.skin, currentAccent(), colorScheme(), currentSeed());
   return (
     <View
       style={{
@@ -181,7 +181,7 @@ function TitleStrip(props: { skin: SkinName }) {
 
 /** The miniature card header, in that skin's decoration language. */
 function PanelHeader(props: { skin: SkinName }) {
-  const t = () => tokensFor(props.skin, currentAccent(), colorScheme());
+  const t = () => tokensFor(props.skin, currentAccent(), colorScheme(), currentSeed());
   return (
     <View
       style={{

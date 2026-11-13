@@ -14,6 +14,7 @@ import {
   SKIN_TOKENS,
 } from "./skins";
 import type { AccentName, SkinName } from "./skins";
+import { seedTokens } from "./seed";
 
 export { SKIN_DEFAULT_ACCENT };
 export type { AccentName, SkinName };
@@ -21,10 +22,10 @@ export type { AccentName, SkinName };
 /** The decoration language a skin paints on top of the flat surfaces. Renderers
  *  branch on this, never on the skin id, so a skin can change its colours
  *  without every component learning a new predicate. */
-export type Decor = "plain" | "glass" | "archive" | "limbus" | "mist" | "hairline";
+export type Decor = "plain" | "glass" | "archive" | "limbus" | "mist" | "hairline" | "gradient";
 
 /** Which decoration each skin uses (the GPUI `SkinId::decor` mapping, plus
- *  `nsh`'s structure-only `hairline`). */
+ *  `nsh`'s structure-only `hairline` and `bettbox`'s theme-colour gradient). */
 export const DECOR_OF: Record<SkinName, Decor> = {
   default: "plain",
   glass: "glass",
@@ -32,15 +33,17 @@ export const DECOR_OF: Record<SkinName, Decor> = {
   limbus: "limbus",
   mist: "mist",
   nsh: "hairline",
+  bettbox: "gradient",
 };
 
-/** The skins in the order the appearance page lists them: the two flat ones
- *  first, then the decorated families. */
-export const SKINS: SkinName[] = ["default", "nsh", "glass", "archive", "limbus", "mist"];
+/** The skins in the order the appearance page lists them: the flat ones first,
+ *  then the decorated families. */
+export const SKINS: SkinName[] = ["default", "nsh", "bettbox", "glass", "archive", "limbus", "mist"];
 
 /** The accents in the order the appearance page lists them. */
 export const ACCENTS: AccentName[] = [
   "crimson",
+  "rose",
   "blue",
   "amber",
   "emerald",
@@ -56,6 +59,7 @@ export const SKIN_LABELS: Record<SkinName, string> = {
   limbus: "边狱",
   mist: "血雾",
   nsh: "NSH",
+  bettbox: "Bettbox",
 };
 
 /** Each skin's one-line description, as the appearance page shows it. */
@@ -66,11 +70,13 @@ export const SKIN_BLURBS: Record<SkinName, string> = {
   limbus: "冷黑暗红 · 黄铜角框 · 直角",
   mist: "近黑血雾 · 暗角颗粒 · 锐角",
   nsh: "中性灰 · 发丝描边 · 零装饰",
+  bettbox: "主题色渐变 · 白卡片 · 大圆角",
 };
 
 /** Each accent's name, as the appearance page shows it. */
 export const ACCENT_LABELS: Record<AccentName, string> = {
   crimson: "赤红",
+  rose: "玫红",
   blue: "深蓝",
   amber: "琥珀",
   emerald: "翠绿",
@@ -87,7 +93,8 @@ const WINDOW_SHADOW: Record<"light" | "dark", string> = {
   dark: "rgba(0, 0, 0, 0.55)",
 };
 
-/** One skin's colour tokens for one appearance, with `accent` laid over them.
+/** One skin's colour tokens for one appearance, with `accent` laid over them and
+ *  a colour theme laid over both.
  *
  *  `setTheme` reads these as the running theme; the skin picker also reads them
  *  directly, because it draws a miniature of every other skin and those cannot
@@ -96,30 +103,36 @@ export function tokensFor(
   skin: SkinName,
   accent: AccentName,
   appearance: "light" | "dark",
+  seed?: string | null,
 ): Record<string, string> {
   const base = SKIN_TOKENS[skin][appearance];
   const override =
     accent === SKIN_DEFAULT_ACCENT[skin] ? undefined : ACCENT_OVERRIDES[skin][accent];
-  return {
+  const tokens = {
     ...base,
     "window-shadow": WINDOW_SHADOW[appearance],
     ...(override?.[appearance] ?? {}),
   };
+  // The colour theme comes last: the user's own pick outranks both the skin's
+  // palette and the accent.
+  return seed ? { ...tokens, ...seedTokens(seed, appearance) } : tokens;
 }
 
-/** The theme object for one skin and accent, in both appearances. */
-export function themeFor(skin: SkinName, accent: AccentName): Theme {
+/** The theme object for one skin, accent and colour theme, in both appearances. */
+export function themeFor(skin: SkinName, accent: AccentName, seed?: string | null): Theme {
   return {
     cssVars: {
       theme: { ...SKIN_RADII[skin] },
-      light: tokensFor(skin, accent, "light"),
-      dark: tokensFor(skin, accent, "dark"),
+      light: tokensFor(skin, accent, "light", seed),
+      dark: tokensFor(skin, accent, "dark", seed),
     },
   };
 }
 
-/** Makes `skin` + `accent` the running theme; every token class and `token()`
- *  read follows on the next frame. */
-export function applyTheme(skin: SkinName, accent: AccentName): void {
-  setTheme(themeFor(skin, accent));
+/** Makes `skin` + `accent` + `seed` the running theme; every token class and
+ *  `token()` read follows on the next frame. */
+export function applyTheme(skin: SkinName, accent: AccentName, seed?: string | null): void {
+  setTheme(themeFor(skin, accent, seed));
 }
+
+export { SEED_PRESETS, isSeedHex, normaliseSeed, seedTokens } from "./seed";

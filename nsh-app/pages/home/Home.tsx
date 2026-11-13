@@ -309,7 +309,9 @@ function DeviceCard() {
     ...deviceList().map((entry) => ({ value: entry.id, label: entry.name })),
   ];
   return (
-    <Card class="w-full p-3">
+    // The connected device is the console's current object, so its card takes
+    // the skin's selected treatment.
+    <Card class="w-full p-3" selected={deviceState() === "connected"}>
       <View class="flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <View class="flex-row items-center gap-1.5">

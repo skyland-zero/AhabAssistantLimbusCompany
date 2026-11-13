@@ -40,6 +40,10 @@ pub struct AppSettings {
     /// Visual skin id (`"default"`, `"limbus"`, ...). Unknown values stay in the
     /// file and the theme layer falls back to the default skin.
     pub skinId: String,
+    /// The colour theme's seed (`"#RRGGBB"`), when the user picked one: it
+    /// replaces the accent's brand tokens. `None` follows the skin.
+    #[serde(default)]
+    pub themeSeed: Option<String>,
     pub language: Language,
     pub lastDeviceId: Option<String>,
 }
@@ -53,6 +57,7 @@ impl Default for AppSettings {
             themeMode: ThemeMode::System,
             accentId: "crimson".into(),
             skinId: "default".into(),
+            themeSeed: None,
             language: Language::ZhCn,
             lastDeviceId: None,
         }

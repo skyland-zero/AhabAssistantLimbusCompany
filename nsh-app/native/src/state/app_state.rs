@@ -117,6 +117,18 @@ impl AppStore {
         self.state.settings.sidebarCollapsed
     }
 
+    /// The colour theme's seed (`#RRGGBB`), or empty for the skin's own accent.
+    pub fn theme_seed(&self) -> String {
+        self.state.settings.themeSeed.clone().unwrap_or_default()
+    }
+
+    /// Saves the colour theme; an empty string clears it.
+    pub fn set_theme_seed(&mut self, seed: String) -> Result<(), String> {
+        let seed = seed.trim().to_owned();
+        self.state.settings.themeSeed = if seed.is_empty() { None } else { Some(seed) };
+        self.save()
+    }
+
     /// Saves the skin and accent pair.
     pub fn set_skin(&mut self, skin: String, accent: String) -> Result<(), String> {
         self.state.settings.skinId = skin;

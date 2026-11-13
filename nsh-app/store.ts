@@ -98,6 +98,8 @@ const storedSkin = appSettings.skin() as SkinName;
 const initialSkin: SkinName = storedSkin in SKIN_DEFAULT_ACCENT ? storedSkin : "default";
 const skin = signal<SkinName>(initialSkin);
 const accent = signal<AccentName>(appSettings.accent() as AccentName);
+/** The colour theme's seed, or `""` for "follow the skin's accent". */
+const seed = signal<string>(appSettings.themeSeed());
 
 /** The skin in effect (tracked where it is read). */
 export function currentSkin(): SkinName {
@@ -107,6 +109,11 @@ export function currentSkin(): SkinName {
 /** The accent in effect (tracked where it is read). */
 export function currentAccent(): AccentName {
   return accent();
+}
+
+/** The colour theme in effect (`#RRGGBB`), or `null` for the skin's own. */
+export function currentSeed(): string | null {
+  return seed() || null;
 }
 
 /** The active decoration language: what `components/` branches on. */
@@ -120,7 +127,7 @@ export function currentDecor(): Decor {
  *  pushed the same way, or a user who picked dark gets the system's choice
  *  until the next toggle. Call once, when the root is created. */
 export function initTheme(): void {
-  applyTheme(skin(), accent());
+  applyTheme(skin(), accent(), currentSeed());
   // A stored light/dark wins over the platform's appearance; `system` leaves it
   // to the platform, and to a host that opened the window in its own scheme.
   if (appearance() !== "system") setColorScheme(appearance());
@@ -132,15 +139,24 @@ export function initTheme(): void {
 export function setSkin(next: SkinName): void {
   if (accent() === SKIN_DEFAULT_ACCENT[skin()]) accent.set(SKIN_DEFAULT_ACCENT[next]);
   skin.set(next);
-  applyTheme(skin(), accent());
+  applyTheme(skin(), accent(), currentSeed());
   appSettings.setSkin(skin(), accent());
 }
 
 /** Switches the accent, leaving the skin alone. */
 export function setAccent(next: AccentName): void {
   accent.set(next);
-  applyTheme(skin(), accent());
+  applyTheme(skin(), accent(), currentSeed());
   appSettings.setSkin(skin(), accent());
+}
+
+/** Switches the colour theme; `null` follows the skin's accent again. The theme
+ *  outranks the accent, so the swatches below it stop changing the look until it
+ *  is cleared. */
+export function setThemeSeed(next: string | null): void {
+  seed.set(next ?? "");
+  applyTheme(skin(), accent(), currentSeed());
+  appSettings.setThemeSeed(next ?? "");
 }
 
 /** Light, dark, or the system's own appearance. */export type Appearance = "light" | "dark" | "system";

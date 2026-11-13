@@ -37,6 +37,19 @@ const SEPARATOR: Record<Decor, string> = {
   limbus: "border-decor-line",
   mist: "border-decor-line",
   hairline: "border-border",
+  gradient: "border-transparent",
+};
+
+/** The bar's own surface: the gradient skin lets the page's wash run through
+ *  it, the others draw the card surface the window chrome has always had. */
+const BAR_BG: Record<Decor, string> = {
+  plain: "bg-card",
+  glass: "bg-card",
+  archive: "bg-card",
+  limbus: "bg-card",
+  mist: "bg-card",
+  hairline: "bg-card",
+  gradient: "bg-transparent",
 };
 
 /** The appearance toggle's glyph and label, in the order it cycles. */
@@ -51,7 +64,7 @@ export function TitleBar() {
     hasDesktop ? titleBar() : { height: TITLEBAR_HEIGHT, left: 0, right: 0 };
   return (
     <View
-      class={`flex-none flex-row items-center gap-1 border-b bg-card ${SEPARATOR[currentDecor()]}`}
+      class={`flex-none flex-row items-center gap-1 border-b ${BAR_BG[currentDecor()]} ${SEPARATOR[currentDecor()]}`}
       style={{ height: TITLEBAR_HEIGHT, paddingLeft: bar().left }}
     >
       {/* Brand: a drag region, as the platform's own title bar was. */}

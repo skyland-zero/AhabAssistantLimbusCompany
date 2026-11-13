@@ -15,6 +15,8 @@
 | `skin-limbus-dark.png` | Limbus 皮肤（暗色羊皮纸、黄铜角框、红色印章） |
 | `skin-mist-dark.png` | Mist 皮肤 |
 | `skin-nsh-light.png` / `skin-nsh-dark.png` | NSH 皮肤（中性灰、1px 发丝描边、无投影、零装饰） |
+| `skin-bettbox-light.png` / `skin-bettbox-dark.png` | Bettbox 皮肤（主题色渐变页底、白色无边框卡片、大圆角） |
+| `skin-bettbox-themes.png` | 外观页：颜色主题色板、自定义色值、皮肤网格 |
 | `titlebar-light.png` | 标题栏：品牌、6 个导航项、状态点、外观切换、设置、窗口按钮 |
 
 ## 重新生成（Linux，无需 GPU）
@@ -29,7 +31,7 @@ python3 scripts/capture_nsh.py --size 820x680 --out nsh-app/docs/shots/home-ligh
 
 **换页面 / 外观 / 皮肤**：皮肤与外观可先用设置文件定好再截图，不用改源码——
 `~/.config/AhabAssistant/settings.json`（Windows 是 `%APPDATA%\AhabAssistant\`）里的
-`skinId`（`default` / `nsh` / `glass` / `archive` / `limbus` / `mist`）与 `themeMode`
+`skinId`（`default` / `nsh` / `bettbox` / `glass` / `archive` / `limbus` / `mist`）、`accentId`、`themeSeed`（`#RRGGBB`，留空则跟随皮肤）与 `themeMode`
 （**小写** `light` / `dark` / `system`）。写错会静默回退成默认值：这是刻意的
 （`SettingsStore` 读失败就用默认值），所以换皮肤截图时先看一眼结果是不是你要的那套。
 换页面仍需临时改 `store.ts` 的初始 page；Windows 用 `nsh-app/visual.test.tsx` 的

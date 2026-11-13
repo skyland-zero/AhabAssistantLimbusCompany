@@ -32,6 +32,14 @@ export function SkinBackdrop() {
       <If when={decor() === "glass"}>
         <Wash height="28%" />
       </If>
+      <If when={decor() === "gradient"}>
+        {/* The theme colour as a page wash: strongest at the leading edge and
+            gone by 85% of the width, so the cards keep a white field. */}
+        <View
+          class="absolute inset-0"
+          style={{ backgroundImage: `linear-gradient(90deg, ${token("wash")} 0%, transparent 85%)` }}
+        />
+      </If>
     </View>
   );
 }

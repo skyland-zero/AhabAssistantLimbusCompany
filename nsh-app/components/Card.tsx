@@ -24,18 +24,25 @@ const CARD_SHADOW: Record<Decor, string> = {
   mist: "shadow-md",
   // Structure only: the hairline border already explains the surface.
   hairline: "shadow-none",
+  // A phone app's card: white over the page's wash, lifted by one soft shadow.
+  gradient: "shadow-sm",
 };
 
 /** A surface container: the app's card geometry, padding and decoration. */
 export function Card(props: {
   /** The header's label. A card without one is a bare surface. */
   title?: string;
+  /** The card is the current one — the running task, the open item. It keeps
+   *  the skin's surface and takes the accent as a border and a faint fill. */
+  selected?: boolean;
   children?: JSX.Element;
   class?: string;
 }) {
+  const surface = () =>
+    props.selected ? "border-brand bg-brand/10" : "border-border bg-card";
   return (
     <View
-      class={`relative min-w-0 rounded-(--radius-lg) border border-border bg-card text-card-foreground ${CARD_SHADOW[currentDecor()]} ${props.class ?? "p-4"}`}
+      class={`relative min-w-0 rounded-(--radius-lg) border text-card-foreground ${surface()} ${CARD_SHADOW[currentDecor()]} ${props.class ?? "p-4"}`}
     >
       <If when={props.title}>
         {(title) => <CardHeader label={title()} />}
@@ -119,6 +126,7 @@ const HEADER_CLASS: Record<Decor, string> = {
   limbus: "overflow-hidden",
   mist: "border-b border-border",
   hairline: "border-b border-border",
+  gradient: "border-b-0",
 };
 
 const HEADER_LABEL: Record<Decor, string> = {
@@ -128,6 +136,7 @@ const HEADER_LABEL: Record<Decor, string> = {
   limbus: "text-accent-foreground",
   mist: "text-foreground",
   hairline: "text-foreground",
+  gradient: "text-foreground",
 };
 
 /** A hairline rule: a separator inside a card or between regions. The ruled
@@ -147,6 +156,7 @@ const RULE_CLASS: Record<Decor, string> = {
   limbus: "bg-decor-line opacity-60",
   mist: "bg-border",
   hairline: "bg-border",
+  gradient: "bg-border",
 };
 
 /** A decorative section divider: the shipped gold flourish for the ruled

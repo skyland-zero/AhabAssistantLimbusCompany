@@ -11,8 +11,15 @@
 // another accent changes, so `theme/index.ts` can compose skin x accent
 // at run time instead of carrying 6 x 6 copies of the same table.
 
-export type SkinName = "default" | "glass" | "archive" | "mist" | "limbus" | "nsh";
-export type AccentName = "crimson" | "blue" | "amber" | "emerald" | "violet" | "limbus-brass";
+export type SkinName = "default" | "glass" | "archive" | "mist" | "limbus" | "nsh" | "bettbox";
+export type AccentName =
+  | "crimson"
+  | "rose"
+  | "blue"
+  | "amber"
+  | "emerald"
+  | "violet"
+  | "limbus-brass";
 
 /** Colour tokens by the theme's CSS variable name, without the `--`. */
 export type SchemeTokens = Record<string, string>;
@@ -27,6 +34,8 @@ export const SKIN_RADII: Record<SkinName, Record<string, string>> = {
   // The design guide's starting point (6pt controls) with containers one and
   // two steps softer, so the containment hierarchy stays visible.
   "nsh": { "radius-sm": "4px", "radius": "6px", "radius-lg": "10px", "radius-xl": "14px" },
+  // A phone app's cards: 16pt surfaces over a tinted page, controls just inside.
+  "bettbox": { "radius-sm": "8px", "radius": "10px", "radius-lg": "16px", "radius-xl": "20px" },
 };
 
 /** The accent a skin is designed around (Limbus is brass, the rest crimson). */
@@ -37,6 +46,7 @@ export const SKIN_DEFAULT_ACCENT: Record<SkinName, AccentName> = {
   "mist": "crimson",
   "limbus": "limbus-brass",
   "nsh": "crimson",
+  "bettbox": "rose",
 };
 
 /** Every colour token of each skin, for its own accent. */
@@ -537,6 +547,92 @@ export const SKIN_TOKENS: Record<SkinName, { light: SchemeTokens; dark: SchemeTo
       "grain": "rgba(0, 0, 0, 0.000)",
     },
   },
+  // The reference is a phone-first client: a white card over a page washed in
+  // the theme colour, no borders, and the theme colour only on actions. Its
+  // `wash` is not decoration here: the page gradient is drawn from it.
+  "bettbox": {
+    light: {
+      "background": "#fafafa",
+      "foreground": "#17181a",
+      "card": "#ffffff",
+      "card-foreground": "#17181a",
+      "popover": "#ffffff",
+      "popover-foreground": "#17181a",
+      "primary": "#b80049",
+      "primary-foreground": "#ffffff",
+      "secondary": "#f4f2f3",
+      "secondary-foreground": "#17181a",
+      "muted": "#f4f2f3",
+      "muted-foreground": "#6e7076",
+      "accent": "#f2eff0",
+      "accent-foreground": "#17181a",
+      "destructive": "#c0281f",
+      "border": "rgba(0, 0, 0, 0.000)",
+      "input": "#ded9db",
+      "ring": "#b80049",
+      "success": "#1e8e5a",
+      "success-light": "#dcf3e7",
+      "warning": "#b26a00",
+      "warning-light": "#ffebc7",
+      "danger": "#c0281f",
+      "danger-light": "#fbe3e1",
+      "danger-foreground": "#ffffff",
+      "selection": "rgba(184, 0, 73, 0.140)",
+      "scrim": "rgba(23, 24, 26, 0.450)",
+      "decor-line": "#e4dee0",
+      "hilite": "rgba(0, 0, 0, 0.000)",
+      "glow": "rgba(0, 0, 0, 0.000)",
+      "brand": "#b80049",
+      "brand-hover": "#8e0038",
+      "brand-light": "#ffe4ec",
+      "brand-foreground": "#ffffff",
+      "band-top": "rgba(0, 0, 0, 0.000)",
+      "band-bottom": "rgba(0, 0, 0, 0.000)",
+      "wash": "rgba(184, 0, 73, 0.100)",
+      "grain": "rgba(0, 0, 0, 0.000)",
+    },
+    dark: {
+      "background": "#0b0c0d",
+      "foreground": "#ecedef",
+      "card": "#17191b",
+      "card-foreground": "#ecedef",
+      "popover": "#1e2124",
+      "popover-foreground": "#ecedef",
+      "primary": "#ffb1c8",
+      "primary-foreground": "#3a0016",
+      "secondary": "#222528",
+      "secondary-foreground": "#ecedef",
+      "muted": "#222528",
+      "muted-foreground": "#a2a7ae",
+      "accent": "#24282c",
+      "accent-foreground": "#ecedef",
+      "destructive": "#ff8a8d",
+      "border": "rgba(0, 0, 0, 0.000)",
+      "input": "#3a3e44",
+      "ring": "#ffb1c8",
+      "success": "#4cdb7c",
+      "success-light": "#0c341e",
+      "warning": "#eab312",
+      "warning-light": "#3a2a08",
+      "danger": "#ff8a8d",
+      "danger-light": "#3a1719",
+      "danger-foreground": "#2a0a0c",
+      "selection": "rgba(255, 177, 200, 0.180)",
+      "scrim": "rgba(0, 0, 0, 0.550)",
+      "decor-line": "#33383d",
+      "hilite": "rgba(0, 0, 0, 0.000)",
+      "glow": "rgba(0, 0, 0, 0.000)",
+      "brand": "#ffb1c8",
+      "brand-hover": "#ffd3df",
+      "brand-light": "#4a1024",
+      "brand-foreground": "#3a0016",
+      "band-top": "rgba(0, 0, 0, 0.000)",
+      "band-bottom": "rgba(0, 0, 0, 0.000)",
+      "wash": "rgba(255, 177, 200, 0.060)",
+      "grain": "rgba(0, 0, 0, 0.000)",
+    },
+  },
+
 };
 
 /** What an accent other than the skin's own changes (empty when it is the same). */
@@ -545,6 +641,25 @@ export const ACCENT_OVERRIDES: Record<
   Partial<Record<AccentName, { light?: SchemeTokens; dark?: SchemeTokens }>>
 > = {
   "default": {
+    "rose": {
+      light: {
+        "ring": "#b80049",
+        "selection": "rgba(184, 0, 73, 0.180)",
+        "decor-line": "#b80049",
+        "brand": "#b80049",
+        "brand-hover": "#8e0038",
+        "brand-light": "#ffe4ec",
+      },
+      dark: {
+        "ring": "#ffb1c8",
+        "selection": "rgba(255, 177, 200, 0.200)",
+        "decor-line": "#ffb1c8",
+        "brand": "#ffb1c8",
+        "brand-hover": "#ffd3df",
+        "brand-light": "#4a1024",
+        "brand-foreground": "#3a0016",
+      },
+    },
     "blue": {
       light: {
         "brand": "#2563eb",
@@ -614,6 +729,29 @@ export const ACCENT_OVERRIDES: Record<
     },
   },
   "glass": {
+    "rose": {
+      light: {
+        "ring": "#b80049",
+        "selection": "rgba(184, 0, 73, 0.180)",
+        "decor-line": "#b80049",
+        "glow": "rgba(184, 0, 73, 0.239)",
+        "brand": "#b80049",
+        "brand-hover": "#8e0038",
+        "brand-light": "#ffe4ec",
+        "wash": "rgba(255, 177, 200, 0.239)",
+      },
+      dark: {
+        "ring": "#ffb1c8",
+        "selection": "rgba(255, 177, 200, 0.200)",
+        "decor-line": "#ffb1c8",
+        "glow": "rgba(255, 177, 200, 0.239)",
+        "brand": "#ffb1c8",
+        "brand-hover": "#ffd3df",
+        "brand-light": "#4a1024",
+        "brand-foreground": "#3a0016",
+        "wash": "rgba(255, 211, 223, 0.239)",
+      },
+    },
     "blue": {
       light: {
         "ring": "#1d4ed8",
@@ -733,6 +871,25 @@ export const ACCENT_OVERRIDES: Record<
     },
   },
   "archive": {
+    "rose": {
+      light: {
+        "ring": "#b80049",
+        "selection": "rgba(184, 0, 73, 0.180)",
+        "decor-line": "#b80049",
+        "brand": "#b80049",
+        "brand-hover": "#8e0038",
+        "brand-light": "#ffe4ec",
+      },
+      dark: {
+        "ring": "#ffb1c8",
+        "selection": "rgba(255, 177, 200, 0.200)",
+        "decor-line": "#ffb1c8",
+        "brand": "#ffb1c8",
+        "brand-hover": "#ffd3df",
+        "brand-light": "#4a1024",
+        "brand-foreground": "#3a0016",
+      },
+    },
     "blue": {
       light: {
         "ring": "#1d4ed8",
@@ -832,6 +989,25 @@ export const ACCENT_OVERRIDES: Record<
     },
   },
   "mist": {
+    "rose": {
+      light: {
+        "ring": "#b80049",
+        "selection": "rgba(184, 0, 73, 0.180)",
+        "decor-line": "#b80049",
+        "brand": "#b80049",
+        "brand-hover": "#8e0038",
+        "brand-light": "#ffe4ec",
+      },
+      dark: {
+        "ring": "#ffb1c8",
+        "selection": "rgba(255, 177, 200, 0.200)",
+        "decor-line": "#ffb1c8",
+        "brand": "#ffb1c8",
+        "brand-hover": "#ffd3df",
+        "brand-light": "#4a1024",
+        "brand-foreground": "#3a0016",
+      },
+    },
     "blue": {
       light: {
         "accent-foreground": "#1d4ed8",
@@ -941,6 +1117,26 @@ export const ACCENT_OVERRIDES: Record<
     },
   },
   "limbus": {
+    "rose": {
+      light: {
+        "ring": "#b80049",
+        "selection": "rgba(184, 0, 73, 0.180)",
+        "decor-line": "#b80049",
+        "brand": "#b80049",
+        "brand-hover": "#8e0038",
+        "brand-light": "#ffe4ec",
+      },
+      dark: {
+        "accent-foreground": "#ffd3df",
+        "ring": "#ffb1c8",
+        "selection": "rgba(255, 177, 200, 0.200)",
+        "decor-line": "#ffb1c8",
+        "brand": "#ffb1c8",
+        "brand-hover": "#ffd3df",
+        "brand-light": "#4a1024",
+        "brand-foreground": "#3a0016",
+      },
+    },
     "crimson": {
       light: {
         "ring": "#a92b42",
@@ -1046,6 +1242,25 @@ export const ACCENT_OVERRIDES: Record<
   },
 
   "nsh": {
+    "rose": {
+      light: {
+        "ring": "#b80049",
+        "selection": "rgba(184, 0, 73, 0.180)",
+        "decor-line": "#b80049",
+        "brand": "#b80049",
+        "brand-hover": "#8e0038",
+        "brand-light": "#ffe4ec",
+      },
+      dark: {
+        "ring": "#ffb1c8",
+        "selection": "rgba(255, 177, 200, 0.200)",
+        "decor-line": "#ffb1c8",
+        "brand": "#ffb1c8",
+        "brand-hover": "#ffd3df",
+        "brand-light": "#4a1024",
+        "brand-foreground": "#3a0016",
+      },
+    },
     "blue": {
       light: {
         "ring": "#1d4ed8",
@@ -1138,6 +1353,137 @@ export const ACCENT_OVERRIDES: Record<
         "ring": "#d8a800",
         "selection": "rgba(216, 168, 0, 0.180)",
         "decor-line": "#d8a800",
+        "brand": "#d1aa52",
+        "brand-hover": "#ad8434",
+        "brand-light": "#4a381d",
+        "brand-foreground": "#17120a",
+      },
+    },
+  },
+  "bettbox": {
+    "crimson": {
+      light: {
+        "ring": "#c8354f",
+        "selection": "rgba(200, 53, 79, 0.140)",
+        "decor-line": "#c8354f",
+        "wash": "rgba(200, 53, 79, 0.100)",
+        "brand": "#c8354f",
+        "brand-hover": "#a92b42",
+        "brand-light": "#fbe9ec",
+      },
+      dark: {
+        "ring": "#e05a72",
+        "selection": "rgba(224, 90, 114, 0.180)",
+        "decor-line": "#e05a72",
+        "wash": "rgba(224, 90, 114, 0.060)",
+        "brand": "#e05a72",
+        "brand-hover": "#c8354f",
+        "brand-light": "#3a1e24",
+        "brand-foreground": "#2a0c12",
+      },
+    },
+    "blue": {
+      light: {
+        "ring": "#2563eb",
+        "selection": "rgba(37, 99, 235, 0.140)",
+        "decor-line": "#2563eb",
+        "wash": "rgba(37, 99, 235, 0.100)",
+        "brand": "#2563eb",
+        "brand-hover": "#1d4ed8",
+        "brand-light": "#dbeafe",
+      },
+      dark: {
+        "ring": "#60a5fa",
+        "selection": "rgba(96, 165, 250, 0.180)",
+        "decor-line": "#60a5fa",
+        "wash": "rgba(96, 165, 250, 0.060)",
+        "brand": "#60a5fa",
+        "brand-hover": "#3b82f6",
+        "brand-light": "#1e293b",
+        "brand-foreground": "#0a1a30",
+      },
+    },
+    "amber": {
+      light: {
+        "ring": "#d97706",
+        "selection": "rgba(217, 119, 6, 0.140)",
+        "decor-line": "#d97706",
+        "wash": "rgba(217, 119, 6, 0.100)",
+        "brand": "#d97706",
+        "brand-hover": "#b45309",
+        "brand-light": "#fef3c7",
+        "brand-foreground": "#241705",
+      },
+      dark: {
+        "ring": "#fbbf24",
+        "selection": "rgba(251, 191, 36, 0.180)",
+        "decor-line": "#fbbf24",
+        "wash": "rgba(251, 191, 36, 0.060)",
+        "brand": "#fbbf24",
+        "brand-hover": "#f59e0b",
+        "brand-light": "#3b2f14",
+        "brand-foreground": "#2a1c04",
+      },
+    },
+    "emerald": {
+      light: {
+        "ring": "#059669",
+        "selection": "rgba(5, 150, 105, 0.140)",
+        "decor-line": "#059669",
+        "wash": "rgba(5, 150, 105, 0.100)",
+        "brand": "#059669",
+        "brand-hover": "#047857",
+        "brand-light": "#d1fae5",
+        "brand-foreground": "#041a10",
+      },
+      dark: {
+        "ring": "#34d399",
+        "selection": "rgba(52, 211, 153, 0.180)",
+        "decor-line": "#34d399",
+        "wash": "rgba(52, 211, 153, 0.060)",
+        "brand": "#34d399",
+        "brand-hover": "#10b981",
+        "brand-light": "#14332a",
+        "brand-foreground": "#04170f",
+      },
+    },
+    "violet": {
+      light: {
+        "ring": "#7c3aed",
+        "selection": "rgba(124, 58, 237, 0.140)",
+        "decor-line": "#7c3aed",
+        "wash": "rgba(124, 58, 237, 0.100)",
+        "brand": "#7c3aed",
+        "brand-hover": "#6d28d9",
+        "brand-light": "#ede9fe",
+      },
+      dark: {
+        "ring": "#a78bfa",
+        "selection": "rgba(167, 139, 250, 0.180)",
+        "decor-line": "#a78bfa",
+        "wash": "rgba(167, 139, 250, 0.060)",
+        "brand": "#a78bfa",
+        "brand-hover": "#8b5cf6",
+        "brand-light": "#2b2247",
+        "brand-foreground": "#150a2e",
+      },
+    },
+    "limbus-brass": {
+      light: {
+        "ring": "#7a5517",
+        "selection": "rgba(122, 85, 23, 0.140)",
+        "decor-line": "#7a5517",
+        "wash": "rgba(122, 85, 23, 0.100)",
+        "brand": "#7a5517",
+        "brand-hover": "#5e3f10",
+        "brand-light": "#f4e5c2",
+        "brand-foreground": "#fafafa",
+      },
+      dark: {
+        "ring": "#d1aa52",
+        "selection": "rgba(209, 170, 82, 0.180)",
+        "decor-line": "#d1aa52",
+        "wash": "rgba(209, 170, 82, 0.060)",
         "brand": "#d1aa52",
         "brand-hover": "#ad8434",
         "brand-light": "#4a381d",
