@@ -114,11 +114,16 @@ export function currentDecor(): Decor {
   return DECOR_OF[skin()];
 }
 
-/** Applies the skin and accent the app starts with. `theme.json` bootstraps
- *  only the default skin, so the run starts from the composed theme instead of
- *  whatever `nsh.json` declared. Call once, when the root is created. */
+/** Applies the skin, accent and appearance the app starts with. `theme.json`
+ *  bootstraps only the default skin, so the run starts from the composed theme
+ *  instead of whatever `nsh.json` declared; the stored appearance has to be
+ *  pushed the same way, or a user who picked dark gets the system's choice
+ *  until the next toggle. Call once, when the root is created. */
 export function initTheme(): void {
   applyTheme(skin(), accent());
+  // A stored light/dark wins over the platform's appearance; `system` leaves it
+  // to the platform, and to a host that opened the window in its own scheme.
+  if (appearance() !== "system") setColorScheme(appearance());
 }
 
 /** Switches the skin. The accent follows only while the user has not picked

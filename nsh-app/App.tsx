@@ -10,7 +10,8 @@ import { currentPage, initTheme } from "./store";
 
 function App() {
   // Once, before the first frame: the composed theme replaces `nsh.json`'s
-  // boot theme, which only carries the default skin.
+  // boot theme, which only carries the default skin, and the stored appearance
+  // replaces the system's.
   initTheme();
   return (
     <View class="relative flex-1 overflow-hidden bg-background">
