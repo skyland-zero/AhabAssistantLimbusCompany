@@ -107,7 +107,7 @@ python3 scripts/capture_nsh.py     # → nsh-app/docs/shots/p0-desktop.png
 | --- | --- | --- |
 | 统一 target 目录 | 根 `.cargo/config.toml` 的 `build.target-dir` | native crate 与 host 共用 `nsh-app/target`，不再把 tokio/rustls/`nsh-core` 再编一遍；`nsh` 自己传 `--target-dir`，以它的为准 |
 | `debuginfo=1` | 同上 `build.rustflags` | dev host 的调试信息从约 1.6 GB 降到几百 MB，链接时间随之下降；保留行号，没有变量值 |
-| 链接器 | `scripts/build-env.sh` / `scripts/build-env.bat`（由 `run-nsh.sh` / `run-nsh*.bat` 调用） | `lld-link`、`mold`、`lld` 可用时用它链接（`AALC_LINKER=default` 回到默认）；`AALC_DEBUGINFO=2` 临时恢复完整调试信息 |
+| 链接器 | `scripts/build-env.sh` / `scripts/build-env.bat`（由 `run-nsh.sh` / `run-nsh*.bat` 调用） | Linux：装了 `mold` 就默认用它（实测重链 2m08s → 1m18s），没有则试 `ld.lld`；Windows：PATH 上有 `lld-link` 就用它。`AALC_LINKER=default` 回到默认，`AALC_LINKER=lld`/`<路径>` 换人；`AALC_DEBUGINFO=2` 临时恢复完整调试信息 |
 | 并发上限 | 同上，`AALC_JOBS`（默认 4） | 八个 rustc 进程抢同一块磁盘是「编译时整机卡死」的主因；CI 不用这两个脚本，保持满并发 |
 
 `native/scrcpy_decoder` 是例外：产物固定在自己的 `target/release`（`scripts/build.py` 显式传
@@ -137,8 +137,9 @@ echo mq-deadline | sudo tee /sys/block/sda/queue/scheduler
 ```
 
 日常开发用 `./run-nsh.sh`（`--mock` 对面是 `run-nsh-mock.bat`）：它会 source
-`scripts/build-env.sh` 把并发降到 4，并以 `ionice -c 2 -n 6 nice -n 5` 运行构建，桌面不被
-编译抢死。`AALC_DRY_RUN=1 ./run-nsh.sh` 可以只看环境与命令而不真构建。
+`scripts/build-env.sh` 把并发降到 4、默认用 mold（机器上没有就回退），并以
+`ionice -c 2 -n 6 nice -n 5` 运行构建，桌面不被编译抢死。`AALC_DRY_RUN=1 ./run-nsh.sh`
+可以只看环境与命令而不真构建。
 
 ## 8. 参考：项目级 Agent Skills
 
