@@ -4,9 +4,17 @@ import { expect, open, test } from "nsh/test";
 
 const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
-test("the toolbar counts every purpose and the grid shows the saved teams", async () => {
+// The page swap commits after `press` returns; under the full suite the grid is
+// still empty when the next press runs, so every test waits for the first card.
+async function openTeams() {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[队伍管理]");
+  await app.waitFor("编队 1 (震颤)");
+  return app;
+}
+
+test("the toolbar counts every purpose and the grid shows the saved teams", async () => {
+  const app = await openTeams();
   for (const label of ["全部", "镜牢", "经验本", "通用", "编队 1 (震颤)", "编队 2 (烧伤)"]) {
     await app.waitFor(label);
   }
@@ -16,8 +24,7 @@ test("the toolbar counts every purpose and the grid shows the saved teams", asyn
 });
 
 test("a filter narrows the grid to its purpose", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("id:team-filter-luxcavation");
   await app.waitFor("编队 2 (烧伤)");
   await app.waitFor("额外编队");
@@ -25,8 +32,7 @@ test("a filter narrows the grid to its purpose", async () => {
 });
 
 test("the editor saves a renamed team", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("role:button[编辑 编队 1 (震颤)]");
   await app.waitFor("编辑队伍");
   // One ASCII key: the field is controlled, so this proves the draft round-trip.
@@ -36,8 +42,7 @@ test("the editor saves a renamed team", async () => {
 });
 
 test("a new team takes the first free formation slot", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("id:new-team");
   await app.waitFor("新建队伍");
   await app.press("id:save-team");
@@ -45,8 +50,7 @@ test("a new team takes the first free formation slot", async () => {
 });
 
 test("the editor exposes all five mirror sections and the starlight cost", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("role:button[编辑 编队 1 (震颤)]");
   for (const tab of ["基础编成", "商店与合成", "二体系与战斗", "开局星光", "观测与高级"]) {
     await app.waitFor(tab);
@@ -60,8 +64,7 @@ test("the editor exposes all five mirror sections and the starlight cost", async
 });
 
 test("the shop tab toggles a discarded system and the starlight quick set", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("role:button[编辑 编队 1 (震颤)]");
   await app.press("id:team-tab-shop");
   // Sinking is already discarded in the fixture; one press restores it.
@@ -72,8 +75,7 @@ test("the shop tab toggles a discarded system and the starlight quick set", asyn
 });
 
 test("an experience-dungeon team only offers the basic section", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("id:team-filter-luxcavation");
   await app.press("role:button[编辑 编队 2 (烧伤)]");
   await app.waitFor("编辑队伍");
@@ -82,8 +84,7 @@ test("an experience-dungeon team only offers the basic section", async () => {
 });
 
 test("copying the editor puts the contract's team JSON on the clipboard", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("role:button[编辑 编队 1 (震颤)]");
   await app.press("role:button[复制 JSON]");
   await app.wait(100);
@@ -92,8 +93,7 @@ test("copying the editor puts the contract's team JSON on the clipboard", async 
 });
 
 test("the advanced tab refreshes and clears the team's history", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[队伍管理]");
+  const app = await openTeams();
   await app.press("role:button[编辑 编队 1 (震颤)]");
   await app.press("id:team-tab-advanced");
   await app.press("role:button[刷新数据]");

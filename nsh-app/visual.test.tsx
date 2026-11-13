@@ -49,6 +49,9 @@ function editorTest(name: string, scheme: "light" | "dark"): void {
   test(name, async () => {
     const app = await open("./App.tsx", { ...DESKTOP, colorScheme: scheme });
     await app.press("role:button[队伍管理]");
+    // The page swap commits after the press returns; without this the editor
+    // button is still missing when the suite runs under load.
+    await app.waitFor("编队 1 (震颤)");
     await app.press("role:button[编辑 编队 1 (震颤)]");
     await app.waitFor("编辑队伍");
     for (const tab of ["basic", "shop", "combat", "starlight", "advanced"] as const) {
