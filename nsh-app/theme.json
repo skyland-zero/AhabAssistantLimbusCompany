@@ -45,7 +45,8 @@
       "band-top": "rgba(0, 0, 0, 0.000)",
       "band-bottom": "rgba(0, 0, 0, 0.000)",
       "wash": "rgba(0, 0, 0, 0.000)",
-      "grain": "rgba(0, 0, 0, 0.000)"
+      "grain": "rgba(0, 0, 0, 0.000)",
+      "window-shadow": "rgba(0, 0, 0, 0.30)"
     },
     "dark": {
       "background": "#0a0707",
@@ -85,7 +86,8 @@
       "band-top": "rgba(0, 0, 0, 0.000)",
       "band-bottom": "rgba(0, 0, 0, 0.000)",
       "wash": "rgba(0, 0, 0, 0.000)",
-      "grain": "rgba(0, 0, 0, 0.000)"
+      "grain": "rgba(0, 0, 0, 0.000)",
+      "window-shadow": "rgba(0, 0, 0, 0.55)"
     }
   }
 }

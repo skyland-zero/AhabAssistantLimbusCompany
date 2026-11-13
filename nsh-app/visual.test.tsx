@@ -6,11 +6,12 @@
 //
 //   nsh test nsh-app/visual.test.tsx --target windows
 //
-// Every shot is 820x680, the client's default window, so a shot lines up with
+// Every shot is the client's 820×680 card, which `nsh.json` opens as an
+// 844×704 window (the frame's 12pt band around it), so a shot lines up with
 // `nsh-app/docs/reference/gpui/`.
 import { open, test } from "nsh/test";
 
-const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
+const DESKTOP = { width: 844, height: 704, platform: "windows" as const };
 const OUT = "artifacts/nsh";
 
 const PAGES: { label: string; marker: string; shot: string }[] = [

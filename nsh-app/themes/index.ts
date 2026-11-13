@@ -78,6 +78,15 @@ export const ACCENT_LABELS: Record<AccentName, string> = {
   "limbus-brass": "边狱黄铜",
 };
 
+/** The window's own shadow: it is the app's to draw, since a transparent
+ *  window has none of the system's. Not a skin's token — every skin floats the
+ *  same way — and the default skin's boot theme carries the same values in
+ *  `theme.json`. */
+const WINDOW_SHADOW: Record<"light" | "dark", string> = {
+  light: "rgba(0, 0, 0, 0.30)",
+  dark: "rgba(0, 0, 0, 0.55)",
+};
+
 /** One skin's colour tokens for one appearance, with `accent` laid over them.
  *
  *  `setTheme` reads these as the running theme; the skin picker also reads them
@@ -91,7 +100,11 @@ export function tokensFor(
   const base = SKIN_TOKENS[skin][appearance];
   const override =
     accent === SKIN_DEFAULT_ACCENT[skin] ? undefined : ACCENT_OVERRIDES[skin][accent];
-  return { ...base, ...(override?.[appearance] ?? {}) };
+  return {
+    ...base,
+    "window-shadow": WINDOW_SHADOW[appearance],
+    ...(override?.[appearance] ?? {}),
+  };
 }
 
 /** The theme object for one skin and accent, in both appearances. */

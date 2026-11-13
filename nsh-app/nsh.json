@@ -11,16 +11,19 @@
   "window": {
     "title": "AALC",
     "defaultSize": {
-      "width": 820,
-      "height": 680
+      "width": 844,
+      "height": 704
     },
     "minSize": {
-      "width": 800,
-      "height": 560
+      "width": 824,
+      "height": 584
     },
     "titleBar": {
       "style": "hidden"
-    }
+    },
+    "frame": "none",
+    "transparent": true,
+    "shadow": false
   },
   "capabilities": {
     "network": {

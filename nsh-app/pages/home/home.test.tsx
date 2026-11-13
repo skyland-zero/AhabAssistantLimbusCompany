@@ -1,7 +1,7 @@
 // The console's contract: the task queue, its parameters, and the run bar.
 import { expect, open, test } from "nsh/test";
 
-const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
+const DESKTOP = { width: 844, height: 704, platform: "windows" as const };
 
 test("the console shows the backend, this week's summary and the task queue", async () => {
   const app = await open("../../App.tsx", DESKTOP);
