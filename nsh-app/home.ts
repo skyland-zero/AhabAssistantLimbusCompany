@@ -322,13 +322,12 @@ export function isAsyncInput(): boolean {
   return asyncInput();
 }
 
-/** Cycles 1080P ↔ 1440P through the task config. */
-export function cycleResolution(): void {
+/** Sets the game window's width through the task config. */
+export function setResolution(size: 1080 | 1440): void {
   const current = ensureStore();
   if (!current) return;
   try {
-    const next = resolution() === "1080P" ? 1440 : 1080;
-    const window = current.setWindowSize(next);
+    const window = current.setWindowSize(size);
     resolution.set(window.resolution);
     asyncInput.set(window.asyncInput);
     feedback.set("窗口设置已保存");
@@ -369,7 +368,8 @@ export function consoleTasks(): Task[] {
   return tasks();
 }
 
-/** The line under the queue, when the last action left something to say. */
+/** The console's last-action line, shown in the run log card, not under the
+ *  queue. */
 export function consoleFeedback(): string | null {
   return feedback();
 }

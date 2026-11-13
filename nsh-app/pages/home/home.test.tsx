@@ -26,6 +26,7 @@ test("the console shows the backend, this week's summary and the task queue", as
 
 test("a task parameter keeps the value it is given", async () => {
   const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:task-toggle-daily");
   await app.press("label:经验本");
   await app.press("role:option[×2]");
   await app.waitFor("×2");
@@ -72,14 +73,17 @@ test("the log card opens a full run-log dialog", async () => {
   expect(app.texts()).toContain("Mock 任务已开始");
 });
 
-test("the window card cycles resolution and async input", async () => {
+test("the window card expands to its settings", async () => {
   const app = await open("../../App.tsx", DESKTOP);
-  await app.press("id:window-resolution");
+  await app.press("id:window-toggle");
+  await app.waitFor("窗口分辨率");
+  await app.press("label:窗口分辨率");
+  await app.press("role:option[2560 × 1440]");
   await app.waitFor("分辨率 1440P");
-  await app.press("id:window-resolution");
-  await app.waitFor("分辨率 1080P");
-  await app.press("id:window-async-input");
+  await app.press("label:异步 PostMessage 输入");
   await app.waitFor("异步输入 开");
+  await app.press("id:window-toggle");
+  expect(app.texts()).not.toContain("窗口分辨率");
 });
 
 test("the device picker lists a device once refreshed", async () => {

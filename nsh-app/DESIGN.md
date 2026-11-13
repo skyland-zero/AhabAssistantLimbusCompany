@@ -110,9 +110,9 @@
 | `xs` | `min-h-5` 20pt | `px-2` | 12 | 表格行内、密集工具栏 |
 | `sm`（默认） | `min-h-5` 20pt | `px-3` | 13 | 普通按钮，等于 GPUI 的 21pt 控件 |
 | `md` | `min-h-6` 24pt | `px-3` | 14 | 标题栏导航、图标按钮 |
-| `lg` | `min-h-7` 28pt | `px-4` | 16 | 页面主操作 |
+| `lg` | `min-h-8` 32pt | `px-4` | 16 | 页面主操作、操作条（GPUI 的主控台启动栏） |
 
-字高与控件高度都用 `min-h-*` 而不是固定 `h-*`：文字随系统字号放大时控件跟着长。
+所有尺寸的文字都是 `text-xs`（12pt）：旧客户端按钮没有更大的字。字高与控件高度都用 `min-h-*` 而不是固定 `h-*`：文字随系统字号放大时控件跟着长。
 
 ## 4. 组件契约
 
@@ -121,7 +121,7 @@
 | 文件 | 组件 | 说明 |
 | --- | --- | --- |
 | `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用） |
-| `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 设置页的标签/控件网格（行距 12pt，控件固定尾列） |
+| `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 标签/控件网格（行距 12pt，控件固定尾列）：设置页与主控台的窗口设置都用它 |
 | `Segmented.tsx` | `Segmented` / `SwatchRow` | 分段选择（容器透明，选中的一段是 `secondary` 胶囊） |
 | `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
@@ -183,6 +183,9 @@ token；不要为此改 `nsh`。
 | 停用的主题包 | 整行 `opacity-60`，滑块 `disabled`；颜色变化即时 |
 | 任务卡开关与参数 | 同 `Switch` / `Select`：淡洗 + 按下收缩 + 颜色 150ms |
 | 任务参数选择器 | 弹层由 `Select` 提供（NSH 默认进出），不额外加动画 |
+| 窗口设置/任务卡展开收起 | 点卡片行即切换（没有单独的展开按钮）；高度瞬时（同队伍编辑器 JSON 面板，不做高度动画） |
+| 卡片行 hover / 按下 | hover 淡洗 `accent`、按下 `secondary`，`duration-150`；行尾箭头随状态转 180°（瞬时，不做旋转动画） |
+| 展开区里的选择与开关 | 同 `Select` / `Switch`：弹层由 NSH 提供，开关淡洗 + 颜色 150ms |
 | 队列全选/清空 | 开关状态瞬时切换；反馈一行出现在队列下方，无入场动画 |
 | 设备刷新 | 列表替换为瞬时；连接状态徽标换色 150ms |
 | 运行日志清空 | 计数与空状态瞬时 |

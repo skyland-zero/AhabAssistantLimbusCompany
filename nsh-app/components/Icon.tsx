@@ -94,6 +94,9 @@ export function Icon(props: {
   name: IconName;
   /** The square size in points (14 when left out). */
   size?: number;
+  /** A rotation in degrees, for a glyph that states a state as well as meaning
+   *  it (the chevron of an open expansion turns to point the other way). */
+  rotate?: number;
   /** A theme token's colour (`token("brand")`); `muted-foreground` when left out. */
   color?: string;
   class?: string;
@@ -107,6 +110,7 @@ export function Icon(props: {
         width: props.size ?? 14,
         height: props.size ?? 14,
         tintColor: props.color ?? token("muted-foreground"),
+        rotate: props.rotate ?? 0,
       }}
     />
   );

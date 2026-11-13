@@ -5,10 +5,12 @@
 // (backend link and this week's statistics), the window settings and the task
 // queue under them, the run bar at the bottom, and a fixed rail for the device,
 // the live preview and the log.
-import { Image, Scroll, Text, View, effect, token } from "nsh";
+import type { JSX } from "nsh";
+import { Image, Scroll, Text, View, effect, signal, token } from "nsh";
 import { Badge } from "../../components/Badge";
-import { Button } from "../../components/Button";
-import { Card } from "../../components/Card";
+import { Button, Pressable } from "../../components/Button";
+import { Card, Rule } from "../../components/Card";
+import { SettingLine, SettingList } from "../../components/Field";
 import { Icon } from "../../components/Icon";
 import type { IconName } from "../../components/Icon";
 import { PageRoot } from "../../components/Page";
@@ -25,7 +27,6 @@ import {
   currentPreviewFrame,
   currentPreviewStatus,
   currentResolution,
-  cycleResolution,
   deviceList,
   deviceState,
   isAsyncInput,
@@ -37,16 +38,23 @@ import {
   refreshDevices,
   selectAllTasks,
   selectDevice,
+  setResolution,
   setTaskParam,
   startQueue,
   toggleAsyncInput,
   toggleTask,
 } from "../../home";
-import type { Task, TaskParam } from "../../home";
+import type { Task } from "../../home";
 import { LogDetailsDialog, StatsDetailsDialog } from "./HomeDetails";
 
 /** The rail's width: the device, preview and log column. */
 const RAIL = "w-56";
+
+/** The two window widths the task config accepts (`SetWindowsConfig`). */
+const RESOLUTIONS = [
+  { value: "1080", label: "1920 × 1080" },
+  { value: "1440", label: "2560 × 1440" },
+];
 
 export function Home() {
   // Poll the event queue while the console is on screen: preview frames and
@@ -69,9 +77,6 @@ export function Home() {
               <Each of={consoleTasks()} key={(task) => task.id}>
                 {(task) => <TaskCard task={task()} />}
               </Each>
-              <If when={consoleFeedback()}>
-                {(line) => <Text class="px-1 text-xs text-success">{line()}</Text>}
-              </If>
             </View>
           </Scroll>
           <RunBar />
@@ -185,52 +190,76 @@ function StatColumn(props: { label: string; value: string }) {
   );
 }
 
-/** The window and input settings the run will use. */
+/** The window and input settings the run will use. The card's row states them
+ *  and its expansion holds their controls: a press on the row opens and closes
+ *  it, as every card of the queue below does. */
 function WindowCard() {
+  const open = signal(false);
   return (
     <Card class="w-full p-0">
-      <View class="w-full flex-row items-center gap-2 px-4 py-3">
+      <Pressable
+        accessibilityLabel={`窗口设置（${open() ? "已展开" : "已收起"}）`}
+        testID="window-toggle"
+        class="w-full flex-row items-center gap-2 rounded-(--radius-lg) px-4 py-3 hover:bg-accent active:bg-secondary"
+        onPress={() => open.set(!open())}
+      >
         <Badge label="SET" />
         <Icon name="settings2" size={14} />
         <Text class="text-xs font-medium text-foreground">窗口设置</Text>
         <View class="flex-1" />
-        <WindowSetting
-          label="分辨率"
-          value={currentResolution()}
-          testID="window-resolution"
-          onPress={() => cycleResolution()}
-        />
-        <WindowSetting
-          label="异步输入"
-          value={isAsyncInput() ? "开" : "关"}
-          testID="window-async-input"
-          onPress={() => toggleAsyncInput()}
-        />
-      </View>
+        <Text class="text-xs text-muted-foreground">{`分辨率 ${currentResolution()}`}</Text>
+        <Text class="text-xs text-muted-foreground">
+          {`异步输入 ${isAsyncInput() ? "开" : "关"}`}
+        </Text>
+        <Chevron open={open()} />
+      </Pressable>
+      <Expansion open={open()}>
+        <SettingList>
+          <SettingLine label="窗口分辨率">
+            <Select<string>
+              accessibilityLabel="窗口分辨率"
+              items={RESOLUTIONS}
+              value={currentResolution() === "1440P" ? "1440" : "1080"}
+              onChange={(next) => setResolution(next === "1440" ? 1440 : 1080)}
+              class="w-36"
+            />
+          </SettingLine>
+          <SettingLine label="异步 PostMessage 输入">
+            <Switch
+              checked={isAsyncInput()}
+              accessibilityLabel="异步 PostMessage 输入"
+              onChange={() => toggleAsyncInput()}
+            />
+          </SettingLine>
+        </SettingList>
+      </Expansion>
     </Card>
   );
 }
 
-function WindowSetting(props: {
-  label: string;
-  value: string;
-  testID: string;
-  onPress: () => void;
-}) {
+/** The chevron of a card's row: it points down at what the press opens, and
+ *  up once it is open. */
+function Chevron(props: { open: boolean }) {
+  return <Icon name="chevronDown" size={14} rotate={props.open ? 180 : 0} />;
+}
+
+/** A card's expansion: a divider and the row's settings, under the row. */
+function Expansion(props: { open: boolean; children?: JSX.Element }) {
   return (
-    <Button
-      label={`${props.label} ${props.value}`}
-      variant="ghost"
-      size="xs"
-      testID={props.testID}
-      onPress={props.onPress}
-    />
+    <If when={props.open}>
+      <View class="w-full flex-col">
+        <Rule />
+        <View class="w-full px-4 py-3">{props.children}</View>
+      </View>
+    </If>
   );
 }
 
-/** One task card: its switch, its name, and the parameters it runs with. */
+/** One task card: its switch, its name, and the parameters it runs with. The
+ *  row states the parameters and a press on it opens their controls. */
 function TaskCard(props: { task: Task }) {
   const task = () => props.task;
+  const open = signal(false);
   return (
     <Card class="w-full p-0">
       <View class="w-full flex-row items-center gap-3 px-4 py-2.5">
@@ -239,43 +268,64 @@ function TaskCard(props: { task: Task }) {
           accessibilityLabel={`启用 ${task().name}`}
           onChange={() => toggleTask(task().id)}
         />
-        <Icon name={task().icon} size={16} color={token("brand")} />
-        <Text class="min-w-0 flex-1 text-sm text-foreground">{task().name}</Text>
-        <View class="flex-row flex-wrap items-center justify-end gap-1.5">
-          <Each of={task().params} key={(param) => param.id}>
-            {(param) => <ParamSelect task={task().id} param={param()} />}
-          </Each>
-        </View>
+        <Pressable
+          accessibilityLabel={`${task().name}设置（${open() ? "已展开" : "已收起"}）`}
+          testID={`task-toggle-${task().id}`}
+          class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 hover:bg-accent active:bg-secondary"
+          onPress={() => open.set(!open())}
+        >
+          <Icon name={task().icon} size={16} color={token("brand")} />
+          <Text class="min-w-0 text-sm text-foreground">{task().name}</Text>
+          <View class="flex-1" />
+          <View class="flex-row items-center gap-2">
+            <If when={!open()}>
+              <Text class="text-xs text-muted-foreground">{taskSummary(task())}</Text>
+            </If>
+            <Chevron open={open()} />
+          </View>
+        </Pressable>
       </View>
+      <Expansion open={open()}>
+        <SettingList>
+          <Each of={task().params} key={(param) => param.id}>
+            {(param) => (
+              <SettingLine label={param().label}>
+                <Select<string>
+                  accessibilityLabel={param().label}
+                  items={param().options}
+                  value={param().value}
+                  onChange={(next) => setTaskParam(task().id, param().id, next)}
+                  class="w-36"
+                />
+              </SettingLine>
+            )}
+          </Each>
+        </SettingList>
+      </Expansion>
     </Card>
   );
 }
 
-/** One parameter: its label and its value in one compact chip. */
-function ParamSelect(props: { task: Task["id"]; param: TaskParam }) {
-  return (
-    <View class="flex-row items-center gap-0.5 rounded-(--radius-sm) border border-input px-2 py-0.5">
-      <Text class="text-xs text-muted-foreground">{props.param.label}</Text>
-      <Select<string>
-        accessibilityLabel={props.param.label}
-        items={props.param.options}
-        value={props.param.value}
-        compact
-        onChange={(next) => setTaskParam(props.task, props.param.id, next)}
-      />
-    </View>
-  );
+/** A task's parameters as one line: `经验本 ×1 · 纽本 ×3 · 连战 关`. */
+function taskSummary(task: Task): string {
+  return task.params
+    .map((param) => {
+      const label = param.options.find((option) => option.value === param.value)?.label;
+      return `${param.label} ${label ?? param.value}`;
+    })
+    .join(" · ");
 }
 
 /** The bar under the queue: select all, clear, the completion action and start. */
 function RunBar() {
   return (
-    <Card class="w-full p-2">
+    <Card class="w-full p-2.5">
       <View class="w-full flex-row items-center gap-2">
         <Button
           label="全选"
           icon="check"
           variant="outline"
+          size="lg"
           testID="select-all"
           onPress={() => selectAllTasks()}
         />
@@ -283,19 +333,20 @@ function RunBar() {
           label="清空"
           icon="eraser"
           variant="outline"
+          size="lg"
           testID="clear-tasks"
           onPress={() => clearTasks()}
         />
         <View class="flex-1" />
-        <Button label="什么也不干（本次）" variant="ghost" />
+        <Button label="什么也不干（本次）" variant="ghost" size="lg" />
         <Button
           label="Link Start!"
           icon="play"
+          size="lg"
           testID="link-start"
-          class="min-w-44"
           onPress={() => startQueue()}
         >
-          <Text class="text-xs opacity-80">F10</Text>
+          <Text class="rounded-(--radius-sm) bg-scrim/40 px-1.5 py-0.5 text-xs opacity-80">F10</Text>
         </Button>
       </View>
     </Card>
@@ -417,6 +468,11 @@ function LogCard() {
             />
           </View>
         </View>
+        {/* The last action's line lives with the logs: the queue is a work
+            list, not a message board. */}
+        <If when={consoleFeedback()}>
+          {(line) => <Text class="text-xs text-muted-foreground">{line()}</Text>}
+        </If>
         <Scroll class="min-h-0 flex-1">
           <View class="flex-col gap-1">
             <If when={logLines() === 0}>
