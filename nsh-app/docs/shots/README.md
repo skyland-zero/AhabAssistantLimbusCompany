@@ -14,6 +14,7 @@
 | `skin-glass-dark.png` | Glass 皮肤（半透明层叠、发丝高光、大圆角） |
 | `skin-limbus-dark.png` | Limbus 皮肤（暗色羊皮纸、黄铜角框、红色印章） |
 | `skin-mist-dark.png` | Mist 皮肤 |
+| `skin-nsh-light.png` / `skin-nsh-dark.png` | NSH 皮肤（中性灰、1px 发丝描边、无投影、零装饰） |
 | `titlebar-light.png` | 标题栏：品牌、6 个导航项、状态点、外观切换、设置、窗口按钮 |
 
 ## 重新生成（Linux，无需 GPU）
@@ -26,8 +27,13 @@ python3 scripts/capture_nsh.py --size 820x680 --out nsh-app/docs/shots/home-ligh
 `VK_ICD_FILENAMES` 指向 Mesa 的 lavapipe 软件 Vulkan、等宿主 `connected` 后抓 X11 根窗口，
 结束清理进程组。
 
-**换页面 / 外观 / 皮肤**：Linux 无 GPU 截图仍靠临时改 `store.ts` 初始值；Windows 用
-`nsh-app/visual.test.tsx` 的 `open(..., { colorScheme })` 和逐页 `press` 驱动，不再手改源码。
+**换页面 / 外观 / 皮肤**：皮肤与外观可先用设置文件定好再截图，不用改源码——
+`~/.config/AhabAssistant/settings.json`（Windows 是 `%APPDATA%\AhabAssistant\`）里的
+`skinId`（`default` / `nsh` / `glass` / `archive` / `limbus` / `mist`）与 `themeMode`
+（**小写** `light` / `dark` / `system`）。写错会静默回退成默认值：这是刻意的
+（`SettingsStore` 读失败就用默认值），所以换皮肤截图时先看一眼结果是不是你要的那套。
+换页面仍需临时改 `store.ts` 的初始 page；Windows 用 `nsh-app/visual.test.tsx` 的
+`open(..., { colorScheme })` 和逐页 `press` 驱动，不再手改源码。
 `store.ts` 的初始值保持默认（`home` / `system` / `default`）。
 
 ## 在原客户端上对照

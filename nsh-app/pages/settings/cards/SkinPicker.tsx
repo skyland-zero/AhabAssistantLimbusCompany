@@ -6,7 +6,7 @@
 // diagram, like a raster preview, not page layout.
 import { Text, View, colorScheme } from "nsh";
 import { Button } from "nsh/base";
-import { SKINS, SKIN_BLURBS, SKIN_LABELS, tokensFor } from "../../../themes";
+import { DECOR_OF, SKINS, SKIN_BLURBS, SKIN_LABELS, tokensFor } from "../../../themes";
 import type { SkinName } from "../../../themes";
 import { setFeedback } from "../../../settings";
 import { currentAccent, currentSkin, setSkin } from "../../../store";
@@ -67,7 +67,18 @@ function SkinOption(props: { skin: SkinName; active: boolean; onPress: () => voi
 function Frame(props: { skin: SkinName }) {
   const t = () => tokensFor(props.skin, currentAccent(), colorScheme());
   return (
-    <View style={{ width: "100%", padding: 3, backgroundColor: t()["card"], borderRadius: 6 }}>
+    <View
+      style={{
+        width: "100%",
+        padding: 3,
+        backgroundColor: t()["card"],
+        borderRadius: 6,
+        // The hairline skin's structure is its line: without one the plate
+        // would look like the flat skin's.
+        borderWidth: DECOR_OF[props.skin] === "hairline" ? 1 : 0,
+        borderColor: t()["border"],
+      }}
+    >
       <Miniature skin={props.skin} />
     </View>
   );

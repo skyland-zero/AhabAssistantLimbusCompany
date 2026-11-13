@@ -65,6 +65,7 @@
   （`home`→`house`、`help`→`circle-question-mark`、`restore`→`square-stack`）。
 - **皮肤与强调色（第二轮）**：`themes/skins.generated.ts` 由 `scripts/export_nsh_theme.py` 生成
   （5 皮肤 × 竖排 token + 6 强调色的差异表），`themes/index.ts` 在运行时合成 `themeFor(skin, accent)`
+  （P4.5 起改名 `themes/skins.ts` 并改为手写维护）
   并 `setTheme()`；`store.ts` 拥有 `skin`/`accent`，切皮肤时若用户没选过强调色则跟随该皮肤的默认配色。
 - **5 套装饰语言**：卡片（边狱四角角框、玻璃顶部高光、血雾/边狱阴影档位）、标题带（边狱渐变带 +
   竖条 + 污渍、档案向右发丝线、血雾左侧竖条、玻璃顶部高光）、空状态标记（封蜡/横杠/芯片）、

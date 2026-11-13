@@ -22,6 +22,8 @@ const CARD_SHADOW: Record<Decor, string> = {
   archive: "shadow-none",
   limbus: "shadow-none",
   mist: "shadow-md",
+  // Structure only: the hairline border already explains the surface.
+  hairline: "shadow-none",
 };
 
 /** A surface container: the app's card geometry, padding and decoration. */
@@ -116,6 +118,7 @@ const HEADER_CLASS: Record<Decor, string> = {
   archive: "border-b border-border",
   limbus: "overflow-hidden",
   mist: "border-b border-border",
+  hairline: "border-b border-border",
 };
 
 const HEADER_LABEL: Record<Decor, string> = {
@@ -124,6 +127,7 @@ const HEADER_LABEL: Record<Decor, string> = {
   archive: "text-foreground",
   limbus: "text-accent-foreground",
   mist: "text-foreground",
+  hairline: "text-foreground",
 };
 
 /** A hairline rule: a separator inside a card or between regions. The ruled
@@ -142,6 +146,7 @@ const RULE_CLASS: Record<Decor, string> = {
   archive: "bg-decor-line opacity-60",
   limbus: "bg-decor-line opacity-60",
   mist: "bg-border",
+  hairline: "bg-border",
 };
 
 /** A decorative section divider: the shipped gold flourish for the ruled

@@ -7,7 +7,7 @@
 - 界面与交互 1:1 照搬迁移前的客户端（参考图归档在 `docs/reference/gpui/`），不新增功能、不改用户可见行为。
 - Rust 拥有后端与状态，TSX 拥有页面与样式，两侧通过生成的 TypeScript 声明强类型对接。
 - Mock 与 Python sidecar 共用同一套 JSON-RPC 契约（仓库根 `contract/contract.json`）。
-- 浅色/深色、6 个强调色、5 个皮肤由 `theme.json` 的 token 驱动，页面里不出现硬编码色值。
+- 浅色/深色、6 个强调色、6 个皮肤由 `theme.json` 的 token 驱动，页面里不出现硬编码色值。
 
 ## 2. 目录职责
 

@@ -11,7 +11,7 @@ import {
   ACCENT_LABELS,
   themeFor,
 } from "./index";
-import { SKIN_RADII, SKIN_TOKENS } from "./skins.generated";
+import { SKIN_RADII, SKIN_TOKENS } from "./skins";
 
 test("every skin and accent composes a complete theme", () => {
   for (const skin of SKINS) {
@@ -65,4 +65,32 @@ test("the mist wash and grain are the mist skin's alone", () => {
   // Glass paints a wash too, but from the accent's glow, and no grain.
   expect(glass["wash"]).not.toBe("rgba(0, 0, 0, 0.000)");
   expect(glass["grain"]).toBe("rgba(0, 0, 0, 0.000)");
+});
+
+test("the nsh skin is hairlines over a neutral surface", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const tokens = themeFor("nsh", "crimson").cssVars[appearance] ?? {};
+    // Nothing to paint: the skin carries its structure with the border alone.
+    for (const decoration of ["band-top", "band-bottom", "wash", "grain", "hilite", "glow"]) {
+      expect(tokens[decoration]).toBe("rgba(0, 0, 0, 0.000)");
+    }
+    // The default skin hides its light-mode border; nsh draws it everywhere.
+    expect(tokens["border"]).not.toBe("rgba(0, 0, 0, 0.000)");
+    expect(tokens["input"]).not.toBe("rgba(0, 0, 0, 0.000)");
+  }
+  // Content, not status colour: the semantic tokens are the default skin's.
+  const nsh = themeFor("nsh", "crimson").cssVars.light ?? {};
+  const plain = themeFor("default", "crimson").cssVars.light ?? {};
+  for (const status of ["success", "warning", "danger"]) {
+    expect(nsh[status]).toBe(plain[status]);
+  }
+});
+
+test("each skin's radii step from small parts up to containers", () => {
+  for (const skin of SKINS) {
+    const scale = ["radius-sm", "radius", "radius-lg", "radius-xl"].map((key) =>
+      parseFloat(SKIN_RADII[skin][key]),
+    );
+    expect(scale).toEqual([...scale].sort((a, b) => a - b));
+  }
 });

@@ -36,6 +36,7 @@ const SEPARATOR: Record<Decor, string> = {
   archive: "border-decor-line/55",
   limbus: "border-decor-line",
   mist: "border-decor-line",
+  hairline: "border-border",
 };
 
 /** The appearance toggle's glyph and label, in the order it cycles. */

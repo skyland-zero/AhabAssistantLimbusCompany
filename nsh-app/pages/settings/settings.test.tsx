@@ -38,6 +38,13 @@ test("choosing an interface skin applies it", async () => {
   await app.waitFor("界面皮肤：边狱");
 });
 
+test("the NSH skin is offered beside the migrated ones", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("role:button[设置]");
+  await app.press("role:button[NSH / nsh]");
+  await app.waitFor("界面皮肤：NSH");
+});
+
 test("a hotkey row captures the next combination", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[设置]");
