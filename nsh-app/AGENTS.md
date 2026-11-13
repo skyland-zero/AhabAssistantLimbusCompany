@@ -101,19 +101,44 @@ python3 scripts/capture_nsh.py     # → nsh-app/docs/shots/p0-desktop.png
 ## 7. 构建速度
 
 改 Rust 后 `nsh run` 要重新编译并链接一个完整 host，慢的是链接与重复的依赖编译，不是应用
-代码（`aalc-native` 本身几秒就能编完）。仓库已按这一点做了三件事，改动时不要退回去：
+代码（`aalc-native` 本身几秒就能编完）。仓库已按这一点做了四件事，改动时不要退回去：
 
 | 机制 | 位置 | 作用 |
 | --- | --- | --- |
 | 统一 target 目录 | 根 `.cargo/config.toml` 的 `build.target-dir` | native crate 与 host 共用 `nsh-app/target`，不再把 tokio/rustls/`nsh-core` 再编一遍；`nsh` 自己传 `--target-dir`，以它的为准 |
 | `debuginfo=1` | 同上 `build.rustflags` | dev host 的调试信息从约 1.6 GB 降到几百 MB，链接时间随之下降；保留行号，没有变量值 |
-| lld-link | `scripts/build-env.bat`（由 `run-nsh.bat` / `run-nsh-mock.bat` 调用） | PATH 上有 `lld-link` 就用它链接；`set AALC_LINKER=default` 回到 `link.exe`，`set AALC_LINKER=<lld-link 路径>` 指定 Visual Studio 自带的那份（通常在 `VC\Tools\Llvm\x64\bin`），`set AALC_DEBUGINFO=2` 临时恢复完整调试信息 |
+| 链接器 | `scripts/build-env.sh` / `scripts/build-env.bat`（由 `run-nsh.sh` / `run-nsh*.bat` 调用） | `lld-link`、`mold`、`lld` 可用时用它链接（`AALC_LINKER=default` 回到默认）；`AALC_DEBUGINFO=2` 临时恢复完整调试信息 |
+| 并发上限 | 同上，`AALC_JOBS`（默认 4） | 八个 rustc 进程抢同一块磁盘是「编译时整机卡死」的主因；CI 不用这两个脚本，保持满并发 |
 
 `native/scrcpy_decoder` 是例外：产物固定在自己的 `target/release`（`scripts/build.py` 显式传
 `CARGO_TARGET_DIR`），因为 Python 侧按这个路径加载 DLL。
 
 拆分边界同理：`crates/model`、`crates/contract` 只放纯 serde 数据（不依赖 `nsh-core`），
 `src/` 里的 state/ipc 依赖 UI 栈。往 `crates/` 里加 `nsh-core` 依赖会让快编译路径失效。
+
+### 7.1 机械硬盘 / 内存紧张的机器
+
+上面的仓库内设置只解决一半：HDD 上真正让机器「卡死」的是写回风暴与换页。系统层建议（Ubuntu
+用 `/etc/sysctl.d/90-aalc-build.conf`）：
+
+```ini
+vm.dirty_ratio = 10
+vm.dirty_background_ratio = 5
+vm.swappiness = 10
+```
+
+默认的 20% 脏页上限意味着一次大链接会把几 GB 脏页攒在一起，随后的回写会卡住所有进程；
+`swappiness=60` 在只有 10 GB 内存的机器上会把编译工作集换到同一块盘上。
+
+磁盘调度器改为 `mq-deadline`（HDD 上比 `none` 少饥饿）：
+
+```bash
+echo mq-deadline | sudo tee /sys/block/sda/queue/scheduler
+```
+
+日常开发用 `./run-nsh.sh`（`--mock` 对面是 `run-nsh-mock.bat`）：它会 source
+`scripts/build-env.sh` 把并发降到 4，并以 `ionice -c 2 -n 6 nice -n 5` 运行构建，桌面不被
+编译抢死。`AALC_DRY_RUN=1 ./run-nsh.sh` 可以只看环境与命令而不真构建。
 
 ## 8. 参考：项目级 Agent Skills
 

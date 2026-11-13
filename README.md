@@ -227,7 +227,7 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # 需要 uv >= 0.12.8；按 .python-version 使用 Python 3.14.7 并安装项目依赖
 uv sync --frozen
-.\\run-nsh.bat
+.\\run-nsh.bat            # Windows；Linux/macOS 用 ./run-nsh.sh（--mock 走 Mock）
 
 # 更新
 git pull

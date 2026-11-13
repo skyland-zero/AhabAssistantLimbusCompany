@@ -15,6 +15,12 @@
 # `nsh` passes its own `--target-dir` for the host workspaces, which wins.
 target-dir = "nsh-app/target"
 
+# On an HDD or a memory-tight machine, also cap cargo's parallelism: eight rustc
+# processes on one platter is what stalls the desktop. The launchers do it for
+# you (`scripts/build-env.bat` / `scripts/build-env.sh`, `AALC_JOBS`); see
+# `nsh-app/AGENTS.md` §7 for the system-level knobs. Config files cannot set a
+# job count per machine without also slowing down CI, so this stays an env var.
+
 # Line-tables-only debug info for the app's Rust crates. The `dev` hosts are
 # otherwise ~1.6 GB of debug info, and linking that dominates a Rust rebuild;
 # `1` keeps file/line in panic backtraces and drops the rest. Raise it to

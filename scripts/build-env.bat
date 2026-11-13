@@ -13,9 +13,14 @@ rem   AALC_LINKER=<path>       use that linker (no spaces in the path), e.g.
 rem                            C:\Program Files\...\VC\Tools\Llvm\x64\bin\lld-link.exe
 rem   AALC_LINKER unset        use lld-link when it is on PATH, else link.exe
 rem   AALC_DEBUGINFO=2         full debug info for this session (variables in a debugger)
+rem   AALC_JOBS=4              rustc jobs; on an HDD fewer concurrent rustc
+rem                            processes stall the desktop less than eight do
 rem
 rem RUSTFLAGS, when already set, is left alone: it replaces the config file's
 rem rustflags wholesale, so whoever set it owns the debug-info level and linker.
+
+if not defined AALC_JOBS set "AALC_JOBS=4"
+if not defined CARGO_BUILD_JOBS set "CARGO_BUILD_JOBS=%AALC_JOBS%"
 
 if defined RUSTFLAGS goto :build_env_done
 
