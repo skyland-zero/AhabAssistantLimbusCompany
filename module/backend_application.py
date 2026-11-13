@@ -1,4 +1,4 @@
-"""Headless application services exposed by the GPUI sidecar.
+"""Headless application services exposed by the Native Shell sidecar.
 
 The sidecar is the narrow runtime context shared by RPC handlers and the
 WebSocket event publisher.  Services are deliberately kept behind small
@@ -934,7 +934,7 @@ class BackendApplication:
         return "pong"
 
     def app_version(self) -> dict[str, Any]:
-        return {"ui": "gpui", "backend": self.version, "schemaVersion": SCHEMA_VERSION}
+        return {"ui": "nsh", "backend": self.version, "schemaVersion": SCHEMA_VERSION}
 
     def app_shutdown(self) -> bool:
         if self._shutdown is not None:

@@ -1,7 +1,7 @@
-"""Runtime device selection for the GPUI sidecar.
+"""Runtime device selection for the Native Shell sidecar.
 
 The legacy application decides between a Windows game window and an Android
-emulator through ``cfg.simulator``.  The GPUI client instead selects an opaque
+emulator through ``cfg.simulator``.  The client instead selects an opaque
 stable device id (for example ``pc:limbus`` or ``mumu:0``).  This module is the
 small compatibility layer between those two models.  It owns exactly one
 active runtime session and keeps HWND/ADB objects out of the IPC contract.

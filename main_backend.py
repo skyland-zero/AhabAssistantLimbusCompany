@@ -1,4 +1,4 @@
-"""Standalone headless Python sidecar entry point for the GPUI application.
+"""Standalone headless Python sidecar entry point for the Native Shell app.
 
 This process owns automation services and local RPC only.  It never creates a
 window or imports the legacy UI layer.
@@ -19,10 +19,10 @@ from pathlib import Path
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Ahab Assistant GPUI sidecar")
+    parser = argparse.ArgumentParser(description="Ahab Assistant Native Shell sidecar")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)
-    # The GPUI-owned launcher supplies the token through the child environment
+    # The Native Shell app supplies the token through the child environment
     # so it does not appear in the process command line.  Manual/debug launches
     # may still pass --token explicitly.
     parser.add_argument("--token", default=None)

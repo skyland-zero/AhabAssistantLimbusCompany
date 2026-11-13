@@ -105,7 +105,7 @@ impl MockState {
             method::APP_PING => Ok(json!("pong")),
             method::APP_VERSION => Ok(json!({
                 "schemaVersion": 3,
-                "ui": env!("CARGO_PKG_VERSION"),
+                "ui": "nsh",
                 "backend": "mock-1.0.0"
             })),
             method::APP_CHECK_UPDATE => Ok(json!({

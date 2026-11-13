@@ -202,7 +202,8 @@ The AALC project could not have been possible without the help of the following 
 | March7thAssistant                     | [March7thAssistant](https://github.com/moesnow/March7thAssistant)                 | Learned quite a bit from the big guy here                                                                                                   |
 | BAAS                                  | [blue_archive_auto_script](https://github.com/pur1fying/blue_archive_auto_script) | I learned the simulator-related code from the big guy here                                                                                  |
 
-AALC's GPUI interface uses system fonts and bundled GPUI resources; the old Qt font is no longer packaged.
+AALC's Native Shell interface uses system fonts and the fonts bundled with the
+frontend; the old Qt font is no longer packaged.
 
 ### Uniform acknowledgements
 
@@ -247,7 +248,7 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # Download dependencies via uv (uv tool needs to be installed separately)
 uv sync --frozen
-.\\run-gpui.bat
+.\\run-nsh.bat
 
 # Update
 git pull
