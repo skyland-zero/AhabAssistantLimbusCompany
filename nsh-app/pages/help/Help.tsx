@@ -11,6 +11,7 @@ import helpEn from "../../assets/content/help-en.md?url";
 import helpZh from "../../assets/content/help-zh.md?url";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
+import { Reveal } from "../../components/Reveal";
 import { currentLanguage, setLanguage, t } from "../../settings";
 import type { Language } from "../../settings";
 import { activeToc, parseHelp, parseInline } from "./parser";
@@ -102,13 +103,15 @@ export function Help() {
             </If>
             <Each of={toc()}>
               {(entry, tocIndex) => (
-                <Button
-                  label={entry().title}
-                  variant={active() === tocIndex() ? "secondary" : "ghost"}
-                  selected={active() === tocIndex()}
-                  class="w-full"
-                  onPress={() => jumpTo(tocIndex())}
-                />
+                <Reveal index={tocIndex()} class="w-full">
+                  <Button
+                    label={entry().title}
+                    variant={active() === tocIndex() ? "secondary" : "ghost"}
+                    selected={active() === tocIndex()}
+                    class="w-full"
+                    onPress={() => jumpTo(tocIndex())}
+                  />
+                </Reveal>
               )}
             </Each>
           </View>

@@ -10,6 +10,7 @@ import { Card } from "../../components/Card";
 import { EmptyState } from "../../components/EmptyState";
 import { PageRoot, PageToolbar } from "../../components/Page";
 import { Switch } from "../../components/Switch";
+import { Tabs } from "../../components/Tabs";
 import {
   PURPOSE_LABELS,
   SCHEME_LABELS,
@@ -45,11 +46,23 @@ export function Teams() {
     <PageRoot>
       <PageToolbar>
         <View class="w-full flex-row flex-wrap items-center justify-between gap-3">
-          <View class="flex-row flex-wrap items-center gap-1 rounded-(--radius) bg-muted p-0.5">
-            <Each of={FILTERS} key={(filter) => filter.value}>
-              {(filter) => <FilterTab filter={filter()} />}
-            </Each>
-          </View>
+          <Tabs<TeamFilter>
+            items={FILTERS}
+            value={teamFilter}
+            onChange={(next) => setTeamFilter(next)}
+            accessibilityLabel="队伍分类"
+            trackClass="flex-wrap items-center gap-1 rounded-(--radius) bg-muted p-0.5"
+            itemClass="min-h-7 px-3"
+            pillClass="bg-card shadow-sm"
+            itemTestID={(filter) => `team-filter-${filter.value}`}
+            suffix={(filter) => (
+              <If when={filter.value === "all" || countFor(filter.value) > 0}>
+                <View class="rounded-sm bg-secondary px-1">
+                  <Text class="text-xs text-muted-foreground">{countFor(filter.value)}</Text>
+                </View>
+              </If>
+            )}
+          />
           <Button
             label="新建队伍"
             icon="plus"
@@ -79,9 +92,9 @@ export function Teams() {
           >
             <View class="grid w-full grid-cols-2 items-stretch gap-3">
               <Each of={slots()} key={(slot) => slot.number}>
-                {(slot) => (
-                  <If when={slot().team} else={<EmptySlot number={slot().number} />}>
-                    {(team) => <TeamCard team={team()} slot={slot().number} />}
+                {(slot, index) => (
+                  <If when={slot().team} else={<EmptySlot number={slot().number} index={index()} />}>
+                    {(team) => <TeamCard team={team()} slot={slot().number} index={index()} />}
                   </If>
                 )}
               </Each>
@@ -93,7 +106,9 @@ export function Teams() {
             </If>
             <View class="grid w-full grid-cols-2 items-stretch gap-3">
               <Each of={extras()} key={(team) => team.id}>
-                {(team) => <TeamCard team={team()} slot={teamNumber(team().id) ?? 0} />}
+                {(team, index) => (
+                  <TeamCard team={team()} slot={teamNumber(team().id) ?? 0} index={index()} />
+                )}
               </Each>
             </View>
           </If>
@@ -104,34 +119,12 @@ export function Teams() {
   );
 }
 
-/** One filter tab: its label and how many teams it holds. */
-function FilterTab(props: { filter: { value: TeamFilter; label: string } }) {
-  const active = () => teamFilter() === props.filter.value;
-  const count = () => countFor(props.filter.value);
-  return (
-    <Button
-      label={props.filter.label}
-      variant="ghost"
-      selected={active()}
-      class={`min-h-7 px-3 ${active() ? "bg-card text-foreground hover:bg-card" : "text-muted-foreground"}`}
-      onPress={() => setTeamFilter(props.filter.value)}
-      testID={`team-filter-${props.filter.value}`}
-    >
-      <If when={props.filter.value === "all" || count() > 0}>
-        <View class="rounded-sm bg-secondary px-1">
-          <Text class="text-xs text-muted-foreground">{count()}</Text>
-        </View>
-      </If>
-    </Button>
-  );
-}
-
-/** A saved team: its number, state, commands, meta and party. */
-function TeamCard(props: { team: Team; slot: number }) {
+/** One saved team: its number, state, commands, meta and party. */
+function TeamCard(props: { team: Team; slot: number; index: number }) {
   const team = () => props.team;
   const luxcavation = () => team().purpose === "luxcavation";
   return (
-    <Card class="w-full p-3">
+    <Card class="w-full p-3" arrive={props.index}>
       <View class="flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <Badge label={`#${String(props.slot).padStart(2, "0")}`} />
@@ -197,9 +190,9 @@ function TeamCard(props: { team: Team; slot: number }) {
 }
 
 /** A formation slot with no team: the two ways to fill it. */
-function EmptySlot(props: { number: number }) {
+function EmptySlot(props: { number: number; index: number }) {
   return (
-    <Card class="w-full bg-muted/40 p-3">
+    <Card class="w-full bg-muted/40 p-3" arrive={props.index}>
       <View class="flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <Badge label={`#${String(props.number).padStart(2, "0")}`} />

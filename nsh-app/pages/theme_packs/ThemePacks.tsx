@@ -74,7 +74,7 @@ export function ThemePacks() {
       <Scroll class="min-h-0 flex-1">
         <View class="w-full flex-col gap-2">
           <Each of={themePacks()} key={(pack) => pack.id}>
-            {(pack) => <PackRow pack={pack()} />}
+            {(pack, index) => <PackRow pack={pack()} index={index()} />}
           </Each>
         </View>
       </Scroll>
@@ -83,11 +83,11 @@ export function ThemePacks() {
 }
 
 /** One pack: its switch, name and tier, then its weight. */
-function PackRow(props: { pack: ThemePack }) {
+function PackRow(props: { pack: ThemePack; index: number }) {
   const pack = () => props.pack;
   const enabled = () => pack().enabled;
   return (
-    <Card class="w-full p-0">
+    <Card class="w-full p-0" arrive={props.index}>
       <View class={`flex-row items-center gap-4 px-5 py-3 ${enabled() ? "" : "opacity-60"}`}>
         <Switch
           checked={enabled()}

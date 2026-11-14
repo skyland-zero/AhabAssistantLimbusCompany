@@ -40,7 +40,7 @@ export function AppearanceCard() {
         <SettingLine label="主题模式">
           <Segmented<Appearance>
             accessibilityLabel="主题模式"
-            value={currentAppearance()}
+            value={currentAppearance}
             onChange={(next) => {
               applyAppearance(next);
               setFeedback(`主题模式：${APPEARANCE_LABELS[next]}`);
@@ -128,7 +128,7 @@ export function AppearanceCard() {
         <SettingLine label="语言 / Language">
           <Segmented<Language>
             accessibilityLabel="语言"
-            value={currentLanguage()}
+            value={currentLanguage}
             onChange={(next) => setLanguage(next)}
             options={[
               { value: "zhCn", label: "简体中文" },

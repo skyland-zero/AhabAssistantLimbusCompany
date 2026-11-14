@@ -1,39 +1,32 @@
 // A segmented choice: two to four mutually exclusive options in one silhouette.
 //
 // The container is the fill; the selected option is the raised one, so the
-// control reads as one object rather than as a row of unrelated buttons. Each
-// option is a `nsh/base` Button, which keeps Tab order, keyboard activation and
-// the selected state for screen readers.
+// control reads as one object rather than as a row of unrelated buttons. The
+// raised one is a single marker that slides between the options (`Tabs`), not
+// a background per option switching on and off.
 import type { JSX } from "nsh";
 import { View } from "nsh";
-import { Button } from "./Button";
+import { Tabs } from "./Tabs";
 
 export function Segmented<T extends string>(props: {
   options: { value: T; label: string }[];
-  value: T;
+  /** The chosen value, read as a signal so the marker follows it. */
+  value: () => T;
   onChange: (value: T) => void;
   /** What screen readers call the group: the setting it chooses. */
   accessibilityLabel?: string;
   class?: string;
 }) {
   return (
-    <View
-      role="radiogroup"
+    <Tabs<T>
+      items={props.options}
+      value={props.value}
+      onChange={props.onChange}
       accessibilityLabel={props.accessibilityLabel}
-      class={`flex-row items-center gap-1 ${props.class ?? ""}`}
-    >
-      <Each of={props.options} key={(option) => option.value}>
-        {(option) => (
-          <Button
-            label={option().label}
-            variant={props.value === option().value ? "secondary" : "ghost"}
-            selected={props.value === option().value}
-            onPress={() => props.onChange(option().value)}
-            class="px-3"
-          />
-        )}
-      </Each>
-    </View>
+      trackClass={`gap-1 ${props.class ?? ""}`}
+      itemClass="min-h-5 px-3"
+      pillClass="bg-secondary"
+    />
   );
 }
 

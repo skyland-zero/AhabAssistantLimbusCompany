@@ -13,6 +13,10 @@ async function openHelp() {
   await app.wait(250);
   await app.press("role:button[查看帮助]");
   await app.waitFor("目录");
+  // The settings page stays mounted while it fades out (the page transition
+  // plus its hold), and it offers the same controls this page does; wait it out
+  // so a press by text names one view.
+  await app.wait(400);
   return app;
 }
 

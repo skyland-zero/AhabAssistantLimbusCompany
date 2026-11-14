@@ -56,10 +56,7 @@ pub struct AppStore {
 impl AppStore {
     /// Loads the settings file (defaults when it is missing or invalid).
     pub fn new() -> Self {
-        if std::env::var("AHAB_BACKEND")
-            .map(|value| value.eq_ignore_ascii_case("mock"))
-            .unwrap_or(false)
-        {
+        if isolated_from_disk() {
             return Self {
                 state: AppState::default(),
                 path: None,
@@ -188,6 +185,27 @@ impl Default for AppStore {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Whether the settings store must stay in memory instead of using the user's
+/// real `settings.json`.
+///
+/// The app-shell settings are a *user* preference, so a test run must not read
+/// them (a developer whose interface is English would fail every copy
+/// assertion) and must not write them (the language and appearance tests switch
+/// both, which would silently change the developer's own client). Two cases:
+///
+/// - `AHAB_BACKEND=mock`: the deterministic test surface (see `README.md`).
+/// - `AHAB_SETTINGS_IN_MEMORY=1`: the headless `nsh test` runner, where the
+///   mock is not the default. `nsh` starts the test host with it, so plain
+///   `nsh test` is isolated too.
+fn isolated_from_disk() -> bool {
+    let flag = |name: &str| {
+        std::env::var(name)
+            .map(|value| value.eq_ignore_ascii_case("mock") || value.trim() == "1")
+            .unwrap_or(false)
+    };
+    flag("AHAB_BACKEND") || flag("AHAB_SETTINGS_IN_MEMORY")
 }
 
 #[cfg(test)]

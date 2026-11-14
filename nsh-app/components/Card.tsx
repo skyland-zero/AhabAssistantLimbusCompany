@@ -6,7 +6,8 @@
 // leading accent bar. A skin switch therefore never moves the body below the
 // header.
 import type { JSX } from "nsh";
-import { Image, Text, View, token } from "nsh";
+import { Image, Text, View, createMotion, token } from "nsh";
+import { arriveSpec } from "../motion";
 import dividerArt from "../assets/themes/limbus/divider.png";
 import { currentDecor } from "../store";
 import type { Decor } from "../themes";
@@ -35,14 +36,25 @@ export function Card(props: {
   /** The card is the current one — the running task, the open item. It keeps
    *  the skin's surface and takes the accent as a border and a faint fill. */
   selected?: boolean;
+  /** Its place in a list: the card arrives as one of a wave when the page is
+   *  entered (fades in and rises, a step after the card before it). The motion
+   *  rides the card's own frame, so a grid keeps its `items-stretch` and no
+   *  wrapper is added to the layout. */
+  arrive?: number;
   children?: JSX.Element;
   class?: string;
 }) {
+  // Created whether or not it is used, so the component always makes the same
+  // allocations; `enter` stays unset (and the style unbound) for a still card.
+  const arrival = createMotion(
+    props.arrive === undefined ? undefined : { enter: arriveSpec(props.arrive) },
+  );
   const surface = () =>
     props.selected ? "border-brand bg-brand/10" : "border-border bg-card";
   return (
     <View
       class={`relative min-w-0 rounded-(--radius-lg) border text-card-foreground ${surface()} ${CARD_SHADOW[currentDecor()]} ${props.class ?? "p-4"}`}
+      style={props.arrive === undefined ? undefined : arrival.style}
     >
       <If when={props.title}>
         {(title) => <CardHeader label={title()} />}

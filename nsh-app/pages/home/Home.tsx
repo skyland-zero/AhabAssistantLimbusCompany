@@ -101,7 +101,7 @@ export function Home() {
             <View class="flex-col gap-2 pb-2">
               <WindowCard />
               <Each of={consoleTasks()} key={(task) => task.id}>
-                {(task) => <TaskCard task={task()} />}
+                {(task, index) => <TaskCard task={task()} index={index() + 1} />}
               </Each>
             </View>
           </Scroll>
@@ -206,7 +206,7 @@ function WindowCard() {
   const open = signal(false);
   const window = () => currentWindow();
   return (
-    <Card class="w-full p-0">
+    <Card class="w-full p-0" arrive={0}>
       <Pressable
         accessibilityLabel={`窗口设置（${open() ? "已展开" : "已收起"}）`}
         testID="window-toggle"
@@ -313,7 +313,7 @@ function Expansion(props: {
 /** One task card: its switch, its name, and the parameters it runs with. The
  *  row states the parameters and a press on it opens their controls; a card
  *  without settings (Ahab resonance) is only its switch and name. */
-function TaskCard(props: { task: Task }) {
+function TaskCard(props: { task: Task; index: number }) {
   const task = () => props.task;
   const open = signal(false);
   const hasSettings = () => task().params.length > 0;
@@ -326,7 +326,7 @@ function TaskCard(props: { task: Task }) {
     if (next) body?.reveal({ vertical: "nearest", animated: !reduceMotion() });
   };
   return (
-    <Card class="w-full p-0">
+    <Card class="w-full p-0" arrive={props.index}>
       <View class="w-full flex-row items-center gap-3 px-4 py-2.5">
         <Switch
           checked={task().enabled}

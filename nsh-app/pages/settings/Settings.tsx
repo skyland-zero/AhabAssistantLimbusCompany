@@ -9,6 +9,7 @@ import type { JSX, ScrollRef } from "nsh";
 import { Scroll, Text, View, signal } from "nsh";
 import { Card, Divider } from "../../components/Card";
 import { Button } from "../../components/Button";
+import { Reveal } from "../../components/Reveal";
 import { currentFeedback } from "../../settings";
 import { AboutCard } from "./cards/About";
 import { AppearanceCard } from "./cards/Appearance";
@@ -103,7 +104,9 @@ function Section(props: {
   children?: JSX.Element;
 }) {
   return (
-    <View onLayout={({ bounds }) => props.onOffset(props.index, bounds.origin.y)}>{props.children}</View>
+    <View onLayout={({ bounds }) => props.onOffset(props.index, bounds.origin.y)}>
+      <Reveal index={props.index}>{props.children}</Reveal>
+    </View>
   );
 }
 

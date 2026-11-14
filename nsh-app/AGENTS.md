@@ -18,6 +18,7 @@ nsh-app/
 ├── App.tsx             入口：mount(App)，只做窗口壳与路由编排
 ├── theme.json          默认主题（shadcn cssVars，light + dark）
 ├── theme/<skin>.json   其余皮肤的 token，供 setTheme() 运行时切换
+├── motion.ts           动效 token：毫秒（MS）、曲线、RISE、进场波纹节奏；页面不写裸数值
 ├── shell/              TSX：标题栏、侧栏、Toast 等窗口级 UI
 ├── components/         TSX：设计系统（按钮、控件、弹层、文本输入、图标）
 ├── pages/              TSX：home / teams / theme_packs / toolbox / settings / stats / help

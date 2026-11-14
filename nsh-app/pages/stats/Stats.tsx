@@ -13,6 +13,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Select } from "../../components/Select";
 import { Segmented } from "../../components/Segmented";
 import { PageRoot, PageToolbar } from "../../components/Page";
+import { ENTER_EASING, MS, MOVE_EASING } from "../../motion";
 import {
   currentDailyStats,
   currentStatsDetailsError,
@@ -99,14 +100,14 @@ export function Stats() {
             <Text class="text-xs text-muted-foreground">最近</Text>
             <Segmented
               options={RANGES}
-              value={range()}
+              value={range}
               onChange={(next) => range.set(next)}
               accessibilityLabel="统计范围"
             />
             <Text class="text-xs text-muted-foreground">难度</Text>
             <Segmented
               options={MODES}
-              value={mode()}
+              value={mode}
               onChange={(next) => mode.set(next)}
               accessibilityLabel="难度筛选"
             />
@@ -146,7 +147,12 @@ export function Stats() {
               fastestSeconds={summary().fastestSeconds}
               slowestSeconds={summary().slowestSeconds}
             />
-            <ChartCard rows={chart()} hovered={hoveredRow()} onHover={(index) => hovered.set(index)} />
+            <ChartCard
+              rows={chart()}
+              generation={`${range()}|${mode()}|${team()}`}
+              hovered={hoveredRow()}
+              onHover={(index) => hovered.set(index)}
+            />
             <View class="w-full flex-row items-stretch gap-2">
               <PhaseCard runs={runs()} />
               <TeamCard runs={runs()} />
@@ -172,7 +178,7 @@ function SummaryStrip(props: {
   slowestSeconds: number;
 }) {
   return (
-    <Card class="w-full p-2.5">
+    <Card class="w-full p-2.5" arrive={0}>
       <View class="w-full flex-col gap-1">
         <View class="w-full flex-row flex-wrap items-center gap-x-4 gap-y-1">
           <Chip label="场次" value={String(props.count)} />
@@ -203,11 +209,13 @@ function Chip(props: { label: string; value: string }) {
 /** The recent runs as one stacked bar each, oldest on the left. */
 function ChartCard(props: {
   rows: ChartRow[];
+  /** What the bars are: a change replays their draw-in, a data tick does not. */
+  generation: string;
   hovered: ChartRow | null;
   onHover: (index: number | null) => void;
 }) {
   return (
-    <Card class="w-full p-3">
+    <Card class="w-full p-3" arrive={1}>
       <View class="w-full flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <Text class="text-xs font-medium text-foreground">最近镜牢用时（按环节）</Text>
@@ -229,20 +237,26 @@ function ChartCard(props: {
               xScale={{ type: "band", paddingInner: 0.28, paddingOuter: 0.08 }}
               yScale={{ type: "linear" }}
               class="h-52 w-full"
+              motion={{
+                appear: { duration: MS.slow, easing: ENTER_EASING },
+                update: { duration: MS.base, easing: MOVE_EASING },
+              }}
+              appearGeneration={props.generation}
               onHoverChange={({ index }) => props.onHover(index)}
               tooltipContent={<ChartTooltip row={props.hovered} />}
               crossLineClass="w-px bg-input"
               accessibilityLabel="最近几次镜牢的用时，按环节堆叠"
             >
               <Grid class="stroke-input" />
-              <Bar stack="phases" value="battle" class="fill-chart-1" />
-              <Bar stack="phases" value="event" class="fill-chart-2" />
-              <Bar stack="phases" value="shop" class="fill-chart-3" />
-              <Bar stack="phases" value="findRoad" class="fill-chart-4" />
+              <Bar stack="phases" value="battle" class="fill-chart-1" stagger={0.35} />
+              <Bar stack="phases" value="event" class="fill-chart-2" stagger={0.35} />
+              <Bar stack="phases" value="shop" class="fill-chart-3" stagger={0.35} />
+              <Bar stack="phases" value="findRoad" class="fill-chart-4" stagger={0.35} />
               <Bar
                 stack="phases"
                 value="other"
                 class="fill-chart-5"
+                stagger={0.35}
                 label={(row: ChartRow) => (row.failed ? "未完成" : "")}
                 labelClass="text-[10px] text-danger"
               />
@@ -314,7 +328,7 @@ function ChartTooltip(props: { row: ChartRow | null }) {
 /** The phase split over the completed runs. */
 function PhaseCard(props: { runs: MirrorHistoryEntry[] }) {
   return (
-    <Card class="min-w-0 flex-1 p-3">
+    <Card class="min-w-0 flex-1 p-3" arrive={2}>
       <View class="w-full flex-col gap-2">
         <Text class="text-xs font-medium text-foreground">环节用时</Text>
         <Each of={phaseTotals(props.runs)}>
@@ -356,7 +370,7 @@ function PhaseCard(props: { runs: MirrorHistoryEntry[] }) {
 /** One row per team: runs, average and its own phase split. */
 function TeamCard(props: { runs: MirrorHistoryEntry[] }) {
   return (
-    <Card class="min-w-0 flex-1 p-3">
+    <Card class="min-w-0 flex-1 p-3" arrive={3}>
       <View class="w-full flex-col gap-2">
         <Text class="text-xs font-medium text-foreground">队伍</Text>
         <If
@@ -401,7 +415,7 @@ function PhaseSegment(props: { phase: { key: keyof PhaseSeconds; bar: string }; 
 /** The newest runs, newest first, with their team and result. */
 function RecentCard(props: { runs: MirrorHistoryEntry[] }) {
   return (
-    <Card class="w-full p-3">
+    <Card class="w-full p-3" arrive={4}>
       <View class="w-full flex-col gap-2">
         <Text class="text-xs font-medium text-foreground">最近记录</Text>
         <Each of={props.runs}>
@@ -438,7 +452,7 @@ function DailyCard() {
   const data = () => currentDailyStats();
   const error = () => currentStatsDetailsError();
   return (
-    <Card class="w-full p-3">
+    <Card class="w-full p-3" arrive={5}>
       <View class="w-full flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <Text class="text-xs font-medium text-foreground">每日次数</Text>

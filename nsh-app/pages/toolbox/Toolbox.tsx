@@ -31,7 +31,7 @@ export function Toolbox() {
         <View class="w-full flex-col gap-3">
           <View class="grid w-full grid-cols-2 gap-4">
             <Each of={TOOLS} key={(tool) => tool.id}>
-              {(tool) => <ToolCard tool={tool()} />}
+              {(tool, index) => <ToolCard tool={tool()} index={index()} />}
             </Each>
           </View>
           <Note>
@@ -59,10 +59,10 @@ function Note(props: { children?: JSX.Element }) {
 }
 
 /** One tool: its icon and state, what it does, and the action that runs it. */
-function ToolCard(props: { tool: Tool }) {
+function ToolCard(props: { tool: Tool; index: number }) {
   const running = () => isToolRunning(props.tool.id);
   return (
-    <Card class="w-full p-0">
+    <Card class="w-full p-0" arrive={props.index}>
       <View class="flex-col items-start gap-3 px-4 py-4">
         <View class="w-full flex-row items-center justify-between">
           <Icon name={props.tool.icon} size={20} color={token("brand")} />

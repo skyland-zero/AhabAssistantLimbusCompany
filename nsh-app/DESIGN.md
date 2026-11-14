@@ -125,16 +125,20 @@
 | --- | --- | --- |
 | `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link` `nav`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用）；`nav` 只给标题栏的选中项（胶囊由标题栏的滑块画） |
 | `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 标签/控件网格（行距 12pt，控件固定尾列）：设置页与主控台的窗口设置都用它 |
-| `Segmented.tsx` | `Segmented` / `SwatchRow` | 分段选择（容器透明，选中的一段是 `secondary` 胶囊） |
+| `Tabs.tsx` | `Tabs` | 分段选择的本体：一条选中胶囊在选项下移动（宽度一起伸缩），选项自己是透明按钮；统计范围/难度、队伍筛选、设置的主题与语言都走它 |
+| `Segmented.tsx` | `Segmented` / `SwatchRow` | `Tabs` 的简短形式（`secondary` 胶囊）；`SwatchRow` 是色块行 |
 | `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
 | `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾 |
 | `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
-| `Card.tsx` | `Card` / `CardHeader` / `Rule` | 卡片表面、44pt 标题带、发丝线 |
+| `Card.tsx` | `Card` / `CardHeader` / `Rule` | 卡片表面、44pt 标题带、发丝线；`Card` 的 `arrive` 让卡片在页面进入时随波纹到位（动效绑在卡片自己的 View，网格的 `items-stretch` 不变） |
+| `Reveal.tsx` | `Reveal` | 非卡片行的进场包裹层（帮助目录这类按钮列），参数同波纹 |
 | `Badge.tsx` | `Badge` | 六种语义色，默认 `neutral` |
 | `Icon.tsx` | `Icon` | Lucide SVG 资产 + `tintColor` |
 | `Page.tsx` | `PageRoot` / `PageToolbar` | 页面外框与工具栏卡片 |
 | `EmptyState.tsx` | `EmptyState` | 空/未就绪状态：说明 + 下一步 |
+
+`motion.ts` 不是组件，是原生动效的 token 出处（毫秒、曲线、`RISE`、波纹节奏），页面与组件只用它，不写裸数值（见第 5 节）。
 
 规则：
 
@@ -169,7 +173,7 @@ token；不要为此改 `nsh`。
 
 卡片设置由 `home.ts` 的 `TaskParam` 描述：`kind`（`select` 下拉 / `switch` 开关）、`group`（有分组时按「常规 / 高级」分节）、`summary`（决定折叠行显示哪几条）、`options`（数组或函数——日常的编队下拉读队伍 store）。页面只渲染，字段落到 `TasksConfig` 的映射在 Rust `state/home/mod.rs` 的 `configure` / `selection`。
 
-数量对齐 GPUI 客户端（`gpui-app/src/pages/home/task_details/`）：
+数量对齐迁移前的客户端任务设置面板：
 
 | 卡片 | 设置 |
 | --- | --- |
@@ -198,6 +202,11 @@ token；不要为此改 `nsh`。
 
 `motion-reduce:` 与 `reduceMotion()` 必须写到每一处动效上；减少动效时状态仍要看得懂。
 
+原生动效（`createMotion` / `Animated` / `Plot` 的 `motion`）不读 CSS，毫秒与曲线从 `motion.ts` 取同一套：
+`MS`（`instant` 100 / `fast` 150 / `base` 200 / `slow` 300 / `slide` 240）、`ENTER_EASING`
+（`cubic-bezier(0.32, 0.72, 0, 1)`，和标题栏胶囊同一条）、`MOVE_EASING`、`LEAVE_EASING`、`RISE` 6pt、
+`WAVE`（20ms 一档、前 5 项）。页面和组件里不写毫秒数。
+
 ### 动效清单（镜牢主题包 / 主控台，本轮）
 
 | 变化 | 动效 |
@@ -222,7 +231,7 @@ token；不要为此改 `nsh`。
 
 | 变化 | 动效 |
 | --- | --- |
-| 目录项 / 筛选标签 | hover 淡洗、按下 `scale-[0.97]`、选中换底色（`secondary` / `card`），`duration-150` |
+| 目录项 / 筛选标签 | 目录项按顺序进场（`Reveal`，见「页面内容」）；筛选标签的选中底是一条滑动胶囊（`Tabs`），文字 `duration-150`；hover 淡洗、按下 `scale-[0.97]` |
 | 目录跳转 | `scrollTo({ animated: true })`；滚动改变当前项时高亮瞬时切换 |
 | 语言切换（帮助） | 文档整块替换（`resource` 重新加载），无过渡：内容整体换掉时淡入只会读到半截 |
 | 队伍卡片开关 | 轨道 `transition-colors`、滑块 `transition-transform`，同 `Switch` |
@@ -250,7 +259,7 @@ token；不要为此改 `nsh`。
 | 导航项点击跳段 | `scrollTo({ animated: true })`，原生滚动，非信号驱动 |
 | 滚动改变当前段 | 高亮瞬时切换（不做淡入：滚动手势中再叠动画会晃） |
 | 开关翻转 | 轨道 `transition-colors duration-150`，滑块 `transition-transform duration-150`，位移 16pt |
-| 分段选择 | 选中段变色 `duration-150`，不位移、不缩放容器 |
+| 分段选择 | 选中底是一条滑动胶囊（`Tabs`）：左边缘与宽度一起滑到目标，`240ms`，`ENTER_EASING`；文字颜色 `duration-150`；不位移、不缩放容器 |
 | 强调色色块 | hover 透明度、按下 `scale-[0.92]`，选中环由 `outline` 立即出现（无动画：环是状态而非过程） |
 | 皮肤卡片 | hover 边框变亮，按下 `scale-[0.99]`，选中 `border-2` + `ring` 色 |
 | 反馈行 | 出现在卡片栈下方，颜色由 token 决定，无入场动画（一行文字，动效无信息量） |
@@ -271,6 +280,22 @@ token；不要为此改 `nsh`。
 | 页面切换 | **交叉溶解**（`PageHost`）：新页面在创建时就以 `createMotion({ enter })` 起跑（第一帧即起点，无静止帧），`200ms` 淡入并朝目标在导航里的方向偏移 `6pt`；离开的页面以**同一时长、同一曲线淡出**。两层互补，任一帧叠起来都是一整页——旧页面文字不会透过新页面的空白区看到，也不会露出窗口底色。淡变结束后（`200+60ms`）移除旧层 |
 | 快速连点导航 | 最多两层：被压下去的旧层从当时的不透明度继续淡出，新层照常入场 |
 | 减少动效 | 以上全部瞬时；底色变化保留（颜色不是动画）；`createMotion` 自动落到终点不移动 |
+
+### 动效清单（页面内容：进场波纹 / 分段选择）
+
+窗口壳负责“换页”，页面内容负责“到位”：新页面在交叉溶解里浮上来，页内的卡片和行再以一条短波纹跟进。两者加起来不超过一次切换的时间，不拖到下一次操作。
+
+| 变化 | 动效 |
+| --- | --- |
+| 页面进入，列表 / 卡片 | 波纹：`opacity 0→1` + 上浮 `RISE` 6pt，`fast` 150ms，`ENTER_EASING`；第 n 项延迟 `min(n, 5) × 20ms`，第 6 项起一起进场。整条波纹（最后一档延迟 + 一次时长）是 250ms，落在页层保留的 260ms 里 |
+| 网格里的卡片 | `Card` 的 `arrive`：动效绑在卡片自己的 `View` 上，网格的 `items-stretch` 不变——加包裹层会让卡片失去等高 |
+| 非卡片的行（帮助目录） | `Reveal` 包裹层，参数同波纹 |
+| 主控台 | 窗口设置卡 `arrive=0`，任务卡按队列序号 `arrive=n+1`；卡片自身的展开仍走原生高度弹簧（见主控台清单） |
+| 队伍 / 工具箱 / 主题包 | 卡片按格子 / 行顺序 `arrive`；筛选、增删不重播（只在挂载时跑一次） |
+| 统计 | KPI、图表、环节、队伍、最近记录、每日次数 `arrive=0…5`；筛选与轮询不重播 |
+| 统计图表 | `Plot` 的 `motion.appear`：柱子从基线长出（`slow` 300ms，`stagger` 0.35 逐列），`update` 用 `base` 跟形状；`appearGeneration` 只随筛选变化重播，数据轮询不重播 |
+| 分段选择（统计范围与难度、队伍筛选、设置的主题模式与语言） | 选中底是**一条**滑动胶囊（`Tabs`）：左边缘与宽度一起滑到目标，`slide` 240ms + `ENTER_EASING`；原生值先落再改宽度（同标题栏胶囊）；胶囊高度取实测项高，轨道的内边距不吃进胶囊；选项自己透明，文字 `foreground` / `muted-foreground` `duration-150` |
+| 减少动效 | 波纹由 `createMotion` 自动落位，胶囊走 `reduceMotion()` 分支直接落位，`Plot` 的 `motion` 自动停；颜色变化保留 |
 
 组件对照页（`pages/Gallery.tsx`）每个变体/尺寸/状态都是静态展示，无动效。
 
