@@ -60,6 +60,11 @@ from utils.image_utils import ImageUtils
 
 MIRROR_FLOOR_DETECT_MAX_ATTEMPTS = 2
 
+# 设置弹窗里的楼层进度条横带（1440 高度基准），已通关层的 CLEAR 红字标记落在这条带上。
+# 参考上游 998c751e：用颜色连通域计数，不依赖模板与主题配色。
+MIRROR_FLOOR_BAND_ROI = (760, 495, 1860, 590)
+MIRROR_FLOOR_CLEAR_MIN_AREA = 300
+
 MIRROR_SINNER_IDS = (
     "yi_sang",
     "faust",
@@ -756,8 +761,9 @@ class Mirror:
 
             if self.plan_runtime.floor_count != 15:
                 infinity_bbox = self._parallel_mode_bbox()
-                if not auto.find_text_element(["off", "ff"], infinity_bbox):
-                    auto.click_element("mirror/road_to_mir/infinity_mirror_enter_assets.png")
+                # OCR 常见把 off 读成 of/ff
+                if not auto.find_text_element(["off", "ff", "of"], infinity_bbox):
+                    auto.click_element("mirror/road_to_mir/infinity_mirror_enter_assets.png", take_screenshot=True)
             if self.plan_runtime.floor_count == 15 and not self.parallel_mode_confirmed:
                 if auto.find_element("mirror/road_to_mir/enter_assets.png"):
                     message = "困难镜牢目标为15层，但无法确认平行叠加模式已开启"
@@ -860,7 +866,7 @@ class Mirror:
                 break
 
             # 离开镜牢的设置页面
-            if to_window_position := auto.find_element("mirror/road_in_mir/to_window_assets.png"):
+            if to_window_position := auto.find_element("mirror/road_in_mir/to_window_assets.png", threshold=0.75):
                 auto.mouse_click(to_window_position[0] - 200 * cfg.set_win_size / 1440, to_window_position[1])
                 continue
 
@@ -1006,7 +1012,7 @@ class Mirror:
                     not cfg.fight_to_last_man
                     and not self.defense_for_solo
                     and not (
-                        auto.find_element("teams/12_sinner_live_assets.png")
+                        auto.find_element("teams/12_sinner_live_assets.png", threshold=0.75)
                         or auto.find_element("teams/11_sinner_live_assets.png")
                         or auto.find_element("teams/10_sinner_live_assets.png")
                     )
@@ -1051,7 +1057,7 @@ class Mirror:
                     continue
 
             # 镜牢星光
-            if auto.find_element("mirror/road_to_mir/dreaming_star/coins_assets.png", threshold=0.9):
+            if auto.find_element("mirror/road_to_mir/dreaming_star/coins_assets.png", model="normal"):
                 self.enter_mir_with_star()
                 continue
 
@@ -1523,7 +1529,7 @@ class Mirror:
         return True
 
     def enter_mir_with_star(self):
-        coins = auto.find_element("mirror/road_to_mir/dreaming_star/coins_assets.png", threshold=0.9)
+        coins = auto.find_element("mirror/road_to_mir/dreaming_star/coins_assets.png", model="normal")
         scale = cfg.set_win_size / 1440
         first_starlight = [coins[0] - 1800 * scale, coins[1] + 300 * scale]
         starlights_X = [first_starlight[0] + (i % 5) * 400 * scale for i in range(10)]
@@ -1598,6 +1604,19 @@ class Mirror:
             if loop_count < 0:
                 raise cannotOperateGameError("无法进入镜牢，不能进行下一步,请手动操作重试")
 
+    def _click_init_gift_row(self, gift_id: int) -> bool:
+        """锚点兜底：以确认按钮为锚点，按实测偏移点选饰品行（随分辨率缩放）。"""
+        confirm_pos = auto.find_element("mirror/road_to_mir/select_init_ego_gifts_confirm_assets.png")
+        if not confirm_pos:
+            return False
+        row_dy = {1: -490, 2: -330, 3: -170}
+        if gift_id not in row_dy:
+            return False
+        s = cfg.set_win_size / 1080
+        auto.mouse_click(confirm_pos[0] - 340 * s, confirm_pos[1] + row_dy[gift_id] * s)
+        sleep(cfg.mouse_action_interval)
+        return True
+
     def select_init_ego_gift(self):
         scroll = False
         select_system = False
@@ -1607,8 +1626,22 @@ class Mirror:
         team_system = self.system
         if self.opening_items:
             team_system = all_systems[self.opening_items_system]
+        start_gift_order = start_gift[self.opening_items_select] if self.opening_items else [1, 2, 3]
         log.debug("开始选择初始EGO")
         while True:
+            # 安全计数必须在循环顶部：下面任何一个 continue 都跳不过它，
+            # 否则页面持续刷屏时 loop_count 永不递减，选不到饰品也退不出来。
+            loop_count -= 1
+            if loop_count < 10 and auto.model != "aggressive":
+                auto.model = "aggressive"
+                log.debug("识别模式切换到激进模式")
+            elif loop_count < 20 and auto.model == "clam":
+                auto.model = "normal"
+                auto.mouse_to_blank(move_back=False)
+                log.debug("识别模式切换到正常模式")
+            if loop_count % 5 == 0:
+                log.debug(f"选择藏品识别次数剩余{loop_count}次")
+
             # 自动截图
             if auto.take_screenshot() is None:
                 continue
@@ -1643,21 +1676,15 @@ class Mirror:
                 select_system = True
                 continue
 
-            if self.opening_items:
-                start_gift_order = start_gift[self.opening_items_select]
-                auto.click_element(
-                    f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_{start_gift_order[0]}.png"
-                )
-                auto.click_element(
-                    f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_{start_gift_order[1]}.png"
-                )
-                auto.click_element(
-                    f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_{start_gift_order[2]}.png"
-                )
-            else:
-                auto.click_element(f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_1.png")
-                auto.click_element(f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_2.png")
-                auto.click_element(f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_3.png")
+            # 按优先级逐个点饰品，识别逐级降级：阈值 0.8 → 0.7 → 锚点坐标。
+            # 普牢常见“饰品已勾选但模板对不上”，锚点兜底能把这一步拉回来。
+            for gift_id in start_gift_order:
+                target = f"mirror/road_to_mir/select_init_gift/{team_system}_ego_gift_{gift_id}.png"
+                if auto.click_element(target):
+                    continue
+                if auto.click_element(target, threshold=0.7):
+                    continue
+                self._click_init_gift_row(gift_id)
 
             # 如果选择观测饰品且选择了饰品，则开启观测饰品按钮
             if self.observe_ego_gift and self.observe_ego_gift_selected:
@@ -1669,16 +1696,6 @@ class Mirror:
 
             if retry() is False:
                 return False
-            loop_count -= 1
-            if loop_count % 5 == 0:
-                log.debug(f"选择藏品识别次数剩余{loop_count}次")
-            if loop_count < 20:
-                auto.model = "normal"
-                auto.mouse_to_blank(move_back=False)
-                log.debug("识别模式切换到正常模式")
-            if loop_count < 10:
-                auto.model = "aggressive"
-                log.debug("识别模式切换到激进模式")
             if loop_count < 0:
                 log.error("无法进入镜牢,尝试回到初始界面")
                 back_init_menu()
@@ -1968,7 +1985,7 @@ class Mirror:
                 break
             if auto.click_element("mirror/road_in_mir/towindow&forfeit_confirm_assets.png"):
                 break
-            if auto.click_element("mirror/road_in_mir/to_window_assets.png"):
+            if auto.click_element("mirror/road_in_mir/to_window_assets.png", threshold=0.75):
                 continue
             if auto.click_element("mirror/road_in_mir/setting_assets.png"):
                 sleep(1)
@@ -2076,7 +2093,10 @@ class Mirror:
             event_choice_crop = (int(win_w * 0.50), int(win_h * 0.20), int(win_w * 0.90), int(win_h * 0.70))
 
             # 针对不同事件进行处理，优先选???与直接获取的，再选需要判定的，再选后续事件的，最后第一个事项
-            if auto.click_element("event/unknown_event.png", my_crop=event_choice_crop):
+            if unknown_pos := auto.find_element("event/unknown_event.png", my_crop=event_choice_crop):
+                # 单通模式下“？？？”后续会拿诅咒饰品，改为选其它选项
+                if not (self.defense_for_solo and event_handling.click_option_avoiding_unknown()):
+                    auto.mouse_action_with_pos(unknown_pos)
                 event_chance -= 1
                 continue
             if positions_list := auto.find_element(
@@ -2345,8 +2365,10 @@ class Mirror:
                         min(select_bbox[2] + 100, cfg.set_win_size * 16 / 9),  # 确保右下角 x 坐标不大于 图片宽
                         min(select_bbox[3] + 100, cfg.set_win_size),  # 确保右下角 y 坐标不大于 图片高
                     )
-                if auto.find_text_element(["0/1", "01", "1/1", "11", "1/2", "12", "/1"], my_crop=select_bbox):
-                    for gift in my_list[:1]:
+                # 先判“可领 2 个”：OCR 的 "1/2" 表示“2 选已选 1”，旧顺序会把它
+                # 当成只需拿 1 个，导致少领一个饰品。参考上游 a3b6766b。
+                if auto.find_text_element(["0/2", "02", "2/2", "22", "/2"], my_crop=select_bbox):
+                    for gift in my_list[:2]:
                         auto.mouse_click(gift[0], gift[1])
                         sleep(cfg.mouse_action_interval)
                     auto.click_element(
@@ -2357,8 +2379,8 @@ class Mirror:
                     if retry() is False:
                         return False
                     return
-                elif auto.find_text_element(["0/2", "02", "2/2", "22", "/2"], my_crop=select_bbox):
-                    for gift in my_list[:2]:
+                elif auto.find_text_element(["0/1", "01", "1/1", "11", "1/2", "12", "/1"], my_crop=select_bbox):
+                    for gift in my_list[:1]:
                         auto.mouse_click(gift[0], gift[1])
                         sleep(cfg.mouse_action_interval)
                     auto.click_element(
@@ -2468,6 +2490,39 @@ class Mirror:
         # Shop expects 1-indexed floor for display/ignore indexing; internal self.floor is 0-indexed
         self.shop.in_shop(self.floor + 1)
 
+    @staticmethod
+    def _clear_badge_mask(roi_rgb):
+        """CLEAR 红字掩码：只保留高饱和正红，排除金色已进入层与暗色未通过菱形。"""
+        r = roi_rgb[:, :, 0].astype(np.int16)
+        g = roi_rgb[:, :, 1].astype(np.int16)
+        b = roi_rgb[:, :, 2].astype(np.int16)
+        return (((r - np.maximum(g, b)) >= 60) & (r >= 190)).astype(np.uint8) * 255
+
+    def _count_clear_badges(self) -> int | None:
+        """数设置弹窗进度条上的 CLEAR 红字标记数；失败返回 None。
+
+        彩色截图 → 红字掩码 → 连通域计数。结束后把当前帧恢复成灰度，
+        避免影响后续模板匹配的预期。（参考上游 998c751e）
+        """
+        if auto.take_screenshot(gray=False) is None:
+            return None
+        frame = np.array(auto.screenshot)
+        if frame.ndim != 3:
+            return None
+        regions = ImageUtils.match_color_regions(
+            frame,
+            self._clear_badge_mask,
+            roi=MIRROR_FLOOR_BAND_ROI,
+            min_area=MIRROR_FLOOR_CLEAR_MIN_AREA,
+            min_dist=80,
+        )
+        if auto.screenshot.mode != "L":
+            auto.screenshot = auto.screenshot.convert("L")
+        if regions is None:
+            return None
+        log.debug(f"设置弹窗 CLEAR 标记数：{len(regions)}")
+        return len(regions)
+
     def get_which_floor(self):
         # Scenario B/C: silent max-pool read first (no click), avoids flicker without popup
         absolute_floor = self._read_absolute_floor()
@@ -2503,7 +2558,7 @@ class Mirror:
             int(1800 * scale),
             int(820 * scale),
         )
-        if to_window_position := auto.find_element("mirror/road_in_mir/to_window_assets.png", take_screenshot=True):
+        if to_window_position := auto.find_element("mirror/road_in_mir/to_window_assets.png", threshold=0.75, take_screenshot=True):
             # 底层“未找到/异常”都返回 []，旧的 or 链会把裁剪区正确的 0 个
             # 洗成全屏误检数。裁剪区定位在弹窗进度行上，采信它；全屏仅诊断。
             cropped_floors = (
@@ -2524,6 +2579,7 @@ class Mirror:
                 )
                 or []
             )
+            not_passed_floor_count = len(cropped_floors)
             if len(cropped_floors) != len(full_floors):
                 log.warning(
                     f"镜牢未通过标记数不一致（裁剪区{len(cropped_floors)}个/全屏{len(full_floors)}个），"
@@ -2532,7 +2588,17 @@ class Mirror:
                 self.plan_runtime.record_deviation(
                     f"未通过标记裁剪区{len(cropped_floors)}与全屏{len(full_floors)}不一致，已采信裁剪区"
                 )
-            not_passed_floor_count = len(cropped_floors)
+                # 标记模板受主题配色影响，计数存疑时用 CLEAR 红字颜色计数来仲裁
+                clear_count = self._count_clear_badges()
+                if clear_count is not None and 0 <= clear_count < MIRROR_SEGMENT_LENGTH:
+                    marker_from_clear = MIRROR_SEGMENT_LENGTH - 1 - clear_count
+                    if marker_from_clear != not_passed_floor_count:
+                        log.info(
+                            f"楼层计数仲裁：CLEAR 红字{clear_count}个 → 剩余{marker_from_clear}个，"
+                            f"与裁剪区{not_passed_floor_count}个不一致，采信 CLEAR"
+                        )
+                        self.plan_runtime.record_deviation(f"楼层标记计数改用 CLEAR 红字计算：{marker_from_clear}")
+                    not_passed_floor_count = marker_from_clear
             try:
                 self.floor = self.plan_runtime.detect_floor(
                     not_passed_floor_count,

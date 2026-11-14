@@ -18,15 +18,41 @@ class Game(metaclass=SingletonMeta):
         self.last_check_time = None
         self.check_in_short_time = 0
 
+    @staticmethod
+    def _has_game_window() -> bool:
+        """能否找到游戏主窗口；无法判定时按“有窗口”处理，退化为旧行为。"""
+        try:
+            import win32gui
+        except ImportError:
+            return True
+        try:
+            title = str(cfg.get_value("game_title_name", "LimbusCompany"))
+            return bool(win32gui.FindWindow("UnityWndClass", title))
+        except Exception:
+            return True
+
     def check_game_alive(self):
-        for proc in psutil.process_iter(["name"]):
+        """检查游戏是否存活：进程与主窗口都在才算存活。
+
+        仅有进程不等于游戏正常——崩溃残留的“僵尸进程”没有窗口，会骗过启动逻辑
+        导致永远无法真正重启，这里顺手清理。刚启动的游戏还没来得及创建窗口，
+        给 180s 宽限期避免误杀。参考上游 fb2ef56d。
+        """
+        for proc in psutil.process_iter(["name", "pid"]):
             try:
                 # 获取进程的可执行文件名（如 "notepad.exe"）
                 proc_name = proc.info["name"]
                 # 精确匹配进程名（区分大小写，取决于系统）
                 if self.process_name in proc_name:
-                    self.log.debug(f"游戏已启动：{self.process_name}，进程ID：{proc.pid}")
-                    return True
+                    if self._has_game_window():
+                        self.log.debug(f"游戏已启动：{self.process_name}，进程ID：{proc.pid}")
+                        return True
+                    if time() - proc.create_time() < 180:
+                        # 正在启动的游戏进程窗口尚未创建，视为存活
+                        return True
+                    # 进程在但窗口长时间缺失 = 僵尸进程，清理后以便重新启动
+                    self.log.warning(f"发现无窗口的僵尸游戏进程 {proc.pid}，正在清理")
+                    psutil.Process(proc.pid).kill()
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 # 忽略已终止、无权限或僵尸进程
                 continue
