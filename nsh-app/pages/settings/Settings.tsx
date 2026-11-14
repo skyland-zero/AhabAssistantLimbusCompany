@@ -7,7 +7,7 @@
 // lives here; every edited value lives in `settings.ts` (and, after P1, in Rust).
 import type { JSX, ScrollRef } from "nsh";
 import { Scroll, Text, View, signal } from "nsh";
-import { Card, Divider } from "../../components/Card";
+import { Card, CardBody, Divider } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { Reveal } from "../../components/Reveal";
 import { currentFeedback } from "../../settings";
@@ -113,23 +113,20 @@ function Section(props: {
 /** The quick-navigation column: one entry per card, the current one selected. */
 function SettingsNav(props: { active: number; onJump: (index: number) => void }) {
   return (
-    <Card class="h-full w-50 flex-none p-3">
-      <View class="flex-col gap-3">
-        <Text class="text-xs font-medium text-muted-foreground">快速导航</Text>
-        <View class="flex-col gap-1">
-          <Each of={SECTIONS}>
-            {(label, index) => (
-              <Button
-                label={label()}
-                variant={props.active === index() ? "secondary" : "ghost"}
-                selected={props.active === index()}
-                onPress={() => props.onJump(index())}
-                class="w-full"
-              />
-            )}
-          </Each>
-        </View>
-      </View>
+    <Card title="快速导航" class="h-full w-50 flex-none">
+      <CardBody class="gap-1">
+        <Each of={SECTIONS}>
+          {(label, index) => (
+            <Button
+              label={label()}
+              variant={props.active === index() ? "secondary" : "ghost"}
+              selected={props.active === index()}
+              onPress={() => props.onJump(index())}
+              class="w-full"
+            />
+          )}
+        </Each>
+      </CardBody>
     </Card>
   );
 }

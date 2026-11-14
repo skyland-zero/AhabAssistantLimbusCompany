@@ -21,7 +21,7 @@ export function PageRoot(props: { children?: JSX.Element; class?: string }) {
 /** The card around a page's action bar. */
 export function PageToolbar(props: { children?: JSX.Element; class?: string }) {
   return (
-    <Card class={`w-full p-3 ${props.class ?? ""}`}>
+    <Card class={`w-full px-4 py-3 ${props.class ?? ""}`}>
       {props.children}
     </Card>
   );

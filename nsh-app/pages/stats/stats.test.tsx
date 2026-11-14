@@ -134,22 +134,22 @@ test("durations keep the client's formats", () => {
 test("the title bar's chart button opens the statistics page", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[统计]");
-  await app.waitFor("最近镜牢用时（按环节）");
+  await app.waitFor("最近镜牢用时");
   await app.waitFor("每日次数");
   await app.waitFor("编队 1 (震颤) #1");
-  expect(app.texts()).toContain("6 场 · 完成 5");
+  await app.waitFor("最近 6 场");
 });
 
 test("the page's filters narrow the summary", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[统计]");
-  await app.waitFor("6 场 · 完成 5");
+  await app.waitFor("最近 6 场");
   await app.press("role:button[困难]");
-  await app.waitFor("4 场 · 完成 3");
+  await app.waitFor("最近 4 场");
   await app.press("role:button[普通]");
-  await app.waitFor("2 场 · 完成 2");
+  await app.waitFor("最近 2 场");
   await app.press("role:button[全部] >> nth=1");
-  await app.waitFor("6 场 · 完成 5");
+  await app.waitFor("最近 6 场");
   await app.press("role:button[5 次]");
-  await app.waitFor("5 场 · 完成 4");
+  await app.waitFor("最近 5 场");
 });

@@ -12,6 +12,7 @@ import { Badge } from "../../components/Badge";
 import { Button, Pressable } from "../../components/Button";
 import { Card, Rule } from "../../components/Card";
 import { SettingLine, SettingList } from "../../components/Field";
+import { Figure } from "../../components/Figure";
 import { Icon } from "../../components/Icon";
 import type { IconName } from "../../components/Icon";
 import { PageRoot } from "../../components/Page";
@@ -26,6 +27,7 @@ import {
   clearLog,
   clearTasks,
   consoleFeedback,
+  consoleProgress,
   consoleStats,
   consoleTasks,
   currentPreviewFrame,
@@ -35,13 +37,13 @@ import {
   deviceState,
   logEntries,
   logLines,
-  mirrorTimeLabel,
   openAfterCompletion,
   openLogDetails,
   pollPreview,
   refreshDevices,
   selectAllTasks,
   selectDevice,
+  selectedDeviceName,
   setWindowSetting,
   setTaskParam,
   startQueue,
@@ -119,59 +121,206 @@ export function Home() {
   );
 }
 
-/** The console's status strip: the week's counts, then the backend link and
- *  the last mirror run. One dense card instead of two tall ones, so the queue
- *  keeps the height the two cards used to take. */
+/** The console's top card: the week's totals while nothing runs, the current
+ *  run's counts and floor while something does. One card, one shape; only the
+ *  title and the numbers change, so the queue never jumps when a task starts.
+ *  Each column puts its label and note on one line, the figure under them: the
+ *  label row says what the number means (`本周 12`, `今日 3 · 本周 11`). */
 function StatusStrip() {
-  const stats = () => consoleStats();
+  const run = () => consoleProgress();
   return (
-    <Card class="w-full p-2.5">
-      <View class="w-full flex-col gap-1">
-        <View class="w-full flex-row items-center gap-2">
-          <Icon name="target" size={14} color={token("brand")} />
-          <Text class="text-xs font-medium text-foreground">周期统计（今日/本周）</Text>
-          <View class="flex-1" />
-          <StatChip label="经验本" value={`${stats().today.exp} / ${stats().week.exp}`} />
-          <StatChip label="纽本" value={`${stats().today.thread} / ${stats().week.thread}`} />
-          <StatChip label="镜牢（累计）" value={`${stats().today.mirror} / ${stats().week.mirror}`} />
-          <Button
-            label="明细"
-            variant="ghost"
-            size="xs"
-            testID="stats-daily-details"
-            onPress={() => navigate("stats")}
-          />
-        </View>
-        <View class="w-full flex-row items-center gap-2">
-          <Icon name="audioLines" size={14} color={token("brand")} />
-          <Text class="text-xs font-medium text-foreground">Python 后端</Text>
-          <Badge label={backendLabel()} />
-          <Text class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {backendDetail()}
-          </Text>
-          <Icon name="target" size={14} color={token("brand")} />
-          <Text class="text-xs font-medium text-foreground">上次镜牢</Text>
-          <If
-            when={stats().lastMirror}
-            else={<Text class="text-xs text-muted-foreground">暂无完成记录</Text>}
-          >
-            {(mirror) => (
-              <Text class="max-w-40 min-w-0 truncate text-xs text-muted-foreground">
-                {mirrorTimeLabel(mirror())}
-              </Text>
-            )}
-          </If>
-          <Button
-            label="明细"
-            variant="ghost"
-            size="xs"
-            testID="stats-last-mirror-details"
-            onPress={() => navigate("stats")}
-          />
-        </View>
-      </View>
+    <Card class="w-full px-4 py-2.5">
+      <If when={run().live} else={<TotalsStrip />}>
+        <RunStrip />
+      </If>
     </Card>
   );
+}
+
+/** The card's title row: its glyph, what the numbers are, and the detail link. */
+function StripHead(props: { icon: IconName; title: string; note?: string }) {
+  return (
+    <View class="w-full flex-row items-center gap-1.5">
+      <Icon name={props.icon} size={14} color={token("brand")} />
+      <Text class="flex-none text-xs font-semibold text-foreground">{props.title}</Text>
+      <If when={props.note}>
+        {(note) => <Text class="flex-none text-[10px] text-muted-foreground">{note()}</Text>}
+      </If>
+      <View class="flex-1" />
+      <Button
+        label="明细"
+        variant="ghost"
+        size="xs"
+        testID="stats-details"
+        onPress={() => navigate("stats")}
+      />
+    </View>
+  );
+}
+
+/** One column of the strip: label and note share a line, the figure sits under
+ *  them with its unit one step smaller. */
+
+/** The card's status line: what runs, on what, and the last mirror run. */
+function StripFoot(props: {
+  label: string;
+  tone: "neutral" | "success" | "warning";
+  detail: string;
+}) {
+  return (
+    <View class="w-full flex-row items-center gap-2">
+      <Badge label={props.label} tone={props.tone} dot />
+      <Text class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{props.detail}</Text>
+      <Text class="flex-none text-[10px] text-muted-foreground">上次镜牢</Text>
+      <Text class="flex-none text-xs text-muted-foreground">{lastMirrorNote()}</Text>
+    </View>
+  );
+}
+
+/** Nothing runs: today's counts, with the week beside each label. */
+function TotalsStrip() {
+  const stats = () => consoleStats();
+  return (
+    <View class="w-full flex-col">
+      <StripHead icon="target" title="周期统计（今日/本周）" />
+      <View class="mt-1.5 w-full flex-row gap-3">
+        <Figure label="经验本" note={`本周 ${stats().week.exp}`} value={String(stats().today.exp)} />
+        <Figure label="纽本" note={`本周 ${stats().week.thread}`} value={String(stats().today.thread)} />
+        <Figure
+          label="镜牢（累计）"
+          note={`本周 ${stats().week.mirror}`}
+          value={String(stats().today.mirror)}
+        />
+      </View>
+      <Rule class="my-2" />
+      <StripFoot label={backendLabel()} tone={backendTone()} detail={backendDetail()} />
+    </View>
+  );
+}
+
+/** A task runs: its own counts, the mirror floor, or the totals when the task
+ *  has no counters of its own. */
+function RunStrip() {
+  const run = () => consoleProgress();
+  const task = () => RUN_TASKS[run().task ?? ""] ?? RUN_FALLBACK;
+  return (
+    <View class="w-full flex-col">
+      <StripHead
+        icon={task().icon}
+        title={task().label}
+        note={task().counted ? undefined : "今日累计"}
+      />
+      <View class="mt-1.5 w-full flex-row gap-3">
+        <If when={run().task === "mirror"} else={<RunCountCells />}>
+          <MirrorCells />
+        </If>
+      </View>
+      <Rule class="my-2" />
+      <StripFoot
+        label={run().state === "paused" ? "已暂停" : "运行中"}
+        tone={run().state === "paused" ? "warning" : "success"}
+        detail={selectedDeviceName() ?? "未连接设备"}
+      />
+    </View>
+  );
+}
+
+/** The daily task's counts against the queue it was started with. A task
+ *  without counters keeps the card on today's totals. */
+function RunCountCells() {
+  const run = () => consoleProgress();
+  const stats = () => consoleStats();
+  const counted = () => run().task === "daily_task";
+  const note = (today: number, week: number) =>
+    counted() ? `今日 ${today} · 本周 ${week}` : `本周 ${week}`;
+  return (
+    <>
+      <Figure
+        label="经验本"
+        note={note(stats().today.exp, stats().week.exp)}
+        value={String(counted() ? run().expDone : stats().today.exp)}
+        unit={counted() && run().expTarget > 0 ? `/ ${run().expTarget}` : undefined}
+      />
+      <Figure
+        label="纽本"
+        note={note(stats().today.thread, stats().week.thread)}
+        value={String(counted() ? run().threadDone : stats().today.thread)}
+        unit={counted() && run().threadTarget > 0 ? `/ ${run().threadTarget}` : undefined}
+      />
+      <Figure
+        label={counted() ? "镜牢" : "镜牢（累计）"}
+        note={note(stats().today.mirror, stats().week.mirror)}
+        value={counted() ? "—" : String(stats().today.mirror)}
+        quiet={counted()}
+      />
+    </>
+  );
+}
+
+/** A mirror run: how many of the queue are done, which floor it is on, and how
+ *  long this run has taken. */
+function MirrorCells() {
+  const run = () => consoleProgress();
+  const stats = () => consoleStats();
+  const elapsed = () => elapsedText(run().elapsedMs ?? 0);
+  const floor = () => run().floor;
+  return (
+    <>
+      <Figure
+        label="镜牢次数"
+        note={`今日 ${stats().today.mirror} · 本周 ${stats().week.mirror}`}
+        value={String(run().mirrorDone)}
+        unit={run().infinite || run().mirrorTarget === 0 ? undefined : `/ ${run().mirrorTarget}`}
+      />
+      <Figure
+        label="当前层"
+        note={run().hard ? "困难" : "普通"}
+        value={floor() === null ? "—" : String(floor())}
+        unit={run().floorTotal ? `/ ${run().floorTotal} 层` : undefined}
+        quiet={floor() === null}
+      />
+      <Figure
+        label="本轮用时"
+        value={run().elapsedMs === null ? "--:--" : elapsed()}
+        quiet={run().elapsedMs === null}
+      />
+    </>
+  );
+}
+
+/** The task names the execution reports, as the card titles them. */
+const RUN_TASKS: Record<string, { icon: IconName; label: string; counted: boolean }> = {
+  daily_task: { icon: "listChecks", label: "日常任务", counted: true },
+  get_reward: { icon: "package", label: "领取奖励", counted: false },
+  buy_enkephalin: { icon: "sparkles", label: "狂气换体", counted: false },
+  mirror: { icon: "crosshair", label: "自动镜牢", counted: true },
+};
+
+const RUN_FALLBACK = { icon: "listChecks" as IconName, label: "运行中", counted: false };
+
+/** The last mirror run as `6:12 · 5 层`, or that there is none yet. */
+function lastMirrorNote(): string {
+  const stats = consoleStats();
+  if (stats.lastMirrorSeconds === null) return "暂无记录";
+  const time = elapsedText(stats.lastMirrorSeconds * 1000);
+  return stats.lastMirrorFloors ? `${time} · ${stats.lastMirrorFloors} 层` : time;
+}
+
+/** `12:04` under an hour, `1:02:03` above it. */
+function elapsedText(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+}
+
+function backendTone(): "neutral" | "success" | "warning" {
+  const state = backendState();
+  if (state === "ready") return "success";
+  if (state === "starting") return "warning";
+  return "neutral";
 }
 
 function backendLabel(): string {
@@ -190,16 +339,6 @@ function backendDetail(): string {
   return "Python 后端启动失败";
 }
 
-/** One counter of the strip: its name and the today/week pair. */
-function StatChip(props: { label: string; value: string }) {
-  return (
-    <View class="flex-none flex-row items-center gap-1">
-      <Text class="text-xs text-muted-foreground">{props.label}</Text>
-      <Text class="text-xs text-foreground">{props.value}</Text>
-    </View>
-  );
-}
-
 /** The window and input settings the run will use. The queue's first row: a
  *  press on it opens its settings, inside the scroll the queue lives in. */
 function WindowCard() {
@@ -210,12 +349,12 @@ function WindowCard() {
       <Pressable
         accessibilityLabel={`窗口设置（${open() ? "已展开" : "已收起"}）`}
         testID="window-toggle"
-        class="w-full flex-row items-center gap-2 rounded-(--radius-lg) px-4 py-3 hover:bg-accent active:bg-secondary"
+        class="w-full flex-row items-center gap-2 rounded-(--radius-xl) px-4 py-2.5 hover:bg-accent active:bg-secondary"
         onPress={() => open.set(!open())}
       >
         <Badge label="SET" />
-        <Icon name="settings2" size={14} />
-        <Text class="text-xs font-medium text-foreground">窗口设置</Text>
+        <Icon name="settings2" size={16} />
+        <Text class="text-sm text-foreground">窗口设置</Text>
         <View class="flex-1" />
         <Text class="text-xs text-muted-foreground">{`分辨率 ${window().resolution}`}</Text>
         <Text class="text-xs text-muted-foreground">
@@ -447,7 +586,7 @@ function taskSummary(task: Task): string {
 /** The bar under the queue: select all, clear, the completion action and start. */
 function RunBar() {
   return (
-    <Card class="w-full p-2.5">
+    <Card class="w-full px-4 py-2.5">
       <View class="w-full flex-row items-center gap-2">
         <Button
           label="全选"
@@ -500,12 +639,12 @@ function DeviceCard() {
   return (
     // The connected device is the console's current object, so its card takes
     // the skin's selected treatment.
-    <Card class="w-full p-3" selected={deviceState() === "connected"}>
+    <Card class="w-full px-4 py-3" selected={deviceState() === "connected"}>
       <View class="flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <View class="flex-row items-center gap-1.5">
             <Icon name="monitor" size={14} />
-            <Text class="text-xs font-medium text-foreground">设备连接</Text>
+            <Text class="text-xs font-semibold text-foreground">设备连接</Text>
           </View>
           <Badge label={deviceLabel()} tone={deviceState() === "connected" ? "success" : "neutral"} />
         </View>
@@ -544,12 +683,12 @@ function previewLabel(status: string): string {
 function PreviewCard() {
   const frame = () => currentPreviewFrame();
   return (
-    <Card class={`${RAIL} w-full p-3`}>
+    <Card class={`${RAIL} w-full px-4 py-3`}>
       <View class="flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <View class="flex-row items-center gap-1.5">
             <Icon name="monitorPlay" size={14} />
-            <Text class="text-xs font-medium text-foreground">实时画面</Text>
+            <Text class="text-xs font-semibold text-foreground">实时画面</Text>
           </View>
           <Badge label={previewLabel(currentPreviewStatus())} />
         </View>
@@ -580,12 +719,12 @@ function PreviewCard() {
 /** The run log. */
 function LogCard() {
   return (
-    <Card class="min-h-0 w-full flex-1 p-3">
+    <Card class="min-h-0 w-full flex-1 px-4 py-3">
       <View class="h-full flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <View class="flex-row items-center gap-1.5">
             <Icon name="terminal" size={14} />
-            <Text class="text-xs font-medium text-foreground">运行日志</Text>
+            <Text class="text-xs font-semibold text-foreground">运行日志</Text>
             <Badge label={String(logLines())} />
           </View>
           <View class="flex-row items-center gap-1">

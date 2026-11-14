@@ -67,7 +67,14 @@ impl MockState {
                             runId: Some(run_id.clone()),
                             state: ExecutionState::Running,
                             currentTaskId: self.execution.currentTaskId,
-                            startedAt: Some(0),
+                            // A real start stamp, so the console's "this run"
+                            // clock counts from zero instead of from 1970.
+                            startedAt: Some(
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map(|duration| duration.as_millis() as i64)
+                                    .unwrap_or(0),
+                            ),
                             targets: StatCounts {
                                 exp: if self.tasks.enabledTasks.daily_task {
                                     self.tasks.daily_task.set_EXP_count.into()

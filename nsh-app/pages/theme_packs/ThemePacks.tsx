@@ -8,7 +8,7 @@ import { Slider } from "nsh/base";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
-import { Icon } from "../../components/Icon";
+import { Notice } from "../../components/Notice";
 import { PageRoot, PageToolbar } from "../../components/Page";
 import { Switch } from "../../components/Switch";
 import {
@@ -55,21 +55,13 @@ export function ThemePacks() {
         </View>
       </PageToolbar>
       <If when={hardMirror()}>
-        <Card class="w-full bg-warning-light p-3">
-          <View class="flex-row items-center gap-2">
-            <Icon name="help" size={14} color={token("warning")} />
-            <Text class="text-xs text-warning">
-              困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重
-            </Text>
-          </View>
-        </Card>
+        <Notice
+          tone="warning"
+          label="困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重"
+        />
       </If>
       <If when={themePacksFeedback()}>
-        {(line) => (
-          <Card class="w-full bg-success-light p-3">
-            <Text class="text-xs text-success">{line()}</Text>
-          </Card>
-        )}
+        {(line) => <Notice tone="success" label={line()} />}
       </If>
       <Scroll class="min-h-0 flex-1">
         <View class="w-full flex-col gap-2">
@@ -88,7 +80,7 @@ function PackRow(props: { pack: ThemePack; index: number }) {
   const enabled = () => pack().enabled;
   return (
     <Card class="w-full p-0" arrive={props.index}>
-      <View class={`flex-row items-center gap-4 px-5 py-3 ${enabled() ? "" : "opacity-60"}`}>
+      <View class={`flex-row items-center gap-4 px-4 py-3 ${enabled() ? "" : "opacity-60"}`}>
         <Switch
           checked={enabled()}
           accessibilityLabel={`启用 ${pack().name}`}

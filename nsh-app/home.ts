@@ -635,6 +635,9 @@ export function pollPreview(): void {
   previewStatus.set(view.status);
   if (view.frame) previewFrame.set(view.frame);
   logs.set(current.logs());
+  // The console card is a plain read of the state layer; this signal is what
+  // makes it re-render when the run moves on.
+  runProgress.set(current.runProgress() as RunProgress);
 }
 
 /** The statistics summary shown on the console (tracked). */
@@ -642,6 +645,9 @@ export function consoleStats(): {
   today: { exp: number; thread: number; mirror: number };
   week: { exp: number; thread: number; mirror: number };
   lastMirror: string | null;
+  /** The last mirror run's time and floors, for the card's "last time" note. */
+  lastMirrorSeconds: number | null;
+  lastMirrorFloors: number | null;
 } {
   const current = ensureStore();
   if (!current) {
@@ -649,6 +655,8 @@ export function consoleStats(): {
       today: { exp: 0, thread: 0, mirror: 0 },
       week: { exp: 0, thread: 0, mirror: 0 },
       lastMirror: null,
+      lastMirrorSeconds: null,
+      lastMirrorFloors: null,
     };
   }
   const stats = current.stats();
@@ -656,7 +664,63 @@ export function consoleStats(): {
     today: { exp: stats.todayExp, thread: stats.todayThread, mirror: stats.todayMirror },
     week: { exp: stats.weekExp, thread: stats.weekThread, mirror: stats.weekMirror },
     lastMirror: stats.lastMirror ?? null,
+    lastMirrorSeconds: stats.lastMirrorSeconds ?? null,
+    lastMirrorFloors: stats.lastMirrorFloors ?? null,
   };
+}
+
+/** The current run as the console card shows it. */
+export type RunProgress = {
+  /** `idle`, `starting`, `running`, `paused`, `stopping` or `restoring`. */
+  state: string;
+  /** `daily_task`, `get_reward`, `buy_enkephalin`, `mirror`, ... or null. */
+  task: string | null;
+  /** A task runs or is paused: the card shows this run, not the totals. */
+  live: boolean;
+  expDone: number;
+  expTarget: number;
+  threadDone: number;
+  threadTarget: number;
+  mirrorDone: number;
+  mirrorTarget: number;
+  infinite: boolean;
+  hard: boolean;
+  floor: number | null;
+  floorTotal: number | null;
+  elapsedMs: number | null;
+};
+
+const IDLE_PROGRESS: RunProgress = {
+  state: "idle",
+  task: null,
+  live: false,
+  expDone: 0,
+  expTarget: 0,
+  threadDone: 0,
+  threadTarget: 0,
+  mirrorDone: 0,
+  mirrorTarget: 0,
+  infinite: false,
+  hard: false,
+  floor: null,
+  floorTotal: null,
+  elapsedMs: null,
+};
+
+/** The run the console shows; `pollPreview` refreshes it with every event
+ *  drain, so the top card follows the queue instead of freezing at mount. */
+const runProgress = signal<RunProgress>(IDLE_PROGRESS);
+
+/** The current run's counts, floor and clock (tracked by the console's poll). */
+export function consoleProgress(): RunProgress {
+  ensureStore();
+  return runProgress();
+}
+
+/** The connected device's name, or `null` while nothing is connected. */
+export function selectedDeviceName(): string | null {
+  const current = ensureStore();
+  return current?.selectedDeviceName() ?? null;
 }
 
 /** The daily statistics loaded for the statistics page (tracked). */

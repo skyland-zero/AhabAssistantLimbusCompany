@@ -6,7 +6,7 @@ import type { JSX } from "nsh";
 import { Scroll, Text, View, token } from "nsh";
 import { Badge } from "../components/Badge";
 import { Button, IconButton } from "../components/Button";
-import { Card, CardHeader, Divider, Rule } from "../components/Card";
+import { Card, CardBody, CardHeader, Divider, Rule } from "../components/Card";
 import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
 import type { IconName } from "../components/Icon";
@@ -90,8 +90,8 @@ export function Gallery() {
 
 function Section(props: { title: string; children?: JSX.Element }) {
   return (
-    <Card title={props.title} class="p-0">
-      <View class="flex-col gap-3 p-4">{props.children}</View>
+    <Card title={props.title}>
+      <CardBody>{props.children}</CardBody>
     </Card>
   );
 }
@@ -193,8 +193,8 @@ function SurfaceSection() {
         </View>
       </Row>
       <Row label="卡片头">
-        <View class="w-full overflow-hidden rounded-(--radius-lg) border border-border">
-          <CardHeader label="卡片标题" />
+        <View class="w-full overflow-hidden rounded-(--radius-xl) border border-border">
+          <CardHeader label="卡片标题" icon="chart" note="注脚" />
         </View>
       </Row>
       <Row label="空状态">

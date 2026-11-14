@@ -6,8 +6,9 @@
 import { Scroll, Text, View, token } from "nsh";
 import { Badge } from "../../components/Badge";
 import { Button, IconButton } from "../../components/Button";
-import { Card } from "../../components/Card";
+import { Card, CardBody } from "../../components/Card";
 import { EmptyState } from "../../components/EmptyState";
+import { Notice } from "../../components/Notice";
 import { PageRoot, PageToolbar } from "../../components/Page";
 import { Switch } from "../../components/Switch";
 import { Tabs } from "../../components/Tabs";
@@ -72,11 +73,7 @@ export function Teams() {
         </View>
       </PageToolbar>
       <If when={teamsFeedback()}>
-        {(line) => (
-          <Card class="w-full bg-success-light p-3">
-            <Text class="text-xs text-success">{line()}</Text>
-          </Card>
-        )}
+        {(line) => <Notice tone="success" label={line()} />}
       </If>
       <Scroll class="min-h-0 flex-1">
         <View class="w-full flex-col gap-3">
@@ -119,54 +116,49 @@ export function Teams() {
   );
 }
 
-/** One saved team: its number, state, commands, meta and party. */
+/** One saved team: its name in the header band with its commands, its
+ *  classification and its party in the body. */
 function TeamCard(props: { team: Team; slot: number; index: number }) {
   const team = () => props.team;
   const luxcavation = () => team().purpose === "luxcavation";
   return (
-    <Card class="w-full p-3" arrive={props.index}>
-      <View class="flex-col gap-2">
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <Badge label={`#${String(props.slot).padStart(2, "0")}`} />
-          <View class="flex-row items-center gap-2">
-            <If when={!luxcavation()}>
-              <View class="flex-row items-center gap-1">
-                <Text class="text-xs text-muted-foreground">启用</Text>
-                <Switch
-                  checked={team().enabled}
-                  accessibilityLabel={`启用 ${team().name}`}
-                  onChange={({ checked }) => setTeamEnabled(team().id, checked)}
-                />
-              </View>
-            </If>
-            <Button
-              label="从预设覆盖"
-              variant="outline"
-              size="xs"
-              onPress={() => openEditor(team())}
+    <Card
+      title={team().name}
+      note={`#${String(props.slot).padStart(2, "0")}`}
+      class="w-full"
+      arrive={props.index}
+      actions={
+        <View class="flex-row items-center gap-1.5">
+          <If when={!luxcavation()}>
+            <Switch
+              checked={team().enabled}
+              accessibilityLabel={`启用 ${team().name}`}
+              onChange={({ checked }) => setTeamEnabled(team().id, checked)}
             />
-            <IconButton
-              name="pencil"
-              label={`编辑 ${team().name}`}
-              size="xs"
-              onPress={() => openEditor(team())}
-            />
-            <IconButton
-              name="trash"
-              label={`删除 ${team().name}`}
-              size="xs"
-              iconColor={token("danger")}
-              onPress={() => deleteTeam(team().id)}
-            />
-          </View>
+          </If>
+          <IconButton
+            name="pencil"
+            label={`编辑 ${team().name}`}
+            size="xs"
+            onPress={() => openEditor(team())}
+          />
+          <IconButton
+            name="trash"
+            label={`删除 ${team().name}`}
+            size="xs"
+            iconColor={token("danger")}
+            onPress={() => deleteTeam(team().id)}
+          />
         </View>
-        <Text class="text-sm font-semibold text-foreground">{team().name}</Text>
+      }
+    >
+      <CardBody class="gap-2">
         <View class="w-full flex-row flex-wrap items-center gap-2">
           <Text class="text-xs text-muted-foreground">{PURPOSE_LABELS[team().purpose]}</Text>
           <Text class="text-xs text-foreground">
             {SCHEME_LABELS[team().accessoryScheme] ?? team().accessoryScheme}
           </Text>
-          <Text class="text-xs text-muted-foreground">{team().sinners.length} 人格</Text>
+          <Text class="text-xs text-muted-foreground">{`${team().sinners.length} 人格`}</Text>
           <If when={hasStarlight(team().mirrorConfig)}>
             <Badge label="已配星光" tone="success" />
           </If>
@@ -184,42 +176,39 @@ function TeamCard(props: { team: Team; slot: number; index: number }) {
             )}
           </Each>
         </View>
-      </View>
+      </CardBody>
     </Card>
   );
 }
 
-/** A formation slot with no team: the two ways to fill it. */
+/** A formation slot with no team: the two ways to fill it. It is a placeholder,
+ *  not a card with content, so it recedes and centres what it offers. */
 function EmptySlot(props: { number: number; index: number }) {
   return (
-    <Card class="w-full bg-muted/40 p-3" arrive={props.index}>
-      <View class="flex-col gap-2">
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <Badge label={`#${String(props.number).padStart(2, "0")}`} />
+    <Card class="w-full bg-muted/25" arrive={props.index}>
+      <View class="size-full flex-col items-center justify-center gap-2">
+        <Badge label={`#${String(props.number).padStart(2, "0")}`} />
+        <View class="flex-row items-baseline gap-1.5">
+          <Text class="text-sm font-semibold text-muted-foreground">未配置</Text>
+          <Text class="text-xs text-muted-foreground">镜牢</Text>
         </View>
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <View class="flex-col gap-1">
-            <Text class="text-sm text-muted-foreground">未配置</Text>
-            <Text class="text-xs text-muted-foreground">镜牢</Text>
-          </View>
-          <View class="flex-row items-center gap-2">
-            <Button
-              label="新建"
-              icon="plus"
-              variant="ghost"
-              size="xs"
-              class="text-brand"
-              iconColor={token("brand")}
-              onPress={() => openEditor(null)}
-            />
-            <Button
-              label="从预设编队选择"
-              icon="package"
-              variant="outline"
-              size="xs"
-              onPress={() => openEditor(null)}
-            />
-          </View>
+        <View class="flex-row items-center gap-2">
+          <Button
+            label="新建"
+            icon="plus"
+            variant="ghost"
+            size="xs"
+            class="text-brand"
+            iconColor={token("brand")}
+            onPress={() => openEditor(null)}
+          />
+          <Button
+            label="从预设编队选择"
+            icon="package"
+            variant="outline"
+            size="xs"
+            onPress={() => openEditor(null)}
+          />
         </View>
       </View>
     </Card>

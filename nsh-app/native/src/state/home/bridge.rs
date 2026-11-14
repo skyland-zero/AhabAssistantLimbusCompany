@@ -2,7 +2,7 @@
 
 use nsh_core::prelude::*;
 
-use crate::model::{ConnectionStatus, ExecutionState, PreviewStatus};
+use crate::model::{ConnectionStatus, ExecutionState, FixedTaskId, PreviewStatus};
 
 use super::HomeState;
 
@@ -64,6 +64,35 @@ pub struct StatsSummaryView {
     pub week_thread: u32,
     pub week_mirror: u32,
     pub last_mirror: Option<String>,
+    /// The last mirror run's time, for the console's "this time vs last time".
+    pub last_mirror_seconds: Option<f64>,
+    /// The last mirror run's floors, shown beside its time.
+    pub last_mirror_floors: Option<u32>,
+}
+
+/// The current run's progress: the console card's running state.
+#[derive(Clone, Debug, JsObject)]
+pub struct RunProgressView {
+    /// `idle`, `starting`, `running`, `paused`, `stopping` or `restoring`.
+    pub state: String,
+    /// `daily_task`, `get_reward`, `buy_enkephalin`, `mirror`, ...
+    pub task: Option<String>,
+    /// A task is running or paused: the card shows this run, not the totals.
+    pub live: bool,
+    pub exp_done: u32,
+    pub exp_target: u32,
+    pub thread_done: u32,
+    pub thread_target: u32,
+    pub mirror_done: u32,
+    pub mirror_target: u32,
+    /// The run's mirror target is unbounded (`targets.mirror` is zero).
+    pub infinite: bool,
+    pub hard: bool,
+    /// The mirror run's floor (1-based) and the route's length, when it runs.
+    pub floor: Option<u32>,
+    pub floor_total: Option<u32>,
+    /// Milliseconds since the run started.
+    pub elapsed_ms: Option<u64>,
 }
 
 /// The console's backend state.
@@ -335,7 +364,64 @@ impl HomeStore {
                 .lastMirror
                 .as_ref()
                 .map(|mirror| mirror.completedAt.clone()),
+            last_mirror_seconds: stats.lastMirror.as_ref().map(|mirror| mirror.totalSeconds),
+            last_mirror_floors: stats.lastMirror.as_ref().map(|mirror| mirror.floorCount),
         }
+    }
+
+    /// The current run's counts, floor and elapsed time: the console card's
+    /// running state. Empty while nothing runs, so the card shows the totals.
+    pub fn run_progress(&self) -> RunProgressView {
+        let execution = &self.state.execution;
+        let run = &self.state.stats.currentRun;
+        let task = execution.currentTaskId.map(task_id_name);
+        let live = matches!(
+            execution.state,
+            ExecutionState::Running | ExecutionState::Paused
+        ) && task.is_some();
+        let mirror = task.as_deref() == Some("mirror");
+        RunProgressView {
+            state: self.execution_state(),
+            task,
+            live,
+            exp_done: run.completed.exp,
+            exp_target: run.targets.exp,
+            thread_done: run.completed.thread,
+            thread_target: run.targets.thread,
+            mirror_done: run.completed.mirror,
+            mirror_target: run.targets.mirror,
+            infinite: run.isMirrorInfinite,
+            hard: self
+                .state
+                .mirror_progress
+                .as_ref()
+                .map(|progress| progress.isHard)
+                .unwrap_or(self.state.tasks.mirror.hard_mirror),
+            floor: if mirror && live {
+                self.state.mirror_floor.as_ref().map(|floor| floor.floor)
+            } else {
+                None
+            },
+            floor_total: if mirror && live {
+                self.state
+                    .mirror_floor
+                    .as_ref()
+                    .map(|floor| floor.floorTotal)
+            } else {
+                None
+            },
+            elapsed_ms: if live { self.state.run_elapsed_ms() } else { None },
+        }
+    }
+
+    /// The connected device's name, for the running card's status line.
+    pub fn selected_device_name(&self) -> Option<String> {
+        let id = self.state.selected_device.as_ref()?;
+        self.state
+            .devices
+            .iter()
+            .find(|device| &device.id == id)
+            .map(|device| device.name.clone())
     }
 
     /// The last state-layer feedback line.
@@ -358,6 +444,18 @@ impl Default for HomeStore {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn task_id_name(task: FixedTaskId) -> String {
+    match task {
+        FixedTaskId::SetWindows => "set_windows",
+        FixedTaskId::DailyTask => "daily_task",
+        FixedTaskId::GetReward => "get_reward",
+        FixedTaskId::BuyEnkephalin => "buy_enkephalin",
+        FixedTaskId::Mirror => "mirror",
+        FixedTaskId::ResonateWithAhab => "resonate_with_Ahab",
+    }
+    .to_owned()
 }
 
 const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -386,7 +484,80 @@ fn base64(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::base64;
+    use super::*;
+    use crate::ipc::BackendClient;
+    use crate::model::FixedTaskId;
+    use serde_json::json;
+
+    fn store() -> HomeStore {
+        let state = HomeState::new(BackendClient::mock());
+        assert!(state.error.is_none(), "mock must load: {:?}", state.error);
+        HomeStore { state }
+    }
+
+    /// A queue of two EXP runs, four thread runs and three mirrors.
+    fn queue(store: &mut HomeStore) {
+        store
+            .state
+            .configure(json!({
+                "daily": {"enabled": true, "exp": "2", "thread": "4"},
+                "rewards": {"enabled": false},
+                "enkephalin": {"enabled": false},
+                "mirror": {"enabled": true, "runs": "3", "difficulty": "normal"},
+                "resonance": {"enabled": false},
+            }))
+            .unwrap();
+    }
+
+    #[test]
+    fn an_idle_console_reports_no_run() {
+        let store = store();
+        let progress = store.run_progress();
+        assert!(!progress.live);
+        assert_eq!(progress.task, None);
+        assert_eq!(progress.floor, None);
+        assert_eq!(progress.elapsed_ms, None);
+    }
+
+    #[test]
+    fn a_daily_run_reports_its_counts_and_no_floor() {
+        let mut store = store();
+        queue(&mut store);
+        store.state.start().unwrap();
+        store.state.poll_preview();
+
+        let progress = store.run_progress();
+        assert!(progress.live);
+        assert_eq!(progress.task.as_deref(), Some("daily_task"));
+        assert_eq!(progress.exp_done, 0);
+        assert_eq!(progress.exp_target, 2);
+        assert_eq!(progress.thread_target, 4);
+        assert_eq!(progress.mirror_target, 3);
+        // The mirror floor belongs to the mirror task only.
+        assert_eq!(progress.floor, None);
+        assert!(progress.elapsed_ms.is_some(), "the run is stamped");
+    }
+
+    #[test]
+    fn a_mirror_run_reports_its_floor_until_the_run_ends() {
+        let mut store = store();
+        queue(&mut store);
+        store.state.start().unwrap();
+        store.state.poll_preview();
+        store.state.execution.currentTaskId = Some(FixedTaskId::Mirror);
+
+        let progress = store.run_progress();
+        assert_eq!(progress.task.as_deref(), Some("mirror"));
+        assert_eq!(progress.floor, Some(1));
+        assert_eq!(progress.floor_total, Some(5));
+        assert!(!progress.hard);
+
+        store.state.stop().unwrap();
+        store.state.poll_preview();
+        let progress = store.run_progress();
+        assert!(!progress.live, "a finished run goes back to the totals");
+        assert_eq!(progress.floor, None);
+    }
 
     #[test]
     fn base64_matches_the_standard_padding() {

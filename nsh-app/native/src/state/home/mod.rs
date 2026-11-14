@@ -16,7 +16,8 @@ use crate::{
     model::{
         AfterCompletionConfig, AfterExitAction, AfterPowerAction, ConnectionStatus,
         DailyStatsPayload, DeviceInfo, ExecutionState, ExecutionStatsPayload,
-        ExecutionStatusPayload, LogEntryPayload, PreviewStatus, PreviewStatusPayload, TasksConfig,
+        ExecutionStatusPayload, LogEntryPayload, MirrorFloorPayload, MirrorProgressPayload,
+        PreviewStatus, PreviewStatusPayload, TasksConfig,
     },
 };
 
@@ -43,6 +44,10 @@ pub struct HomeState {
     pub preview_status: PreviewStatus,
     pub preview_frame: Option<PreviewFrame>,
     pub preview_revision: u64,
+    /// The current run's mirror counts, when the backend reports them.
+    pub mirror_progress: Option<MirrorProgressPayload>,
+    /// The floor the current run has reached, 1-based.
+    pub mirror_floor: Option<MirrorFloorPayload>,
     pub feedback: Option<String>,
     pub error: Option<String>,
     next_client_request: u64,
@@ -62,6 +67,8 @@ impl HomeState {
             preview_status: PreviewStatus::Stopped,
             preview_frame: None,
             preview_revision: 0,
+            mirror_progress: None,
+            mirror_floor: None,
             feedback: None,
             error: None,
             next_client_request: 0,
@@ -564,7 +571,32 @@ impl HomeState {
                     if let Ok(status) =
                         serde_json::from_value::<ExecutionStatusPayload>(envelope.payload)
                     {
+                        // A new run starts with no progress of its own; a
+                        // finished one keeps no floor for the next task to
+                        // inherit. The card reads these under the run id gate.
+                        if matches!(
+                            status.state,
+                            ExecutionState::Idle | ExecutionState::Starting
+                        ) {
+                            self.mirror_progress = None;
+                            self.mirror_floor = None;
+                        }
                         self.execution = status;
+                    }
+                }
+                event::EXECUTION_MIRROR_PROGRESS => {
+                    if let Ok(progress) =
+                        serde_json::from_value::<MirrorProgressPayload>(envelope.payload)
+                        && self.same_run(progress.runId.as_deref())
+                    {
+                        self.mirror_progress = Some(progress);
+                    }
+                }
+                event::EXECUTION_MIRROR_FLOOR => {
+                    if let Ok(floor) = serde_json::from_value::<MirrorFloorPayload>(envelope.payload)
+                        && self.same_run(floor.runId.as_deref())
+                    {
+                        self.mirror_floor = Some(floor);
                     }
                 }
                 event::EXECUTION_STATS => {
@@ -621,6 +653,30 @@ impl HomeState {
                 _ => {}
             }
         }
+    }
+}
+
+impl HomeState {
+    /// Whether a run-scoped event belongs to the run this console shows. A
+    /// payload without a run id predates run-scoped events and is accepted.
+    fn same_run(&self, run_id: Option<&str>) -> bool {
+        match run_id {
+            None => true,
+            Some(id) => self.execution.runId.as_deref() == Some(id),
+        }
+    }
+
+    /// Milliseconds since the current run started, when the backend stamped it.
+    pub fn run_elapsed_ms(&self) -> Option<u64> {
+        let started = self.stats.currentRun.startedAt?;
+        if started <= 0 {
+            return None;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_millis() as i64;
+        Some((now - started).max(0) as u64)
     }
 }
 

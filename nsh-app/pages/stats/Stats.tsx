@@ -4,12 +4,14 @@
 // route) and persists them, so this page is a view over `home.ts`'s payload:
 // a summary strip, the recent runs as stacked bars, the phase split, the teams
 // and the daily counts.
-import { Scroll, Text, View, effect, signal } from "nsh";
+import { Scroll, Text, View, effect, signal, token } from "nsh";
 import { Bar, Grid, Plot, PlotAxis } from "nsh/base/plot";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
-import { Card } from "../../components/Card";
+import { Card, CardBody, Rule } from "../../components/Card";
 import { EmptyState } from "../../components/EmptyState";
+import { Figure } from "../../components/Figure";
+import { Icon } from "../../components/Icon";
 import { Select } from "../../components/Select";
 import { Segmented } from "../../components/Segmented";
 import { PageRoot, PageToolbar } from "../../components/Page";
@@ -120,9 +122,6 @@ export function Stats() {
             />
           </View>
           <View class="flex-row items-center gap-2">
-            <Text class="text-xs text-muted-foreground">
-              {`${summary().count} 场 · 完成 ${summary().completed}`}
-            </Text>
             <Button label="刷新" icon="refresh" variant="ghost" onPress={reload} />
           </View>
         </View>
@@ -166,7 +165,8 @@ export function Stats() {
   );
 }
 
-/** The KPI strip: counts, the totals and the averages, on one line each half. */
+/** The overview card: the same data card the console's top card is — a title
+ *  line, four figures, and the derived readings as one footer line. */
 function SummaryStrip(props: {
   count: number;
   completed: number;
@@ -177,32 +177,33 @@ function SummaryStrip(props: {
   fastestSeconds: number;
   slowestSeconds: number;
 }) {
+  const share = () =>
+    props.count > 0 ? `${Math.round((props.hard / props.count) * 100)}%` : undefined;
   return (
-    <Card class="w-full p-2.5" arrive={0}>
-      <View class="w-full flex-col gap-1">
-        <View class="w-full flex-row flex-wrap items-center gap-x-4 gap-y-1">
-          <Chip label="场次" value={String(props.count)} />
-          <Chip label="完成" value={`${props.completed} / ${props.count}`} />
-          <Chip label="困难" value={String(props.hard)} />
-          <Chip label="未完成" value={String(props.failed)} />
-          <Chip label="完成总用时" value={spanText(props.totalSeconds)} />
-        </View>
-        <View class="w-full flex-row flex-wrap items-center gap-x-4 gap-y-1">
-          <Chip label="平均" value={clockText(props.averageSeconds)} />
-          <Chip label="最快" value={clockText(props.fastestSeconds)} />
-          <Chip label="最慢" value={clockText(props.slowestSeconds)} />
-        </View>
+    <Card class="w-full px-4 py-2.5" arrive={0}>
+      <View class="w-full flex-row items-center gap-1.5">
+        <Icon name="chart" size={14} color={token("brand")} />
+        <Text class="flex-none text-xs font-semibold text-foreground">总览</Text>
+        <Text class="flex-none text-[10px] text-muted-foreground">{`最近 ${props.count} 场`}</Text>
+      </View>
+      <View class="mt-1.5 w-full flex-row gap-3">
+        <Figure label="场次" value={String(props.count)} />
+        <Figure label="完成" value={String(props.completed)} unit={`/ ${props.count}`} />
+        <Figure label="困难" note={share()} value={String(props.hard)} />
+        <Figure label="平均用时" value={clockText(props.averageSeconds)} />
+      </View>
+      <Rule class="my-2" />
+      <View class="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+        <Text class="text-[10px] text-muted-foreground">
+          {`完成总用时 ${spanText(props.totalSeconds)}`}
+        </Text>
+        <Text class="text-[10px] text-muted-foreground">{`最快 ${clockText(props.fastestSeconds)}`}</Text>
+        <Text class="text-[10px] text-muted-foreground">{`最慢 ${clockText(props.slowestSeconds)}`}</Text>
+        <If when={props.failed > 0}>
+          <Text class="text-[10px] text-danger">{`未完成 ${props.failed}`}</Text>
+        </If>
       </View>
     </Card>
-  );
-}
-
-function Chip(props: { label: string; value: string }) {
-  return (
-    <View class="flex-none flex-row items-center gap-1">
-      <Text class="text-xs text-muted-foreground">{props.label}</Text>
-      <Text class="text-xs text-foreground">{props.value}</Text>
-    </View>
   );
 }
 
@@ -215,16 +216,18 @@ function ChartCard(props: {
   onHover: (index: number | null) => void;
 }) {
   return (
-    <Card class="w-full p-3" arrive={1}>
-      <View class="w-full flex-col gap-2">
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <Text class="text-xs font-medium text-foreground">最近镜牢用时（按环节）</Text>
-          <View class="flex-row flex-wrap items-center gap-2">
-            <Each of={PHASE_GROUPS}>
-              {(phase) => <LegendItem phase={phase()} />}
-            </Each>
-          </View>
+    <Card
+      title="最近镜牢用时"
+      note="按环节"
+      class="w-full"
+      arrive={1}
+      actions={
+        <View class="flex-row flex-wrap items-center gap-2">
+          <Each of={PHASE_GROUPS}>{(phase) => <LegendItem phase={phase()} />}</Each>
         </View>
+      }
+    >
+      <CardBody class="gap-2">
         <If
           when={props.rows.length > 0}
           else={<Text class="py-8 text-center text-xs text-muted-foreground">没有符合条件的记录</Text>}
@@ -282,7 +285,7 @@ function ChartCard(props: {
         <Text class="pt-2 text-[10px] text-muted-foreground">
           平均与占比只算完成场次；图表含未完成场次，其柱上标「未完成」。
         </Text>
-      </View>
+      </CardBody>
     </Card>
   );
 }
@@ -328,9 +331,8 @@ function ChartTooltip(props: { row: ChartRow | null }) {
 /** The phase split over the completed runs. */
 function PhaseCard(props: { runs: MirrorHistoryEntry[] }) {
   return (
-    <Card class="min-w-0 flex-1 p-3" arrive={2}>
-      <View class="w-full flex-col gap-2">
-        <Text class="text-xs font-medium text-foreground">环节用时</Text>
+    <Card title="环节用时" class="min-w-0 flex-1" arrive={2}>
+      <CardBody class="gap-2">
         <Each of={phaseTotals(props.runs)}>
           {(phase) => (
             <View class="w-full flex-col gap-1">
@@ -362,7 +364,7 @@ function PhaseCard(props: { runs: MirrorHistoryEntry[] }) {
             )}
           </Each>
         </View>
-      </View>
+      </CardBody>
     </Card>
   );
 }
@@ -370,9 +372,8 @@ function PhaseCard(props: { runs: MirrorHistoryEntry[] }) {
 /** One row per team: runs, average and its own phase split. */
 function TeamCard(props: { runs: MirrorHistoryEntry[] }) {
   return (
-    <Card class="min-w-0 flex-1 p-3" arrive={3}>
-      <View class="w-full flex-col gap-2">
-        <Text class="text-xs font-medium text-foreground">队伍</Text>
+    <Card title="队伍" class="min-w-0 flex-1" arrive={3}>
+      <CardBody class="gap-2">
         <If
           when={teamRows(props.runs).length > 0}
           else={<Text class="py-4 text-center text-xs text-muted-foreground">没有符合条件的队伍</Text>}
@@ -396,7 +397,7 @@ function TeamCard(props: { runs: MirrorHistoryEntry[] }) {
             )}
           </Each>
         </If>
-      </View>
+      </CardBody>
     </Card>
   );
 }
@@ -415,12 +416,11 @@ function PhaseSegment(props: { phase: { key: keyof PhaseSeconds; bar: string }; 
 /** The newest runs, newest first, with their team and result. */
 function RecentCard(props: { runs: MirrorHistoryEntry[] }) {
   return (
-    <Card class="w-full p-3" arrive={4}>
-      <View class="w-full flex-col gap-2">
-        <Text class="text-xs font-medium text-foreground">最近记录</Text>
+    <Card title="最近记录" note={`${props.runs.length} 场`} class="w-full" arrive={4}>
+      <CardBody class="gap-0.5">
         <Each of={props.runs}>
           {(run) => (
-            <View class="w-full flex-row flex-wrap items-center gap-2 rounded-(--radius-sm) border border-border px-2 py-1.5">
+            <View class="w-full flex-row flex-wrap items-center gap-2 rounded-(--radius-sm) px-2 py-1.5 hover:bg-accent">
               <Text class="w-24 flex-none font-mono text-xs text-muted-foreground">
                 {runLabel(run().completedAt)}
               </Text>
@@ -442,7 +442,7 @@ function RecentCard(props: { runs: MirrorHistoryEntry[] }) {
             </View>
           )}
         </Each>
-      </View>
+      </CardBody>
     </Card>
   );
 }
@@ -451,21 +451,14 @@ function RecentCard(props: { runs: MirrorHistoryEntry[] }) {
 function DailyCard() {
   const data = () => currentDailyStats();
   const error = () => currentStatsDetailsError();
+  const span = () => {
+    const stats = data();
+    if (!stats) return undefined;
+    return stats.dateFrom && stats.dateTo ? `${stats.dateFrom} – ${stats.dateTo}` : "每日完成";
+  };
   return (
-    <Card class="w-full p-3" arrive={5}>
-      <View class="w-full flex-col gap-2">
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <Text class="text-xs font-medium text-foreground">每日次数</Text>
-          <If when={data()}>
-            {(stats) => (
-              <Text class="text-[10px] text-muted-foreground">
-                {stats().dateFrom && stats().dateTo
-                  ? `${stats().dateFrom} – ${stats().dateTo}`
-                  : "每日完成"}
-              </Text>
-            )}
-          </If>
-        </View>
+    <Card title="每日次数" note={span()} class="w-full" arrive={5}>
+      <CardBody class="gap-2">
         <If when={data()} else={<Text class="py-4 text-center text-xs text-muted-foreground">{error() ?? "正在加载每日统计…"}</Text>}>
           {(stats) => (
             <If
@@ -487,7 +480,7 @@ function DailyCard() {
             </If>
           )}
         </If>
-      </View>
+      </CardBody>
     </Card>
   );
 }

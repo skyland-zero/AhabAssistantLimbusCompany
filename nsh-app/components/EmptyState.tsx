@@ -21,7 +21,7 @@ export function EmptyState(props: {
 }) {
   return (
     <View
-      class={`flex-1 items-center justify-center gap-2 rounded-(--radius-lg) border border-border p-6 ${props.class ?? ""}`}
+      class={`flex-1 items-center justify-center gap-2 rounded-(--radius-xl) border border-border p-6 ${props.class ?? ""}`}
     >
       <Marker />
       <Text class="text-sm font-semibold text-foreground">{props.title}</Text>

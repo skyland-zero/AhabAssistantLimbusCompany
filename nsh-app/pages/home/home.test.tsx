@@ -6,7 +6,7 @@ const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 test("the console shows the backend, this week's summary and the task queue", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   for (const text of [
-    "Python 后端",
+    "未启动 Python 后端",
     "Mock 模式",
     "周期统计（今日/本周）",
     "上次镜牢",
@@ -40,6 +40,15 @@ test("select all and clear act on the queue", async () => {
   await app.waitFor("已全选任务");
 });
 
+test("the top card follows the running queue", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:link-start");
+  await app.waitFor("Mock 任务已开始");
+  // The card leaves the totals behind and states the run instead.
+  await app.waitFor("周期统计（今日/本周）", { state: "gone" });
+  await app.waitFor("运行中");
+});
+
 test("starting the queue says what it did", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("id:link-start");
@@ -48,15 +57,13 @@ test("starting the queue says what it did", async () => {
   expect(app.texts()).toContain("F10");
 });
 
-test("the statistics cards open the statistics page", async () => {
+test("the statistics card opens the statistics page", async () => {
   const app = await open("../../App.tsx", DESKTOP);
-  await app.press("id:stats-last-mirror-details");
-  await app.waitFor("最近镜牢用时（按环节）");
+  await app.press("id:stats-details");
+  await app.waitFor("最近镜牢用时");
   await app.waitFor("每日次数");
   await app.press("role:button[主控台]");
   await app.waitFor("日常任务");
-  await app.press("id:stats-daily-details");
-  await app.waitFor("最近镜牢用时（按环节）");
 });
 
 test("the log card opens a full run-log dialog", async () => {

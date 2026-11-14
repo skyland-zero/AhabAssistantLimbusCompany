@@ -11,6 +11,8 @@ import { arriveSpec } from "../motion";
 import dividerArt from "../assets/themes/limbus/divider.png";
 import { currentDecor } from "../store";
 import type { Decor } from "../themes";
+import { Icon } from "./Icon";
+import type { IconName } from "./Icon";
 
 /** Shared card-header height (44pt in the GPUI client, `CARD_HEADER_HEIGHT`). */
 const HEADER_HEIGHT = "h-11";
@@ -29,10 +31,20 @@ const CARD_SHADOW: Record<Decor, string> = {
   gradient: "shadow-sm",
 };
 
-/** A surface container: the app's card geometry, padding and decoration. */
+/** A surface container: the app's card geometry, padding and decoration.
+ *
+ * Two shapes share one surface: a **titled** card draws the 44pt header band and
+ * puts its body in `CardBody`, a **bare** card is the surface itself (a row, a
+ * data strip, a reading column) and carries its own inset. */
 export function Card(props: {
   /** The header's label. A card without one is a bare surface. */
   title?: string;
+  /** The glyph before the band's label, in the accent. */
+  icon?: IconName;
+  /** A short note after the label: an identity, a count, a date range. */
+  note?: string;
+  /** Trailing controls of the header band: a badge, a filter, a link. */
+  actions?: JSX.Element;
   /** The card is the current one — the running task, the open item. It keeps
    *  the skin's surface and takes the accent as a border and a faint fill. */
   selected?: boolean;
@@ -51,19 +63,26 @@ export function Card(props: {
   );
   const surface = () =>
     props.selected ? "border-brand bg-brand/10" : "border-border bg-card";
+  // A titled card owns no padding: the band and `CardBody` bring their own, so
+  // every page shares the same insets without repeating them at the call site.
+  const inset = () => props.class ?? (props.title === undefined ? "p-4" : "p-0");
   return (
     <View
-      class={`relative min-w-0 rounded-(--radius-lg) border text-card-foreground ${surface()} ${CARD_SHADOW[currentDecor()]} ${props.class ?? "p-4"}`}
+      class={`relative min-w-0 rounded-(--radius-xl) border text-card-foreground ${surface()} ${CARD_SHADOW[currentDecor()]} ${inset()}`}
       style={props.arrive === undefined ? undefined : arrival.style}
     >
       <If when={props.title}>
-        {(title) => <CardHeader label={title()} />}
+        {(title) => (
+          <CardHeader label={title()} icon={props.icon} note={props.note}>
+            {props.actions}
+          </CardHeader>
+        )}
       </If>
       {props.children}
       <If when={currentDecor() === "glass"}>
         {/* A one-pixel highlight along the top edge: what makes a translucent
             panel read as glass rather than as a flat tint. */}
-        <View class="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-(--radius-lg) bg-hilite" />
+        <View class="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-(--radius-xl) bg-hilite" />
       </If>
       <If when={currentDecor() === "limbus"}>
         <Bracket top left />
@@ -87,12 +106,17 @@ function Bracket(props: { top?: boolean; left?: boolean }) {
 }
 
 /** The card's title band, in the active skin's decoration language. */
-export function CardHeader(props: { label: string; children?: JSX.Element }) {
+export function CardHeader(props: {
+  label: string;
+  icon?: IconName;
+  note?: string;
+  children?: JSX.Element;
+}) {
   const decor = () => currentDecor();
   return (
     <View
       role="header"
-      class={`${HEADER_HEIGHT} relative flex-none flex-row items-center px-4 ${HEADER_CLASS[decor()]}`}
+      class={`${HEADER_HEIGHT} relative flex-none flex-row items-center gap-1.5 px-4 ${HEADER_CLASS[decor()]}`}
     >
       <If when={decor() === "limbus"}>
         {/* The stencilled band: a dark-red (or parchment) gradient behind the
@@ -103,7 +127,7 @@ export function CardHeader(props: { label: string; children?: JSX.Element }) {
             backgroundImage: `linear-gradient(180deg, ${token("band-top")} 0%, ${token("band-bottom")} 100%)`,
           }}
         />
-        <View class="pointer-events-none absolute inset-y-0 left-3.5 w-[3px] bg-decor-line" />
+        <View class="pointer-events-none absolute inset-y-0 left-3 w-[3px] bg-decor-line" />
         <View class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-decor-line" />
         <Smear class="left-14 top-2 h-2 w-8" />
         <Smear class="left-33 top-7 h-1.5 w-4" />
@@ -113,12 +137,28 @@ export function CardHeader(props: { label: string; children?: JSX.Element }) {
       <If when={decor() === "mist"}>
         <View class="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-decor-line" />
       </If>
-      <Text class={`text-sm font-semibold ${HEADER_LABEL[decor()]}`}>{props.label}</Text>
+      <If when={props.icon}>
+        {(name) => <Icon name={name()} size={14} color={token("brand")} />}
+      </If>
+      <Text class={`flex-none text-sm font-semibold ${HEADER_LABEL[decor()]}`}>{props.label}</Text>
+      <If when={props.note !== undefined && props.note !== ""}>
+        <Text class="flex-none text-[10px] text-muted-foreground">{props.note}</Text>
+      </If>
       <If when={decor() === "archive"}>
         <View class="ms-3 h-px flex-1 bg-decor-line opacity-35" />
       </If>
+      <If when={decor() !== "archive" && props.children !== undefined}>
+        <View class="flex-1" />
+      </If>
       {props.children}
     </View>
+  );
+}
+
+/** A titled card's body: one inset and one row rhythm for every page. */
+export function CardBody(props: { children?: JSX.Element; class?: string }) {
+  return (
+    <View class={`w-full flex-col gap-3 px-4 pt-3 pb-4 ${props.class ?? ""}`}>{props.children}</View>
   );
 }
 

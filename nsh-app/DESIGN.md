@@ -93,15 +93,16 @@
 | --- | --- | --- |
 | 极小标签 | 9.5–10pt | `text-[10px]`（仅限确有需要的密集数据，需说明） |
 | 控件/次要文字 | 11–12pt | `text-xs` |
+| 主数字 | 21pt | `text-xl font-bold tabular-nums`，只给 `Figure`，单位/分母用 `text-xs` |
 | 卡片标题 | 14pt | `text-sm font-semibold` |
 | 区块标题 | 16pt | `text-base font-semibold` |
 
 间距：一律用 Tailwind 档位（`p-1` 4pt、`p-2` 8pt、`p-3` 12pt、`p-4` 16pt、
 `gap-2`/`gap-3`/`gap-6`）。页面外框固定 `p-2.5`（10pt，对齐 GPUI 的 `page_root`）。
 
-圆角：只用 `rounded-(--radius-sm)`（徽标、小部件）、`rounded-(--radius)`（控件）、
-`rounded-(--radius-lg)`（卡片、弹层）、`rounded-(--radius-xl)`，以及 `rounded-full`（仅圆形：
-状态点、开关滑块、头像）。
+圆角：只用 `rounded-(--radius-sm)`（徽标、小部件）、`rounded-(--radius)`（控件、内嵌块）、
+`rounded-(--radius-xl)`（卡片）、`rounded-(--radius-lg)`（弹层、对话框），以及 `rounded-full`（仅圆形：
+状态点、开关滑块、头像、药丸徽标）。
 
 控件尺寸（`components/Button.tsx` 的 `SIZE`，一并决定高度、内边距、图标）：
 
@@ -131,9 +132,11 @@
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
 | `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾 |
 | `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
-| `Card.tsx` | `Card` / `CardHeader` / `Rule` | 卡片表面、44pt 标题带、发丝线；`Card` 的 `arrive` 让卡片在页面进入时随波纹到位（动效绑在卡片自己的 View，网格的 `items-stretch` 不变） |
+| `Card.tsx` | `Card` / `CardHeader` / `CardBody` / `Rule` | 卡片表面、44pt 标题带（图标 + 标题 + 注脚 + 尾部控件）、正文内缩；`Card` 的 `arrive` 让卡片在页面进入时随波纹到位（动效绑在卡片自己的 View，网格的 `items-stretch` 不变） |
+| `Figure.tsx` | `Figure` | 数据卡里的一项读数：标签与注脚同一行，主值 `text-xl` + 单位/分母 |
+| `Notice.tsx` | `Notice` | 页面级一行提示（警告/成功/信息），不是卡片：贴在页面上，不另开一个盒 |
 | `Reveal.tsx` | `Reveal` | 非卡片行的进场包裹层（帮助目录这类按钮列），参数同波纹 |
-| `Badge.tsx` | `Badge` | 六种语义色，默认 `neutral` |
+| `Badge.tsx` | `Badge` | 六种语义色，默认 `neutral`；药丸形（`rounded-full`），`dot` 是状态自己的标记 |
 | `Icon.tsx` | `Icon` | Lucide SVG 资产 + `tintColor` |
 | `Page.tsx` | `PageRoot` / `PageToolbar` | 页面外框与工具栏卡片 |
 | `EmptyState.tsx` | `EmptyState` | 空/未就绪状态：说明 + 下一步 |
@@ -153,6 +156,23 @@
 - 焦点环在控件外侧：`focus-visible:outline-2 outline-offset-2 outline-ring`；祖先 `overflow-hidden`
   会裁掉它，布局要留出位置。
 
+### 卡片的三种形态
+
+三形共用一套表面（`radius-xl` + 当前皮肤的阴影/描边）、`px-4` 左内缩、14pt 半粗标题、药丸徽标：
+
+| 形态 | 结构 | 用在哪 |
+| --- | --- | --- |
+| 带标题的卡片 | `Card title` + `CardHeader`（44pt：图标 + 标题 + 注脚 + 尾部控件）+ `CardBody`（`px-4 pt-3 pb-4`，行距 12pt） | 设置各段、统计各卡、工具箱每件工具、队伍卡、帮助目录 |
+| 单行卡片 | `Card class="p-0"` + 一行 `px-4 py-3`：开关/图标 + 名称 + 摘要 + 箭头 | 主控台队列与窗口设置、主题包行、空编队槽位 |
+| 数据卡片 | `Card class="px-4 py-2.5"`：紧凑标题行（12pt 半粗 + 10pt 注脚 + 尾部幽灵按钮）→ `Figure` 行 → `Rule` → 一行 10pt 注脚 | 主控台顶部卡、统计的总览、主控台右侧栏（设备/画面/日志） |
+
+规则：
+
+- 单行卡片的标题就是行内容，不加标题带；带标题的卡片不加行内标题。
+- 页面不自己写卡片内缩：标题卡用 `CardBody`，单行卡用 `px-4 py-3`，数据卡用 `px-4 py-2.5`。
+- 卡片里不再套卡片：分组用 `Rule` 和间距；页面的警告/成功提示用 `Notice`，不用带底色的卡片。
+- 数据卡的主值只出自 `Figure`，单位与分母在 `unit` 里；`—` 用 `quiet`。
+
 ### 图标着色的已知限制
 
 `nsh` 通过 `Image` 画 SVG，`tintColor` 是**值**而不是 CSS 的 `currentColor`，所以图标不能跟着
@@ -168,6 +188,18 @@ token；不要为此改 `nsh`。
 ### 主控台的结束后操作
 
 运行栏左侧的按钮打开「结束后操作」弹层（`pages/home/HomeCompletion.tsx`）：退出动作可多选（退出游戏 / 退出模拟器 / 退出 AALC）、最终电源动作（无 / 睡眠 / 休眠 / 锁屏 / 关机），底部两个提交——「仅本次生效」与「保存为默认」，分别把 `keepAfterCompletion` 置为 `false` / `true`。弹层在草稿上工作，提交前不改配置；按钮标签是摘要（`退出游戏 · 锁屏（默认）` / `什么也不干（本次）`）。
+
+### 主控台的顶部卡
+
+空闲时是「周期统计（今日/本周）」，运行中换成本轮进度；两者共用一套骨架，切任务时卡片不变高：
+
+- 标题行：14pt 字形 + 12pt 半粗标题 + 尾部「明细」；
+- 数字行：三列，标签与注脚同一行（`经验本 本周 11`、`镜牢次数 今日 2 · 本周 7`），下面是主值（`text-xl`、700、`tabular-nums`），目标写成分母（`/ 2`、`/ 5 层`）；
+- 状态行：药丸（运行中 / 已暂停 / 后端状态）+ 设备名 + `上次镜牢 6:12 · 5 层`。
+
+分状态的内容：空闲 = 今日；`daily_task` = 经验本/纽本/镜牢的 `已完成 / 目标`；`mirror` = 镜牢次数、当前层、本轮用时；`get_reward` / `buy_enkephalin` 没有分步计数，退回今日/本周并在标题后标「今日累计」。
+
+数据来自 `execution.status.currentTaskId`、`execution.stats.currentRun`（targets / completed / startedAt / isMirrorInfinite）与 `execution.mirrorFloor`。`execution.mirrorProgress.total` 是「剩余」不是总数（`script_task_scheme.py` 用递减后的 `mir_times` 发送），分母只取 `currentRun.targets`。镜牢层数只在 `currentTaskId === "mirror"` 时显示，运行结束（状态回到 idle）时清空，不会挂在下一次任务上。
 
 ### 主控台的设置面板
 
@@ -215,6 +247,8 @@ token；不要为此改 `nsh`。
 | 权重滑块 | 拖动/按键即时跟手（滑块自己处理，不加缓动）；范围与滑块位置由 `Slider` 原生放置 |
 | 停用的主题包 | 整行 `opacity-60`，滑块 `disabled`；颜色变化即时 |
 | 任务卡开关与参数 | 同 `Switch` / `Select`：淡洗 + 按下收缩 + 颜色 150ms |
+| 顶部卡切换（任务开始 / 结束 / 暂停） | 标题与数字整块替换，无过渡；数字 5Hz 直接换，不做滚动或插值 |
+| 顶部卡的本轮用时 | 每秒一跳，同样不做动画 |
 | 任务参数选择器 | 弹层由 `Select` 提供（NSH 默认进出），不额外加动画 |
 | 窗口设置/任务卡展开收起 | 点卡片行即切换（没有单独的展开按钮）；高度是 `Collapsible reveal` 的原生弹簧，下面的卡片跟着走；卡片在可视区外时 `reveal({ animated })` 把它滚进来；减少动效时两处都瞬时 |
 | 卡片行 hover / 按下 | hover 淡洗 `accent`、按下 `secondary`，`duration-150`；行尾箭头随状态转 180°（瞬时，不做旋转动画） |
@@ -351,4 +385,18 @@ nsh run nsh-app       # 开窗看
   - `font-semibold` 在 Linux 宿主回退（`.SystemUIFont` 缺 600 字重），粗体实际没生效 → 待定字体族。
   - 7 个皮肤（`nsh`、`bettbox` 为新增）、7 个强调色、DPI 缩放、Windows 实机（窗口按钮 / 托盘 / 全局热键）均未验证。
   - 键盘 Tab 顺序与屏幕阅读器朗读未在本轮验证。
+
+### 本轮（卡片语言统一到全部页面）
+
+- 每个页面只用三种卡片形态中的一种：设置各段 / 统计各卡 / 工具箱工具 / 队伍卡 / 帮助目录用标题卡；
+  主控台队列与主题包行用单行卡；主控台顶部卡、统计总览与右侧栏用数据卡。
+- 卡片圆角 `radius-lg` → `radius-xl`（Bettbox 16 → 20），`EmptyState` 同档；标题卡的正文改由
+  `CardBody` 统一内缩，页面不再各写 `p-3`/`p-4`。
+- 页面级提示不再用带底色的卡片：`Notice` 一行贴在页面上（主题包的困难镜牢提示、各页的成功反馈）。
+- 统计的 KPI 行换成 `Figure` 四列（与主控台顶部卡同一套数字排版）；“最近记录”去掉每行的描边框。
+- 队伍卡把名字提到标题带，`#编号` 作注脚；空槽位改为居中的占位块（`bg-muted/25`）。
+- 校验：`nsh check` / `nsh build` 无告警；`AHAB_BACKEND=mock nsh test nsh-app` 145 项全过；
+  截图由 `nsh test nsh-app/visual.test.tsx --target windows` 写入 `artifacts/nsh/`（浅/深各一页）。
+- 未验证 / 未覆盖：只在设置页看过 7 皮肤（现代 / 玻璃 / 档案 / 边狱 / 血雾 / nsh / Bettbox）的标题带；
+  带图标或尾部控件的标题带只在 Bettbox 与边狱上看过（工具箱、帮助、统计图例）。
 

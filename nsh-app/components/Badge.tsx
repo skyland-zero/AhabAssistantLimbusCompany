@@ -34,7 +34,7 @@ export function Badge(props: {
   };
   return (
     <View
-      class={`flex-row items-center gap-1.5 rounded-(--radius-sm) border border-border px-2 py-0.5 ${TONE[props.tone ?? "neutral"]} ${props.class ?? ""}`}
+      class={`flex-row items-center gap-1.5 rounded-full border border-border px-2 py-0.5 ${TONE[props.tone ?? "neutral"]} ${props.class ?? ""}`}
     >
       <If when={props.dot}>
         <View class={`size-1.5 flex-none rounded-full ${dotColor[props.tone ?? "neutral"]}`} />

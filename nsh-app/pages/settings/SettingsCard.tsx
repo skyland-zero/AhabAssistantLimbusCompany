@@ -1,13 +1,12 @@
-// The card shell every settings section uses: the active skin's header
-// decoration, then a body with one shared inset and one shared row rhythm.
+// The card shell every settings section uses: the active skin's header band,
+// then one body with the app's shared inset and row rhythm.
 import type { JSX } from "nsh";
-import { View } from "nsh";
-import { Card } from "../../components/Card";
+import { Card, CardBody } from "../../components/Card";
 
 export function SettingsCard(props: { title: string; children?: JSX.Element }) {
   return (
-    <Card title={props.title} class="p-0">
-      <View class="flex-col gap-3 px-4 pt-4 pb-4">{props.children}</View>
+    <Card title={props.title}>
+      <CardBody>{props.children}</CardBody>
     </Card>
   );
 }

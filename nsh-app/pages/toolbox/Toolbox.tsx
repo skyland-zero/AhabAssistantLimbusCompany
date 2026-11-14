@@ -3,12 +3,11 @@
 //
 // The actions are requests to the sidecar; until P1 wires the RPC they run the
 // store's stand-ins, which report what a real run would say.
-import type { JSX } from "nsh";
 import { Scroll, Text, View, token } from "nsh";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
-import { Card } from "../../components/Card";
-import { Icon } from "../../components/Icon";
+import { Card, CardBody } from "../../components/Card";
+import { Notice } from "../../components/Notice";
 import { PageRoot } from "../../components/Page";
 import {
   TOOLS,
@@ -28,21 +27,15 @@ export function Toolbox() {
   return (
     <PageRoot>
       <Scroll class="min-h-0 flex-1">
-        <View class="w-full flex-col gap-3">
+        <View class="w-full flex-col gap-3 pb-2">
           <View class="grid w-full grid-cols-2 gap-4">
             <Each of={TOOLS} key={(tool) => tool.id}>
               {(tool, index) => <ToolCard tool={tool()} index={index()} />}
             </Each>
           </View>
-          <Note>
-            <Text class="text-xs text-muted-foreground">工具请求通过 Python sidecar 执行</Text>
-          </Note>
+          <Text class="px-1 text-xs text-muted-foreground">工具请求通过 Python sidecar 执行</Text>
           <If when={toolboxFeedback()}>
-            {(line) => (
-              <Note>
-                <Text class="text-xs text-success">{line()}</Text>
-              </Note>
-            )}
+            {(line) => <Notice tone="success" label={line()} />}
           </If>
         </View>
       </Scroll>
@@ -50,30 +43,22 @@ export function Toolbox() {
   );
 }
 
-function Note(props: { children?: JSX.Element }) {
-  return (
-    <Card class="w-full p-3">
-      <View>{props.children}</View>
-    </Card>
-  );
-}
-
-/** One tool: its icon and state, what it does, and the action that runs it. */
+/** One tool: its icon and state in the header band, what it does, and the
+ *  action that runs it at the foot of the card. */
 function ToolCard(props: { tool: Tool; index: number }) {
   const running = () => isToolRunning(props.tool.id);
   return (
-    <Card class="w-full p-0" arrive={props.index}>
-      <View class="flex-col items-start gap-3 px-4 py-4">
-        <View class="w-full flex-row items-center justify-between">
-          <Icon name={props.tool.icon} size={20} color={token("brand")} />
-          <ToolStatus id={props.tool.id} running={running()} />
-        </View>
-        <View class="flex-col gap-1">
-          <Text class="text-sm text-foreground">{props.tool.title}</Text>
-          <Text class="text-xs text-muted-foreground">{props.tool.description}</Text>
-        </View>
+    <Card
+      title={props.tool.title}
+      icon={props.tool.icon}
+      class="w-full flex-col"
+      arrive={props.index}
+      actions={<ToolStatus id={props.tool.id} running={running()} />}
+    >
+      <CardBody class="flex-1 justify-between">
+        <Text class="text-xs text-muted-foreground">{props.tool.description}</Text>
         <ToolAction id={props.tool.id} running={running()} />
-      </View>
+      </CardBody>
     </Card>
   );
 }
