@@ -6,7 +6,18 @@
 // window settings and the task queue under it, the run bar at the bottom, and a
 // fixed rail for the device, the live preview and the log.
 import type { JSX, ViewRef } from "nsh";
-import { Image, List, Scroll, Text, View, effect, reduceMotion, signal, token } from "nsh";
+import {
+  Image,
+  List,
+  Scroll,
+  Text,
+  View,
+  effect,
+  reduceMotion,
+  signal,
+  token,
+  windowSize,
+} from "nsh";
 import { Collapsible } from "nsh/base";
 import { Badge } from "../../components/Badge";
 import { Button, IconButton, Pressable } from "../../components/Button";
@@ -59,6 +70,24 @@ import { LogDetailsDialog } from "./HomeDetails";
 
 /** The rail's width: the device, preview and log column. */
 const RAIL = "w-56";
+
+/** The console's setting body is the window minus the page insets (10 × 2), the
+ *  page gap (8), the rail (224), the card border (1 × 2) and the expansion's
+ *  insets (16 × 2): `window - 286`. Two columns need a 520pt body, so the split
+ *  starts at 806pt: the default 820pt window shows them, the 800pt minimum
+ *  keeps one column. */
+const TWO_COLUMN_WINDOW = 806;
+
+/** Whether the console's setting panels have room for two columns. */
+function wideSettings(): boolean {
+  return windowSize().width >= TWO_COLUMN_WINDOW;
+}
+
+/** A group splits only when it has something to put in both columns; a lone
+ *  setting keeps the full width, so its control stays at the card's edge. */
+function settingColumns(count: number): 1 | 2 {
+  return wideSettings() && count >= 2 ? 2 : 1;
+}
 
 /** The window sizes the task config accepts (`SetWindowsConfig.set_win_size`). */
 const WINDOW_SIZES = [
@@ -366,7 +395,7 @@ function WindowCard() {
         <Chevron open={open()} />
       </Pressable>
       <Expansion open={open()}>
-        <SettingList>
+        <SettingList columns={wideSettings() ? 2 : 1}>
           <SettingLine label="窗口分辨率">
             <Select<string>
               accessibilityLabel="窗口分辨率"
@@ -467,9 +496,20 @@ function TaskCard(props: { task: Task; index: number }) {
     open.set(next);
     if (next) body?.reveal({ vertical: "nearest", animated: !reduceMotion() });
   };
+  // The whole row takes the pointer's wash, like the window card above it: the
+  // press target is only the settings area, but hovering the switch still says
+  // which row the pointer is on. A row without settings has no action of its
+  // own, so it stays still.
+  const rowClass = () =>
+    "w-full flex-row items-center gap-3 px-4 py-2.5 " +
+    (hasSettings()
+      ? `hover:bg-accent active:bg-secondary ${
+          open() ? "rounded-t-(--radius-xl)" : "rounded-(--radius-xl)"
+        }`
+      : "");
   return (
     <Card class="w-full p-0" arrive={props.index}>
-      <View class="w-full flex-row items-center gap-3 px-4 py-2.5">
+      <View class={rowClass()}>
         <Switch
           checked={task().enabled}
           accessibilityLabel={`启用 ${task().name}`}
@@ -479,7 +519,7 @@ function TaskCard(props: { task: Task; index: number }) {
           <Pressable
             accessibilityLabel={`${task().name}设置（${open() ? "已展开" : "已收起"}）`}
             testID={`task-toggle-${task().id}`}
-            class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 hover:bg-accent active:bg-secondary"
+            class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 active:bg-secondary"
             onPress={toggleOpen}
           >
             <Icon name={task().icon} size={16} color={token("brand")} />
@@ -510,7 +550,7 @@ function TaskCard(props: { task: Task; index: number }) {
                     <Text class="text-xs font-medium text-muted-foreground">{title()}</Text>
                   )}
                 </If>
-                <SettingList>
+                <SettingList columns={settingColumns(group().params.length)}>
                   <Each of={group().params} key={(param) => param.id}>
                     {(param) => <ParamRow task={task().id} param={param()} />}
                   </Each>

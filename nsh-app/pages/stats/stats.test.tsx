@@ -14,6 +14,7 @@ import {
   teamLabel,
   teamRows,
 } from "./aggregate";
+import { mirrorTimeLabel } from "../../home";
 import type { MirrorHistoryEntry } from "../../home";
 
 const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
@@ -118,8 +119,8 @@ test("the phases inside 其他 are listed too", () => {
 test("the chart lists the runs oldest first", () => {
   const rows = chartRows(HISTORY);
   expect(rows.length).toBe(3);
-  expect(rows[0].label).toBe("08-30 22:00");
-  expect(rows[2].label).toBe("08-31 21:00");
+  expect(rows[0].label).toBe(mirrorTimeLabel(HISTORY[2].completedAt));
+  expect(rows[2].label).toBe(mirrorTimeLabel(HISTORY[0].completedAt));
   expect(rows[0].failed).toBe(true);
 });
 
