@@ -1,8 +1,84 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
+from module.config import cfg
 from utils.image_utils import ImageUtils
+
+
+@pytest.fixture
+def window_size(monkeypatch):
+    """Patch the configured window height without touching the real config."""
+
+    def _set(value: int) -> None:
+        monkeypatch.setattr(cfg, "set_win_size", value)
+
+    return _set
+
+
+def test_coarse_limits_follow_the_window_size(window_size) -> None:
+    """The coarse thresholds must not be absolute pixels.
+
+    A template whose 1440p min side is 34 px shrinks to 26 px at 1080p.  With
+    absolute limits it stopped qualifying for the coarse pass, so the shop and
+    skill-replacement loops ran full-resolution matches at lower resolutions
+    and were measurably slower than at 1440p.
+    """
+
+    region = (1440, 2560)
+    template = (34, 168)
+
+    window_size(1440)
+    assert ImageUtils._coarse_scale(region, template) > 1
+
+    window_size(1080)
+    scaled_region = (1080, 1920)
+    scaled_template = (26, 126)
+    assert ImageUtils._coarse_scale(scaled_region, scaled_template) > 1
+
+
+@pytest.mark.parametrize("win_size", [720, 900, 1080, 1440, 1800, 2160])
+@pytest.mark.parametrize("min_side", [22, 26, 28, 34, 49, 65])
+def test_coarse_gate_is_resolution_consistent(window_size, win_size, min_side) -> None:
+    """The same feature must be gated the same way at every window size."""
+
+    height = win_size
+    width = int(round(win_size * 16 / 9))
+    scale = win_size / 1440
+    template_min = int(round(min_side * scale))
+    region = (height, width)
+    template = (template_min, max(template_min, int(round(min_side * scale * 4))))
+
+    window_size(win_size)
+    enabled = ImageUtils._coarse_scale(region, template) > 1
+
+    window_size(1440)
+    reference = ImageUtils._coarse_scale(
+        (1440, 2560),
+        (min_side, max(min_side, min_side * 4)),
+    )
+    assert enabled is (reference > 1)
+
+
+def test_coarse_limits_scale_area_quadratically(window_size) -> None:
+    window_size(1440)
+    min_area_1440, side_1440, scaled_1440 = ImageUtils._coarse_limits()
+    window_size(1080)
+    min_area_1080, side_1080, scaled_1080 = ImageUtils._coarse_limits()
+
+    assert min_area_1440 == ImageUtils._COARSE_MIN_AREA
+    assert min_area_1080 == pytest.approx(ImageUtils._COARSE_MIN_AREA * 0.75**2)
+    assert side_1080 == pytest.approx(side_1440 * 0.75)
+    assert scaled_1080 == pytest.approx(scaled_1440 * 0.75)
+
+
+def test_coarse_parameters_reports_effective_limits(window_size) -> None:
+    window_size(1080)
+    parameters = ImageUtils.coarse_parameters()
+
+    assert parameters["reference_win_size"] == 1440
+    assert parameters["min_template_side"] == pytest.approx(ImageUtils._COARSE_MIN_TEMPLATE_SIDE * 0.75, abs=1e-3)
 
 
 def test_multiple_template_matching_returns_one_peak_per_target() -> None:

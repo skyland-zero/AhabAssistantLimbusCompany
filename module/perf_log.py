@@ -349,9 +349,7 @@ class PerfLog:
             from utils.image_utils import ImageUtils
 
             data["coarse"] = {
-                "min_area": ImageUtils._COARSE_MIN_AREA,
-                "min_template_side": ImageUtils._COARSE_MIN_TEMPLATE_SIDE,
-                "min_scaled_side": ImageUtils._COARSE_MIN_SCALED_SIDE,
+                **ImageUtils.coarse_parameters(),
                 "min_score": ImageUtils._COARSE_MIN_SCORE,
                 "max_scale": ImageUtils._COARSE_MAX_SCALE,
                 "max_candidates": ImageUtils._COARSE_MAX_CANDIDATES,

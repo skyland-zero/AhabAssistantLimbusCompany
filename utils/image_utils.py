@@ -24,6 +24,14 @@ class ImageUtils:
     # conservative: the full-resolution verification below the coarse pass is
     # what decides a hit, so a low coarse floor only costs a small extra pass
     # while it protects low-contrast UI elements from false negatives.
+    #
+    # The three geometry limits are expressed for ``_COARSE_REFERENCE_WIN_SIZE``
+    # and scaled to the active window by ``_coarse_limits``.  They used to be
+    # plain pixel counts, which made the same dialog template qualify for the
+    # coarse pass at 1440p (min side >= 28 px) and fall back to a full-resolution
+    # match at 1080p (min side 22..27 px), so lower resolutions were measurably
+    # slower than higher ones on the shop / skill-replacement / gift loops.
+    _COARSE_REFERENCE_WIN_SIZE = 1440
     _COARSE_MIN_AREA = 350_000
     _COARSE_MIN_TEMPLATE_SIDE = 28
     _COARSE_MIN_SCALED_SIDE = 14
@@ -31,6 +39,40 @@ class ImageUtils:
     _COARSE_MAX_SCALE = 4
     _COARSE_MAX_CANDIDATES = 3
     _COARSE_MAX_MULTI_CANDIDATES = 32
+
+    @classmethod
+    def _coarse_limits(cls) -> tuple[float, float, float]:
+        """Return ``(min_area, min_template_side, min_scaled_side)``.
+
+        The same UI element is ``win_size / 1440`` smaller below the reference
+        window and its search region is smaller by the square of that factor,
+        so the limits have to follow the window instead of staying absolute.
+        """
+
+        try:
+            win_size = float(getattr(cfg, "set_win_size", 0) or 0)
+        except (TypeError, ValueError):
+            win_size = 0.0
+        factor = 1.0
+        if win_size > 0:
+            factor = win_size / float(cls._COARSE_REFERENCE_WIN_SIZE)
+        return (
+            cls._COARSE_MIN_AREA * factor * factor,
+            cls._COARSE_MIN_TEMPLATE_SIDE * factor,
+            cls._COARSE_MIN_SCALED_SIDE * factor,
+        )
+
+    @classmethod
+    def coarse_parameters(cls) -> dict[str, float]:
+        """Expose the effective coarse limits for the performance log."""
+
+        min_area, min_template_side, min_scaled_side = cls._coarse_limits()
+        return {
+            "min_area": round(min_area, 3),
+            "min_template_side": round(min_template_side, 3),
+            "min_scaled_side": round(min_scaled_side, 3),
+            "reference_win_size": cls._COARSE_REFERENCE_WIN_SIZE,
+        }
 
     @staticmethod
     def load_image(image_path, resize=True, return_path=False):
@@ -324,18 +366,22 @@ class ImageUtils:
 
         region_height, region_width = region_shape[:2]
         template_height, template_width = template_shape[:2]
+        min_area, min_template_side, min_scaled_side = cls._coarse_limits()
         area = int(region_height) * int(region_width)
         template_min = min(int(template_height), int(template_width))
-        if area < cls._COARSE_MIN_AREA or template_min < cls._COARSE_MIN_TEMPLATE_SIDE:
+        if area < min_area or template_min < min_template_side:
             return 1
 
+        # The area ladder bounds how far an image of a given pixel count can be
+        # reduced, which does not depend on the window size; the template floor
+        # below is what keeps the downscaled template usable.
         if area < 900_000:
             scale = 2
         elif area < 2_000_000:
             scale = 3
         else:
             scale = 4
-        max_by_template = template_min // cls._COARSE_MIN_SCALED_SIDE
+        max_by_template = int(template_min // max(1.0, min_scaled_side))
         return max(1, min(scale, max_by_template, cls._COARSE_MAX_SCALE))
 
     @classmethod
