@@ -39,19 +39,20 @@ test("the appearance toggle cycles through the three appearances", async () => {
   await app.waitFor("role:button[外观：深色]");
 });
 
-// The page switch is a cross-dissolve: the page that leaves stays mounted (and
-// painted) under the one that arrives until the new one is opaque, so the
-// window's backdrop never shows through a gap. It runs before the language
-// test, which persists an English interface for the tests after it.
-test("a page switch leaves no gap under the new page", async () => {
+// The page switch is a cross-dissolve: the page that leaves fades out while the
+// one that arrives fades in, on the same curve, so at every frame the pair adds
+// up to one full page — the old page's text never reads through the new page's
+// empty areas, and the window's backdrop never shows. It runs before the
+// language test, which persists an English interface for the tests after it.
+test("a page switch fades the old page out of the tree", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.waitFor("日常任务");
   await app.press("role:button[工具箱]");
   await app.waitFor("自动战斗");
-  // Mid-fade both pages are painted: the console's copy is still there, under
-  // the toolbox, so nothing of the window's backdrop can show through.
+  // The leaving page is still mounted while it fades (it is painted, only
+  // fading), so its copy is still in the tree mid-fade.
   expect(app.texts()).toContain("日常任务");
-  // Once the fade is over the page under it is gone.
+  // It is dropped once the fade is over: the new page is the only one left.
   await app.wait(400);
   expect(app.texts()).not.toContain("日常任务");
 });

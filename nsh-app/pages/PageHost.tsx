@@ -2,12 +2,14 @@
 // dialogs and the work it starts; this file only picks one — and dissolves the
 // new one in over the last one.
 //
-// The change is a cross-dissolve, not a slide. The page that leaves keeps its
-// layer, fully painted, under the one that arrives, so no frame of the switch
-// shows the window's backdrop through a gap. Only the arriving page moves (a
-// few points toward the side its destination sits on in the bar) and fades in;
-// the page under it is removed once the new one is opaque.
-import { Easing, View, cleanup, createMotion, effect, signal } from "nsh";
+// The change is a cross-dissolve: the page that leaves fades out while the one
+// that arrives fades in, both on the same curve and duration, so the frame the
+// switch happens on is never a half-transparent page over another one's
+// contents. A layer that only faded in on top of an opaque layer would show the
+// old page's text through the new page's empty areas for the length of the
+// fade. The arriving page also travels a few points toward the side its
+// destination sits on in the bar; the leaving one stays put.
+import { Animated, Easing, View, cleanup, createMotion, effect, signal } from "nsh";
 import type { MotionSpec } from "nsh";
 import { PAGES, currentPage } from "../store";
 import type { PageId } from "../store";
@@ -20,11 +22,12 @@ import { Stats } from "./stats/Stats";
 import { ThemePacks } from "./theme_packs/ThemePacks";
 import { Toolbox } from "./toolbox/Toolbox";
 
-/** The arriving page's fade, in milliseconds. */
+/** The fade, in milliseconds: the arriving page fades in over the leaving one
+ *  for exactly this long, both on the same curve. */
 const ENTER_MS = 200;
 
-/** How long the page under it outlives it: that layer is only there to be
- *  painted under the new one, so it can go as soon as the new one is opaque. */
+/** A margin past the fade before the layer under it is dropped, so the layer is
+ *  never removed on the frame it reaches zero. */
 const HOLD_MS = 60;
 
 /** How far the arriving page travels, in points. A hint of direction, not a
@@ -87,10 +90,10 @@ export function PageHost(props: { page: PageId }) {
     const dir: -1 | 0 | 1 = to === from ? 0 : to > from ? 1 : -1;
     shown = page;
     const next: Layer = { key: seq++, page, dir, top: true };
-    // The page that leaves is demoted, not unmounted: it stays opaque under the
-    // arriving one for the length of the fade. At most two layers are ever up,
-    // and the one below is only there to be painted, so the switch never shows
-    // the backdrop.
+    // The page that leaves is demoted, not unmounted: it fades out under the
+    // arriving one, on the same curve, so the two are complements and the pair
+    // always paints the full page — neither the backdrop nor the old text shows
+    // through. At most two layers are ever up.
     layers.set([{ ...top, top: false }, next]);
     top = next;
     // A newer switch replaces the wait of the older one.
@@ -119,10 +122,19 @@ function PageLayer(props: { page: PageId; dir: -1 | 0 | 1; top: boolean }) {
     props.dir === 0 ? {} : { enter: enterMotion(props.dir) },
   );
 
-  // A page pushed down by a newer one may still be fading in, and nothing is
-  // painted under it any more: it goes solid at once, so the gap never shows.
+  // A layer a newer page pushed down fades out on the same curve its successor
+  // fades in on, so the two always add up to a full page: the old text can never
+  // read through the new page's empty areas, and the backdrop never shows
+  // either. `top` is stable for the life of a layer (a demoted one is dropped
+  // right after), so this runs once.
   effect(() => {
-    if (!props.top) motion.opacity.set(1);
+    if (props.top) return;
+    motion.opacity.set(1);
+    Animated.timing(motion.opacity, {
+      toValue: 0,
+      duration: ENTER_MS,
+      easing: ENTER_EASING,
+    }).start();
   });
 
   return (
