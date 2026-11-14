@@ -993,9 +993,6 @@ class Mirror:
             # 战斗配队的情况
             if auto.find_element("teams/identify_assets.png"):
                 self._clear_entering_node_state()
-                if self.defense_for_solo_state is not None:
-                    self.defense_for_solo_state.observe_team_page(self.floor)
-                    self.shop.set_pseudo_solo_active(self.defense_for_solo_state.live_count == 1)
                 # 如果第一次启动脚本，还没进行编队，就先编队
                 if self.first_battle:
                     if self._form_team_for_battle():
@@ -1007,6 +1004,11 @@ class Mirror:
                 if auto.click_element("teams/none_sinner_assets.png", model="clam"):
                     self.first_battle = True
                     continue
+                # 编队完成后再读红框 "Total Participants X / Y"，
+                # 避免首次编队前读到上一局/半成队的旧人数。
+                if self.defense_for_solo_state is not None:
+                    self.defense_for_solo_state.observe_team_page(self.floor)
+                    self.shop.set_pseudo_solo_active(self.defense_for_solo_state.live_count == 1)
                 # 如果未开启战斗直至全灭，则检测罪人幸存人数是否少于10人
                 if (
                     not cfg.fight_to_last_man

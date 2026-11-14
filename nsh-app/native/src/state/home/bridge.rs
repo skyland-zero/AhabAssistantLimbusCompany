@@ -1,8 +1,12 @@
 //! TSX-facing console store: task selection, execution, devices and logs.
 
 use nsh_core::prelude::*;
+use serde_json::json;
 
-use crate::model::{ConnectionStatus, ExecutionState, FixedTaskId, PreviewStatus};
+use crate::{
+    ipc::contract::method,
+    model::{ConnectionStatus, DeviceInfo, ExecutionState, FixedTaskId, PreviewStatus},
+};
 
 use super::HomeState;
 
@@ -99,6 +103,10 @@ pub struct RunProgressView {
 #[class]
 pub struct HomeStore {
     state: HomeState,
+    /// The last preview revision handed to TSX.  Re-encoding and re-sending
+    /// the same JPEG every poll makes the image view reload it and keeps a
+    /// fresh data URL (and its decoded bitmap) alive each time.
+    last_preview_revision: u64,
 }
 
 #[class]
@@ -107,6 +115,7 @@ impl HomeStore {
     pub fn new() -> Self {
         Self {
             state: HomeState::from_shared(),
+            last_preview_revision: 0,
         }
     }
 
@@ -121,7 +130,10 @@ impl HomeStore {
         let state = HomeState::from_shared();
         match state.error.clone() {
             Some(error) => Err(error),
-            None => Ok(Self { state }),
+            None => Ok(Self {
+                state,
+                last_preview_revision: 0,
+            }),
         }
     }
 
@@ -275,16 +287,51 @@ impl HomeStore {
         .into()
     }
 
-    /// Re-reads the device list.
-    pub fn refresh_devices(&mut self) -> Result<Vec<DeviceView>, String> {
-        self.state.refresh_devices()?;
-        Ok(self.devices())
+    /// Re-reads the device list off the engine thread.
+    ///
+    /// Device discovery starts MuMu/ADB probes and can take seconds; a
+    /// synchronous member would freeze the whole window until the scan
+    /// returns. `blocking` keeps the engine thread free, and the result is
+    /// applied back on the engine thread between awaits.
+    pub async fn refresh_devices(this: Instance<Self>) -> Result<Vec<DeviceView>, String> {
+        let mut rpc = this.with(|store| store.state.rpc.shared());
+        let devices = blocking(move || {
+            rpc.request::<Vec<DeviceInfo>>(method::DEVICE_LIST, None)
+                .map_err(|error| error.message)
+        })
+        .await
+        .map_err(|error| error.to_string())??;
+        this.with_mut(|store| store.state.apply_devices(devices));
+        Ok(this.with(Self::devices))
     }
 
     /// Connects one device by id; an empty id disconnects.
-    pub fn connect_device(&mut self, id: String) -> Result<String, String> {
-        self.state.connect_device(&id)?;
-        Ok(self.device_state())
+    ///
+    /// Opening a cold emulator and loading the automation stack can take
+    /// seconds, so the RPC runs off the engine thread while the card shows
+    /// `connecting`.
+    pub async fn connect_device(this: Instance<Self>, id: String) -> Result<String, String> {
+        if !this.with_mut(|store| store.state.begin_connect(&id)) {
+            return Ok("disconnected".into());
+        }
+        let mut rpc = this.with(|store| store.state.rpc.shared());
+        let connect_id = id.clone();
+        let response = blocking(move || {
+            rpc.request_value(method::DEVICE_CONNECT, Some(json!({ "id": connect_id })))
+                .map_err(|error| error.message)
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+        match response {
+            Ok(value) => {
+                this.with_mut(|store| store.state.apply_connected(&id, value.as_ref()));
+                Ok(this.with(|store| store.device_state()))
+            }
+            Err(message) => {
+                this.with_mut(|store| store.state.fail_connect(&message));
+                Err(message)
+            }
+        }
     }
 
     /// Starts or stops the preview stream.
@@ -295,6 +342,21 @@ impl HomeStore {
     /// Drains pending events and returns the latest preview frame and status.
     pub fn poll_preview(&mut self) -> PreviewView {
         let (status, frame) = self.state.poll_preview();
+        let revision = frame.map(|frame| frame.revision).unwrap_or(0);
+        let width = frame.map(|frame| frame.width).unwrap_or(0);
+        let height = frame.map(|frame| frame.height).unwrap_or(0);
+        let new_frame = frame.is_some() && revision != self.last_preview_revision;
+        if new_frame {
+            self.last_preview_revision = revision;
+        }
+        // A new frame is the only thing that should rebuild the data URL: the
+        // poll also runs while the capture rate is slower than it, and
+        // resending the same JPEG makes the view decode and relink it again.
+        let frame = if new_frame {
+            frame.map(|frame| format!("data:image/jpeg;base64,{}", base64(&frame.jpeg)))
+        } else {
+            None
+        };
         PreviewView {
             status: match status {
                 PreviewStatus::Stopped => "stopped",
@@ -303,10 +365,10 @@ impl HomeStore {
                 PreviewStatus::Error => "error",
             }
             .into(),
-            frame: frame.map(|frame| format!("data:image/jpeg;base64,{}", base64(&frame.jpeg))),
-            revision: frame.map(|frame| frame.revision).unwrap_or(0),
-            width: frame.map(|frame| frame.width).unwrap_or(0),
-            height: frame.map(|frame| frame.height).unwrap_or(0),
+            frame,
+            revision,
+            width,
+            height,
         }
     }
 
@@ -424,6 +486,11 @@ impl HomeStore {
             .map(|device| device.name.clone())
     }
 
+    /// The connected device's id, so the picker can show the chosen row.
+    pub fn selected_device_id(&self) -> Option<String> {
+        self.state.selected_device.clone()
+    }
+
     /// The last state-layer feedback line.
     pub fn feedback(&self) -> Option<String> {
         self.state.feedback.clone()
@@ -492,7 +559,10 @@ mod tests {
     fn store() -> HomeStore {
         let state = HomeState::new(BackendClient::mock());
         assert!(state.error.is_none(), "mock must load: {:?}", state.error);
-        HomeStore { state }
+        HomeStore {
+            state,
+            last_preview_revision: 0,
+        }
     }
 
     /// A queue of two EXP runs, four thread runs and three mirrors.
@@ -510,6 +580,14 @@ mod tests {
     }
 
     #[test]
+    fn the_connected_device_is_reported_by_id_and_name() {
+        let mut store = store();
+        store.state.connect_device("mumu:0").unwrap();
+        assert_eq!(store.selected_device_id().as_deref(), Some("mumu:0"));
+        assert_eq!(store.selected_device_name().as_deref(), Some("MuMu 模拟器"));
+    }
+
+    #[test]
     fn an_idle_console_reports_no_run() {
         let store = store();
         let progress = store.run_progress();
@@ -517,6 +595,37 @@ mod tests {
         assert_eq!(progress.task, None);
         assert_eq!(progress.floor, None);
         assert_eq!(progress.elapsed_ms, None);
+    }
+
+    #[test]
+    fn repeated_preview_polls_only_send_a_new_revision() {
+        let mut store = store();
+        store.state.preview_frame = Some(crate::state::home::PreviewFrame {
+            jpeg: vec![0xff, 0xd8, 0xff, 0xd9],
+            width: 1,
+            height: 1,
+            revision: 1,
+        });
+
+        let first = store.poll_preview();
+        assert!(first.frame.is_some());
+        assert_eq!(first.revision, 1);
+
+        let second = store.poll_preview();
+        assert!(
+            second.frame.is_none(),
+            "the same frame must not be re-encoded on every poll"
+        );
+
+        store.state.preview_frame = Some(crate::state::home::PreviewFrame {
+            jpeg: vec![0xff, 0xd8, 0xff, 0xd9],
+            width: 1,
+            height: 1,
+            revision: 2,
+        });
+        let third = store.poll_preview();
+        assert!(third.frame.is_some());
+        assert_eq!(third.revision, 2);
     }
 
     #[test]

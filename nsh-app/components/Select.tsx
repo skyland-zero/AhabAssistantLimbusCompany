@@ -39,24 +39,40 @@ const TRIGGER_CLASS =
   "hover:bg-accent active:bg-secondary " +
   "focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring";
 
+/** A trigger for a field group that draws the surface itself: the select owns
+ *  no frame, so the group and its trailing actions read as one control. */
+const BARE_CLASS =
+  "min-h-9 w-full flex-row items-center justify-between gap-2 rounded-(--radius) px-2.5 " +
+  "transition-colors duration-150 hover:bg-accent active:bg-secondary " +
+  "focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring";
+
 export function Select<T extends string>(props: {
   items: { value: T; label: string }[];
-  value: T;
+  value: T | null;
   onChange: (value: T) => void;
   /** What screen readers call it: what the choice is about. */
   accessibilityLabel?: string;
+  /** Shown, muted, while no item is chosen. */
+  placeholder?: string;
   disabled?: boolean;
   /** A trigger without a frame, for a select that sits inside the app's own
    *  chip (a task card's parameter). */
   compact?: boolean;
+  /** A trigger without a frame or background, for a select inside a field
+   *  group whose surface already paints the block (the console's device
+   *  picker). */
+  bare?: boolean;
   class?: string;
 }) {
   const label = () =>
     props.items.find((item) => item.value === props.value)?.label ?? "";
+  const triggerClass = () =>
+    props.bare ? BARE_CLASS : props.compact ? COMPACT_CLASS : TRIGGER_CLASS;
   return (
     <BaseSelect
       items={props.items.map((item) => ({ value: item.value, title: item.label }))}
       value={props.value}
+      placeholder={props.placeholder}
       onChange={(event) => {
         const chosen = props.items.find((item) => item.value === event.value);
         if (chosen) props.onChange(chosen.value);
@@ -79,10 +95,14 @@ export function Select<T extends string>(props: {
         </View>
       )}
       trigger={
-        <View
-          class={`${props.compact ? COMPACT_CLASS : TRIGGER_CLASS} ${props.class ?? ""}`}
-        >
-          <Text class="text-xs text-foreground">{label()}</Text>
+        <View class={`${triggerClass()} ${props.class ?? ""}`}>
+          <Text
+            class={`min-w-0 flex-1 truncate text-xs ${
+              label() ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            {label() || props.placeholder || ""}
+          </Text>
           <Icon name="chevronDown" size={12} />
         </View>
       }

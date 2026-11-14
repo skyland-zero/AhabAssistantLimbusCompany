@@ -27,6 +27,10 @@ DEFENSE_FOR_SOLO_TURN_LIMIT = 5
 # Keep the original gear match threshold; lower scores are too prone to
 # matching transition-frame artifacts instead of the actual defense gear.
 DEFENSE_GEAR_THRESHOLD = 0.75
+# A partially rendered command row can show the auto-P card before the left
+# defense gear.  Wait briefly for the complete row instead of submitting a
+# doomed defense and pressing P immediately.
+DEFENSE_ENTRY_WAIT_SECONDS = 3.0
 # Once the pause marker is visible, polling more often than this is enough to
 # catch the command row returning without waiting the old 2 * adaptive delay.
 BATTLE_ANIMATION_POLL_MAX = 1.5
@@ -74,6 +78,7 @@ class Battle:
         self.fail_times = 0
         self.cur_turn = 1
         self.is_tool = is_tool
+        self._defense_entry_wait_started: float | None = None
         """是否由小工具初始化"""
 
     @staticmethod
@@ -311,6 +316,46 @@ class Battle:
             f"defense_requested={defense_requested}"
         )
 
+        if (
+            defense_requested
+            and is_dynamic_pseudo_solo
+            and bool(getattr(defense_for_solo_state, "team_page_authoritative", False))
+        ):
+            # ``auto_p_card`` can be visible while the skill row is still
+            # entering the screen.  Submitting defense from that frame makes
+            # ``_defense_this_round`` fail and the caller presses P, wasting
+            # the turn; wait until both gear anchors are actually present.
+            defense_left = auto.find_element(
+                "battle/gear_left.png",
+                threshold=DEFENSE_GEAR_THRESHOLD,
+                my_crop=crops["gear_left"],
+            )
+            defense_right = auto.find_element(
+                "battle/gear_right.png",
+                threshold=DEFENSE_GEAR_THRESHOLD,
+                my_crop=crops["gear_right"],
+            )
+            if not (defense_left and defense_right):
+                now = time.monotonic()
+                if self._defense_entry_wait_started is None:
+                    self._defense_entry_wait_started = now
+                waited = now - self._defense_entry_wait_started
+                if waited < DEFENSE_ENTRY_WAIT_SECONDS:
+                    log.debug(
+                        "小指良单通守备操作入口尚未完整，等待下一帧: "
+                        f"left={defense_left} right={defense_right} "
+                        f"operation_entry={pseudo_solo_operation_entry} "
+                        f"waited={waited:.1f}s"
+                    )
+                    return False
+                log.warning(
+                    "小指良单通守备操作入口等待超时，本回合改为P: "
+                    f"waited={waited:.1f}s left={defense_left} right={defense_right}"
+                )
+                self._defense_entry_wait_started = None
+            else:
+                self._defense_entry_wait_started = None
+
         if defense_requested:
             if pseudo_solo_should_defend:
                 msg = "小指良单通检测到多人存活，执行全员守备"
@@ -400,6 +445,7 @@ class Battle:
             # restarted during an existing battle also gets exactly one first
             # observation when its command row becomes available.
             begin_battle_observation()
+        self._defense_entry_wait_started = None
 
         first_turn = True
         defense_for_solo_used_this_turn = False
@@ -478,6 +524,7 @@ class Battle:
                 chance = self.INIT_CHANCE
                 first_turn = False
                 defense_for_solo_used_this_turn = False
+                self._defense_entry_wait_started = None
                 continue
 
             # 战斗失败重启

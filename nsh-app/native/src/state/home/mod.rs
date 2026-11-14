@@ -441,34 +441,67 @@ impl HomeState {
     }
 
     pub fn refresh_devices(&mut self) -> Result<(), String> {
-        self.devices = self
+        let devices = self
             .rpc
             .request(method::DEVICE_LIST, None)
             .map_err(|error| error.message)?;
-        self.feedback = Some("已刷新设备列表".to_owned());
+        self.apply_devices(devices);
         Ok(())
     }
 
+    /// Replaces the cached device list after a scan performed off the engine
+    /// thread.
+    pub fn apply_devices(&mut self, devices: Vec<DeviceInfo>) {
+        self.devices = devices;
+        self.feedback = Some("已刷新设备列表".to_owned());
+    }
+
     pub fn connect_device(&mut self, device_id: &str) -> Result<(), String> {
+        if !self.begin_connect(device_id) {
+            return Ok(());
+        }
+        let response = match self
+            .rpc
+            .request_value(method::DEVICE_CONNECT, Some(json!({ "id": device_id })))
+        {
+            Ok(response) => response,
+            Err(error) => {
+                self.fail_connect(&error.message);
+                return Err(error.message);
+            }
+        };
+        self.apply_connected(device_id, response.as_ref());
+        Ok(())
+    }
+
+    /// Marks the selection as connecting. Returns whether a connect RPC is
+    /// needed; an empty id only clears the selection.
+    pub fn begin_connect(&mut self, device_id: &str) -> bool {
         if device_id.is_empty() {
             self.selected_device = None;
             self.device_status = ConnectionStatus::Disconnected;
-            return Ok(());
+            return false;
         }
         self.device_status = ConnectionStatus::Connecting;
-        let response = self
-            .rpc
-            .request_value(method::DEVICE_CONNECT, Some(json!({ "id": device_id })))
-            .map_err(|error| error.message)?;
+        true
+    }
+
+    /// Applies a successful `device.connect` response after the RPC completes
+    /// off the engine thread.
+    pub fn apply_connected(&mut self, device_id: &str, response: Option<&Value>) {
         self.selected_device = response
-            .as_ref()
             .and_then(|value| value.get("deviceId"))
             .and_then(Value::as_str)
             .map(str::to_owned)
             .or_else(|| Some(device_id.to_owned()));
         self.device_status = ConnectionStatus::Connected;
         self.feedback = Some("设备已连接".to_owned());
-        Ok(())
+    }
+
+    /// Clears the transient connecting state when `device.connect` fails.
+    pub fn fail_connect(&mut self, message: &str) {
+        self.device_status = ConnectionStatus::Disconnected;
+        self.feedback = Some(message.to_owned());
     }
 
     /// Ask the sidecar to start or stop the preview stream.

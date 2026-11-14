@@ -57,6 +57,15 @@ test("starting the queue says what it did", async () => {
   expect(app.texts()).toContain("F10");
 });
 
+test("the run bar turns Link Start into stop while the queue runs", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:link-start");
+  await app.waitFor("Mock 任务已开始");
+  await app.waitFor("停止");
+  await app.press("id:link-start");
+  await app.waitFor("Link Start!");
+});
+
 test("the statistics card opens the statistics page", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("id:stats-details");
@@ -117,7 +126,22 @@ test("the after-run actions save from the run bar", async () => {
 
 test("the device picker lists a device once refreshed", async () => {
   const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[刷新]");
+  await app.press("label:刷新设备列表");
+  // The refresh runs off the engine thread; wait for it to land before
+  // opening the picker, which snapshots its options when it opens.
+  await app.waitFor("已刷新设备列表");
   await app.press("label:选择设备");
   await app.waitFor("MuMu 模拟器");
+});
+
+test("choosing a device connects off the engine thread", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("label:刷新设备列表");
+  await app.waitFor("已刷新设备列表");
+  await app.press("label:选择设备");
+  await app.press("role:option[MuMu 模拟器]");
+  await app.waitFor("设备已连接");
+  await app.waitFor("已连接");
+  // The picker states the chosen device instead of falling back to its hint.
+  expect(app.texts()).toContain("MuMu 模拟器");
 });

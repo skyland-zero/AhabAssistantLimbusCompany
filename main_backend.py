@@ -45,6 +45,13 @@ async def _run(args: argparse.Namespace) -> None:
     from module.logger.my_log import Logger
 
     Logger(headless=True)
+    # Preload OpenCV/NumPy on the main thread.  NumPy's OpenBLAS DLL can
+    # deadlock inside the Windows loader when its first import happens on an
+    # RPC worker thread while the config, hotkey and stdin threads are already
+    # running (device.connect used to freeze there).  This costs a fraction of
+    # a second at startup and keeps every later import cheap.
+    import cv2  # noqa: F401
+
     from module.backend_application import BackendApplication, recover_pending_cleanups
     from module.device_manager import get_device_manager
     from module.rpc_dispatcher import RpcDispatcher

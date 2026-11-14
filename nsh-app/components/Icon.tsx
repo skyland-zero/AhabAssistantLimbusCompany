@@ -16,6 +16,7 @@ import chartColumn from "../assets/icons/chart-column.svg";
 import circleQuestionMark from "../assets/icons/circle-question-mark.svg";
 import crosshair from "../assets/icons/crosshair.svg";
 import eraser from "../assets/icons/eraser.svg";
+import fileText from "../assets/icons/file-text.svg";
 import house from "../assets/icons/house.svg";
 import listChecks from "../assets/icons/list-checks.svg";
 import loaderCircle from "../assets/icons/loader-circle.svg";
@@ -56,6 +57,7 @@ const ICONS = {
   crosshair,
   chevronDown,
   eraser,
+  fileText,
   close: x,
   help: circleQuestionMark,
   home: house,

@@ -13,6 +13,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -319,6 +320,9 @@ class DeviceManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._operation_condition = threading.Condition(self._lock)
+        # Discovery is cheap but starts subprocesses and shells out to ADB.
+        # Serialize it so concurrent refresh requests cannot stack up scans.
+        self._discovery_lock = threading.Lock()
         self._device_operations = 0
         self._status_lock = threading.RLock()
         # Serializes listener invocation without ever being nested inside
@@ -603,6 +607,19 @@ class DeviceManager:
 
     def list_devices(self) -> list[dict[str, Any]]:
         """Return currently discoverable targets without opening them."""
+        # A refresh is user-triggered and may arrive several times while an
+        # earlier scan is still running (the UI also scans when it hydrates).
+        # One scan at a time keeps MuMu/ADB probing predictable and prevents
+        # a burst of concurrent subprocesses.
+        with self._discovery_lock:
+            started = time.monotonic()
+            log.debug("开始扫描设备列表")
+            try:
+                return self._scan_devices()
+            finally:
+                log.debug("设备列表扫描结束（%.2fs）", time.monotonic() - started)
+
+    def _scan_devices(self) -> list[dict[str, Any]]:
         targets: dict[str, DeviceTarget] = {}
 
         # 1. 优先扫描 MuMu 模拟器
@@ -1658,22 +1675,43 @@ class DeviceManager:
         """Query MuMu player metadata without constructing a controller."""
         no_window_flag = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         try:
-            result = subprocess.run(
-                [manager, "info", "-v", vmindex],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=5,
-                creationflags=no_window_flag,
-            )
+            # Redirect to temporary files instead of pipes.  On Windows,
+            # ``subprocess.run(capture_output=True, timeout=...)`` starts
+            # reader threads and, when a child keeps an inherited pipe open,
+            # the timeout cleanup can wait on those threads indefinitely.
+            # Files have no reader threads, so the 5s bound is reliable even
+            # if MuMuManager leaves a helper process behind.
+            with (
+                tempfile.TemporaryFile() as stdout_file,
+                tempfile.TemporaryFile() as stderr_file,
+            ):
+                subprocess.run(
+                    [manager, "info", "-v", vmindex],
+                    # Do not let MuMuManager inherit the sidecar's control
+                    # stdin pipe; a pending read on it can stall the child.
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    timeout=5,
+                    creationflags=no_window_flag,
+                )
+                stdout_file.seek(0)
+                output = stdout_file.read().decode("utf-8", "replace").strip()
+                stderr_file.seek(0)
+                error_output = stderr_file.read().decode("utf-8", "replace").strip()
         except (OSError, subprocess.SubprocessError) as error:
             log.debug("查询 MuMu 实例信息失败（%s）：%s", vmindex, error)
             return None
 
-        output = result.stdout.strip()
         if not output:
-            log.debug("查询 MuMu 实例信息返回空结果（%s）", vmindex)
+            if error_output:
+                log.debug(
+                    "查询 MuMu 实例信息返回空结果（%s）：%s",
+                    vmindex,
+                    error_output,
+                )
+            else:
+                log.debug("查询 MuMu 实例信息返回空结果（%s）", vmindex)
             return None
 
         try:
@@ -1794,7 +1832,9 @@ class DeviceManager:
         conn_label = "Wi-Fi" if is_network else "USB"
 
         try:
-            props_raw = device.shell("getprop")
+            # adbutils defaults to a 600s shell timeout.  A half-dead USB or
+            # network ADB target must not block the whole device refresh.
+            props_raw = device.shell("getprop", timeout=3)
 
             def get_prop(key: str) -> str:
                 match = re.search(rf"\[{key}\]:\s*\[(.*?)\]", props_raw)

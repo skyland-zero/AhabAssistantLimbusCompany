@@ -73,9 +73,10 @@ def test_mumu_discovery_uses_existing_instances_from_manager(monkeypatch) -> Non
     }
     calls: list[list[str]] = []
 
-    def run(command, **_kwargs):
+    def run(command, **kwargs):
         calls.append(command)
-        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+        kwargs["stdout"].write(json.dumps(payload).encode("utf-8"))
+        return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
     monkeypatch.setattr(device_manager_module.subprocess, "run", run)
@@ -110,12 +111,12 @@ def test_mumu_discovery_supports_multiple_and_stopped_instances(monkeypatch) -> 
         },
     }
 
+    def run(_command, **kwargs):
+        kwargs["stdout"].write(json.dumps(payload).encode("utf-8"))
+        return SimpleNamespace(returncode=0)
+
     monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
-    monkeypatch.setattr(
-        device_manager_module.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr=""),
-    )
+    monkeypatch.setattr(device_manager_module.subprocess, "run", run)
 
     targets = manager._discover_mumu_targets()
 
@@ -130,13 +131,10 @@ def test_mumu_discovery_does_not_fabricate_configured_instance_on_manager_error(
     manager = DeviceManager()
     calls: list[list[str]] = []
 
-    def run(command, **_kwargs):
+    def run(command, **kwargs):
         calls.append(command)
-        return SimpleNamespace(
-            returncode=1,
-            stdout=json.dumps({"errcode": -200, "errmsg": "player index not found"}),
-            stderr="",
-        )
+        kwargs["stdout"].write(json.dumps({"errcode": -200, "errmsg": "player index not found"}).encode("utf-8"))
+        return SimpleNamespace(returncode=1)
 
     monkeypatch.setattr(manager, "_configured_mumu_instance", lambda: 0)
     monkeypatch.setattr(DeviceManager, "_find_mumu_manager", staticmethod(lambda: "MuMuManager.exe"))
@@ -147,6 +145,27 @@ def test_mumu_discovery_does_not_fabricate_configured_instance_on_manager_error(
         ["MuMuManager.exe", "info", "-v", "all"],
         ["MuMuManager.exe", "info", "-v", "0"],
     ]
+
+
+def test_mumu_query_captures_through_files_instead_of_pipe_threads(monkeypatch) -> None:
+    """A child that leaves a helper holding the pipe must not outlive the bound."""
+
+    captured: dict[str, Any] = {}
+
+    def run(_command, **kwargs):
+        captured.update(kwargs)
+        kwargs["stdout"].write(json.dumps({"index": "0", "adb_port": 16384}).encode("utf-8"))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(device_manager_module.subprocess, "run", run)
+
+    info = DeviceManager._query_mumu_info("MuMuManager.exe", "all")
+
+    assert info == {"index": "0", "adb_port": 16384}
+    assert "capture_output" not in captured
+    assert captured["stdin"] is device_manager_module.subprocess.DEVNULL
+    assert hasattr(captured["stdout"], "fileno")
+    assert hasattr(captured["stderr"], "fileno")
 
 
 def test_connection_methods_identify_mumu_ipc_and_adb_paths() -> None:
@@ -658,7 +677,7 @@ def test_inspect_adb_device_distinguishes_emulators_and_phones() -> None:
             self.state = state
             self._getprop = getprop_output
 
-        def shell(self, cmd: str) -> str:
+        def shell(self, cmd: str, **_kwargs: Any) -> str:
             if cmd == "getprop":
                 return self._getprop
             return ""

@@ -48,7 +48,7 @@ class EventHandling:
             frame = np.array(auto.screenshot)
             bbox_image = ImageUtils.load_image("event/all_sinner_bbox.png")
             if bbox_image is not None:
-                black_out_red(frame, ImageUtils.get_bbox(bbox_image), reference_height=bbox_image.height)
+                black_out_red(frame, ImageUtils.get_bbox(bbox_image), reference_height=bbox_image.shape[0])
             auto.screenshot = Image.fromarray(frame).convert("L")
             if self._click_first_hit(self.SUCCESS_LEVEL_ASSETS, now):
                 return True

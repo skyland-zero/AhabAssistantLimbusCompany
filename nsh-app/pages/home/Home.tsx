@@ -6,10 +6,10 @@
 // window settings and the task queue under it, the run bar at the bottom, and a
 // fixed rail for the device, the live preview and the log.
 import type { JSX, ViewRef } from "nsh";
-import { Image, Scroll, Text, View, effect, reduceMotion, signal, token } from "nsh";
+import { Image, List, Scroll, Text, View, effect, reduceMotion, signal, token } from "nsh";
 import { Collapsible } from "nsh/base";
 import { Badge } from "../../components/Badge";
-import { Button, Pressable } from "../../components/Button";
+import { Button, IconButton, Pressable } from "../../components/Button";
 import { Card, Rule } from "../../components/Card";
 import { SettingLine, SettingList } from "../../components/Field";
 import { Figure } from "../../components/Figure";
@@ -31,6 +31,7 @@ import {
   consoleStats,
   consoleTasks,
   currentPreviewFrame,
+  currentPreviewPlaceholder,
   currentPreviewStatus,
   currentWindow,
   deviceList,
@@ -43,13 +44,15 @@ import {
   refreshDevices,
   selectAllTasks,
   selectDevice,
+  selectedDeviceId,
   selectedDeviceName,
   setWindowSetting,
   setTaskParam,
   startQueue,
+  stopQueue,
   toggleTask,
 } from "../../home";
-import type { Task, TaskParam } from "../../home";
+import type { LogEntry, Task, TaskParam } from "../../home";
 import { navigate } from "../../store";
 import { AfterCompletionDialog } from "./HomeCompletion";
 import { LogDetailsDialog } from "./HomeDetails";
@@ -585,6 +588,7 @@ function taskSummary(task: Task): string {
 
 /** The bar under the queue: select all, clear, the completion action and start. */
 function RunBar() {
+  const live = () => consoleProgress().live;
   return (
     <Card class="w-full px-4 py-2.5">
       <View class="w-full flex-row items-center gap-2">
@@ -617,11 +621,14 @@ function RunBar() {
           </Text>
         </Button>
         <Button
-          label="Link Start!"
-          icon="play"
+          label={live() ? "停止" : "Link Start!"}
+          icon={live() ? "stop" : "play"}
+          variant={live() ? "outline" : "default"}
+          iconColor={live() ? token("danger") : token("brand-foreground")}
           size="lg"
           testID="link-start"
-          onPress={() => startQueue()}
+          class={live() ? "text-danger" : undefined}
+          onPress={() => (live() ? stopQueue() : startQueue())}
         >
           <Text class="rounded-(--radius-sm) bg-scrim/40 px-1.5 py-0.5 text-xs opacity-80">F10</Text>
         </Button>
@@ -630,34 +637,43 @@ function RunBar() {
   );
 }
 
-/** The device the console drives. */
+/** The device the console drives: one field holds the picker and its refresh. */
 function DeviceCard() {
-  const options = () => [
-    { value: "", label: "选择游戏窗口 / 模拟器" },
-    ...deviceList().map((entry) => ({ value: entry.id, label: entry.name })),
-  ];
+  const options = () =>
+    deviceList().map((entry) => ({ value: entry.id, label: entry.name }));
   return (
-    // The connected device is the console's current object, so its card takes
-    // the skin's selected treatment.
-    <Card class="w-full px-4 py-3" selected={deviceState() === "connected"}>
+    <Card class="w-full px-4 py-3">
       <View class="flex-col gap-2">
         <View class="w-full flex-row items-center justify-between gap-2">
           <View class="flex-row items-center gap-1.5">
             <Icon name="monitor" size={14} />
             <Text class="text-xs font-semibold text-foreground">设备连接</Text>
           </View>
-          <Badge label={deviceLabel()} tone={deviceState() === "connected" ? "success" : "neutral"} />
+          <Badge
+            label={deviceLabel()}
+            tone={deviceState() === "connected" ? "success" : "neutral"}
+            dot
+          />
         </View>
-        <View class="w-full flex-row items-center gap-1">
+        <View class="w-full flex-row items-center gap-2 rounded-(--radius) bg-muted pe-1">
           <View class="min-w-0 flex-1">
             <Select<string>
+              bare
               accessibilityLabel="选择设备"
+              placeholder="选择窗口 / 模拟器"
               items={options()}
-              value=""
-              onChange={(next) => selectDevice(next)}
+              value={selectedDeviceId()}
+              onChange={(next) => void selectDevice(next)}
             />
           </View>
-          <Button label="刷新" icon="refresh" variant="ghost" size="xs" onPress={() => refreshDevices()} />
+          <View class="h-4.5 w-px flex-none bg-decor-line" />
+          <IconButton
+            name="refresh"
+            label="刷新设备列表"
+            size="md"
+            class="size-7"
+            onPress={() => void refreshDevices()}
+          />
         </View>
       </View>
     </Card>
@@ -681,7 +697,10 @@ function previewLabel(status: string): string {
 
 /** The live preview: frames arrive from the sidecar once a device is connected. */
 function PreviewCard() {
-  const frame = () => currentPreviewFrame();
+  // A boolean condition keeps the Image element in place across frames; only
+  // its src changes. Reading the frame string in `when` would rebuild the
+  // branch (and blank the card) for every new JPEG.
+  const hasFrame = () => currentPreviewFrame() !== null;
   return (
     <Card class={`${RAIL} w-full px-4 py-3`}>
       <View class="flex-col gap-2">
@@ -692,9 +711,12 @@ function PreviewCard() {
           </View>
           <Badge label={previewLabel(currentPreviewStatus())} />
         </View>
-        <View class="h-40 w-full items-center justify-center overflow-hidden rounded-(--radius) bg-muted">
+        <View
+          class="w-full items-center justify-center overflow-hidden rounded-(--radius) bg-muted"
+          style={{ aspectRatio: "16 / 9" }}
+        >
           <If
-            when={frame()}
+            when={hasFrame()}
             else={
               <View class="items-center gap-2">
                 <Icon name="monitorPlay" size={28} color={token("muted-foreground")} />
@@ -702,10 +724,11 @@ function PreviewCard() {
               </View>
             }
           >
-            {(src) => (
+            {() => (
               <Image
-                src={src()}
-                style={{ width: 200, height: 160 }}
+                src={currentPreviewFrame() ?? ""}
+                placeholder={currentPreviewPlaceholder() ?? undefined}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
                 fadeDuration={0}
               />
             )}
@@ -728,18 +751,19 @@ function LogCard() {
             <Badge label={String(logLines())} />
           </View>
           <View class="flex-row items-center gap-1">
-            <Button
-              label="明细"
-              variant="ghost"
-              size="xs"
+            <IconButton
+              name="fileText"
+              label="运行日志明细"
+              size="md"
+              class="size-7"
               testID="log-details"
               onPress={() => openLogDetails()}
             />
-            <Button
-              label="清空"
-              icon="eraser"
-              variant="ghost"
-              size="xs"
+            <IconButton
+              name="eraser"
+              label="清空日志"
+              size="md"
+              class="size-7"
               testID="clear-log"
               onPress={() => clearLog()}
             />
@@ -750,23 +774,21 @@ function LogCard() {
         <If when={consoleFeedback()}>
           {(line) => <Text class="text-xs text-muted-foreground">{line()}</Text>}
         </If>
-        <Scroll class="min-h-0 flex-1">
-          <View class="flex-col gap-1">
-            <If when={logLines() === 0}>
-              <Text class="text-xs text-muted-foreground">暂无日志</Text>
-            </If>
-            <Each of={logEntries()} key={(entry) => `${entry.ts}-${entry.message}`}>
-              {(entry) => (
-                <View class="w-full flex-row items-start gap-1">
-                  <Badge label={entry().level} />
-                  <Text class="min-w-0 flex-1 text-xs text-muted-foreground">
-                    {entry().message}
-                  </Text>
-                </View>
-              )}
-            </Each>
-          </View>
-        </Scroll>
+        {/* A log is a growing history: the list keeps itself at the end while
+            the reader is there, and leaves the position alone once scrolled up. */}
+        <List<LogEntry>
+          each={logEntries()}
+          keyExtractor={(entry) => `${entry.ts}-${entry.message}`}
+          estimatedItemSize={18}
+          initialScrollAtEnd
+          maintainVisibleContentPosition={{ autoscrollToBottomThreshold: 0 }}
+          contentClass="flex-col gap-1"
+          class="min-h-0 flex-1"
+          testID="log-lines"
+          empty={<Text class="text-xs text-muted-foreground">暂无日志</Text>}
+        >
+          {(entry) => <Text class="w-full text-xs text-muted-foreground">{entry().message}</Text>}
+        </List>
       </View>
     </Card>
   );

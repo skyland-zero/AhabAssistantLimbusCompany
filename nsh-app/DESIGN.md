@@ -130,7 +130,7 @@
 | `Segmented.tsx` | `Segmented` / `SwatchRow` | `Tabs` 的简短形式（`secondary` 胶囊）；`SwatchRow` 是色块行 |
 | `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
-| `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾 |
+| `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾；`value=null` + `placeholder` 显示未选提示，`bare` 去掉自带边框/底色，供字段组使用 |
 | `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
 | `Card.tsx` | `Card` / `CardHeader` / `CardBody` / `Rule` | 卡片表面、44pt 标题带（图标 + 标题 + 注脚 + 尾部控件）、正文内缩；`Card` 的 `arrive` 让卡片在页面进入时随波纹到位（动效绑在卡片自己的 View，网格的 `items-stretch` 不变） |
 | `Figure.tsx` | `Figure` | 数据卡里的一项读数：标签与注脚同一行，主值 `text-xl` + 单位/分母 |
@@ -218,6 +218,12 @@ token；不要为此改 `nsh`。
 
 设置行都走 `Field.tsx` 的 `SettingList` / `SettingLine`，控件固定尾列（`w-36` 的下拉、开关）。
 
+### 主控台的设备连接
+
+右栏第一张卡：标题行是字形 + 「设备连接」+ 状态徽标（带状态点，连接后不会给卡片加品牌色底）。下方是**一整块** `bg-muted` 字段组，内部由无框 `Select`（`bare`，未选时显示灰色占位「选择窗口 / 模拟器」）、`decor-line` 竖分隔线和纯图标刷新按钮组成；选中的设备 id 由 Rust `HomeStore.selected_device_id()` 持有，TSX 只镜像，连接成功后触发器的文字直接变成设备名。
+
+运行日志卡：头部两个纯图标按钮（`fileText` 明细、`eraser` 清空），行内不再显示日志级别，只保留正文；`List` 的 `initialScrollAtEnd` + `maintainVisibleContentPosition` 让日志在读者位于底部时跟随新行，上滚阅读时不强制回底。
+
 ## 5. 动效
 
 ### Token（沿用 Tailwind 档位，不另建常量）
@@ -257,8 +263,10 @@ token；不要为此改 `nsh`。
 | 下拉列表行 | 指针/键盘高亮 `focus:bg-accent`（瞬时，`Select` 自带），触发器 hover 淡洗 `duration-150` |
 | 结束后操作弹层 | `Dialog` 自带的进出动画（NSH 默认），不额外加；草稿摘要行随开关即时替换 |
 | 队列全选/清空 | 开关状态瞬时切换；反馈一行出现在队列下方，无入场动画 |
-| 设备刷新 | 列表替换为瞬时；连接状态徽标换色 150ms |
-| 运行日志清空 | 计数与空状态瞬时 |
+| 设备刷新 | 图标按钮同 Button：hover 淡洗、按下收缩；列表替换为瞬时；连接状态徽标换色 150ms |
+| 设备选择 | 弹层由 `Select` 提供；连接成功后触发器文字与徽标一起更新，无额外过渡 |
+| 运行日志跟随 | 停在底部时新行由 `List` 原生跟随；上滚后保持阅读位置，不强制回底；无额外动画 |
+| 日志明细 / 清空 | 纯图标按钮同 Button：hover 淡洗、按下收缩；计数与空状态瞬时 |
 | 减少动效 | 以上全部瞬时；颜色变化保留 |
 
 ### 动效清单（帮助 / 队伍）

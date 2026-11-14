@@ -26,9 +26,19 @@ pub use crate::runtime::Runtime;
 /// The contract's payloads, as `crate::model` (crate `aalc-model`).
 pub use aalc_model as model;
 
+/// The process image cache's limit.
+///
+/// The preview replaces its image on every captured frame. NSH keys decoded
+/// images by source, so past frames stay in the default (up to 256 MiB) LRU
+/// cache long after they left the screen. The console needs only the current
+/// frame (plus the previous one as its placeholder); 16 MiB keeps the rest of
+/// the UI's images cached while a long preview session stays bounded.
+const IMAGE_CACHE_LIMIT: usize = 16 << 20;
+
 /// The crate's UI set: what `App.tsx` imports from `aalc/native`.
 #[native_module("aalc/native")]
 fn native(registry: &mut Registry) {
+    nsh_core::image::budget().set_limit(IMAGE_CACHE_LIMIT);
     registry
         .module::<Runtime>()
         .module::<crate::ipc::bridge::Backend>()

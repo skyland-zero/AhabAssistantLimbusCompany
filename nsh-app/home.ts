@@ -329,6 +329,7 @@ const DEFAULT_TASKS: Task[] = [
 const backend = signal<BackendState>(Backend.mode() === "mock" ? "mock" : "starting");
 const devices = signal<{ id: string; name: string }[]>([]);
 const device = signal<DeviceState>("disconnected");
+const selectedDevice = signal<string | null>(null);
 const window_ = signal<WindowSettings>({
   size: "1080",
   resolution: "1080P",
@@ -344,6 +345,9 @@ const logs = signal<LogEntry[]>([]);
 const feedback = signal<string | null>(null);
 const tasks = signal<Task[]>(DEFAULT_TASKS.map((task) => ({ ...task })));
 const previewFrame = signal<string | null>(null);
+// The last frame stays underneath the next one while the new image decodes,
+// so a frame swap does not blank the card.
+const previewPreviousFrame = signal<string | null>(null);
 const previewStatus = signal("stopped");
 const dailyStats = signal<DailyStats | null>(null);
 const statsDetailsError = signal<string | null>(null);
@@ -394,13 +398,22 @@ function hydrateFrom(created: HomeStore): void {
   store = created;
   hydrateSelection(created.selection() as Record<string, Record<string, unknown>>);
   devices.set(created.devices().map((entry) => ({ id: entry.id, name: entry.name })));
-  device.set(created.deviceState() as DeviceState);
+  syncDevice(created);
   const window = created.window();
   applyWindow(window);
   applyAfterCompletion(created.afterCompletion());
   logs.set(created.logs());
   mirrorHomeStatus(created.executionState());
   backend.set(Backend.mode() === "mock" ? "mock" : "ready");
+}
+
+/** Mirrors the device selection the state layer owns (connect events included).
+ *  While a connect is in flight the picker keeps the choice it was given: Rust
+ *  only records the selected id once the RPC lands. */
+function syncDevice(current: HomeStore): void {
+  const state = current.deviceState() as DeviceState;
+  device.set(state);
+  if (state !== "connecting") selectedDevice.set(current.selectedDeviceId());
 }
 
 function ensureStore(): HomeStore | null {
@@ -443,6 +456,12 @@ export function deviceList(): { id: string; name: string }[] {
 /** The chosen device's state (tracked). */
 export function deviceState(): DeviceState {
   return device();
+}
+
+/** The chosen device's id, or `null` while none is selected (tracked). */
+export function selectedDeviceId(): string | null {
+  ensureStore();
+  return selectedDevice();
 }
 
 /** The window card's settings (tracked). */
@@ -590,27 +609,34 @@ export function clearLog(): void {
   feedback.set(current.feedback());
 }
 
-/** Re-reads the device list. */
-export function refreshDevices(): void {
+/** Re-reads the device list without blocking the window. */
+export async function refreshDevices(): Promise<void> {
   const current = ensureStore();
   if (!current) return;
   try {
-    devices.set(current.refreshDevices().map((entry) => ({ id: entry.id, name: entry.name })));
+    const list = await current.refreshDevices();
+    devices.set(list.map((entry) => ({ id: entry.id, name: entry.name })));
+    syncDevice(current);
     feedback.set(current.feedback());
   } catch (error) {
     feedback.set(error instanceof Error ? error.message : String(error));
   }
 }
 
-/** Picks a device to drive. */
-export function selectDevice(id: string): void {
+/** Picks a device to drive without blocking the window. */
+export async function selectDevice(id: string): Promise<void> {
   const current = ensureStore();
   if (!current) return;
+  // The popup closes before the RPC returns: state the choice at once, then
+  // reconcile it with the id the state layer reports when the call lands.
+  selectedDevice.set(id || null);
   try {
-    device.set(current.connectDevice(id) as DeviceState);
+    await current.connectDevice(id);
+    syncDevice(current);
     feedback.set(current.feedback());
     if (device() === "connected") current.setPreviewEnabled(true);
   } catch (error) {
+    syncDevice(current);
     feedback.set(error instanceof Error ? error.message : String(error));
   }
 }
@@ -619,6 +645,12 @@ export function selectDevice(id: string): void {
 export function currentPreviewFrame(): string | null {
   ensureStore();
   return previewFrame();
+}
+
+/** The frame before the latest one; shown while the latest decodes. */
+export function currentPreviewPlaceholder(): string | null {
+  ensureStore();
+  return previewPreviousFrame();
 }
 
 /** The preview stream's status (`stopped`, `starting`, `running`, `error`). */
@@ -633,7 +665,14 @@ export function pollPreview(): void {
   if (!current) return;
   const view = current.pollPreview();
   previewStatus.set(view.status);
-  if (view.frame) previewFrame.set(view.frame);
+  if (view.frame) {
+    const previous = previewFrame();
+    if (previous) previewPreviousFrame.set(previous);
+    previewFrame.set(view.frame);
+  }
+  // Device events (a connection made or lost elsewhere) arrive with the same
+  // drain, so the picker and the badge follow the state layer as well.
+  syncDevice(current);
   logs.set(current.logs());
   // The console card is a plain read of the state layer; this signal is what
   // makes it re-render when the run moves on.
