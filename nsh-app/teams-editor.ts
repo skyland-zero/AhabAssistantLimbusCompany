@@ -1,7 +1,7 @@
 // The team editor's draft: the section being edited, every change the mirror
 // tabs make, and the JSON/clipboard round-trip. The list state is in
 // `teams-store.ts`; `teams.ts` re-exports both.
-import { signal } from "nsh";
+import { computed, signal } from "nsh";
 import {
   SYSTEM_NAMES,
   clampMirrorNumber,
@@ -42,6 +42,14 @@ export const EDITOR_TAB_LABELS: Record<TeamEditorTab, string> = {
 /** The draft the editor is editing, or `null` when it is closed. */
 const draft = signal<Team | null>(null);
 
+/** Whether the editor is open: derived from the draft's presence only.
+ *
+ *  `Dialog`'s `open` must not read the draft itself: every edit replaces the
+ *  draft object, and the dialog would rebuild its whole content (scroll,
+ *  focus and entrance included) on each keystroke or sinner toggle. This
+ *  computed stays `true` while the draft's contents change. */
+const editorOpen = computed(() => draft() !== null);
+
 /** Whether the draft is a new formation rather than a saved one. */
 const draftIsNew = signal(false);
 
@@ -56,6 +64,11 @@ export function editorIsNew(): boolean {
 /** The draft in the editor (tracked). */
 export function editingTeam(): Team | null {
   return draft();
+}
+
+/** Whether the editor is open (tracked; true while a draft exists). */
+export function editorIsOpen(): boolean {
+  return editorOpen();
 }
 
 /** The editor's current section (tracked). */

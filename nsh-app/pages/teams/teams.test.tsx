@@ -42,6 +42,18 @@ test("the editor saves a renamed team", async () => {
   await app.waitFor("#01 编队 1 (震颤)-");
 });
 
+test("editing inside the dialog does not rebuild it", async () => {
+  const app = await openTeams();
+  await app.press("role:button[编辑 编队 1 (震颤)]");
+  await app.waitFor("编辑编队 #01");
+  // A rebuild between keys drops the input node, so only the first character
+  // would land; this guards the dialog's `open` binding against the draft.
+  await app.type("id:team-name", "abc");
+  expect(app.value("id:team-name")).toBe("编队 1 (震颤)abc");
+  await app.press("id:team-sinner-faust");
+  expect(app.value("id:team-name")).toBe("编队 1 (震颤)abc");
+});
+
 test("a new team takes the first free formation slot", async () => {
   const app = await openTeams();
   await app.press("id:new-team");

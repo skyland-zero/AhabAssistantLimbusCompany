@@ -16,6 +16,7 @@ import {
   draftStarlightCost,
   draftMirror,
   editorIsNew,
+  editorIsOpen,
   editorTabs,
   editingTeam,
   saveDraft,
@@ -33,8 +34,11 @@ import { StarlightTab } from "./editor/StarlightTab";
 
 export function TeamEditor() {
   return (
+    // `open` must not read the draft: every edit replaces it, and the dialog
+    // would rebuild its content (scroll, focus, entrance) on each change.
+    // `editorIsOpen` flips only when a draft appears or goes away.
     <Dialog
-      open={editingTeam() !== null}
+      open={editorIsOpen()}
       onOpenChange={({ open }) => {
         if (!open) closeEditor();
       }}
