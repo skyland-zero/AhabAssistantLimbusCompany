@@ -506,7 +506,7 @@ class Battle:
                     return False
                 continue
 
-            if in_mirror and not cfg.fight_to_last_man:
+            if in_mirror and not cfg.fight_to_last_man and not infinite_battle:
                 if dead_position := auto.find_element("battle/dead.png", my_crop=crops["dead"]):
                     my_scale = cfg.set_win_size / 1440
                     dead_bbox = (
@@ -877,6 +877,9 @@ class Battle:
             auto.mouse_drag_link(skill_list)
 
             auto.mouse_to_blank()
+
+            # 拖拽技能后需要等 UI 稳定再按确定；过早按会让整轮操作丢在动画里。
+            sleep(0.5)
 
             auto.key_press("enter")
 

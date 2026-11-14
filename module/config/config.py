@@ -7,7 +7,6 @@ from pathlib import Path
 from time import localtime, strftime, time
 from typing import Any, Optional
 
-import numpy as np
 from pydantic import BaseModel, ValidationError
 from ruamel.yaml import YAML, YAMLError
 
@@ -819,13 +818,21 @@ class Config(metaclass=SingletonMeta):
 
 
 def migrate_legacy_team_setting_data(data: dict) -> dict:
-    """Return team setting data with legacy starlight fields folded into opening_bonus."""
+    """Return team setting data with legacy starlight fields folded into opening_bonus.
+
+    旧版配置可能没有 ``opening_bonus_level``（或长度不一致）；用 np.array 处理会
+    得到 object 数组并直接抛异常，使整份配置无法加载。这里改为纯列表，缺失项按
+    0 级（不乘倍率）处理。参考上游 ece221b6。
+    """
     migrated = dict(data)
 
     if migrated.get("choose_opening_bonus", False):
-        opening_bonus = np.array(migrated.get("opening_bonus"), dtype=int)
-        opening_bonus_level = np.array(migrated.get("opening_bonus_level"), dtype=int)
-        migrated["opening_bonus"] = (opening_bonus * (opening_bonus_level + 1)).tolist()
+        opening_bonus = migrated.get("opening_bonus") or []
+        opening_bonus_level = migrated.get("opening_bonus_level") or []
+        migrated["opening_bonus"] = [
+            int(bonus) * (int(opening_bonus_level[index]) + 1) if index < len(opening_bonus_level) else int(bonus)
+            for index, bonus in enumerate(opening_bonus)
+        ]
     else:
         migrated["opening_bonus"] = TeamSetting().opening_bonus.copy()
 

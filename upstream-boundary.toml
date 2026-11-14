@@ -74,6 +74,17 @@ allowed_protected_files = [
     # small changes after taking the upstream mirror runner during
     # synchronization.
     "tasks/mirror/mirror.py",
+    # Fork-owned shop asset enumeration.  Upstream walked
+    # ``assets/images/share/...`` which no longer exists, so the must-buy /
+    # must-abandon / fusion-result lists were always empty; the path now comes
+    # from ``assets/images/default/share`` (upstream 8196e72f) and should be
+    # kept as a fork edit because the resource layout is product-owned.
+    "tasks/mirror/__init__.py",
+    # Fork-owned event handling: red-badge blackout before grayscale level
+    # matching (upstream #994) and the pseudo-solo "???" avoidance that guards
+    # against cursed E.G.O gifts.  Replay both hooks after taking upstream's
+    # event handler during synchronization.
+    "tasks/event/event_handling.py",
     # Fork-owned route adapter hooks.  The route catalog stays outside the
     # protected tree; these files only pass the selected route into existing
     # reward, theme, shop, fusion, and OCR operations.

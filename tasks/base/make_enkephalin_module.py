@@ -56,7 +56,8 @@ def get_current_enkephalin():
             ocr_result = ocr_result.lower()
             if "/" in ocr_result:
                 ocr_result = ocr_result.split("/")
-                current_enkephalin = int(ocr_result[0])
+                # OCR 常把数字前的符号/噪点识别成文字，如 "◈12/78"；只保留数字再解析。
+                current_enkephalin = int("".join(char for char in ocr_result[0] if char.isdigit()))
                 return current_enkephalin
         except Exception:
             continue
