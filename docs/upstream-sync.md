@@ -7,6 +7,10 @@ and `utils` is protected by `upstream-boundary.toml`.
 
 For every upstream release, and at least weekly:
 
+0. Read [`upstream-merge-ledger.md`](./upstream-merge-ledger.md) first. Every
+   upstream commit already judged in the ledger keeps its verdict (`已合并` /
+   `部分合并` / `已存在` / `放弃`); do not re-litigate it unless the stated
+   premise changed. New verdicts are appended per sync round.
 1. Fetch `origin/main` and create `upstream-sync/YYYY-MM-DD` from the product
    branch.
 2. Merge `origin/main` with a merge commit. Keep the product deletion for Qt
@@ -15,6 +19,9 @@ For every upstream release, and at least weekly:
 3. Run `uv run python scripts/check_upstream_boundary.py`, Python tests, and
    the full GPUI fmt/check/test/clippy suite.
 4. Review `git diff --stat origin/main...HEAD` before merging the sync branch.
+5. Append the round's per-commit verdicts to
+   [`upstream-merge-ledger.md`](./upstream-merge-ledger.md), including what was
+   deliberately rejected and why.
 
 Enable Git rerere locally with `git config rerere.enabled true`. Do not use an
 `ours` merge driver for source code because it can silently hide upstream bug
