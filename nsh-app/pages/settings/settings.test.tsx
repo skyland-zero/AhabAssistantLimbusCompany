@@ -22,6 +22,7 @@ test("the settings page lists every section", async () => {
     "系统与防护",
     "实验性功能",
     "更新与源配置",
+    "资源同步",
     "任务通知",
     "关于",
   ]) {

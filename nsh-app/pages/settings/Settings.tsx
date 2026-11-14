@@ -14,6 +14,7 @@ import { AboutCard } from "./cards/About";
 import { AppearanceCard } from "./cards/Appearance";
 import { HotkeysCard } from "./cards/Hotkeys";
 import { NotificationsCard } from "./cards/Notifications";
+import { ResourcesCard } from "./cards/Resources";
 import { ExperimentalCard, SystemCard } from "./cards/System";
 import { UpdatesCard } from "./cards/Updates";
 
@@ -24,6 +25,7 @@ const SECTIONS = [
   "系统与防护",
   "实验性功能",
   "更新与源配置",
+  "资源同步",
   "任务通知",
   "关于",
 ] as const;
@@ -75,9 +77,12 @@ export function Settings() {
             <UpdatesCard />
           </Section>
           <Section index={5} onOffset={record}>
-            <NotificationsCard />
+            <ResourcesCard />
           </Section>
           <Section index={6} onOffset={record}>
+            <NotificationsCard />
+          </Section>
+          <Section index={7} onOffset={record}>
             <AboutCard />
           </Section>
           <Divider />

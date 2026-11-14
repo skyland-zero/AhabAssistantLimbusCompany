@@ -8,6 +8,7 @@ import { Button } from "../../../components/Button";
 import { SettingLine, SettingList } from "../../../components/Field";
 import { Runtime } from "aalc/native";
 import { setFeedback } from "../../../settings";
+import { navigate } from "../../../store";
 import { SettingsCard } from "../SettingsCard";
 
 const REPO_URL = "https://github.com/KIYI671/AhabAssistantLimbusCompany";
@@ -27,6 +28,14 @@ export function AboutCard() {
             onPress={() => {
               openUrl(REPO_URL).catch(() => setFeedback("无法打开浏览器"));
             }}
+          />
+        </SettingLine>
+        <SettingLine label="帮助文档">
+          <Button
+            label="查看帮助"
+            icon="help"
+            variant="ghost"
+            onPress={() => navigate("help")}
           />
         </SettingLine>
       </SettingList>

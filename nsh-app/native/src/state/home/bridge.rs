@@ -22,9 +22,27 @@ pub struct DeviceView {
 
 #[derive(Clone, Debug, JsObject)]
 pub struct WindowView {
+    /// `"720"`, `"1080"` or `"1440"`: the `Select`'s value for the window's size.
+    pub size: String,
+    /// `"1080P"`, for the card's summary line.
     pub resolution: String,
-    pub async_input: bool,
+    /// `center`, `left_top`, `right_top` or `free`.
     pub position: String,
+    pub reduce_miscontact: bool,
+    /// Seconds, one decimal (`"0.5"`), so the `Select` matches its option.
+    pub screenshot_interval: String,
+    pub mouse_interval: String,
+    pub async_input: bool,
+}
+
+#[derive(Clone, Debug, JsObject)]
+pub struct AfterCompletionView {
+    /// `exit_game`, `exit_emulator`, `exit_aalc`, in the order they run.
+    pub actions: Vec<String>,
+    /// `none`, `sleep`, `hibernate`, `lock` or `shutdown`.
+    pub power: String,
+    /// Saved as the default, rather than chosen for this run only.
+    pub keep: bool,
 }
 
 #[derive(Clone, Debug, JsObject)]
@@ -88,36 +106,92 @@ impl HomeStore {
         self.state.configure(selection)
     }
 
-    /// Sets the game window's width (`1080` or `1440`) and returns the summary.
-    pub fn set_window_size(&mut self, size: u32) -> Result<WindowView, String> {
-        self.state.set_window_size(size)?;
+    /// Applies one of the window card's settings (`size`, `position`,
+    /// `reduceMiscontact`, `screenshotInterval`, `mouseInterval`, `asyncInput`)
+    /// and returns the settings as they are now.
+    pub fn set_window(
+        &mut self,
+        field: String,
+        value: nsh_core::JsonValue,
+    ) -> Result<WindowView, String> {
+        self.state.set_window(&field, &value)?;
         Ok(self.window())
     }
 
-    /// Toggles asynchronous input and returns the window summary.
-    pub fn toggle_async_input(&mut self) -> Result<WindowView, String> {
-        self.state.toggle_async_input()?;
-        Ok(self.window())
+    /// The "after the queue finishes" actions.
+    pub fn after_completion(&self) -> AfterCompletionView {
+        let view = self.state.after_completion();
+        AfterCompletionView {
+            actions: view
+                .get("actions")
+                .and_then(|value| value.as_array())
+                .map(|actions| {
+                    actions
+                        .iter()
+                        .filter_map(|action| action.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            power: view
+                .get("power")
+                .and_then(|value| value.as_str())
+                .unwrap_or("none")
+                .to_owned(),
+            keep: view
+                .get("keep")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false),
+        }
+    }
+
+    /// Replaces the after-run actions and returns them as they are now.
+    pub fn set_after_completion(
+        &mut self,
+        actions: Vec<String>,
+        power: String,
+        keep: bool,
+    ) -> Result<AfterCompletionView, String> {
+        self.state.set_after_completion(actions, power, keep)?;
+        Ok(self.after_completion())
     }
 
     /// The window settings shown on the console.
     pub fn window(&self) -> WindowView {
         let summary = self.state.window_summary();
-        WindowView {
-            resolution: summary
-                .get("resolution")
+        let text = |key: &str, fallback: &str| {
+            summary
+                .get(key)
                 .and_then(|value| value.as_str())
-                .unwrap_or("1080P")
-                .to_owned(),
-            async_input: summary
-                .get("asyncInput")
+                .unwrap_or(fallback)
+                .to_owned()
+        };
+        let flag = |key: &str, fallback: bool| {
+            summary
+                .get(key)
                 .and_then(|value| value.as_bool())
-                .unwrap_or(false),
-            position: summary
-                .get("position")
-                .and_then(|value| value.as_str())
-                .unwrap_or("free")
-                .to_owned(),
+                .unwrap_or(fallback)
+        };
+        let seconds = |key: &str, fallback: f64| {
+            format!(
+                "{:.1}",
+                summary
+                    .get(key)
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(fallback)
+            )
+        };
+        WindowView {
+            size: summary
+                .get("size")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(1080)
+                .to_string(),
+            resolution: text("resolution", "1080P"),
+            position: text("position", "free"),
+            reduce_miscontact: flag("reduceMiscontact", true),
+            screenshot_interval: seconds("screenshotInterval", 0.5),
+            mouse_interval: seconds("mouseInterval", 0.3),
+            async_input: flag("asyncInput", false),
         }
     }
 
@@ -234,6 +308,11 @@ impl HomeStore {
     /// The full statistics payload, including the mirror history.
     pub fn stats_payload(&self) -> nsh_core::JsonValue {
         self.state.stats_payload()
+    }
+
+    /// Drains events, then the statistics payload (the stats page's poll).
+    pub fn poll_stats(&mut self) -> nsh_core::JsonValue {
+        self.state.poll_stats()
     }
 
     /// Loads the daily statistics for the detail dialog.

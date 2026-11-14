@@ -15,13 +15,13 @@ export const PAGES = [
   { id: "teams", label: "队伍管理", icon: "users" },
   { id: "theme-packs", label: "镜牢主题包", icon: "palette" },
   { id: "toolbox", label: "工具箱", icon: "wrench" },
-  { id: "resources", label: "资源中心", icon: "package" },
-  { id: "help", label: "帮助", icon: "help" },
 ] as const;
 
-/** Every page the app shows: the six title-bar destinations, Settings (opened
- *  from the title bar's utility button) and the P2 component gallery. */
-export type PageId = (typeof PAGES)[number]["id"] | "settings" | "gallery";
+/** Every page the app shows: the four title-bar destinations, Settings and
+ *  Stats (the title bar's utility buttons), Help (from Settings → About) and
+ *  the P2 component gallery. The resource sync lives in Settings, not in the
+ *  bar. */
+export type PageId = (typeof PAGES)[number]["id"] | "settings" | "stats" | "help" | "gallery";
 
 const page = signal<PageId>("home");
 
@@ -59,15 +59,15 @@ export function isCurrent(id: PageId): boolean {
   return page() === id;
 }
 
-/** The catalog key for each title-bar destination. */
+/** The catalog key for each page the title bar can label. */
 const PAGE_KEY: Record<string, string> = {
   home: "navHome",
   teams: "navTeams",
   "theme-packs": "navThemes",
   toolbox: "navToolbox",
-  resources: "navResources",
-  help: "navHelp",
   settings: "navSettings",
+  stats: "navStats",
+  help: "navHelp",
 };
 
 /** The page's title-bar label, or the gallery's development-only name. */

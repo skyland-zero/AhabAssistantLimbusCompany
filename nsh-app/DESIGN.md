@@ -114,18 +114,21 @@
 
 所有尺寸的文字都是 `text-xs`（12pt）：旧客户端按钮没有更大的字。字高与控件高度都用 `min-h-*` 而不是固定 `h-*`：文字随系统字号放大时控件跟着长。
 
+数据系列用 `chart-1` … `chart-5`（设计指南的图表角色）：它们不是皮肤 token，由 `themes/index.ts` 统一注入，
+只分明暗两套，所以同一组数据在换皮肤、换强调色、换颜色主题时仍是同一个颜色，图例可以跨皮肤阅读。
+
 ## 4. 组件契约
 
 `components/` 是应用自己的 ui 层，`nsh/base` 只提供行为（按下、键盘、焦点、无障碍）。
 
 | 文件 | 组件 | 说明 |
 | --- | --- | --- |
-| `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用） |
+| `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link` `nav`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用）；`nav` 只给标题栏的选中项（胶囊由标题栏的滑块画） |
 | `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 标签/控件网格（行距 12pt，控件固定尾列）：设置页与主控台的窗口设置都用它 |
 | `Segmented.tsx` | `Segmented` / `SwatchRow` | 分段选择（容器透明，选中的一段是 `secondary` 胶囊） |
 | `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
-| `Select.tsx` | `Select` | 下拉选择，弹出层用统一浮层表面 |
+| `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾 |
 | `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
 | `Card.tsx` | `Card` / `CardHeader` / `Rule` | 卡片表面、44pt 标题带、发丝线 |
 | `Badge.tsx` | `Badge` | 六种语义色，默认 `neutral` |
@@ -141,7 +144,7 @@
   accent 按钮（GPUI Kit 的 `Primary` 映射到 `palette.brand`）。调用方按语义挑名字：`primary`
   表示「决策区唯一的默认提交」，`default` 表示普通填充动作。
 - 变体按**含义**选：`primary` 只给决策区里唯一的默认提交；工具栏里的普通动作是 `default`；
-  `danger` 只给不可逆的破坏性提交；`link` 只给外部资源。
+  `danger` 只给不可逆的破坏性提交；`link` 只给外部资源；`nav` 只给标题栏当前页（胶囊由滑块画）。
 - 图标按钮必须有 `accessibilityLabel`，且是正方（`aspect-square`）。
 - 焦点环在控件外侧：`focus-visible:outline-2 outline-offset-2 outline-ring`；祖先 `overflow-hidden`
   会裁掉它，布局要留出位置。
@@ -157,6 +160,27 @@
 
 若后续需要 hover 换图标颜色，用两个图标叠放 + `opacity` 过渡，或给 `Icon` 传一个 signal 驱动的
 token；不要为此改 `nsh`。
+
+### 主控台的结束后操作
+
+运行栏左侧的按钮打开「结束后操作」弹层（`pages/home/HomeCompletion.tsx`）：退出动作可多选（退出游戏 / 退出模拟器 / 退出 AALC）、最终电源动作（无 / 睡眠 / 休眠 / 锁屏 / 关机），底部两个提交——「仅本次生效」与「保存为默认」，分别把 `keepAfterCompletion` 置为 `false` / `true`。弹层在草稿上工作，提交前不改配置；按钮标签是摘要（`退出游戏 · 锁屏（默认）` / `什么也不干（本次）`）。
+
+### 主控台的设置面板
+
+卡片设置由 `home.ts` 的 `TaskParam` 描述：`kind`（`select` 下拉 / `switch` 开关）、`group`（有分组时按「常规 / 高级」分节）、`summary`（决定折叠行显示哪几条）、`options`（数组或函数——日常的编队下拉读队伍 store）。页面只渲染，字段落到 `TasksConfig` 的映射在 Rust `state/home/mod.rs` 的 `configure` / `selection`。
+
+数量对齐 GPUI 客户端（`gpui-app/src/pages/home/task_details/`）：
+
+| 卡片 | 设置 |
+| --- | --- |
+| 窗口设置 | 6：分辨率、窗口位置、减少误触、截图间隔、鼠标操作间隔、异步 PostMessage |
+| 日常任务 | 18：经验本、纽本、默认日常编队、连战（开关 + 次数）、按属性/按星期配队开关 + 11 个按天编队 |
+| 领取奖励 | 1：领取模式（全部 / 狂气与通行证奖励 / 仅领取邮件奖励） |
+| 狂气换体 | 3：换体次数、葛朗台模式、跳过模块合成 |
+| 自动镜牢 | 17：轮次、难度、困牢目标、无限模式 + 13 个高级开关 |
+| 亚哈共鸣 | 0：卡片开关本身即设置，不展开 |
+
+设置行都走 `Field.tsx` 的 `SettingList` / `SettingLine`，控件固定尾列（`w-36` 的下拉、开关）。
 
 ## 5. 动效
 
@@ -183,9 +207,12 @@ token；不要为此改 `nsh`。
 | 停用的主题包 | 整行 `opacity-60`，滑块 `disabled`；颜色变化即时 |
 | 任务卡开关与参数 | 同 `Switch` / `Select`：淡洗 + 按下收缩 + 颜色 150ms |
 | 任务参数选择器 | 弹层由 `Select` 提供（NSH 默认进出），不额外加动画 |
-| 窗口设置/任务卡展开收起 | 点卡片行即切换（没有单独的展开按钮）；高度瞬时（同队伍编辑器 JSON 面板，不做高度动画） |
+| 窗口设置/任务卡展开收起 | 点卡片行即切换（没有单独的展开按钮）；高度是 `Collapsible reveal` 的原生弹簧，下面的卡片跟着走；卡片在可视区外时 `reveal({ animated })` 把它滚进来；减少动效时两处都瞬时 |
 | 卡片行 hover / 按下 | hover 淡洗 `accent`、按下 `secondary`，`duration-150`；行尾箭头随状态转 180°（瞬时，不做旋转动画） |
 | 展开区里的选择与开关 | 同 `Select` / `Switch`：弹层由 NSH 提供，开关淡洗 + 颜色 150ms |
+| 队列滚动 | 用户拖动是原生的 1:1 + 惯性（`decelerationRate` 原生默认），不加缓动；只有程序滚动（展开后 `reveal`）带动画 |
+| 下拉列表行 | 指针/键盘高亮 `focus:bg-accent`（瞬时，`Select` 自带），触发器 hover 淡洗 `duration-150` |
+| 结束后操作弹层 | `Dialog` 自带的进出动画（NSH 默认），不额外加；草稿摘要行随开关即时替换 |
 | 队列全选/清空 | 开关状态瞬时切换；反馈一行出现在队列下方，无入场动画 |
 | 设备刷新 | 列表替换为瞬时；连接状态徽标换色 150ms |
 | 运行日志清空 | 计数与空状态瞬时 |
@@ -203,7 +230,7 @@ token；不要为此改 `nsh`。
 | 队伍保存/删除 | 卡片增删即时生效；反馈条出现在工具栏下方，无入场动画 |
 | 减少动效 | 以上全部瞬时；颜色变化保留 |
 
-### 动效清单（工具箱 / 资源中心）
+### 动效清单（工具箱 / 设置里的资源同步）
 
 | 变化 | 动效 |
 | --- | --- |
@@ -235,13 +262,15 @@ token；不要为此改 `nsh`。
 | --- | --- |
 | 导航项 hover | 底色淡洗 `hover:bg-accent`，`duration-150`，不改变尺寸 |
 | 导航项按下 | `active:bg-secondary` + `active:scale-[0.97]`，`duration-150` |
-| 导航项选中 | 变体切换（`ghost`→`primary`），颜色 `duration-150` 过渡；不滑动指示条（标题栏本身是固定 6 项） |
+| 导航项选中 | 标题栏只在选中项下面画**一条**滑动胶囊（`nav` 变体自己透明）：左边缘与宽度以 `scaleX` 一起滑到目标，`240ms`，`cubic-bezier(0.32, 0.72, 0, 1)`；原生值（位移 / 缩放）先落，再改胶囊宽度，否则会漏出一帧“新宽度 + 旧缩放”的胖胶囊 |
+| 离开导航页（统计 / 设置 / 帮助） | 胶囊 `160ms` 淡出；回到任一导航页时从当时的胶囊位置滑回 |
 | 图标按钮 hover/按下 | 同导航项（`ghost` 的淡洗 + 收缩） |
 | 窗口按钮 hover | 淡洗；关闭按钮 `hover:bg-danger` |
 | 执行状态点 | 空闲不显示；运行 `success`、暂停 `warning`。GPUI 的呼吸动画默认关闭（`ENABLE_STATUS_DOT_BREATHING = false`），这里同样不做动画 |
 | 外观切换 | 图标交换（sun/moon/monitor）即时替换 + 颜色过渡；不做交叉淡入（6px 图标，动效无信息量） |
-| 页面切换 | 无过渡：切换后内容整块替换（P3 迁入页面时再评估，需保持 GPUI 观感） |
-| 减少动效 | 以上全部瞬时；底色变化保留（颜色不是动画） |
+| 页面切换 | **交叉溶解**（`PageHost`）：离开的页面不卸载、不淡出，保持不透明垫在下面；新页面在创建时就以 `createMotion({ enter })` 起跑（第一帧即起点，无静止帧），`200ms` 淡入并朝目标在导航里的方向偏移 `6pt`，`cubic-bezier(0.16, 1, 0.3, 1)`；新旧都实了以后（`200+60ms`）移除旧层。切换过程中不会露出窗口底色 |
+| 快速连点导航 | 最多两层：被更新的页面立即置为不透明（它在上面，看不到跳变），旧层照常移除，任何一帧底部都有不透明内容 |
+| 减少动效 | 以上全部瞬时；底色变化保留（颜色不是动画）；`createMotion` 自动落到终点不移动 |
 
 组件对照页（`pages/Gallery.tsx`）每个变体/尺寸/状态都是静态展示，无动效。
 

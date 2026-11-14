@@ -9,6 +9,7 @@ pub const CATALOG: Catalog = Catalog {
     nav_toolbox: "Toolbox",
     nav_resources: "Resources",
     nav_help: "Help",
+    nav_stats: "Stats",
     nav_settings: "Settings",
     titlebar_minimize: "Minimize",
     titlebar_maximize: "Maximize",

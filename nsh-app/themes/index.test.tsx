@@ -10,6 +10,7 @@ import {
   SKIN_LABELS,
   ACCENT_LABELS,
   themeFor,
+  tokensFor,
 } from "./index";
 import { SKIN_RADII, SKIN_TOKENS } from "./skins";
 import { SEED_PRESETS, isSeedHex, normaliseSeed, seedTokens } from "./seed";
@@ -29,6 +30,24 @@ test("every skin and accent composes a complete theme", () => {
       }
     }
   }
+});
+
+test("the chart series are the same in every skin", () => {
+  // The statistics page's five series: a skin may restyle surfaces, never the
+  // colours that carry data.
+  for (const skin of SKINS) {
+    for (const appearance of ["light", "dark"] as const) {
+      const tokens = tokensFor(skin, SKIN_DEFAULT_ACCENT[skin], appearance);
+      for (const key of ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"]) {
+        expect(tokens[key]).toBeDefined();
+      }
+    }
+  }
+  const light = tokensFor("default", "crimson", "light");
+  const dark = tokensFor("default", "crimson", "dark");
+  expect(light["chart-1"]).toBe("#c8354f");
+  expect(dark["chart-1"]).toBe("#e05a72");
+  expect(light["chart-1"]).not.toBe(dark["chart-1"]);
 });
 
 test("the accent lands on the brand tokens and changes them", () => {

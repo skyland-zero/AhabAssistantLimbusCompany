@@ -12,6 +12,7 @@ import copy from "../assets/icons/copy.svg";
 import audioLines from "../assets/icons/audio-lines.svg";
 import bookOpen from "../assets/icons/book-open.svg";
 import camera from "../assets/icons/camera.svg";
+import chartColumn from "../assets/icons/chart-column.svg";
 import circleQuestionMark from "../assets/icons/circle-question-mark.svg";
 import crosshair from "../assets/icons/crosshair.svg";
 import eraser from "../assets/icons/eraser.svg";
@@ -49,6 +50,7 @@ const ICONS = {
   audioLines,
   bookOpen,
   camera,
+  chart: chartColumn,
   check,
   copy,
   crosshair,

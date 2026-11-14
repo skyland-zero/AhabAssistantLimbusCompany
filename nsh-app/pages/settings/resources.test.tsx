@@ -1,14 +1,20 @@
-// The resources page's contract: the groups and their versions, the update
+// The resource sync, in Settings: the groups and their versions, the update
 // check, and a sync that ends with a settled time.
-import { open, test } from "nsh/test";
-import { expect } from "nsh/test";
-import { formatSyncTime } from "./Resources";
+import { expect, open, test } from "nsh/test";
+import { formatSyncTime } from "./cards/Resources";
 
 const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
-test("the page lists the resource groups and their versions", async () => {
+/** Opens the app on the settings page, where the resource card lives. */
+async function openSettings() {
   const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[资源中心]");
+  await app.press("role:button[设置]");
+  await app.waitFor("资源同步");
+  return app;
+}
+
+test("the card lists the resource groups and their versions", async () => {
+  const app = await openSettings();
   await app.waitFor("模板资源");
   await app.waitFor("ONNX 模型");
   expect(app.texts()).toContain("v2025.06.1");
@@ -16,16 +22,14 @@ test("the page lists the resource groups and their versions", async () => {
   expect(app.texts()).toContain("从未同步");
 });
 
-test("checking for updates says what it did", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[资源中心]");
-  await app.press("role:button[检查更新]");
+test("checking for resource updates says what it did", async () => {
+  const app = await openSettings();
+  await app.press("role:button[检查资源更新]");
   await app.waitFor("发现资源更新");
 });
 
 test("a sync reports progress and settles", async () => {
-  const app = await open("../../App.tsx", DESKTOP);
-  await app.press("role:button[资源中心]");
+  const app = await openSettings();
   await app.press("role:button[立即同步]");
   await app.waitFor("资源同步完成");
 });

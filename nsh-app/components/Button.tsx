@@ -24,7 +24,8 @@ export type ButtonVariant =
   | "outline" // an action that needs a boundary with less weight
   | "ghost" // a familiar, low-emphasis action
   | "danger" // a destructive commitment
-  | "link"; // an external resource only: never an in-app command
+  | "link" // an external resource only: never an in-app command
+  | "nav"; // the title bar's current destination: its pill is the bar's slider
 
 /** One step of the control scale: frame, padding, text and icon grow together. */
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
@@ -70,25 +71,26 @@ const VARIANT: Record<ButtonVariant, VariantStyle> = {
       "bg-transparent px-0 text-brand underline underline-offset-4 hover:text-brand-hover active:opacity-80",
     icon: () => token("brand"),
   },
+  // The title bar's current destination: the bar paints one pill that slides
+  // between the tabs, so the tab itself stays transparent and only carries the
+  // foreground that pill needs.
+  nav: {
+    frame:
+      "bg-transparent text-brand-foreground hover:bg-transparent active:bg-transparent selected:bg-transparent",
+    icon: () => token("brand-foreground"),
+  },
 };
 
 const SIZE: Record<ButtonSize, { frame: string; icon: number }> = {
   xs: { frame: "min-h-5 gap-1 px-2", icon: 12 },
   sm: { frame: "min-h-5 gap-1.5 px-3", icon: 13 },
   md: { frame: "min-h-6 gap-1.5 px-3", icon: 14 },
-  lg: { frame: "min-h-7 gap-2 px-4", icon: 16 },
-};
-
-/** Text size is part of the size step, so it is not per variant. */
-const SIZE_TEXT: Record<ButtonSize, string> = {
-  xs: "text-xs",
-  sm: "text-xs",
-  md: "text-xs",
-  lg: "text-sm",
+  lg: { frame: "min-h-8 gap-2 px-4", icon: 16 },
 };
 
 const FRAME =
   "flex-row items-center justify-center rounded-(--radius) font-medium transition-colors duration-150 " +
+  "text-xs " +
   "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
   "disabled:pointer-events-none disabled:opacity-50";
@@ -119,7 +121,7 @@ export function Button(props: {
       selected={props.selected}
       accessibilityLabel={props.accessibilityLabel}
       testID={props.testID}
-      class={`${FRAME} ${SIZE[props.size ?? "sm"].frame} ${SIZE_TEXT[props.size ?? "sm"]} ${style().frame} ${props.class ?? ""}`}
+      class={`${FRAME} ${SIZE[props.size ?? "sm"].frame} ${style().frame} ${props.class ?? ""}`}
     >
       <If when={props.icon}>
         {(name) => (

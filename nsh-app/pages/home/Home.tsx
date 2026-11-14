@@ -1,12 +1,13 @@
 // The console: the backend and the week's summary, the queue of task cards, and
 // the device, preview and log rails on the right.
 //
-// The layout is the client's three-region console: two cards across the top
-// (backend link and this week's statistics), the window settings and the task
-// queue under them, the run bar at the bottom, and a fixed rail for the device,
-// the live preview and the log.
-import type { JSX } from "nsh";
-import { Image, Scroll, Text, View, effect, signal, token } from "nsh";
+// The layout is the client's three-region console: a two-row status strip
+// (this week's counts, then the backend link and the last mirror run), the
+// window settings and the task queue under it, the run bar at the bottom, and a
+// fixed rail for the device, the live preview and the log.
+import type { JSX, ViewRef } from "nsh";
+import { Image, Scroll, Text, View, effect, reduceMotion, signal, token } from "nsh";
+import { Collapsible } from "nsh/base";
 import { Badge } from "../../components/Badge";
 import { Button, Pressable } from "../../components/Button";
 import { Card, Rule } from "../../components/Card";
@@ -18,6 +19,9 @@ import { Select } from "../../components/Select";
 import { Switch } from "../../components/Switch";
 import { t } from "../../settings";
 import {
+  afterCompletionLabel,
+  afterCompletionMode,
+  afterCompletionSettings,
   backendState,
   clearLog,
   clearTasks,
@@ -26,34 +30,59 @@ import {
   consoleTasks,
   currentPreviewFrame,
   currentPreviewStatus,
-  currentResolution,
+  currentWindow,
   deviceList,
   deviceState,
-  isAsyncInput,
   logEntries,
   logLines,
+  mirrorTimeLabel,
+  openAfterCompletion,
   openLogDetails,
-  openStatsDetails,
   pollPreview,
   refreshDevices,
   selectAllTasks,
   selectDevice,
-  setResolution,
+  setWindowSetting,
   setTaskParam,
   startQueue,
-  toggleAsyncInput,
   toggleTask,
 } from "../../home";
-import type { Task } from "../../home";
-import { LogDetailsDialog, StatsDetailsDialog } from "./HomeDetails";
+import type { Task, TaskParam } from "../../home";
+import { navigate } from "../../store";
+import { AfterCompletionDialog } from "./HomeCompletion";
+import { LogDetailsDialog } from "./HomeDetails";
 
 /** The rail's width: the device, preview and log column. */
 const RAIL = "w-56";
 
-/** The two window widths the task config accepts (`SetWindowsConfig`). */
-const RESOLUTIONS = [
+/** The window sizes the task config accepts (`SetWindowsConfig.set_win_size`). */
+const WINDOW_SIZES = [
+  { value: "720", label: "1280 × 720" },
   { value: "1080", label: "1920 × 1080" },
   { value: "1440", label: "2560 × 1440" },
+];
+
+/** Where the run puts the game window before it starts. */
+const WINDOW_POSITIONS = [
+  { value: "center", label: "屏幕居中" },
+  { value: "left_top", label: "靠左对齐" },
+  { value: "right_top", label: "靠右对齐" },
+  { value: "free", label: "保持原位" },
+];
+
+/** How often the run takes a screenshot, in the old client's four steps. */
+const SCREENSHOT_INTERVALS = [
+  { value: "0.1", label: "0.1s 极速" },
+  { value: "0.2", label: "0.2s" },
+  { value: "0.5", label: "0.5s 默认" },
+  { value: "1.0", label: "1.0s 较慢" },
+];
+
+/** How long the run waits between mouse actions. */
+const MOUSE_INTERVALS = [
+  { value: "0.1", label: "0.1s" },
+  { value: "0.3", label: "0.3s 默认" },
+  { value: "0.5", label: "0.5s" },
 ];
 
 export function Home() {
@@ -67,13 +96,10 @@ export function Home() {
     <PageRoot>
       <View class="min-h-0 flex-1 flex-row gap-2">
         <View class="min-w-0 flex-1 flex-col gap-2">
-          <View class="flex-row gap-2">
-            <BackendCard />
-            <StatsCard />
-          </View>
-          <WindowCard />
+          <StatusStrip />
           <Scroll class="min-h-0 flex-1">
             <View class="flex-col gap-2 pb-2">
+              <WindowCard />
               <Each of={consoleTasks()} key={(task) => task.id}>
                 {(task) => <TaskCard task={task()} />}
               </Each>
@@ -87,25 +113,62 @@ export function Home() {
           <LogCard />
         </View>
       </View>
-      <StatsDetailsDialog />
       <LogDetailsDialog />
+      <AfterCompletionDialog />
     </PageRoot>
   );
 }
 
-/** The Python backend link. */
-function BackendCard() {
+/** The console's status strip: the week's counts, then the backend link and
+ *  the last mirror run. One dense card instead of two tall ones, so the queue
+ *  keeps the height the two cards used to take. */
+function StatusStrip() {
+  const stats = () => consoleStats();
   return (
-    <Card class="w-50 flex-none p-3">
-      <View class="flex-col gap-2">
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <View class="flex-row items-center gap-1.5">
-            <Icon name="audioLines" size={14} color={token("brand")} />
-            <Text class="text-xs font-medium text-foreground">Python 后端</Text>
-          </View>
-          <Badge label={backendLabel()} />
+    <Card class="w-full p-2.5">
+      <View class="w-full flex-col gap-1">
+        <View class="w-full flex-row items-center gap-2">
+          <Icon name="target" size={14} color={token("brand")} />
+          <Text class="text-xs font-medium text-foreground">周期统计（今日/本周）</Text>
+          <View class="flex-1" />
+          <StatChip label="经验本" value={`${stats().today.exp} / ${stats().week.exp}`} />
+          <StatChip label="纽本" value={`${stats().today.thread} / ${stats().week.thread}`} />
+          <StatChip label="镜牢（累计）" value={`${stats().today.mirror} / ${stats().week.mirror}`} />
+          <Button
+            label="明细"
+            variant="ghost"
+            size="xs"
+            testID="stats-daily-details"
+            onPress={() => navigate("stats")}
+          />
         </View>
-        <Text class="text-xs text-muted-foreground">{backendDetail()}</Text>
+        <View class="w-full flex-row items-center gap-2">
+          <Icon name="audioLines" size={14} color={token("brand")} />
+          <Text class="text-xs font-medium text-foreground">Python 后端</Text>
+          <Badge label={backendLabel()} />
+          <Text class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {backendDetail()}
+          </Text>
+          <Icon name="target" size={14} color={token("brand")} />
+          <Text class="text-xs font-medium text-foreground">上次镜牢</Text>
+          <If
+            when={stats().lastMirror}
+            else={<Text class="text-xs text-muted-foreground">暂无完成记录</Text>}
+          >
+            {(mirror) => (
+              <Text class="max-w-40 min-w-0 truncate text-xs text-muted-foreground">
+                {mirrorTimeLabel(mirror())}
+              </Text>
+            )}
+          </If>
+          <Button
+            label="明细"
+            variant="ghost"
+            size="xs"
+            testID="stats-last-mirror-details"
+            onPress={() => navigate("stats")}
+          />
+        </View>
       </View>
     </Card>
   );
@@ -127,74 +190,21 @@ function backendDetail(): string {
   return "Python 后端启动失败";
 }
 
-/** This week's summary: how many runs finished, and the last mirror run. */
-function StatsCard() {
-  const stats = () => consoleStats();
+/** One counter of the strip: its name and the today/week pair. */
+function StatChip(props: { label: string; value: string }) {
   return (
-    <Card class="min-w-0 flex-1 p-3">
-      <View class="flex-col gap-2">
-        <View class="w-full flex-row items-center justify-between gap-2">
-          <View class="flex-row items-center gap-1.5">
-            <Icon name="target" size={14} color={token("brand")} />
-            <Text class="text-xs font-medium text-foreground">周期统计（今日/本周）</Text>
-          </View>
-          <Button
-            label="明细"
-            variant="ghost"
-            size="xs"
-            testID="stats-daily-details"
-            onPress={() => openStatsDetails("daily")}
-          />
-        </View>
-        <View class="w-full flex-row gap-4">
-          <StatColumn
-            label="经验本"
-            value={`${stats().today.exp} / ${stats().week.exp}`}
-          />
-          <StatColumn
-            label="纽本"
-            value={`${stats().today.thread} / ${stats().week.thread}`}
-          />
-          <StatColumn
-            label="镜牢（累计）"
-            value={`${stats().today.mirror} / ${stats().week.mirror}`}
-          />
-        </View>
-        <View class="w-full flex-row items-center justify-between gap-2 border-t border-border pt-2">
-          <View class="flex-row items-center gap-1.5">
-            <Icon name="target" size={14} color={token("brand")} />
-            <Text class="text-xs font-medium text-foreground">上次镜牢</Text>
-          </View>
-          <Button
-            label="明细"
-            variant="ghost"
-            size="xs"
-            testID="stats-last-mirror-details"
-            onPress={() => openStatsDetails("mirror")}
-          />
-        </View>
-        <Text class="text-center text-xs text-muted-foreground">
-          {stats().lastMirror ?? "暂无完成记录"}
-        </Text>
-      </View>
-    </Card>
-  );
-}
-
-function StatColumn(props: { label: string; value: string }) {
-  return (
-    <View class="flex-col gap-0.5">
+    <View class="flex-none flex-row items-center gap-1">
       <Text class="text-xs text-muted-foreground">{props.label}</Text>
       <Text class="text-xs text-foreground">{props.value}</Text>
     </View>
   );
 }
 
-/** The window and input settings the run will use. The card's row states them
- *  and its expansion holds their controls: a press on the row opens and closes
- *  it, as every card of the queue below does. */
+/** The window and input settings the run will use. The queue's first row: a
+ *  press on it opens its settings, inside the scroll the queue lives in. */
 function WindowCard() {
   const open = signal(false);
+  const window = () => currentWindow();
   return (
     <Card class="w-full p-0">
       <Pressable
@@ -207,9 +217,9 @@ function WindowCard() {
         <Icon name="settings2" size={14} />
         <Text class="text-xs font-medium text-foreground">窗口设置</Text>
         <View class="flex-1" />
-        <Text class="text-xs text-muted-foreground">{`分辨率 ${currentResolution()}`}</Text>
+        <Text class="text-xs text-muted-foreground">{`分辨率 ${window().resolution}`}</Text>
         <Text class="text-xs text-muted-foreground">
-          {`异步输入 ${isAsyncInput() ? "开" : "关"}`}
+          {`异步输入 ${window().asyncInput ? "开" : "关"}`}
         </Text>
         <Chevron open={open()} />
       </Pressable>
@@ -218,17 +228,51 @@ function WindowCard() {
           <SettingLine label="窗口分辨率">
             <Select<string>
               accessibilityLabel="窗口分辨率"
-              items={RESOLUTIONS}
-              value={currentResolution() === "1440P" ? "1440" : "1080"}
-              onChange={(next) => setResolution(next === "1440" ? 1440 : 1080)}
+              items={WINDOW_SIZES}
+              value={window().size}
+              onChange={(next) => setWindowSetting("size", next)}
+              class="w-36"
+            />
+          </SettingLine>
+          <SettingLine label="窗口位置">
+            <Select<string>
+              accessibilityLabel="窗口位置"
+              items={WINDOW_POSITIONS}
+              value={window().position}
+              onChange={(next) => setWindowSetting("position", next)}
+              class="w-36"
+            />
+          </SettingLine>
+          <SettingLine label="减少误触">
+            <Switch
+              checked={window().reduceMiscontact}
+              accessibilityLabel="减少误触"
+              onChange={() => setWindowSetting("reduceMiscontact", !window().reduceMiscontact)}
+            />
+          </SettingLine>
+          <SettingLine label="截图间隔">
+            <Select<string>
+              accessibilityLabel="截图间隔"
+              items={SCREENSHOT_INTERVALS}
+              value={window().screenshotInterval}
+              onChange={(next) => setWindowSetting("screenshotInterval", next)}
+              class="w-36"
+            />
+          </SettingLine>
+          <SettingLine label="鼠标操作间隔">
+            <Select<string>
+              accessibilityLabel="鼠标操作间隔"
+              items={MOUSE_INTERVALS}
+              value={window().mouseInterval}
+              onChange={(next) => setWindowSetting("mouseInterval", next)}
               class="w-36"
             />
           </SettingLine>
           <SettingLine label="异步 PostMessage 输入">
             <Switch
-              checked={isAsyncInput()}
+              checked={window().asyncInput}
               accessibilityLabel="异步 PostMessage 输入"
-              onChange={() => toggleAsyncInput()}
+              onChange={() => setWindowSetting("asyncInput", !window().asyncInput)}
             />
           </SettingLine>
         </SettingList>
@@ -243,23 +287,44 @@ function Chevron(props: { open: boolean }) {
   return <Icon name="chevronDown" size={14} rotate={props.open ? 180 : 0} />;
 }
 
-/** A card's expansion: a divider and the row's settings, under the row. */
-function Expansion(props: { open: boolean; children?: JSX.Element }) {
+/** A card's expansion: a divider and the row's settings, under the row. It
+ *  opens and closes with a native spring of its own height, so the cards under it
+ *  ride along instead of jumping (reduced motion: both instant). */
+function Expansion(props: {
+  open: boolean;
+  /** The body, for a card that brings it into view as it opens. */
+  bodyRef?: (ref: ViewRef) => void;
+  children?: JSX.Element;
+}) {
   return (
-    <If when={props.open}>
-      <View class="w-full flex-col">
-        <Rule />
-        <View class="w-full px-4 py-3">{props.children}</View>
-      </View>
-    </If>
+    <Collapsible
+      open={props.open}
+      reveal
+      content={
+        <View class="w-full flex-col" ref={props.bodyRef}>
+          <Rule />
+          <View class="w-full flex-col gap-3 px-4 py-3">{props.children}</View>
+        </View>
+      }
+    />
   );
 }
 
 /** One task card: its switch, its name, and the parameters it runs with. The
- *  row states the parameters and a press on it opens their controls. */
+ *  row states the parameters and a press on it opens their controls; a card
+ *  without settings (Ahab resonance) is only its switch and name. */
 function TaskCard(props: { task: Task }) {
   const task = () => props.task;
   const open = signal(false);
+  const hasSettings = () => task().params.length > 0;
+  // The queue scrolls: a card near its end opens below the fold, so the press
+  // asks the scroll view for the settings, the shortest way and animated.
+  let body: ViewRef | undefined;
+  const toggleOpen = () => {
+    const next = !open();
+    open.set(next);
+    if (next) body?.reveal({ vertical: "nearest", animated: !reduceMotion() });
+  };
   return (
     <Card class="w-full p-0">
       <View class="w-full flex-row items-center gap-3 px-4 py-2.5">
@@ -268,49 +333,112 @@ function TaskCard(props: { task: Task }) {
           accessibilityLabel={`启用 ${task().name}`}
           onChange={() => toggleTask(task().id)}
         />
-        <Pressable
-          accessibilityLabel={`${task().name}设置（${open() ? "已展开" : "已收起"}）`}
-          testID={`task-toggle-${task().id}`}
-          class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 hover:bg-accent active:bg-secondary"
-          onPress={() => open.set(!open())}
-        >
-          <Icon name={task().icon} size={16} color={token("brand")} />
-          <Text class="min-w-0 text-sm text-foreground">{task().name}</Text>
-          <View class="flex-1" />
-          <View class="flex-row items-center gap-2">
-            <If when={!open()}>
-              <Text class="text-xs text-muted-foreground">{taskSummary(task())}</Text>
-            </If>
-            <Chevron open={open()} />
+        <If when={hasSettings()}>
+          <Pressable
+            accessibilityLabel={`${task().name}设置（${open() ? "已展开" : "已收起"}）`}
+            testID={`task-toggle-${task().id}`}
+            class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 hover:bg-accent active:bg-secondary"
+            onPress={toggleOpen}
+          >
+            <Icon name={task().icon} size={16} color={token("brand")} />
+            <Text class="min-w-0 text-sm text-foreground">{task().name}</Text>
+            <View class="flex-1" />
+            <View class="flex-row items-center gap-2">
+              <If when={!open()}>
+                <Text class="text-xs text-muted-foreground">{taskSummary(task())}</Text>
+              </If>
+              <Chevron open={open()} />
+            </View>
+          </Pressable>
+        </If>
+        <If when={!hasSettings()}>
+          <View class="min-w-0 flex-1 flex-row items-center gap-3">
+            <Icon name={task().icon} size={16} color={token("brand")} />
+            <Text class="min-w-0 truncate text-sm text-foreground">{task().name}</Text>
           </View>
-        </Pressable>
+        </If>
       </View>
-      <Expansion open={open()}>
-        <SettingList>
-          <Each of={task().params} key={(param) => param.id}>
-            {(param) => (
-              <SettingLine label={param().label}>
-                <Select<string>
-                  accessibilityLabel={param().label}
-                  items={param().options}
-                  value={param().value}
-                  onChange={(next) => setTaskParam(task().id, param().id, next)}
-                  class="w-36"
-                />
-              </SettingLine>
+      <If when={hasSettings()}>
+        <Expansion open={open()} bodyRef={(ref) => (body = ref)}>
+          <Each of={taskGroups(task())} key={(group) => group.title}>
+            {(group) => (
+              <View class="w-full flex-col gap-2">
+                <If when={group().title}>
+                  {(title) => (
+                    <Text class="text-xs font-medium text-muted-foreground">{title()}</Text>
+                  )}
+                </If>
+                <SettingList>
+                  <Each of={group().params} key={(param) => param.id}>
+                    {(param) => <ParamRow task={task().id} param={param()} />}
+                  </Each>
+                </SettingList>
+              </View>
             )}
           </Each>
-        </SettingList>
-      </Expansion>
+        </Expansion>
+      </If>
     </Card>
   );
 }
 
-/** A task's parameters as one line: `经验本 ×1 · 纽本 ×3 · 连战 关`. */
+/** One setting row: a select for a choice, a switch for an on/off setting. */
+function ParamRow(props: { task: Task["id"]; param: TaskParam }) {
+  const param = () => props.param;
+  // A card can offer the saved teams as its choices; the list loads with them.
+  const items = () => {
+    const options = param().options;
+    return typeof options === "function" ? options() : (options ?? []);
+  };
+  return (
+    <SettingLine label={param().label}>
+      <If when={param().kind === "switch"}>
+        <Switch
+          checked={param().value === "on"}
+          accessibilityLabel={param().label}
+          onChange={() =>
+            setTaskParam(props.task, param().id, param().value === "on" ? "off" : "on")
+          }
+        />
+      </If>
+      <If when={param().kind === "select"}>
+        <Select<string>
+          accessibilityLabel={param().label}
+          items={items()}
+          value={param().value}
+          onChange={(next) => setTaskParam(props.task, param().id, next)}
+          class="w-36"
+        />
+      </If>
+    </SettingLine>
+  );
+}
+
+/** A card's settings in the sections its parameters name, the way the client's
+ *  options panel had 常规 and 高级. */
+function taskGroups(task: Task): { title: string; params: TaskParam[] }[] {
+  const groups: { title: string; params: TaskParam[] }[] = [];
+  for (const param of task.params) {
+    const title = param.group ?? "";
+    const group = groups.find((entry) => entry.title === title);
+    if (group) group.params.push(param);
+    else groups.push({ title, params: [param] });
+  }
+  return groups;
+}
+
+/** A task's parameters as one line: `经验本 ×1 · 纽本 ×3 · 连战 关`. Only the
+ *  ones a card marks as its summary, so a card with a dozen switches keeps a
+ *  readable row. */
 function taskSummary(task: Task): string {
   return task.params
+    .filter((param) => param.summary)
     .map((param) => {
-      const label = param.options.find((option) => option.value === param.value)?.label;
+      if (param.kind === "switch") {
+        return `${param.label} ${param.value === "on" ? "开" : "关"}`;
+      }
+      const options = typeof param.options === "function" ? param.options() : (param.options ?? []);
+      const label = options.find((option) => option.value === param.value)?.label;
       return `${param.label} ${label ?? param.value}`;
     })
     .join(" · ");
@@ -338,7 +466,17 @@ function RunBar() {
           onPress={() => clearTasks()}
         />
         <View class="flex-1" />
-        <Button label="什么也不干（本次）" variant="ghost" size="lg" />
+        <Button
+          label={afterCompletionLabel(afterCompletionSettings())}
+          variant="ghost"
+          size="lg"
+          testID="after-completion"
+          onPress={() => openAfterCompletion()}
+        >
+          <Text class="rounded-(--radius-sm) bg-scrim/40 px-1.5 py-0.5 text-xs opacity-80">
+            {afterCompletionMode(afterCompletionSettings())}
+          </Text>
+        </Button>
         <Button
           label="Link Start!"
           icon="play"

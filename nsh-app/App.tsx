@@ -1,13 +1,13 @@
-// The entry: the window's frame, the skin's background layer, the window shell,
-// and the page host. Page logic lives in `pages/`, the shell in `shell/`,
-// shared state in `store.ts`.
+// The entry: the window shell, the skin's background layer, and the page host.
+// Page logic lives in `pages/`, the shell in `shell/`, shared state in
+// `store.ts`. The root fills the whole window: `nsh.json` asks for a frameless
+// transparent window, so the app paints every pixel of it, corners included.
 import { mount, View } from "nsh";
 import { Runtime } from "aalc/native";
 import { PageHost } from "./pages/PageHost";
 import { DesktopIntegration } from "./shell/DesktopIntegration";
 import { SkinBackdrop } from "./shell/SkinBackdrop";
 import { TitleBar } from "./shell/TitleBar";
-import { WindowFrame } from "./shell/WindowFrame";
 import { currentPage, initTheme } from "./store";
 
 function App() {
@@ -16,17 +16,14 @@ function App() {
   // replaces the system's.
   initTheme();
   Runtime.enableTransparency();
-  Runtime.applyRoundedCorners(20);
   return (
-    <View class="relative flex-1">
-      <WindowFrame>
-        <DesktopIntegration />
-        <SkinBackdrop />
-        <TitleBar />
-        <View class="min-h-0 flex-1">
-          <PageHost page={currentPage()} />
-        </View>
-      </WindowFrame>
+    <View class="relative flex-1 overflow-hidden bg-background">
+      <DesktopIntegration />
+      <SkinBackdrop />
+      <TitleBar />
+      <View class="min-h-0 flex-1">
+        <PageHost page={currentPage()} />
+      </View>
     </View>
   );
 }

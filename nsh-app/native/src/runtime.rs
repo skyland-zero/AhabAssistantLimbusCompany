@@ -26,17 +26,11 @@ impl Runtime {
     }
 
     /// On Windows 10/11, opts the top-level frameless window into DWM desktop
-    /// alpha compositing (`DwmEnableBlurBehindWindow`), eliminating solid black
-    /// corners outside the card's rounded radius. Returns true if applied.
+    /// alpha compositing (`DwmEnableBlurBehindWindow`), so the pixels the app
+    /// leaves unpainted blend with the desktop instead of turning black.
+    /// Returns true if applied.
     pub fn enable_transparency() -> bool {
         crate::window::enable_transparency_opt_in()
-    }
-
-    /// On Windows, sets or clears a GDI rounded clipping region on the top-level
-    /// window to eliminate DirectComposition edge artifacts on Windows 10.
-    /// Pass 0.0 or negative to restore the standard rectangular window (e.g. when maximized).
-    pub fn apply_rounded_corners(radius_pt: f64) -> bool {
-        crate::window::apply_rounded_window_corners(radius_pt as f32)
     }
 }
 

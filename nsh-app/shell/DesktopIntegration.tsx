@@ -30,17 +30,14 @@ function toggleQueue(): void {
 }
 
 export function DesktopIntegration() {
-  // On Windows 10/11, enable DWM per-pixel alpha desktop compositing on the
-  // main window so the corners outside the card's rounded radius blend cleanly
-  // with the desktop instead of showing solid black.
+  // On Windows 10/11, opt the transparent main window into DWM per-pixel alpha
+  // compositing, so whatever the app leaves unpainted blends with the desktop
+  // instead of showing solid black. Repeated once after mount because the
+  // window may not exist yet on the first frame.
   effect(() => {
     if (!isAvailable || Runtime.platformOs() !== "windows") return;
     Runtime.enableTransparency();
-    Runtime.applyRoundedCorners(20);
-    const timer = setTimeout(() => {
-      Runtime.enableTransparency();
-      Runtime.applyRoundedCorners(20);
-    }, 100);
+    const timer = setTimeout(() => Runtime.enableTransparency(), 100);
     return () => clearTimeout(timer);
   });
 

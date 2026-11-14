@@ -48,16 +48,15 @@ test("starting the queue says what it did", async () => {
   expect(app.texts()).toContain("F10");
 });
 
-test("the statistics cards open their detail dialogs", async () => {
+test("the statistics cards open the statistics page", async () => {
   const app = await open("../../App.tsx", DESKTOP);
-  await app.press("id:stats-daily-details");
-  await app.waitFor("每日刷本明细");
-  await app.waitFor("暂无每日数据");
-  await app.press("id:stats-details-close");
   await app.press("id:stats-last-mirror-details");
-  await app.waitFor("镜牢完成记录");
-  await app.waitFor("暂无镜牢完成记录");
-  await app.press("id:stats-details-close");
+  await app.waitFor("最近镜牢用时（按环节）");
+  await app.waitFor("每日次数");
+  await app.press("role:button[主控台]");
+  await app.waitFor("日常任务");
+  await app.press("id:stats-daily-details");
+  await app.waitFor("最近镜牢用时（按环节）");
 });
 
 test("the log card opens a full run-log dialog", async () => {
@@ -82,8 +81,31 @@ test("the window card expands to its settings", async () => {
   await app.waitFor("分辨率 1440P");
   await app.press("label:异步 PostMessage 输入");
   await app.waitFor("异步输入 开");
+  await app.press("label:窗口位置");
+  await app.press("role:option[靠左对齐]");
+  await app.press("label:截图间隔");
+  await app.press("role:option[0.2s]");
+  await app.press("label:减少误触");
+  expect(app.texts()).toContain("0.2s");
   await app.press("id:window-toggle");
   expect(app.texts()).not.toContain("窗口分辨率");
+});
+
+test("the after-run actions save from the run bar", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  await app.press("id:after-completion");
+  await app.waitFor("结束后操作");
+  await app.press("label:退出游戏");
+  await app.press("label:电源动作");
+  await app.press("role:option[锁屏]");
+  await app.press("id:after-completion-save");
+  await app.waitFor("退出游戏 · 锁屏");
+  expect(app.texts()).toContain("默认");
+  await app.press("id:after-completion");
+  await app.press("label:退出游戏");
+  await app.press("id:after-completion-once");
+  await app.waitFor("锁屏");
+  expect(app.texts()).toContain("本次");
 });
 
 test("the device picker lists a device once refreshed", async () => {

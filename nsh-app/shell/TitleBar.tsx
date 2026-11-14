@@ -6,7 +6,7 @@
 // platform's window buttons where the platform has them. The drag regions are
 // the brand block and the flexible spacer only, so a press on a destination is
 // a press, not a window drag.
-import { Image, Text, View, platform, token } from "nsh";
+import { Animated, Easing, Image, Text, View, createAnimatedValue, effect, platform, reduceMotion, signal, token } from "nsh";
 import { isAvailable as hasDesktop, titleBar } from "nsh/desktop";
 import banner from "../assets/limbus_title_banner.png";
 import { Button, IconButton } from "../components/Button";
@@ -21,6 +21,16 @@ import { StatusDot } from "./StatusDot";
 /** The bar's area: the client's fixed 40pt bar. The platform still supplies
  *  the left/right insets for its own window buttons (traffic lights). */
 const TITLEBAR_HEIGHT = 40;
+
+/** The pill's slide: one duration and one curve for both channels, so the edge
+ *  and the width settle together. The curve decelerates hard at the end
+ *  (`cubic-bezier(0.32, 0.72, 0, 1)`), which is what makes the pill come to
+ *  rest instead of stopping. */
+const PILL_MS = 240;
+const PILL_EASING = Easing.bezier(0.32, 0.72, 0, 1);
+
+/** The pill's fade when a page outside the bar (Settings, Stats, Help) is up. */
+const PILL_FADE_MS = 160;
 
 /** macOS keeps the system's traffic lights on the left, so the app draws no
  *  window buttons there. */
@@ -73,24 +83,21 @@ export function TitleBar() {
         <Text class="text-xs font-semibold text-foreground">AALC</Text>
       </View>
 
-      <View class="flex-row items-center gap-1">
-        <Each of={PAGES}>
-          {(entry) => (
-            <NavItem
-              id={entry().id}
-              label={pageLabel(entry().id)}
-              icon={entry().icon}
-              status={entry().id === "home" ? currentHomeStatus() : null}
-            />
-          )}
-        </Each>
-      </View>
+      <NavBar />
 
       {/* Drag spacer: the bar's empty middle belongs to the window. */}
       <View class="h-full flex-1" desktop={{ windowDrag: true }} />
 
       <View class="flex-row items-center gap-1 pe-2">
-        <AppearanceButton />
+        <IconButton
+          name="chart"
+          label={pageLabel("stats")}
+          size="md"
+          variant={currentPage() === "stats" ? "outline" : "ghost"}
+          iconColor={currentPage() === "stats" ? brandIcon() : undefined}
+          onPress={() => navigate("stats")}
+          class="size-7"
+        />
         <IconButton
           name="settings"
           label={pageLabel("settings")}
@@ -100,6 +107,7 @@ export function TitleBar() {
           onPress={() => navigate("settings")}
           class="size-7"
         />
+        <AppearanceButton />
       </View>
 
       <If when={drawsWindowButtons}>
@@ -109,6 +117,113 @@ export function TitleBar() {
           <WindowButton control="close" icon="close" label={t("titlebarClose")} danger />
         </View>
       </If>
+    </View>
+  );
+}
+
+/** The destinations: one pill slides under the current one, and one button
+ *  follows each. The pill's width is the target's from the moment the page
+ *  changes and its left edge springs over to it, so a switch reads as one pill
+ *  moving rather than one closing and another opening. */
+function NavBar() {
+  const origin = createAnimatedValue(0);
+  const stretch = createAnimatedValue(1);
+  const fade = createAnimatedValue(1);
+  const measured = signal<Record<string, { x: number; w: number }>>({});
+  const pill = signal({ w: 0 });
+  let previous: { x: number; w: number } | null = null;
+  let width = 0;
+  let visible = true;
+
+  const place = (next: number) => {
+    if (Math.abs(width - next) < 0.5) return;
+    width = next;
+    pill.set({ w: next });
+  };
+
+  const report = (id: string, bounds: { origin: { x: number }; size: { width: number } }) => {
+    const next = { x: bounds.origin.x, w: bounds.size.width };
+    const current = measured()[id];
+    if (
+      current &&
+      Math.abs(current.x - next.x) < 0.5 &&
+      Math.abs(current.w - next.w) < 0.5
+    ) {
+      return;
+    }
+    measured.set({ ...measured(), [id]: next });
+  };
+
+  effect(() => {
+    const target = measured()[currentPage()];
+    const onNav = target !== undefined;
+    // `Animated` runs natively and has no reduced-motion switch of its own:
+    // the charge is ours, so the user's setting lands the pill at once.
+    const calm = reduceMotion();
+    // Settings, Stats and Help have no tab: the pill fades out for them.
+    if (onNav !== visible) {
+      visible = onNav;
+      if (calm) fade.set(onNav ? 1 : 0);
+      else Animated.timing(fade, { toValue: onNav ? 1 : 0, duration: PILL_FADE_MS }).start();
+    }
+    if (!target || target.w <= 0) return;
+    if (!previous) {
+      // The first layout: place it where the current page's tab is.
+      previous = target;
+      origin.set(target.x);
+      stretch.set(1);
+      place(target.w);
+      return;
+    }
+    const moved =
+      Math.abs(previous.x - target.x) >= 0.5 || Math.abs(previous.w - target.w) >= 0.5;
+    const from = previous;
+    previous = target;
+    if (!moved) {
+      place(target.w);
+      return;
+    }
+    if (calm) {
+      origin.set(target.x);
+      stretch.set(1);
+      place(target.w);
+      return;
+    }
+    // The native values land before the new width does. Taking the width first
+    // would leave the pill one frame wide as the target tab while its edge and
+    // scale were still the old ones: a pill stretched across both tabs.
+    origin.set(from.x);
+    stretch.set(from.w / target.w);
+    place(target.w);
+    Animated.parallel([
+      Animated.timing(origin, { toValue: target.x, duration: PILL_MS, easing: PILL_EASING }),
+      Animated.timing(stretch, { toValue: 1, duration: PILL_MS, easing: PILL_EASING }),
+    ]).start();
+  });
+
+  return (
+    <View class="relative flex-row items-center gap-1">
+      <View
+        class="absolute inset-y-0 rounded-full bg-brand"
+        style={{
+          width: pill().w,
+          transformOrigin: "left center",
+          transform: [{ translateX: origin }, { scaleX: stretch }],
+          opacity: fade,
+        }}
+      />
+      <Each of={PAGES}>
+        {(entry) => (
+          <View class="flex-none" onLayout={({ bounds }) => report(entry().id, bounds)}>
+            <NavItem
+              id={entry().id}
+              label={pageLabel(entry().id)}
+              icon={entry().icon}
+              status={entry().id === "home" ? currentHomeStatus() : null}
+            />
+          </View>
+        )}
+      </Each>
     </View>
   );
 }
@@ -126,7 +241,7 @@ function NavItem(props: {
       label={props.label}
       icon={props.icon}
       size="md"
-      variant={active() ? "primary" : "ghost"}
+      variant={active() ? "nav" : "ghost"}
       selected={active()}
       onPress={() => navigate(props.id)}
       class="h-8 px-2"

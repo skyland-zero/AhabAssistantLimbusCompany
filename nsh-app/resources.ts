@@ -1,5 +1,5 @@
-// The resources page's state: the resource groups, their versions and the sync
-// in flight.
+// The resource sync's state (Settings → 资源同步): the resource groups, their
+// versions and the sync in flight.
 //
 // Rust owns the groups and the sync (`resource.status` / `resource.checkUpdate`
 // / `resource.syncStart`); this module mirrors the snapshots and gives the

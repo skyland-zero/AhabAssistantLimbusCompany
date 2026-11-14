@@ -93,6 +93,27 @@ const WINDOW_SHADOW: Record<"light" | "dark", string> = {
   dark: "rgba(0, 0, 0, 0.55)",
 };
 
+/** The data-series colours of charts, in the design guide's `chart-1` …
+ *  `chart-5` roles. Not a skin's tokens either: a series means the same colour
+ *  in every skin, so the reader can carry a legend from one to another; the
+ *  two appearances only differ in how bright each hue is. */
+const CHART_TOKENS: Record<"light" | "dark", Record<string, string>> = {
+  light: {
+    "chart-1": "#c8354f",
+    "chart-2": "#2f6fbf",
+    "chart-3": "#1f8a5b",
+    "chart-4": "#b6791b",
+    "chart-5": "#6f5bbd",
+  },
+  dark: {
+    "chart-1": "#e05a72",
+    "chart-2": "#6fa8e6",
+    "chart-3": "#4ec98a",
+    "chart-4": "#e0b04a",
+    "chart-5": "#a48ce6",
+  },
+};
+
 /** One skin's colour tokens for one appearance, with `accent` laid over them and
  *  a colour theme laid over both.
  *
@@ -111,6 +132,7 @@ export function tokensFor(
   const tokens = {
     ...base,
     "window-shadow": WINDOW_SHADOW[appearance],
+    ...CHART_TOKENS[appearance],
     ...(override?.[appearance] ?? {}),
   };
   // The colour theme comes last: the user's own pick outranks both the skin's

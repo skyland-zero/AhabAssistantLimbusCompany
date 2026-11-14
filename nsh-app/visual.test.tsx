@@ -18,8 +18,6 @@ const PAGES: { label: string; marker: string; shot: string }[] = [
   { label: "队伍管理", marker: "全部", shot: "teams" },
   { label: "镜牢主题包", marker: "总权重：", shot: "theme-packs" },
   { label: "工具箱", marker: "自动战斗", shot: "toolbox" },
-  { label: "资源中心", marker: "检查更新", shot: "resources" },
-  { label: "帮助", marker: "目录", shot: "help" },
   { label: "设置", marker: "外观", shot: "settings" },
 ];
 
@@ -64,14 +62,11 @@ function editorTest(name: string, scheme: "light" | "dark"): void {
 function detailsTest(name: string, scheme: "light" | "dark"): void {
   test(name, async () => {
     const app = await open("./App.tsx", { ...DESKTOP, colorScheme: scheme });
-    await app.press("id:stats-daily-details");
-    await app.waitFor("每日刷本明细");
-    await shot(app, `${scheme}-stats-daily`);
-    await app.press("id:stats-details-close");
     await app.press("id:stats-last-mirror-details");
-    await app.waitFor("镜牢完成记录");
-    await shot(app, `${scheme}-stats-mirror`);
-    await app.press("id:stats-details-close");
+    await app.waitFor("最近镜牢用时（按环节）");
+    await shot(app, `${scheme}-stats`);
+    await app.press("role:button[主控台]");
+    await app.waitFor("日常任务");
     await app.press("id:link-start");
     await app.waitFor("Mock 任务已开始");
     await app.press("id:log-details");

@@ -20,7 +20,7 @@ nsh-app/
 ├── theme/<skin>.json   其余皮肤的 token，供 setTheme() 运行时切换
 ├── shell/              TSX：标题栏、侧栏、Toast 等窗口级 UI
 ├── components/         TSX：设计系统（按钮、控件、弹层、文本输入、图标）
-├── pages/              TSX：home / teams / settings / theme_packs / help
+├── pages/              TSX：home / teams / theme_packs / toolbox / settings / stats / help
 ├── native/             Rust 后端 crate 工作区（nsh.json `"rust": "native"`）
 │   ├── Cargo.toml      工作区根包 `aalc-native`，members 为 `crates/*`
 │   ├── crates/

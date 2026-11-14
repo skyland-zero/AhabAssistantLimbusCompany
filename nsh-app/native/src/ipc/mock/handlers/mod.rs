@@ -136,9 +136,38 @@ impl MockState {
             method::STATS_GET_SUMMARY => Ok(serde_json::to_value(&self.stats).unwrap()),
             method::STATS_GET_DAILY_SUMMARY => Ok(serde_json::to_value(DailyStatsPayload {
                 schemaVersion: 1,
-                dateFrom: String::new(),
-                dateTo: String::new(),
-                days: Vec::new(),
+                dateFrom: "2026-08-25".into(),
+                dateTo: "2026-08-31".into(),
+                days: vec![
+                    DailyStatEntry {
+                        date: "2026-08-27".into(),
+                        exp: 2,
+                        thread: 1,
+                        mirror: 0,
+                        total: 3,
+                    },
+                    DailyStatEntry {
+                        date: "2026-08-29".into(),
+                        exp: 2,
+                        thread: 2,
+                        mirror: 2,
+                        total: 6,
+                    },
+                    DailyStatEntry {
+                        date: "2026-08-30".into(),
+                        exp: 1,
+                        thread: 1,
+                        mirror: 2,
+                        total: 4,
+                    },
+                    DailyStatEntry {
+                        date: "2026-08-31".into(),
+                        exp: 2,
+                        thread: 1,
+                        mirror: 2,
+                        total: 5,
+                    },
+                ],
                 updatedAt: 0,
             })
             .unwrap()),

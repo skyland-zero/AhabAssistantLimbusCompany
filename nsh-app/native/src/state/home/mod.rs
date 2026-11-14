@@ -14,7 +14,8 @@ use crate::{
         contract::{event, method},
     },
     model::{
-        ConnectionStatus, DailyStatsPayload, DeviceInfo, ExecutionState, ExecutionStatsPayload,
+        AfterCompletionConfig, AfterExitAction, AfterPowerAction, ConnectionStatus,
+        DailyStatsPayload, DeviceInfo, ExecutionState, ExecutionStatsPayload,
         ExecutionStatusPayload, LogEntryPayload, PreviewStatus, PreviewStatusPayload, TasksConfig,
     },
 };
@@ -100,31 +101,65 @@ impl HomeState {
     pub fn configure(&mut self, selection: Value) -> Result<(), String> {
         let daily = selection.get("daily");
         self.tasks.enabledTasks.daily_task = enabled(daily);
-        self.tasks.daily_task.set_EXP_count = number(daily, "exp", 1);
-        self.tasks.daily_task.set_thread_count = number(daily, "thread", 3);
-        self.tasks.daily_task.use_continuous_combat = text(daily, "chain", "off") == "on";
+        let config = &mut self.tasks.daily_task;
+        config.set_EXP_count = number(daily, "exp", 1);
+        config.set_thread_count = number(daily, "thread", 3);
+        config.daily_teams = number(daily, "team", 1);
+        config.use_continuous_combat = flag(daily, "chain", false);
+        config.use_continuous_combat_select = number(daily, "chainCount", 1);
+        config.targeted_teaming_EXP = flag(daily, "targetedExp", false);
+        config.targeted_teaming_thread = flag(daily, "targetedThread", false);
+        config.EXP_day_1_2 = number(daily, "expSlash", 1);
+        config.EXP_day_3_4 = number(daily, "expPierce", 1);
+        config.EXP_day_5_6 = number(daily, "expBlunt", 1);
+        config.EXP_day_7 = number(daily, "expAll", 1);
+        config.thread_day_1 = number(daily, "threadMon", 1);
+        config.thread_day_2 = number(daily, "threadTue", 1);
+        config.thread_day_3 = number(daily, "threadWed", 1);
+        config.thread_day_4 = number(daily, "threadThu", 1);
+        config.thread_day_5 = number(daily, "threadFri", 1);
+        config.thread_day_6 = number(daily, "threadSat", 1);
+        config.thread_day_7 = number(daily, "threadSun", 1);
 
         let rewards = selection.get("rewards");
         self.tasks.enabledTasks.get_reward = enabled(rewards);
         self.tasks.get_reward.set_get_prize = match text(rewards, "mode", "all").as_str() {
-            "daily" => 1,
-            "weekly" => 2,
+            "lunacy" => 1,
+            "mail" => 2,
             _ => 0,
         };
 
         let enkephalin = selection.get("enkephalin");
         self.tasks.enabledTasks.buy_enkephalin = enabled(enkephalin);
         self.tasks.buy_enkephalin.set_lunacy_to_enkephalin = number(enkephalin, "times", 2);
-        self.tasks.buy_enkephalin.Dr_Grandet_mode = text(enkephalin, "grandet", "off") == "on";
+        self.tasks.buy_enkephalin.Dr_Grandet_mode = flag(enkephalin, "grandet", false);
+        self.tasks.buy_enkephalin.skip_enkephalin = flag(enkephalin, "skip", false);
 
         let mirror = selection.get("mirror");
         self.tasks.enabledTasks.mirror = enabled(mirror);
-        self.tasks.mirror.set_mirror_count = number(mirror, "runs", 1);
-        self.tasks.mirror.hard_mirror = text(mirror, "difficulty", "normal") == "hard";
+        let config = &mut self.tasks.mirror;
+        config.set_mirror_count = number(mirror, "runs", 1);
+        config.hard_mirror = text(mirror, "difficulty", "normal") == "hard";
+        config.hard_mirror_target_floors = count(mirror, "hardTarget", 5);
+        config.infinite_dungeons = flag(mirror, "infinite", false);
+        config.no_weekly_bonuses = flag(mirror, "noWeekly", false);
+        config.floor_3_exit = flag(mirror, "floorThree", false);
+        config.save_rewards = flag(mirror, "saveRewards", false);
+        config.hard_mirror_single_bonuses = flag(mirror, "singleBonus", false);
+        config.select_event_pack = flag(mirror, "selectEvent", false);
+        config.skip_event_pack = flag(mirror, "skipEvent", false);
+        config.re_claim_rewards = flag(mirror, "reclaim", false);
+        config.not_skip_whitegossypium = flag(mirror, "cotton", false);
+        config.fight_to_last_man = flag(mirror, "lastMan", false);
+        config.mirror_keyboard_navigation = flag(mirror, "keyboard", false);
+        config.mirror_keyboard_simple_pathfinding = flag(mirror, "simpleKeys", false);
+        config.mirror_prefer_hatred_and_despair = flag(mirror, "hatred", false);
+        config.mirror_minimize_non_boss_combat = flag(mirror, "minimize", false);
 
-        let resonance = selection.get("resonance");
-        self.tasks.enabledTasks.resonate_with_Ahab = enabled(resonance);
-        self.tasks.resonate_with_Ahab.enabled = text(resonance, "voice", "on") == "on";
+        // The card's own switch is the whole of this task's configuration.
+        let resonance = enabled(selection.get("resonance"));
+        self.tasks.enabledTasks.resonate_with_Ahab = resonance;
+        self.tasks.resonate_with_Ahab.enabled = resonance;
 
         let value = serde_json::to_value(&self.tasks).map_err(|error| error.to_string())?;
         self.rpc
@@ -135,50 +170,107 @@ impl HomeState {
 
     /// The console's five cards, derived from the contract's task config.
     pub fn selection(&self) -> Value {
+        let daily = &self.tasks.daily_task;
+        let enkephalin = &self.tasks.buy_enkephalin;
+        let mirror = &self.tasks.mirror;
         json!({
             "daily": {
                 "enabled": self.tasks.enabledTasks.daily_task,
-                "exp": self.tasks.daily_task.set_EXP_count.to_string(),
-                "thread": self.tasks.daily_task.set_thread_count.to_string(),
-                "chain": if self.tasks.daily_task.use_continuous_combat { "on" } else { "off" },
+                "exp": daily.set_EXP_count.to_string(),
+                "thread": daily.set_thread_count.to_string(),
+                "team": daily.daily_teams.to_string(),
+                "chain": onoff(daily.use_continuous_combat),
+                "chainCount": daily.use_continuous_combat_select.to_string(),
+                "targetedExp": onoff(daily.targeted_teaming_EXP),
+                "targetedThread": onoff(daily.targeted_teaming_thread),
+                "expSlash": daily.EXP_day_1_2.to_string(),
+                "expPierce": daily.EXP_day_3_4.to_string(),
+                "expBlunt": daily.EXP_day_5_6.to_string(),
+                "expAll": daily.EXP_day_7.to_string(),
+                "threadMon": daily.thread_day_1.to_string(),
+                "threadTue": daily.thread_day_2.to_string(),
+                "threadWed": daily.thread_day_3.to_string(),
+                "threadThu": daily.thread_day_4.to_string(),
+                "threadFri": daily.thread_day_5.to_string(),
+                "threadSat": daily.thread_day_6.to_string(),
+                "threadSun": daily.thread_day_7.to_string(),
             },
             "rewards": {
                 "enabled": self.tasks.enabledTasks.get_reward,
                 "mode": match self.tasks.get_reward.set_get_prize {
-                    1 => "daily",
-                    2 => "weekly",
+                    1 => "lunacy",
+                    2 => "mail",
                     _ => "all",
                 },
             },
             "enkephalin": {
                 "enabled": self.tasks.enabledTasks.buy_enkephalin,
-                "times": self.tasks.buy_enkephalin.set_lunacy_to_enkephalin.to_string(),
-                "grandet": if self.tasks.buy_enkephalin.Dr_Grandet_mode { "on" } else { "off" },
+                "times": enkephalin.set_lunacy_to_enkephalin.to_string(),
+                "grandet": onoff(enkephalin.Dr_Grandet_mode),
+                "skip": onoff(enkephalin.skip_enkephalin),
             },
             "mirror": {
                 "enabled": self.tasks.enabledTasks.mirror,
-                "runs": self.tasks.mirror.set_mirror_count.to_string(),
-                "difficulty": if self.tasks.mirror.hard_mirror { "hard" } else { "normal" },
+                "runs": mirror.set_mirror_count.to_string(),
+                "difficulty": if mirror.hard_mirror { "hard" } else { "normal" },
+                "hardTarget": mirror.hard_mirror_target_floors.to_string(),
+                "infinite": onoff(mirror.infinite_dungeons),
+                "noWeekly": onoff(mirror.no_weekly_bonuses),
+                "floorThree": onoff(mirror.floor_3_exit),
+                "saveRewards": onoff(mirror.save_rewards),
+                "singleBonus": onoff(mirror.hard_mirror_single_bonuses),
+                "selectEvent": onoff(mirror.select_event_pack),
+                "skipEvent": onoff(mirror.skip_event_pack),
+                "reclaim": onoff(mirror.re_claim_rewards),
+                "cotton": onoff(mirror.not_skip_whitegossypium),
+                "lastMan": onoff(mirror.fight_to_last_man),
+                "keyboard": onoff(mirror.mirror_keyboard_navigation),
+                "simpleKeys": onoff(mirror.mirror_keyboard_simple_pathfinding),
+                "hatred": onoff(mirror.mirror_prefer_hatred_and_despair),
+                "minimize": onoff(mirror.mirror_minimize_non_boss_combat),
             },
             "resonance": {
                 "enabled": self.tasks.enabledTasks.resonate_with_Ahab,
-                "voice": if self.tasks.resonate_with_Ahab.enabled { "on" } else { "off" },
             },
         })
     }
 
-    /// Sets the game window's width (`1080` or `1440`) and persists the tasks.
-    pub fn set_window_size(&mut self, size: u32) -> Result<(), String> {
-        self.tasks.set_windows.set_win_size = match size {
-            1440 => 1440,
-            _ => 1080,
-        };
-        self.save_tasks()
-    }
-
-    /// Toggles asynchronous input and persists the tasks.
-    pub fn toggle_async_input(&mut self) -> Result<(), String> {
-        self.tasks.set_windows.use_post_message = !self.tasks.set_windows.use_post_message;
+    /// Applies one of the window card's settings and persists the tasks.
+    /// `field` is `size`, `position`, `reduceMiscontact`, `screenshotInterval`,
+    /// `mouseInterval` or `asyncInput`; anything else is rejected.
+    pub fn set_window(&mut self, field: &str, value: &Value) -> Result<(), String> {
+        let windows = &mut self.tasks.set_windows;
+        match field {
+            "size" => {
+                // The card's `Select` hands its value over as text.
+                let requested = value
+                    .as_u64()
+                    .or_else(|| value.as_str().and_then(|value| value.parse::<u64>().ok()));
+                windows.set_win_size = match requested {
+                    Some(720) => 720,
+                    Some(1440) => 1440,
+                    _ => 1080,
+                }
+            }
+            "position" => {
+                let position = value.as_str().unwrap_or("free");
+                windows.set_win_position = match position {
+                    "center" | "left_top" | "right_top" => position.to_owned(),
+                    _ => "free".to_owned(),
+                }
+            }
+            "reduceMiscontact" => {
+                windows.set_reduce_miscontact = value.as_bool().unwrap_or(true)
+            }
+            "screenshotInterval" => {
+                windows.screenshot_interval = interval(value, windows.screenshot_interval)?
+            }
+            "mouseInterval" => {
+                windows.mouse_action_interval = interval(value, windows.mouse_action_interval)?
+            }
+            "asyncInput" => windows.use_post_message = value.as_bool().unwrap_or(false),
+            other => return Err(format!("未知的窗口设置：{other}")),
+        }
         self.save_tasks()
     }
 
@@ -190,12 +282,60 @@ impl HomeState {
         Ok(())
     }
 
+    /// The "after the queue finishes" actions, as the console edits them.
+    pub fn after_completion(&self) -> Value {
+        let config = &self.tasks.afterCompletion;
+        json!({
+            "actions": config.actions.iter().map(|action| exit_key(*action)).collect::<Vec<_>>(),
+            "power": power_key(config.powerAction),
+            "keep": config.keepAfterCompletion,
+        })
+    }
+
+    /// Replaces the after-run actions and persists the tasks. The actions are
+    /// the console's keys; `keep` marks them as the saved default, and leaves
+    /// them as a choice for this run only when it is false.
+    pub fn set_after_completion(
+        &mut self,
+        actions: Vec<String>,
+        power: String,
+        keep: bool,
+    ) -> Result<(), String> {
+        let mut parsed = Vec::with_capacity(actions.len());
+        for action in &actions {
+            parsed.push(match action.as_str() {
+                "exit_game" => AfterExitAction::ExitGame,
+                "exit_emulator" => AfterExitAction::ExitEmulator,
+                "exit_aalc" => AfterExitAction::ExitAalc,
+                other => return Err(format!("未知的退出动作：{other}")),
+            });
+        }
+        let power_action = match power.as_str() {
+            "none" => AfterPowerAction::None,
+            "sleep" => AfterPowerAction::Sleep,
+            "hibernate" => AfterPowerAction::Hibernate,
+            "lock" => AfterPowerAction::Lock,
+            "shutdown" => AfterPowerAction::Shutdown,
+            other => return Err(format!("未知的电源动作：{other}")),
+        };
+        self.tasks.afterCompletion = AfterCompletionConfig {
+            actions: parsed,
+            powerAction: power_action,
+            keepAfterCompletion: keep,
+        };
+        self.save_tasks()
+    }
+
     /// Window settings shown on the console.
     pub fn window_summary(&self) -> Value {
         json!({
+            "size": self.tasks.set_windows.set_win_size,
             "resolution": format!("{}P", self.tasks.set_windows.set_win_size),
-            "asyncInput": self.tasks.set_windows.use_post_message,
             "position": self.tasks.set_windows.set_win_position,
+            "reduceMiscontact": self.tasks.set_windows.set_reduce_miscontact,
+            "screenshotInterval": self.tasks.set_windows.screenshot_interval,
+            "mouseInterval": self.tasks.set_windows.mouse_action_interval,
+            "asyncInput": self.tasks.set_windows.use_post_message,
         })
     }
 
@@ -363,6 +503,14 @@ impl HomeState {
         serde_json::to_value(&self.stats).unwrap_or(Value::Null)
     }
 
+    /// Drains the event queue first, then returns the payload: a page that shows
+    /// the mirror history sees a finished run without waiting for the console's
+    /// poll.
+    pub fn poll_stats(&mut self) -> Value {
+        self.drain_events();
+        self.stats_payload()
+    }
+
     /// Load the daily statistics for the detail dialog.
     pub fn load_daily_stats(&mut self) -> Result<DailyStatsPayload, String> {
         self.rpc
@@ -491,12 +639,64 @@ fn text(value: Option<&Value>, key: &str, fallback: &str) -> String {
         .to_owned()
 }
 
+/// A switch on a card, as `"on"` / `"off"`.
+fn flag(value: Option<&Value>, key: &str, fallback: bool) -> bool {
+    match value.and_then(|value| value.get(key)).and_then(Value::as_str) {
+        Some("on") => true,
+        Some("off") => false,
+        _ => fallback,
+    }
+}
+
+fn onoff(value: bool) -> &'static str {
+    if value { "on" } else { "off" }
+}
+
+fn exit_key(action: AfterExitAction) -> &'static str {
+    match action {
+        AfterExitAction::ExitGame => "exit_game",
+        AfterExitAction::ExitEmulator => "exit_emulator",
+        AfterExitAction::ExitAalc => "exit_aalc",
+    }
+}
+
+fn power_key(action: AfterPowerAction) -> &'static str {
+    match action {
+        AfterPowerAction::None => "none",
+        AfterPowerAction::Sleep => "sleep",
+        AfterPowerAction::Hibernate => "hibernate",
+        AfterPowerAction::Lock => "lock",
+        AfterPowerAction::Shutdown => "shutdown",
+    }
+}
+
+fn count(value: Option<&Value>, key: &str, fallback: u32) -> u32 {
+    value
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_str)
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(fallback)
+}
+
 fn number(value: Option<&Value>, key: &str, fallback: u8) -> u8 {
     value
         .and_then(|value| value.get(key))
         .and_then(Value::as_str)
         .and_then(|value| value.parse::<u8>().ok())
         .unwrap_or(fallback)
+}
+
+/// A window interval in seconds; the sidecar rejects one it cannot use, so the
+/// range is kept to what the console offers (0.05 to 5s).
+fn interval(value: &Value, fallback: f32) -> Result<f32, String> {
+    let seconds = value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|value| value.parse::<f64>().ok()))
+        .ok_or_else(|| format!("不是有效的间隔：{value}"))? as f32;
+    if !(0.05..=5.0).contains(&seconds) {
+        return Err(format!("间隔超出范围（0.05~5s）：{seconds}"));
+    }
+    Ok(if seconds.is_finite() { seconds } else { fallback })
 }
 
 #[cfg(test)]

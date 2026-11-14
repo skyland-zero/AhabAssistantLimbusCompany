@@ -4,6 +4,144 @@ use super::*;
 
 impl Default for MockState {
     fn default() -> Self {
+        // Six recorded mirror runs: two teams, both difficulties, one failed
+        // run, and every phase of the sidecar's record filled in, so the
+        // console's history, the statistics page and the dialogues all have
+        // data to show in mock runs and tests.
+        let mirror_history = vec![
+            mock_mirror(json!({
+                "completedAt": "2026-08-31T21:04:00+08:00",
+                "runId": "mock-run-6",
+                "totalSeconds": 1520.4,
+                "battleSeconds": 980.4,
+                "eventSeconds": 150.0,
+                "shopSeconds": 80.0,
+                "findRoadSeconds": 240.0,
+                "themePackSeconds": 30.0,
+                "rewardCardSeconds": 15.0,
+                "egoGiftSeconds": 10.0,
+                "settlementSeconds": 10.0,
+                "otherSeconds": 5.0,
+                "eventCount": 4,
+                "mode": "normal",
+                "floorCount": 10,
+                "routeId": "spiderweb_family_route",
+                "routeName": "蜘蛛巢默认路线",
+                "routeNameEn": "Spiderweb default route",
+                "team": mock_team("team-2", "编队 2 (烧伤)", 2, "burn")
+            })),
+            mock_mirror(json!({
+                "completedAt": "2026-08-31T19:12:00+08:00",
+                "runId": "mock-run-5",
+                "totalSeconds": 1980.5,
+                "battleSeconds": 1310.5,
+                "eventSeconds": 200.0,
+                "shopSeconds": 110.0,
+                "findRoadSeconds": 260.0,
+                "themePackSeconds": 40.0,
+                "rewardCardSeconds": 20.0,
+                "egoGiftSeconds": 15.0,
+                "settlementSeconds": 20.0,
+                "otherSeconds": 5.0,
+                "eventCount": 5,
+                "hardMode": true,
+                "mode": "hard",
+                "floorCount": 15,
+                "routeId": "spiderweb_family_route",
+                "routeName": "蜘蛛巢默认路线",
+                "routeNameEn": "Spiderweb default route",
+                "team": mock_team("team-1", "编队 1 (震颤)", 1, "tremor")
+            })),
+            mock_mirror(json!({
+                "completedAt": "2026-08-30T22:41:00+08:00",
+                "runId": "mock-run-4",
+                "totalSeconds": 1610.2,
+                "battleSeconds": 1050.2,
+                "eventSeconds": 160.0,
+                "shopSeconds": 90.0,
+                "findRoadSeconds": 230.0,
+                "themePackSeconds": 35.0,
+                "rewardCardSeconds": 15.0,
+                "egoGiftSeconds": 10.0,
+                "settlementSeconds": 15.0,
+                "otherSeconds": 5.0,
+                "eventCount": 3,
+                "mode": "normal",
+                "floorCount": 10,
+                "routeId": "spiderweb_family_route",
+                "routeName": "蜘蛛巢默认路线",
+                "routeNameEn": "Spiderweb default route",
+                "team": mock_team("team-2", "编队 2 (烧伤)", 2, "burn")
+            })),
+            mock_mirror(json!({
+                "completedAt": "2026-08-30T20:07:00+08:00",
+                "runId": "mock-run-3",
+                "totalSeconds": 940.8,
+                "battleSeconds": 720.8,
+                "eventSeconds": 90.0,
+                "shopSeconds": 40.0,
+                "findRoadSeconds": 70.0,
+                "themePackSeconds": 10.0,
+                "rewardCardSeconds": 5.0,
+                "egoGiftSeconds": 0.0,
+                "settlementSeconds": 5.0,
+                "otherSeconds": 0.0,
+                "eventCount": 2,
+                "failed": true,
+                "failureReason": "战斗超时",
+                "hardMode": true,
+                "mode": "hard",
+                "floorCount": 8,
+                "routeId": "spiderweb_family_route",
+                "routeName": "蜘蛛巢默认路线",
+                "routeNameEn": "Spiderweb default route",
+                "team": mock_team("team-1", "编队 1 (震颤)", 1, "tremor")
+            })),
+            mock_mirror(json!({
+                "completedAt": "2026-08-29T23:15:00+08:00",
+                "runId": "mock-run-2",
+                "totalSeconds": 2050.1,
+                "battleSeconds": 1390.1,
+                "eventSeconds": 210.0,
+                "shopSeconds": 120.0,
+                "findRoadSeconds": 240.0,
+                "themePackSeconds": 40.0,
+                "rewardCardSeconds": 20.0,
+                "egoGiftSeconds": 10.0,
+                "settlementSeconds": 15.0,
+                "otherSeconds": 5.0,
+                "eventCount": 5,
+                "hardMode": true,
+                "mode": "hard",
+                "floorCount": 15,
+                "routeId": "spiderweb_family_route",
+                "routeName": "蜘蛛巢默认路线",
+                "routeNameEn": "Spiderweb default route",
+                "team": mock_team("team-1", "编队 1 (震颤)", 1, "tremor")
+            })),
+            mock_mirror(json!({
+                "completedAt": "2026-08-29T20:02:00+08:00",
+                "runId": "mock-run-1",
+                "totalSeconds": 1875.3,
+                "battleSeconds": 1230.3,
+                "eventSeconds": 190.0,
+                "shopSeconds": 100.0,
+                "findRoadSeconds": 250.0,
+                "themePackSeconds": 30.0,
+                "rewardCardSeconds": 20.0,
+                "egoGiftSeconds": 20.0,
+                "settlementSeconds": 25.0,
+                "otherSeconds": 10.0,
+                "eventCount": 4,
+                "hardMode": true,
+                "mode": "hard",
+                "floorCount": 15,
+                "routeId": "spiderweb_family_route",
+                "routeName": "蜘蛛巢默认路线",
+                "routeNameEn": "Spiderweb default route",
+                "team": mock_team("team-2", "编队 2 (烧伤)", 2, "burn")
+            })),
+        ];
         Self {
             next_team_id: 4,
             next_run_id: 0,
@@ -15,6 +153,18 @@ impl Default for MockState {
             execution: ExecutionStatusPayload::default(),
             stats: ExecutionStatsPayload {
                 schemaVersion: 1,
+                lastMirror: mirror_history.first().cloned(),
+                mirrorHistory: mirror_history,
+                today: StatCounts {
+                    exp: 2,
+                    thread: 1,
+                    mirror: 3,
+                },
+                week: StatCounts {
+                    exp: 6,
+                    thread: 4,
+                    mirror: 6,
+                },
                 ..ExecutionStatsPayload::default()
             },
             team_stats: HashMap::from([(
@@ -244,4 +394,24 @@ impl Default for MockState {
             completions: std::collections::VecDeque::new(),
         }
     }
+}
+
+/// One mirror record of the mock's history, decoded through the model so the
+/// fixture fails loudly when the contract's shape drifts.
+fn mock_mirror(value: Value) -> MirrorCompletionStats {
+    serde_json::from_value(value).expect("the mock's mirror fixture is valid")
+}
+
+/// The team snapshot a mock mirror record was fought with.
+fn mock_team(id: &str, name: &str, number: u32, system: &str) -> Value {
+    json!({
+        "id": id,
+        "name": name,
+        "number": number,
+        "sinners": [],
+        "sinnerNames": [],
+        "sinnerNamesEn": [],
+        "system": system,
+        "accessoryScheme": system,
+    })
 }
