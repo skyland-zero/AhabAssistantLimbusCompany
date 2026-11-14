@@ -93,8 +93,7 @@ export function TitleBar() {
           name="chart"
           label={pageLabel("stats")}
           size="md"
-          variant={currentPage() === "stats" ? "outline" : "ghost"}
-          iconColor={currentPage() === "stats" ? brandIcon() : undefined}
+          variant={currentPage() === "stats" ? "soft" : "ghost"}
           onPress={() => navigate("stats")}
           class="size-7"
         />
@@ -102,8 +101,7 @@ export function TitleBar() {
           name="settings"
           label={pageLabel("settings")}
           size="md"
-          variant={currentPage() === "settings" ? "outline" : "ghost"}
-          iconColor={currentPage() === "settings" ? brandIcon() : undefined}
+          variant={currentPage() === "settings" ? "soft" : "ghost"}
           onPress={() => navigate("settings")}
           class="size-7"
         />
@@ -204,7 +202,7 @@ function NavBar() {
   return (
     <View class="relative flex-row items-center gap-1">
       <View
-        class="absolute inset-y-0 rounded-full bg-brand"
+        class="absolute inset-y-0 rounded-full bg-brand/15 dark:bg-brand-light"
         style={{
           width: pill().w,
           transformOrigin: "left center",
@@ -243,20 +241,15 @@ function NavItem(props: {
       size="md"
       variant={active() ? "nav" : "ghost"}
       selected={active()}
+      iconColor={active() ? token("brand") : token("foreground")}
       onPress={() => navigate(props.id)}
-      class="h-8 px-2"
+      class={`h-8 px-2 ${active() ? "" : "text-foreground/80"}`}
     >
       <If when={props.status}>
         {(status) => <StatusDot status={status()} />}
       </If>
     </Button>
   );
-}
-
-/** The accent token, for the settings button's open state (the GPUI shell
- *  tinted its glyph with `brand` while Settings was showing). */
-function brandIcon(): string {
-  return token("brand");
 }
 
 /** Cycles light → dark → system, and says which one is showing. */

@@ -22,7 +22,7 @@ import { Collapsible } from "nsh/base";
 import { Badge } from "../../components/Badge";
 import { Button, IconButton, Pressable } from "../../components/Button";
 import { Card, Rule } from "../../components/Card";
-import { SettingLine, SettingList } from "../../components/Field";
+import { SettingLine, SettingPanel } from "../../components/Field";
 import { Figure } from "../../components/Figure";
 import { Icon } from "../../components/Icon";
 import type { IconName } from "../../components/Icon";
@@ -395,7 +395,7 @@ function WindowCard() {
         <Chevron open={open()} />
       </Pressable>
       <Expansion open={open()}>
-        <SettingList columns={wideSettings() ? 2 : 1}>
+        <SettingPanel columns={wideSettings() ? 2 : 1}>
           <SettingLine label="窗口分辨率">
             <Select<string>
               accessibilityLabel="窗口分辨率"
@@ -446,7 +446,7 @@ function WindowCard() {
               onChange={() => setWindowSetting("asyncInput", !window().asyncInput)}
             />
           </SettingLine>
-        </SettingList>
+        </SettingPanel>
       </Expansion>
     </Card>
   );
@@ -550,11 +550,11 @@ function TaskCard(props: { task: Task; index: number }) {
                     <Text class="text-xs font-medium text-muted-foreground">{title()}</Text>
                   )}
                 </If>
-                <SettingList columns={settingColumns(group().params.length)}>
+                <SettingPanel columns={settingColumns(group().params.length)}>
                   <Each of={group().params} key={(param) => param.id}>
                     {(param) => <ParamRow task={task().id} param={param()} />}
                   </Each>
-                </SettingList>
+                </SettingPanel>
               </View>
             )}
           </Each>

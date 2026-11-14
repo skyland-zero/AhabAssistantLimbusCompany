@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AALC.nsh · 顶栏导航选中态设计稿</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  :root {
+    --doc-bg: #08090a;
+    --doc-fg: #ecedef;
+    --doc-muted: #8d939b;
+    --doc-line: rgba(255,255,255,.08);
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+  body {
+    margin: 0;
+    padding: 40px 36px 64px;
+    background:
+      radial-gradient(1100px 520px at 50% -10%, rgba(255,177,200,.05), transparent 60%),
+      var(--doc-bg);
+    color: var(--doc-fg);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc-head {
+    max-width: 1780px;
+    margin: 0 auto 30px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffb1c8;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ffb1c8;
+    box-shadow: 0 0 16px rgba(255,177,200,.55);
+  }
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 650;
+    letter-spacing: -.02em;
+  }
+  .sub {
+    margin: 8px 0 0;
+    color: var(--doc-muted);
+    font-size: 13px;
+    line-height: 1.7;
+    max-width: 820px;
+  }
+  .meta {
+    flex: none;
+    text-align: right;
+    color: var(--doc-muted);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .meta strong { display: block; color: var(--doc-fg); font-size: 12px; font-weight: 600; }
+  .grid {
+    max-width: 1780px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+  .artboard {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid var(--doc-line);
+    box-shadow: 0 18px 48px rgba(0,0,0,.3);
+    background: var(--stage);
+  }
+  .stage {
+    padding: 24px 26px 28px;
+    background: var(--stage);
+  }
+  .stage-label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--label);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 21px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid var(--tag-border);
+    background: var(--tag-bg);
+    color: var(--label);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    text-transform: none;
+  }
+  .tag.accent {
+    color: var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 25%, transparent);
+    background: color-mix(in srgb, var(--brand) 8%, transparent);
+  }
+  .artboard.dark {
+    --stage: #0b0c0d;
+    --card: #17191b;
+    --fg: #ecedef;
+    --muted: #222528;
+    --muted-fg: #a2a7ae;
+    --input: #3a3e44;
+    --brand: #ffb1c8;
+    --brand-fg: #3a0016;
+    --brand-light: #4a1024;
+    --active-fill: var(--brand-light);
+    --label: #8d939b;
+    --tag-bg: rgba(255,255,255,.035);
+    --tag-border: rgba(255,255,255,.08);
+    --hairline: rgba(255,255,255,.075);
+    --bar-shadow: 0 12px 32px rgba(0,0,0,.42);
+  }
+  .artboard.light {
+    --stage: #fafafa;
+    --card: #ffffff;
+    --fg: #17181a;
+    --muted: #f4f2f3;
+    --muted-fg: #6e7076;
+    --input: #ded9db;
+    --brand: #b80049;
+    --brand-fg: #ffffff;
+    --brand-light: #ffe4ec;
+    --active-fill: color-mix(in srgb, var(--brand) 15%, transparent);
+    --label: #6e7076;
+    --tag-bg: rgba(23,24,26,.025);
+    --tag-border: rgba(23,24,26,.08);
+    --hairline: rgba(23,24,26,.075);
+    --bar-shadow: 0 12px 30px rgba(23,24,26,.10);
+  }
+
+  /* -------- app title bar -------- */
+  .bar {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 0 0 12px;
+    background: var(--card);
+    border-bottom: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: var(--bar-shadow);
+    color: var(--fg);
+    overflow: hidden;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 0 0;
+    flex: none;
+  }
+  .mark {
+    width: 38px;
+    height: 20px;
+    border-radius: 5px;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 5px),
+      linear-gradient(135deg, #d9b350, #8a6522 55%, #c79a37);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+  }
+  .brand-name {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    white-space: nowrap;
+  }
+  nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+  }
+  .nav {
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted-fg);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .nav svg { flex: none; }
+  .nav.active {
+    background: var(--brand);
+    color: var(--brand-fg);
+    font-weight: 500;
+  }
+  .bar.proposed .nav:not(.active) {
+    color: color-mix(in srgb, var(--fg) 80%, transparent);
+  }
+  .bar.proposed .nav.active {
+    background: var(--active-fill);
+    color: var(--brand);
+    font-weight: 600;
+  }
+  .spacer { flex: 1; min-width: 8px; }
+  .utils, .win {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+  .utils { gap: 2px; padding: 0 4px; }
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted-fg);
+    cursor: default;
+  }
+  .bar.proposed .icon-btn { color: color-mix(in srgb, var(--fg) 80%, transparent); }
+  .win { align-self: stretch; }
+  .win-btn {
+    width: 38px;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--muted-fg);
+    cursor: default;
+  }
+  .win-btn svg { display: block; }
+
+  /* -------- detail boards -------- */
+  .details {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 24px;
+  }
+  .panel {
+    border: 1px solid var(--doc-line);
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,.025), transparent 42%), #111315;
+    padding: 24px 26px 26px;
+  }
+  .panel h2 {
+    margin: 0 0 5px;
+    font-size: 16px;
+    font-weight: 650;
+    letter-spacing: -.01em;
+  }
+  .panel .note {
+    margin: 0 0 20px;
+    color: var(--doc-muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .anatomy {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 22px 24px;
+    border-radius: 16px;
+    background: #0b0c0d;
+    border: 1px solid rgba(255,255,255,.07);
+  }
+  .pill-big {
+    height: 48px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: #4a1024;
+    color: #ffb1c8;
+    font-size: 17px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pill-big svg { flex: none; }
+  .pill-caption {
+    color: var(--doc-muted);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .pill-caption b { color: var(--doc-fg); font-weight: 600; }
+  .token-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .token {
+    border: 1px solid var(--doc-line);
+    border-radius: 11px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.018);
+    font-size: 11px;
+    line-height: 1.6;
+    color: #c9ced4;
+  }
+  .token .k { display: block; color: var(--doc-muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 3px; }
+  .token .v { font-weight: 500; }
+  .utility-compare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .utility-card {
+    border: 1px solid var(--doc-line);
+    border-radius: 14px;
+    padding: 16px;
+    background: #0b0c0d;
+  }
+  .utility-card .k {
+    color: var(--doc-muted);
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .utility-row { display: flex; align-items: center; gap: 10px; }
+  .utility-icon {
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    border-radius: 10px;
+    border: 1px solid #3a3e44;
+    background: #17191b;
+    color: #ffb1c8;
+  }
+  .utility-icon.soft {
+    border-color: transparent;
+    background: #4a1024;
+    color: #ffb1c8;
+  }
+  .utility-label { color: #8d939b; font-size: 11px; }
+  .utility-label b { color: #ecedef; font-weight: 600; }
+  .list { margin: 0; padding: 0; list-style: none; }
+  .list li {
+    position: relative;
+    padding-left: 16px;
+    color: #c9ced4;
+    font-size: 12px;
+    line-height: 1.85;
+  }
+  .list li::before {
+    content: "";
+    position: absolute; top: 9px; left: 2px;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: #ffb1c8; opacity: .85;
+  }
+  .footnote {
+    grid-column: 1 / -1;
+    color: var(--doc-muted);
+    font-size: 11px;
+    line-height: 1.8;
+    padding: 2px 4px;
+  }
+  @media (max-width: 1100px) {
+    .grid { grid-template-columns: 1fr; }
+    .details { grid-template-columns: 1fr; }
+    .doc-head { flex-direction: column; align-items: flex-start; }
+    .meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+  <header class="doc-head">
+    <div>
+      <div class="eyebrow">AALC.nsh · Design Spec</div>
+      <h1>顶栏导航 · 选中态</h1>
+      <p class="sub">
+        位置和几何都不动，只把选中项的实心品牌胶囊换成浅品牌底 + 品牌色图标/文字，
+        并让未选中项从灰色回到前景色。参考 Bettbox/FlClash 的“安静选中”语言。
+      </p>
+    </div>
+    <div class="meta">
+      <strong>v1 · 选中态对比</strong>
+      2026-11-14<br />
+      Dark / Light · 820pt
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="artboard dark" id="art-dark-current">
+      <div class="stage">
+        <div class="stage-label">深色 · 当前 <span class="tag">实心 brand 胶囊</span></div>
+        <div class="bar current" id="bar-dark-current"></div>
+      </div>
+    </section>
+
+    <section class="artboard dark" id="art-dark-proposed">
+      <div class="stage">
+        <div class="stage-label">深色 · 建议 <span class="tag accent">软品牌底 + brand 字</span></div>
+        <div class="bar proposed" id="bar-dark-proposed"></div>
+      </div>
+    </section>
+
+    <section class="artboard light" id="art-light-current">
+      <div class="stage">
+        <div class="stage-label">浅色 · 当前 <span class="tag">实心 brand 胶囊</span></div>
+        <div class="bar current" id="bar-light-current"></div>
+      </div>
+    </section>
+
+    <section class="artboard light" id="art-light-proposed">
+      <div class="stage">
+        <div class="stage-label">浅色 · 建议 <span class="tag accent">软品牌底 + brand 字</span></div>
+        <div class="bar proposed" id="bar-light-proposed"></div>
+      </div>
+    </section>
+
+    <section class="details">
+      <div class="panel">
+        <h2>选中项 anatomy</h2>
+        <p class="note">形状、高度、滑动逻辑保持不变，只换填充、前景色和字重。</p>
+        <div class="anatomy">
+          <span class="pill-big" id="pill-big"></span>
+          <span class="pill-caption">
+            <b>高度 32pt</b> · 全圆角<br />
+            填充 <b>bg-brand-light</b><br />
+            图标 / 文字 <b>brand</b> · <b>600</b>
+          </span>
+        </div>
+        <div class="token-row">
+          <div class="token"><span class="k">选中填充 · 浅色</span><span class="v">brand / 15 · #f4d6e1</span></div>
+          <div class="token"><span class="k">选中填充 · 深色</span><span class="v">brand-light · #4a1024</span></div>
+          <div class="token"><span class="k">选中前景 · 浅色</span><span class="v">brand · #b80049</span></div>
+          <div class="token"><span class="k">选中前景 · 深色</span><span class="v">brand · #ffb1c8</span></div>
+          <div class="token"><span class="k">未选中 · 浅色</span><span class="v">foreground / 80</span></div>
+          <div class="token"><span class="k">未选中 · 深色</span><span class="v">foreground / 80</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>统计 / 设置</h2>
+        <p class="note">激活时不再用带描边的 outline 方块，改成和主导航一致的软品牌方块。</p>
+        <div class="utility-compare">
+          <div class="utility-card">
+            <div class="k">当前 · outline</div>
+            <div class="utility-row">
+              <span class="utility-icon" id="util-current"></span>
+              <span class="utility-label"><b>统计</b><br />激活态</span>
+            </div>
+          </div>
+          <div class="utility-card">
+            <div class="k">建议 · soft</div>
+            <div class="utility-row">
+              <span class="utility-icon soft" id="util-proposed"></span>
+              <span class="utility-label"><b>统计</b><br />激活态</span>
+            </div>
+          </div>
+        </div>
+        <h2 style="margin-top:22px">落地规则</h2>
+        <ul class="list">
+          <li>胶囊填充从 <b>bg-brand</b> 改为 <b>bg-brand-light</b>，滑动 240ms 和宽度逻辑不变。</li>
+          <li>选中文字/图标使用 <b>text-brand</b> / <b>token("brand")</b>，字重 600。</li>
+          <li>未选中项从 muted-foreground 提到 <b>foreground/80</b>，保持 hover 的 accent 淡洗。</li>
+          <li>统计/设置图标激活态改为 <b>bg-brand-light</b> + brand 图标，去掉 outline 边框。</li>
+          <li>不改窗口尺寸、导航位置、设置面板和页面切换动效。</li>
+        </ul>
+      </div>
+
+      <p class="footnote">
+        说明：这是选中态样式稿，不是侧栏方案；顶栏位置、尺寸和滑动胶囊都保持现状。
+        真实实现只需改 <b>Button.tsx</b> 的 <b>nav</b> 变体、<b>TitleBar.tsx</b> 的胶囊填充与未选中图标色，以及统计/设置两个 IconButton 的激活态。
+      </p>
+    </section>
+  </main>
+
+<script>
+  const icons = {
+    home: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4a1 1 0 0 1-1-1v-6a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v6a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2Z"/></svg>',
+    users: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    palette: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.8-.1 2.6-.3.9-.2 1.4-1.2 1-2-.2-.5-.3-1-.3-1.6 0-1.7 1.3-3 3-3h1.7c2.2 0 4-1.8 4-4C24 5.5 18.5 2 12 2Z"/></svg>',
+    wrench: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg>',
+    chart: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>',
+    settings: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+    sun: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+    min: '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5h6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
+    max: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2.2" y="2.2" width="5.6" height="5.6" stroke="currentColor" stroke-width="1"/></svg>',
+    close: '<svg width="10" height="10" viewBox="0 0 10 10"><path d="m2.2 2.2 5.6 5.6m0-5.6L2.2 7.8" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>'
+  };
+
+  const nav = [
+    ['home', '主控台'], ['users', '队伍管理'], ['palette', '镜牢主题包'], ['wrench', '工具箱']
+  ];
+
+  function titleBar() {
+    return `
+      <div class="brand"><span class="mark"></span><span class="brand-name">AALC.nsh</span></div>
+      <nav>
+        ${nav.map(([icon, label], i) => `<button class="nav${i === 0 ? ' active' : ''}">${icons[icon]}<span>${label}</span></button>`).join('')}
+      </nav>
+      <div class="spacer"></div>
+      <div class="utils">
+        <button class="icon-btn">${icons.chart}</button>
+        <button class="icon-btn">${icons.settings}</button>
+        <button class="icon-btn">${icons.sun}</button>
+      </div>
+      <div class="win">
+        <button class="win-btn">${icons.min}</button>
+        <button class="win-btn">${icons.max}</button>
+        <button class="win-btn">${icons.close}</button>
+      </div>`;
+  }
+
+  for (const id of ['bar-dark-current','bar-dark-proposed','bar-light-current','bar-light-proposed']) {
+    document.getElementById(id).innerHTML = titleBar();
+  }
+  document.getElementById('pill-big').innerHTML = `${icons.home}<span>主控台</span>`;
+  document.getElementById('util-current').innerHTML = icons.chart;
+  document.getElementById('util-proposed').innerHTML = icons.chart;
+</script>
+</body>
+</html>

@@ -11,6 +11,9 @@
 | `nsh-app/` | 窗口、页面、组件、主题、状态、IPC 客户端和发布资源；Rust 后端在 `nsh-app/native/`，界面在 TSX | 先读 `nsh-app/AGENTS.md` 与 `nsh-app/MIGRATION.md` |
 | Python 后端 | sidecar/Runner 入口、RPC 契约与分发、设备、任务编排、资源同步、预览、热键和更新 | 保持无界面，不导入 Qt |
 
+`nsh-app/` 的设置类界面采用 FlClash 式分组表面（tonal surface + 20pt 列槽 + 1pt 分隔线），
+具体规范见 `nsh-app/AGENTS.md` 的 1.1 与 `nsh-app/DESIGN.md`。
+
 Python 后端的主要入口：
 
 - `main_backend.py`：sidecar 进程入口；

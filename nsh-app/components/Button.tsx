@@ -1,4 +1,4 @@
-// The app's button: one press target, six variants, four sizes, and the
+// The app's button: one press target, the variants below, four sizes, and the
 // disabled and selected states. It wraps `nsh/base`'s `Button`, which owns the
 // presses, the keyboard activation, the disabled and selected semantics for
 // screen readers; only the look is decided here.
@@ -21,6 +21,7 @@ export type ButtonVariant =
   | "default" // the ordinary filled action, in the accent (the client's `Default`)
   | "primary" // the one default commit of a decision area: the same look as `default`
   | "secondary" // a quieter filled action, and the "current" state of a choice
+  | "soft" // the quiet brand fill of a chosen utility (the bar's icon buttons)
   | "outline" // an action that needs a boundary with less weight
   | "ghost" // a familiar, low-emphasis action
   | "danger" // a destructive commitment
@@ -51,6 +52,17 @@ const VARIANT: Record<ButtonVariant, VariantStyle> = {
       "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70 selected:bg-secondary/80",
     icon: () => token("secondary-foreground"),
   },
+  // FlClash's quiet chosen state: a soft brand surface with brand ink, not a
+  // solid accent fill. The title bar's utility buttons use it while their page
+  // is up; the main tabs let the sliding pill draw the same surface instead.
+  soft: {
+    frame:
+      "bg-brand/15 dark:bg-brand-light text-brand " +
+      "hover:bg-brand/15 dark:hover:bg-brand-light " +
+      "active:bg-brand/15 dark:active:bg-brand-light " +
+      "selected:bg-brand/15 dark:selected:bg-brand-light",
+    icon: () => token("brand"),
+  },
   outline: {
     frame:
       "border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground active:bg-secondary selected:bg-accent",
@@ -71,13 +83,13 @@ const VARIANT: Record<ButtonVariant, VariantStyle> = {
       "bg-transparent px-0 text-brand underline underline-offset-4 hover:text-brand-hover active:opacity-80",
     icon: () => token("brand"),
   },
-  // The title bar's current destination: the bar paints one pill that slides
-  // between the tabs, so the tab itself stays transparent and only carries the
-  // foreground that pill needs.
+  // The title bar's current destination: the bar paints one soft brand pill
+  // that slides between the tabs, so the tab itself stays transparent and only
+  // carries the foreground that pill needs.
   nav: {
     frame:
-      "bg-transparent text-brand-foreground hover:bg-transparent active:bg-transparent selected:bg-transparent",
-    icon: () => token("brand-foreground"),
+      "bg-transparent text-brand font-semibold hover:bg-transparent active:bg-transparent selected:bg-transparent",
+    icon: () => token("brand"),
   },
 };
 

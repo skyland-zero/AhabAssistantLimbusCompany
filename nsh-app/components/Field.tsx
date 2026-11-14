@@ -7,9 +7,32 @@
 import type { JSX } from "nsh";
 import { Text, View } from "nsh";
 
-/** The vertical rhythm of one card's settings: 12pt between rows. */
-export function SettingList(props: { children?: JSX.Element }) {
-  return <View class="w-full flex-col gap-3">{props.children}</View>;
+/** The vertical rhythm of one card's settings: 12pt between rows. Two columns
+ *  keep the same row rhythm, with a wider column gap so neighbouring rows read
+ *  apart; a list stays a column unless its caller asks for the split. */
+export function SettingList(props: { columns?: 1 | 2; children?: JSX.Element }) {
+  const layout = () =>
+    props.columns === 2 ? "grid grid-cols-2 gap-x-5 gap-y-3" : "flex-col gap-3";
+  return <View class={`w-full ${layout()}`}>{props.children}</View>;
+}
+
+/** A group of settings on its own tonal surface. It is a surface, not a second
+ *  card: no border and no shadow, just the muted fill and a continuous radius.
+ *  Two columns share one 1pt rule down the middle, inside a 20pt gutter, so a
+ *  control at the end of one column is never read as the next column's label.
+ *  A single column keeps the surface and drops the rule. */
+export function SettingPanel(props: { columns?: 1 | 2; children?: JSX.Element }) {
+  return (
+    <View class="w-full rounded-(--radius-lg) bg-muted p-2">
+      <View class="relative w-full">
+        <View
+          class="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-input"
+          classList={{ hidden: props.columns !== 2 }}
+        />
+        <SettingList columns={props.columns}>{props.children}</SettingList>
+      </View>
+    </View>
+  );
 }
 
 /** A label and its control on one line. */

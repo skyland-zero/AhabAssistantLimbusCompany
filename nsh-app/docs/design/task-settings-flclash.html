@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AALC.nsh · 任务设置两列布局设计稿</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  :root {
+    --doc-bg: #08090a;
+    --doc-fg: #ecedef;
+    --doc-muted: #8d939b;
+    --doc-line: rgba(255,255,255,.08);
+    --doc-panel: #111315;
+    --accent: #ffb1c8;
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+
+  body {
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(255,177,200,.055), transparent 60%),
+      var(--doc-bg);
+    color: var(--doc-fg);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    padding: 40px 32px 72px;
+  }
+
+  .doc-head {
+    max-width: 1356px;
+    margin: 0 auto 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 16px rgba(255,177,200,.55);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 650;
+    letter-spacing: -.02em;
+  }
+
+  .doc-sub {
+    margin: 8px 0 0;
+    color: var(--doc-muted);
+    font-size: 13px;
+    line-height: 1.7;
+    max-width: 720px;
+  }
+
+  .meta {
+    flex: none;
+    color: var(--doc-muted);
+    font-size: 11px;
+    line-height: 1.7;
+    text-align: right;
+    letter-spacing: .02em;
+  }
+
+  .meta strong {
+    display: block;
+    color: var(--doc-fg);
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .board-grid {
+    max-width: 1356px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+    align-items: start;
+  }
+
+  .artboard {
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid var(--doc-line);
+    box-shadow: 0 18px 50px rgba(0,0,0,.28);
+    background: var(--stage);
+  }
+
+  .stage {
+    background: var(--stage);
+    padding: 26px 32px 32px;
+  }
+
+  .stage-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--label);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-border);
+    color: var(--label);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    text-transform: none;
+  }
+
+  .tag.accent {
+    color: var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 24%, transparent);
+    background: color-mix(in srgb, var(--brand) 8%, transparent);
+  }
+
+  .artboard.dark {
+    --page: #0b0c0d;
+    --stage: #0b0c0d;
+    --card: #17191b;
+    --fg: #ecedef;
+    --muted: #222528;
+    --muted-fg: #a2a7ae;
+    --input: #3a3e44;
+    --brand: #ffb1c8;
+    --brand-fg: #3a0016;
+    --panel: var(--muted);
+    --line: var(--input);
+    --card-shadow: 0 26px 64px rgba(0,0,0,.5);
+    --label: #8d939b;
+    --tag-bg: rgba(255,255,255,.035);
+    --tag-border: rgba(255,255,255,.08);
+    --select-bg: #17191b;
+    --head-rule: rgba(255,255,255,.07);
+  }
+
+  .artboard.light {
+    --page: #fafafa;
+    --stage: #fafafa;
+    --card: #ffffff;
+    --fg: #17181a;
+    --muted: #f4f2f3;
+    --muted-fg: #6e7076;
+    --input: #ded9db;
+    --brand: #b80049;
+    --brand-fg: #ffffff;
+    --panel: var(--muted);
+    --line: var(--input);
+    --card-shadow: 0 20px 48px rgba(23,24,26,.10);
+    --label: #6e7076;
+    --tag-bg: rgba(23,24,26,.025);
+    --tag-border: rgba(23,24,26,.08);
+    --select-bg: #ffffff;
+    --head-rule: rgba(23,24,26,.07);
+  }
+
+  /* ---------- app card ---------- */
+
+  .card {
+    color: var(--fg);
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+  }
+
+  .card.wide { width: 568px; }
+  .card.narrow { width: 548px; }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 16px;
+  }
+
+  .head-icon {
+    color: var(--brand);
+    display: flex;
+    align-items: center;
+  }
+
+  .head-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg);
+    white-space: nowrap;
+  }
+
+  .head-summary {
+    margin-left: auto;
+    color: var(--muted-fg);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .head-chevron { color: var(--muted-fg); display: flex; }
+
+  .card-body {
+    border-top: 1px solid var(--head-rule);
+    padding: 12px 16px 16px;
+  }
+
+  .group + .group { margin-top: 14px; }
+
+  .group-title {
+    margin: 0 0 8px 2px;
+    color: var(--muted-fg);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+
+  .surface {
+    position: relative;
+    background: var(--panel);
+    border-radius: 16px;
+    padding: 8px;
+  }
+
+  .grid {
+    position: relative;
+    display: grid;
+    align-items: stretch;
+  }
+
+  .grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 20px;
+    row-gap: 12px;
+  }
+
+  .grid.one {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 12px;
+  }
+
+  .grid.two::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(50% - .5px);
+    width: 1px;
+    background: var(--line);
+    pointer-events: none;
+  }
+
+  .row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .row .label {
+    min-width: 0;
+    color: var(--fg);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+  }
+
+  .select {
+    flex: none;
+    width: 144px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 8px;
+    border: 1px solid var(--input);
+    border-radius: 10px;
+    background: var(--select-bg);
+    color: var(--fg);
+  }
+
+  .select .value {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .select svg { flex: none; color: var(--muted-fg); }
+
+  .switch {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--input);
+    transition: background .15s ease;
+  }
+
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: 0 1px 3px rgba(0,0,0,.22);
+    transition: transform .15s ease, background .15s ease;
+  }
+
+  .switch.on { background: var(--brand); }
+  .switch.on::after { transform: translateX(16px); }
+
+  /* ---------- notes ---------- */
+
+  .notes {
+    border: 1px solid var(--doc-line);
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0) 40%), var(--doc-panel);
+    padding: 28px 30px 30px;
+    color: var(--doc-fg);
+  }
+
+  .notes h2 {
+    margin: 0 0 6px;
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -.01em;
+  }
+
+  .notes .note-sub {
+    margin: 0 0 22px;
+    color: var(--doc-muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .spec {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .spec-cell {
+    border: 1px solid var(--doc-line);
+    border-radius: 12px;
+    padding: 11px 12px;
+    background: rgba(255,255,255,.018);
+  }
+
+  .spec-cell .k {
+    color: var(--doc-muted);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+
+  .spec-cell .v {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .notes h3 {
+    margin: 22px 0 10px;
+    color: var(--doc-fg);
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .notes ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .notes li {
+    position: relative;
+    padding-left: 16px;
+    color: #c9ced4;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+
+  .notes li::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    left: 2px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: .85;
+  }
+
+  .swatches {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .swatch {
+    flex: 1;
+    border: 1px solid var(--doc-line);
+    border-radius: 10px;
+    padding: 8px;
+    color: var(--doc-muted);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .swatch i {
+    display: block;
+    height: 20px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: var(--sw);
+    border: 1px solid rgba(255,255,255,.06);
+  }
+
+  .compare {
+    margin-top: 14px;
+    border: 1px solid var(--doc-line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .compare-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    font-size: 11px;
+    color: #c9ced4;
+  }
+
+  .compare-row + .compare-row { border-top: 1px solid var(--doc-line); }
+  .compare-row .tag-mini {
+    flex: none;
+    width: 42px;
+    color: var(--doc-muted);
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .compare-row .bad { color: #ff9b9e; }
+  .compare-row .good { color: #7de3ad; }
+
+  .footnote {
+    margin-top: 26px;
+    padding-top: 16px;
+    border-top: 1px solid var(--doc-line);
+    color: var(--doc-muted);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+
+  @media (max-width: 1080px) {
+    .board-grid { grid-template-columns: minmax(0, 1fr); }
+    .doc-head { flex-direction: column; align-items: flex-start; }
+    .meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+  <header class="doc-head">
+    <div>
+      <div class="eyebrow">AALC.nsh · Design Spec</div>
+      <h1>主控台任务设置 · FlClash 风格两列布局</h1>
+      <p class="doc-sub">
+        展开的设置按可用宽度分两档：默认 820pt 两列，最小 800pt 单列。两列时每组坐在一块低对比度
+        tonal surface 上，中央 1pt 竖线明确分栏；控件宽度保持不变。
+      </p>
+    </div>
+    <div class="meta">
+      <strong>v1 · 布局探索</strong>
+      2026-11-14<br />
+      Dark / Light · 820 / 800
+    </div>
+  </header>
+
+  <main class="board-grid">
+    <article class="artboard dark" id="art-dark-wide">
+      <div class="stage">
+        <div class="stage-label">
+          深色 · 两列
+          <span class="tag accent">820pt</span>
+          <span class="tag">设置区 534 · 列 249 · 槽 20</span>
+        </div>
+        <div id="card-dark-wide"></div>
+      </div>
+    </article>
+
+    <article class="artboard light" id="art-light-wide">
+      <div class="stage">
+        <div class="stage-label">
+          浅色 · 两列
+          <span class="tag accent">820pt</span>
+          <span class="tag">同一套 token</span>
+        </div>
+        <div id="card-light-wide"></div>
+      </div>
+    </article>
+
+    <article class="artboard dark" id="art-dark-narrow">
+      <div class="stage">
+        <div class="stage-label">
+          深色 · 单列
+          <span class="tag">800pt</span>
+          <span class="tag">设置区 514 · 竖线隐藏</span>
+        </div>
+        <div id="card-dark-narrow"></div>
+      </div>
+    </article>
+
+    <aside class="notes">
+      <h2>落地规则</h2>
+      <p class="note-sub">用现有主题 token 实现，不引入 Material 色板；深浅色和 7 个皮肤共用同一结构。</p>
+
+      <div class="spec">
+        <div class="spec-cell"><div class="k">分组表面</div><div class="v">bg-muted<br />radius 16 · 无边框/阴影</div></div>
+        <div class="spec-cell"><div class="k">列槽与分隔线</div><div class="v">20pt 槽 · 1pt 竖线<br />左右各约 10pt</div></div>
+        <div class="spec-cell"><div class="k">行节奏</div><div class="v">行距 12pt<br />标签 / 控件 16pt</div></div>
+        <div class="spec-cell"><div class="k">控件</div><div class="v">下拉 144×28<br />开关 36×20 · 不收窄</div></div>
+        <div class="spec-cell"><div class="k">分栏断点</div><div class="v">设置区 ≥520pt<br />≈ 窗口 ≥806pt</div></div>
+        <div class="spec-cell"><div class="k">单列</div><div class="v">表面保留<br />竖线隐藏</div></div>
+      </div>
+
+      <h3>与 FlClash 的关系</h3>
+      <ul>
+        <li>借它的 <b>Material You 分组表面</b>：低对比度、连续圆角、无重描边。</li>
+        <li>借它的 <b>Apple 式安静层级</b>：强调色只留在开关、选中态和焦点环。</li>
+        <li>不搬 48–56pt 的 Material list tile；这里保持 12pt 文字和现有密度。</li>
+        <li>不搬每行 leading icon：参数没有图标语义，加了会变成装饰噪音。</li>
+      </ul>
+
+      <h3>问题行</h3>
+      <div class="compare">
+        <div class="compare-row">
+          <span class="tag-mini">现在</span>
+          <span>经验本按属性配队</span><span class="switch" style="margin-left:auto"></span>
+          <span class="bad">16pt 空白，没有边界</span>
+        </div>
+        <div class="compare-row">
+          <span class="tag-mini">建议</span>
+          <span>经验本按属性配队</span><span class="switch" style="margin-left:auto"></span>
+          <span class="good">表面 + 20pt 槽 + 竖线</span>
+        </div>
+      </div>
+
+      <h3>颜色</h3>
+      <div class="swatches">
+        <div class="swatch"><i style="--sw:#0b0c0d"></i>page<br />#0b0c0d</div>
+        <div class="swatch"><i style="--sw:#17191b"></i>card<br />#17191b</div>
+        <div class="swatch"><i style="--sw:#222528"></i>surface<br />muted</div>
+        <div class="swatch"><i style="--sw:#3a3e44"></i>input / line<br />#3a3e44</div>
+        <div class="swatch"><i style="--sw:#ffb1c8"></i>brand<br />#ffb1c8</div>
+      </div>
+
+      <p class="footnote">
+        说明：两列时分组表面的 8pt 内边距与 20pt 列槽会把每列压到约 249pt，长标签
+        （如「经验斩击（周一/二）」）会自然换行；控件宽度不缩。若希望完全不增加换行，可去掉分组表面，
+        只保留 20pt 列槽 + 1pt 竖线。
+      </p>
+    </aside>
+  </main>
+
+<script>
+  const chevron = `
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  const down = `
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M3 5.25 7 9.25l4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  const listIcon = `
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M5.2 4.2 6.4 5.4 8.7 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.2 8.2 6.4 9.4 8.7 7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.2 12.2 6.4 13.4 8.7 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M10.2 4.7h1.3M10.2 8.7h1.3M10.2 12.7h1.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>`;
+
+  const daily = {
+    name: "日常任务",
+    summary: "经验本 ×1 · 纽本 ×3 · 连战 关",
+    groups: [
+      {
+        title: "常规",
+        rows: [
+          { label: "经验本", kind: "select", value: "×1" },
+          { label: "纽本", kind: "select", value: "×3" },
+          { label: "默认日常编队", kind: "select", value: "镜牢1" },
+          { label: "连战", kind: "switch", on: false },
+          { label: "连战次数", kind: "select", value: "1" },
+        ],
+      },
+      {
+        title: "高级",
+        rows: [
+          { label: "经验本按属性配队", kind: "switch", on: false },
+          { label: "纽本按星期配队", kind: "switch", on: false },
+          { label: "经验斩击（周一/二）", kind: "select", value: "镜牢1" },
+          { label: "经验突刺（周三/四）", kind: "select", value: "镜牢1" },
+          { label: "经验打击（周五/六）", kind: "select", value: "镜牢1" },
+          { label: "经验全属性（周日）", kind: "select", value: "镜牢1" },
+          { label: "纽本周一", kind: "select", value: "镜牢1" },
+          { label: "纽本周二", kind: "select", value: "镜牢1" },
+          { label: "纽本周三", kind: "select", value: "镜牢1" },
+          { label: "纽本周四", kind: "select", value: "镜牢1" },
+          { label: "纽本周五", kind: "select", value: "镜牢1" },
+          { label: "纽本周六", kind: "select", value: "镜牢1" },
+          { label: "纽周日", kind: "select", value: "镜牢1" },
+        ],
+      },
+    ],
+  };
+
+  function control(row) {
+    if (row.kind === "switch") {
+      return `<span class="switch${row.on ? " on" : ""}" aria-hidden="true"></span>`;
+    }
+    return `<span class="select"><span class="value">${row.value}</span>${chevron}</span>`;
+  }
+
+  function settingRow(row) {
+    return `<div class="row"><span class="label">${row.label}</span>${control(row)}</div>`;
+  }
+
+  function groupMarkup(group, columns) {
+    return `
+      <section class="group">
+        <div class="group-title">${group.title}</div>
+        <div class="surface">
+          <div class="grid ${columns === 2 ? "two" : "one"}">
+            ${group.rows.map(settingRow).join("")}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  function cardMarkup(columns) {
+    return `
+      <div class="card ${columns === 2 ? "wide" : "narrow"}">
+        <div class="card-head">
+          <span class="switch on" aria-hidden="true"></span>
+          <span class="head-icon">${listIcon}</span>
+          <span class="head-name">${daily.name}</span>
+          <span class="head-summary">${daily.summary}</span>
+          <span class="head-chevron">${down}</span>
+        </div>
+        <div class="card-body">
+          ${daily.groups.map((group) => groupMarkup(group, columns)).join("")}
+        </div>
+      </div>`;
+  }
+
+  document.getElementById("card-dark-wide").innerHTML = cardMarkup(2);
+  document.getElementById("card-light-wide").innerHTML = cardMarkup(2);
+  document.getElementById("card-dark-narrow").innerHTML = cardMarkup(1);
+</script>
+</body>
+</html>

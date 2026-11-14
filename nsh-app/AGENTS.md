@@ -10,6 +10,27 @@
 - 浅色/深色、7 个强调色、7 个皮肤由 `theme.json` 的 token 驱动，页面里不出现硬编码色值；
   颜色主题（`themeSeed`）在皮肤之上再覆盖品牌色。
 
+### 1.1 设计语言：FlClash 式分组表面
+
+设置类界面（主控台窗口设置、任务设置等）借用 FlClash 的 Material You 表面语言：
+
+- 分组使用 **tonal surface**：`bg-muted`、`rounded-(--radius-lg)`、`p-2`，无边框、无阴影。
+  它是表面容器，不是第二层卡片，不违反“卡片里不再套卡片”。
+- 分组标题在表面外：`text-xs font-medium text-muted-foreground`，表面上方 8pt。
+- 两列时列槽 20pt，中央 1pt `bg-input` 竖线；单列隐藏。行距 12pt，标签和控件之间 16pt。
+- 强调色只给开关、选中态和焦点环，不用品牌色铺底。
+- 导航（标题栏 tab、统计/设置图标）的选中态用 soft brand：浅色 `bg-brand/15`、
+  深色 `bg-brand-light`，配 `text-brand`/brand 图标，选中字重 600；
+  未选中用 `foreground/80`，不要整块 `bg-brand` 反白。
+- 开关：off 轨道 `bg-brand-light`、on 轨道 `bg-brand`，滑块 16pt：
+  浅色 off `bg-card`、on `brand-foreground`；深色 off `foreground`、on
+  `brand-foreground`。保持 36×20 和 2pt 内缩；不引入灰色 off 轨道。
+- 保持现有 12pt 标签和控件尺寸；不搬 FlClash 的 48–56pt Material list tile、
+  每行 leading icon 或 Material 色板。
+- 新设置界面优先复用 `components/Field.tsx` 的 `SettingPanel` / `SettingList`；
+  详细参数见 `DESIGN.md` 的「主控台的设置面板」，视觉稿见
+  `docs/design/task-settings-flclash.html`。
+
 ## 2. 目录职责
 
 ```text

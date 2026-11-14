@@ -124,11 +124,11 @@
 
 | 文件 | 组件 | 说明 |
 | --- | --- | --- |
-| `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `outline` `ghost` `danger` `link` `nav`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用）；`nav` 只给标题栏的选中项（胶囊由标题栏的滑块画） |
+| `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `soft` `outline` `ghost` `danger` `link` `nav`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用）；`soft` 是浅品牌底 + brand 字的安静选中态（统计/设置图标按钮）；`nav` 只给标题栏的选中项（胶囊由标题栏的滑块画，文字/图标为 brand） |
 | `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 标签/控件网格（行距 12pt，控件固定尾列）：设置页与主控台的窗口设置都用它 |
 | `Tabs.tsx` | `Tabs` | 分段选择的本体：一条选中胶囊在选项下移动（宽度一起伸缩），选项自己是透明按钮；统计范围/难度、队伍筛选、设置的主题与语言都走它 |
 | `Segmented.tsx` | `Segmented` / `SwatchRow` | `Tabs` 的简短形式（`secondary` 胶囊）；`SwatchRow` 是色块行 |
-| `Switch.tsx` | `Switch` | 开关（轨道 `input`→`primary`，滑块 16pt，`transition-transform`） |
+| `Switch.tsx` | `Switch` | 开关（轨道 `brand-light`→`brand`，滑块 16pt：浅色 off `bg-card`、on `brand-foreground`；深色 off `foreground`、on `brand-foreground`，`transition-transform`；浅色下是浅粉轨道 + 白滑块，开启为品牌色轨道 + 白滑块） |
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
 | `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾；`value=null` + `placeholder` 显示未选提示，`bare` 去掉自带边框/底色，供字段组使用 |
 | `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
@@ -151,7 +151,8 @@
   accent 按钮（GPUI Kit 的 `Primary` 映射到 `palette.brand`）。调用方按语义挑名字：`primary`
   表示「决策区唯一的默认提交」，`default` 表示普通填充动作。
 - 变体按**含义**选：`primary` 只给决策区里唯一的默认提交；工具栏里的普通动作是 `default`；
-  `danger` 只给不可逆的破坏性提交；`link` 只给外部资源；`nav` 只给标题栏当前页（胶囊由滑块画）。
+  `danger` 只给不可逆的破坏性提交；`link` 只给外部资源；`nav` 只给标题栏当前页（胶囊由滑块画）；
+  `soft` 用于不需要滑动胶囊的安静选中（统计/设置图标按钮）。
 - 图标按钮必须有 `accessibilityLabel`，且是正方（`aspect-square`）。
 - 焦点环在控件外侧：`focus-visible:outline-2 outline-offset-2 outline-ring`；祖先 `overflow-hidden`
   会裁掉它，布局要留出位置。
@@ -216,7 +217,13 @@ token；不要为此改 `nsh`。
 | 自动镜牢 | 17：轮次、难度、困牢目标、无限模式 + 13 个高级开关 |
 | 亚哈共鸣 | 0：卡片开关本身即设置，不展开 |
 
-设置行都走 `Field.tsx` 的 `SettingList` / `SettingLine`，控件固定尾列（`w-36` 的下拉、开关）。
+设置行都走 `Field.tsx` 的 `SettingPanel` / `SettingLine`，控件固定尾列（`w-36` 的下拉、36pt 开关）。
+
+展开的设置区采用 FlClash 式的 Material You 分组表面：每个分组是一块 `bg-muted`、`rounded-(--radius-lg)`、`p-2` 的 tonal surface，没有边框和阴影，不套第二层卡片；组标题在表面外，12pt 中等字重、`muted-foreground`。强调色只留在开关、选中态和焦点环，不用品牌色铺底。
+
+设置区按可用宽度分 1 / 2 列：设置区 ≥520pt（当前固定框线约窗口 ≥806pt）时，每组内部成为两列网格，列槽 20pt，中央 1pt `bg-input` 竖线；默认 820pt 窗口显示两列，最小 800pt 窗口回到单列。单列时表面保留，竖线隐藏。只有一项的分组不拆列。两列时控件宽度不变（`w-36` / 36pt 开关），每列约 249pt，`经验斩击（周一/二）` 这类长标签允许自然换行。窗口设置与任务卡共用这套规则。
+
+视觉稿：`docs/design/task-settings-flclash.html`。
 
 ### 队伍页
 
@@ -326,12 +333,15 @@ token；不要为此改 `nsh`。
 
 ### 动效清单（窗口壳）
 
+顶栏选中态视觉稿：`docs/design/nav-selected-spec.png`（源码 `nav-selected-style.html`）。
+
 | 变化 | 动效 |
 | --- | --- |
 | 导航项 hover | 底色淡洗 `hover:bg-accent`，`duration-150`，不改变尺寸 |
 | 导航项按下 | `active:bg-secondary` + `active:scale-[0.97]`，`duration-150` |
-| 导航项选中 | 标题栏只在选中项下面画**一条**滑动胶囊（`nav` 变体自己透明）：左边缘与宽度以 `scaleX` 一起滑到目标，`240ms`，`cubic-bezier(0.32, 0.72, 0, 1)`；原生值（位移 / 缩放）先落，再改胶囊宽度，否则会漏出一帧“新宽度 + 旧缩放”的胖胶囊 |
+| 导航项选中 | 标题栏只在选中项下面画**一条**滑动胶囊（`nav` 变体自己透明）：胶囊填充浅色 `bg-brand/15`、深色 `bg-brand-light`，选中文字/图标 `brand`、字重 600；未选中 `text-foreground/80` + foreground 图标。左边缘与宽度以 `scaleX` 一起滑到目标，`240ms`，`cubic-bezier(0.32, 0.72, 0, 1)`；原生值（位移 / 缩放）先落，再改胶囊宽度，否则会漏出一帧“新宽度 + 旧缩放”的胖胶囊 |
 | 离开导航页（统计 / 设置 / 帮助） | 胶囊 `160ms` 淡出；回到任一导航页时从当时的胶囊位置滑回 |
+| 统计 / 设置激活 | 图标按钮用 `soft` 变体：浅色 `bg-brand/15`、深色 `bg-brand-light`，配 brand 图标，28×28、圆角 10；不再用 outline 描边 |
 | 图标按钮 hover/按下 | 同导航项（`ghost` 的淡洗 + 收缩） |
 | 窗口按钮 hover | 淡洗；关闭按钮 `hover:bg-danger` |
 | 执行状态点 | 空闲不显示；运行 `success`、暂停 `warning`。GPUI 的呼吸动画默认关闭（`ENABLE_STATUS_DOT_BREATHING = false`），这里同样不做动画 |
