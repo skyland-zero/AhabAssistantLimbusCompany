@@ -35,10 +35,10 @@ pub struct TeamPreset {
     pub team: TeamDetail,
 }
 
-/// The formation page reserves the first twenty numbers as stable UI slots.
-/// This is intentionally a presentation limit; the backend may still expose
-/// teams outside this range.
-pub const TEAM_SLOT_COUNT: u32 = 20;
+/// The game exposes forty loadout numbers since the 2026-08-27 update. The
+/// formation page presents all of them as stable slots; the backend may still
+/// expose legacy teams outside this range.
+pub const TEAM_SLOT_COUNT: u32 = 40;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct TeamMirrorConfig {
@@ -207,6 +207,10 @@ pub struct TeamDetail {
     pub enabled: bool,
     #[serde(default)]
     pub teamCode: String,
+    /// The mirror queue position (1-based), or 0 when the team is not queued.
+    /// This is derived from `teams_active_queue`; saving ignores it.
+    #[serde(default)]
+    pub queuePosition: u32,
     pub mirrorConfig: Option<TeamMirrorConfig>,
 }
 
@@ -253,6 +257,7 @@ mod tests {
             accessoryScheme: "poise".into(),
             enabled: true,
             teamCode: "code".into(),
+            queuePosition: 0,
             mirrorConfig: Some(Default::default()),
         };
         let json = serde_json::to_string(&team).unwrap();
@@ -286,6 +291,7 @@ mod tests {
     fn team_ids_expose_persisted_numbers() {
         assert_eq!(team_number_from_id("team-1"), Some(1));
         assert_eq!(team_number_from_id("team-20"), Some(20));
+        assert_eq!(team_number_from_id("team-40"), Some(40));
         assert_eq!(team_number_from_id("team-0"), None);
         assert_eq!(team_number_from_id("team-invalid"), None);
     }

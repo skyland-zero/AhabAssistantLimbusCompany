@@ -10,13 +10,16 @@ use crate::{
     },
 };
 
-use super::types::{TeamFilter, TeamSaveInput, TeamSlot};
+use super::types::{TeamSaveInput, TeamSlot};
 
 pub struct TeamsState {
     rpc: RpcGateway,
     pub teams: Vec<TeamDetail>,
     pub sinners: Vec<SinnerInfo>,
     pub presets: Vec<TeamPreset>,
+    /// `select_team_by_order`: choose the physical list row instead of OCRing
+    /// the in-game team name.
+    pub select_team_by_order: bool,
     pub error: Option<String>,
 }
 
@@ -28,6 +31,7 @@ impl TeamsState {
             teams: Vec::new(),
             sinners: Vec::new(),
             presets: Vec::new(),
+            select_team_by_order: false,
             error: None,
         };
         if let Err(error) = state.refresh() {
@@ -54,80 +58,77 @@ impl TeamsState {
             .rpc
             .request(method::TEAM_PRESET_LIST, None)
             .map_err(|error| error.message)?;
+        let selection: bool = self
+            .rpc
+            .request(method::TEAM_SELECTION_GET, None)
+            .map_err(|error| error.message)?;
         self.teams = teams;
         self.sinners = sinners;
         self.presets = presets;
+        self.select_team_by_order = selection;
         self.error = None;
         Ok(())
     }
 
-    pub fn count_for(&self, filter: TeamFilter) -> usize {
-        match filter.purpose() {
-            None => self.teams.len(),
-            Some(purpose) => self
-                .teams
-                .iter()
-                .filter(|team| team.purpose == purpose)
-                .count(),
-        }
+    /// Switch between OCR-by-name and physical-row selection.
+    pub fn set_selection(&mut self, enabled: bool) -> Result<bool, String> {
+        let response: bool = self
+            .rpc
+            .request(
+                method::TEAM_SELECTION_SET,
+                Some(json!({ "enabled": enabled })),
+            )
+            .map_err(|error| error.message)?;
+        self.select_team_by_order = response;
+        Ok(response)
     }
 
-    /// Fixed formation numbers: every slot for "all", 2–20 for mirror,
-    /// slot 1 for experience dungeons, and none for general teams.
-    pub fn slots_for(&self, filter: TeamFilter) -> Vec<TeamSlot> {
-        let numbers: Vec<u32> = match filter {
-            TeamFilter::All => (1..=TEAM_SLOT_COUNT).collect(),
-            TeamFilter::Mirror => (2..=TEAM_SLOT_COUNT).collect(),
-            TeamFilter::Luxcavation => vec![1],
-            TeamFilter::General => Vec::new(),
-        };
-        let purpose = filter.purpose();
-        numbers
-            .into_iter()
-            .filter_map(|number| {
-                let team = self
+    /// Every game loadout number, whether or not a team is configured there.
+    /// Purpose is a property of the team, not of the slot, so the page filters
+    /// configured teams separately.
+    pub fn slots(&self) -> Vec<TeamSlot> {
+        (1..=TEAM_SLOT_COUNT)
+            .map(|number| TeamSlot {
+                number,
+                team: self
                     .teams
                     .iter()
                     .find(|team| team_number_from_id(&team.id) == Some(number))
-                    .cloned();
-                if let Some(team) = team.as_ref()
-                    && purpose.is_some()
-                    && Some(team.purpose) != purpose
-                {
-                    return None;
-                }
-                Some(TeamSlot { number, team })
+                    .cloned(),
             })
             .collect()
     }
 
-    /// Teams outside the fixed formation numbers the filter shows.
-    pub fn extra_teams_for(&self, filter: TeamFilter) -> Vec<TeamDetail> {
-        let fixed_numbers: Vec<u32> = match filter {
-            TeamFilter::All => (1..=TEAM_SLOT_COUNT).collect(),
-            TeamFilter::Mirror => (2..=TEAM_SLOT_COUNT).collect(),
-            TeamFilter::Luxcavation => vec![1],
-            TeamFilter::General => Vec::new(),
-        };
-        let purpose = filter.purpose();
+    /// Legacy teams whose id falls outside the forty game loadouts. They stay
+    /// visible in an "extra" section so old configs are not silently hidden.
+    pub fn extra_teams(&self) -> Vec<TeamDetail> {
         self.teams
             .iter()
-            .filter(|team| purpose.is_none() || Some(team.purpose) == purpose)
             .filter(|team| {
                 team_number_from_id(&team.id)
-                    .map(|number| !fixed_numbers.contains(&number))
+                    .map(|number| number > TEAM_SLOT_COUNT)
                     .unwrap_or(true)
             })
             .cloned()
             .collect()
     }
 
+    /// The built-in team templates, as loaded from `team.preset.list`.
+    pub fn presets(&self) -> Vec<TeamPreset> {
+        self.presets.clone()
+    }
+
     /// Create or update one team and return the stored payload.
     pub fn save(&mut self, input: TeamSaveInput) -> Result<TeamDetail, String> {
         let mut submitted = input.team;
+        submitted.queuePosition = 0;
         if submitted.purpose == TeamPurpose::Luxcavation {
             submitted.enabled = false;
             submitted.mirrorConfig = None;
+        } else if submitted.purpose == TeamPurpose::General {
+            // General teams are manual-only: their configuration stays for a
+            // later switch back to mirror, but they never join the queue.
+            submitted.enabled = false;
         }
         let mut value =
             serde_json::to_value(&submitted).map_err(|error| format!("队伍数据无效：{error}"))?;
@@ -141,6 +142,11 @@ impl TeamsState {
             && let Some(object) = value.as_object_mut()
         {
             object.insert("mirrorConfig".to_owned(), Value::Null);
+            object.insert("enabled".to_owned(), Value::Bool(false));
+        }
+        if submitted.purpose == TeamPurpose::General
+            && let Some(object) = value.as_object_mut()
+        {
             object.insert("enabled".to_owned(), Value::Bool(false));
         }
 
@@ -158,7 +164,16 @@ impl TeamsState {
             None => return Err("team.save 返回了空结果".to_owned()),
         };
         self.apply_saved(&submitted, saved.clone());
-        Ok(saved)
+        // Enabling, disabling or re-purposing a team shifts the rotation
+        // positions of the other teams. Re-read the projection so the page's
+        // queue strip is not left with stale `queuePosition` values.
+        self.refresh()?;
+        Ok(self
+            .teams
+            .iter()
+            .find(|team| team.id == saved.id)
+            .cloned()
+            .unwrap_or(saved))
     }
 
     fn apply_saved(&mut self, submitted: &TeamDetail, saved: TeamDetail) {
@@ -179,7 +194,7 @@ impl TeamsState {
         self.rpc
             .request_value(method::TEAM_DELETE, Some(json!({ "id": team_id })))
             .map_err(|error| error.message)?;
-        self.teams.retain(|team| team.id != team_id);
+        self.refresh()?;
         Ok(())
     }
 
@@ -192,7 +207,10 @@ impl TeamsState {
             .cloned()
             .ok_or_else(|| "未找到要更新的队伍".to_owned())?;
         if existing.purpose == TeamPurpose::Luxcavation {
-            return Err("经验本队伍不参与镜牢启用队列".to_owned());
+            return Err("资源本队伍不参与镜牢启用队列".to_owned());
+        }
+        if existing.purpose == TeamPurpose::General {
+            return Err("通用队伍仅手动使用，不参与镜牢启用队列".to_owned());
         }
         let response = self
             .rpc
@@ -217,7 +235,14 @@ impl TeamsState {
         if let Some(existing) = self.teams.iter_mut().find(|team| team.id == saved.id) {
             *existing = saved.clone();
         }
-        Ok(saved)
+        // The queue may have shifted other teams' positions.
+        self.refresh()?;
+        Ok(self
+            .teams
+            .iter()
+            .find(|team| team.id == saved.id)
+            .cloned()
+            .unwrap_or(saved))
     }
 
     /// Read one team's accumulated statistics.

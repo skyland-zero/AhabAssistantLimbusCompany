@@ -42,10 +42,10 @@ uv run python scripts/build.py --version 1.0.0
 1. `nsh package nsh-app --target windows` 生成 Native Shell 前端；
 2. `main_backend.spec` 生成无界面的 `AALC Backend.exe`；
 3. `updater.spec` 生成 `AALC Updater.exe`；
-4. 组装 `dist/AALC/` 并复制 `nsh/`、`assets/`、README 和 LICENSE；
-5. 使用 7-Zip 生成 `dist/AALC_<version>.7z`。
+4. 组装 `dist/AALC.nsh/` 并复制 `nsh/`、`assets/`、README 和 LICENSE；
+5. 使用 7-Zip 生成 `dist/AALC.nsh_<version>.7z`。
 
 没有安装 7-Zip 时会生成等价的 `.zip` 归档。
 
-正式包不需要 Python 或 Qt。首次启动前请确认 `AALC.exe`、`nsh/`、
-`backend/AALC Backend.exe` 和 `AALC Updater.exe` 位于 `dist/AALC/`。
+正式包不需要 Python 或 Qt。首次启动前请确认 `AALC.nsh.exe`、`nsh/`、
+`backend/AALC Backend.exe` 和 `AALC Updater.exe` 位于 `dist/AALC.nsh/`。

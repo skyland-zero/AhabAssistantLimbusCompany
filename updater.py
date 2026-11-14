@@ -24,7 +24,9 @@ class Updater:
     """应用程序更新器，负责检查、下载、解压和安装最新版本的应用程序。"""
 
     def __init__(self, file_name=None):
-        self.process_names = ["AALC.exe"]
+        # ``AALC.exe`` is the pre-rename frontend; keep it so an update from an
+        # older install can still stop the running client.
+        self.process_names = ["AALC.nsh.exe", "AALC.exe"]
         self.updater_name = "AALC Updater.exe"
         self.apply_updater_name = "AALC Updater.apply.exe"
 
@@ -424,8 +426,8 @@ class Updater:
         self.remove_legacy_sidecar()
         self.cleanup()
         input("已完成更新，按回车键退出并打开软件\nThe update is complete, press enter to exit and open the software")
-        if os.system(f'cmd /c start "" "{os.path.abspath("./AALC.exe")}"'):
-            subprocess.Popen(os.path.abspath("./AALC.exe"))
+        if os.system(f'cmd /c start "" "{os.path.abspath("./AALC.nsh.exe")}"'):
+            subprocess.Popen(os.path.abspath("./AALC.nsh.exe"))
 
 
 def check_temp_dir_and_run():

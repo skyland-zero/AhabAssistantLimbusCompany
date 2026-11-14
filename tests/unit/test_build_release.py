@@ -18,6 +18,10 @@ def _load_build_module():
 build = _load_build_module()
 
 
+def test_release_root_uses_the_nsh_app_name() -> None:
+    assert build.RELEASE == build.DIST / "AALC.nsh"
+
+
 def test_stage_runner_bundle_copies_complete_onedir_tree(tmp_path: Path) -> None:
     source = tmp_path / "AALCRunner"
     (source / "_internal" / "onnxruntime").mkdir(parents=True)
@@ -76,6 +80,7 @@ def test_shared_runtime_manifest_uses_one_backend_directory(tmp_path: Path) -> N
         "1.2.3", release_root=release, shared_runtime=True
     )
 
+    assert manifest["frontend"] == "AALC.nsh.exe"
     assert manifest["runtime"] == "shared"
     assert manifest["backend"]["entry"] == "backend/AALC Backend.exe"
     assert manifest["runner"]["entry"] == "backend/AALCRunner.exe"

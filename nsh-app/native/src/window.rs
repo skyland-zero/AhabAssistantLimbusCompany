@@ -4,12 +4,11 @@
 #[cfg(windows)]
 fn find_main_hwnd() -> Option<windows::Win32::Foundation::HWND> {
     use std::sync::atomic::{AtomicIsize, Ordering};
-    use windows::core::BOOL;
     use windows::Win32::Foundation::{HWND, LPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowLongW, GetWindowThreadProcessId, GWL_STYLE, IsWindowVisible,
-        WS_POPUP,
+        EnumWindows, GWL_STYLE, GetWindowLongW, GetWindowThreadProcessId, IsWindowVisible, WS_POPUP,
     };
+    use windows::core::BOOL;
 
     static FOUND: AtomicIsize = AtomicIsize::new(0);
     FOUND.store(0, Ordering::Relaxed);
@@ -42,7 +41,7 @@ fn find_main_hwnd() -> Option<windows::Win32::Foundation::HWND> {
 #[cfg(windows)]
 pub fn enable_transparency_opt_in() -> bool {
     use windows::Win32::Graphics::Dwm::{
-        DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND,
+        DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND, DwmEnableBlurBehindWindow,
     };
     use windows::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject};
 

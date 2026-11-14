@@ -143,7 +143,7 @@ export type AfterCompletion = {
 export const AFTER_EXIT_ACTIONS: { value: string; label: string }[] = [
   { value: "exit_game", label: "退出游戏" },
   { value: "exit_emulator", label: "退出模拟器" },
-  { value: "exit_aalc", label: "退出 AALC" },
+  { value: "exit_aalc", label: "退出 AALC.nsh" },
 ];
 
 /** The power action that may follow them. */
@@ -844,7 +844,7 @@ export function saveAfterCompletion(next: AfterCompletion): void {
   }
 }
 
-/** The run bar's summary: `退出游戏/AALC · 关机`, or `什么也不干`. It stays
+/** The run bar's summary: `退出游戏/AALC.nsh · 关机`, or `什么也不干`. It stays
  *  short (the actions' names drop their "退出", which the summary says once),
  *  because the run bar also holds the start button. */
 export function afterCompletionLabel(config: AfterCompletion): string {

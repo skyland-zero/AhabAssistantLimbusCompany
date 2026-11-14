@@ -1313,12 +1313,71 @@ def test_team_contract_preserves_python_order_and_exposes_full_mirror_projection
     assert team["schemaVersion"] == 3
     assert team["sinners"] == ["faust", "yi_sang"]
     assert team["enabled"] is True
+    assert team["queuePosition"] == 1
     assert team["mirrorConfig"]["shopping_strategy"] is True
     assert team["mirrorConfig"]["shopping_strategy_select"] == 5
     assert team["mirrorConfig"]["reward_cards"] is True
     assert team["mirrorConfig"]["opening_items_system"] == 3
     assert team["mirrorConfig"]["use_damage_p"] is False
     app.close()
+
+
+def test_team_list_marks_manual_purposes_as_unqueued() -> None:
+    app = make_application()
+    app.config.config.teams = {
+        "1": TeamSetting(team_number=1, purpose="mirror"),
+        "2": TeamSetting(team_number=2, purpose="luxcavation"),
+        "3": TeamSetting(team_number=3, purpose="general"),
+    }
+    app.config.values["teams_active_queue"] = [1, 2, 3]
+
+    teams = {team["id"]: team for team in app.team_list()}
+
+    assert teams["team-1"]["enabled"] is True
+    assert teams["team-1"]["queuePosition"] == 1
+    assert teams["team-2"]["enabled"] is False
+    assert teams["team-2"]["queuePosition"] == 0
+    assert teams["team-3"]["enabled"] is False
+    assert teams["team-3"]["queuePosition"] == 0
+    app.close()
+
+
+def test_team_selection_mode_round_trips_through_rpc() -> None:
+    app = make_application()
+    dispatcher = RpcDispatcher(application=app, version="test")
+    assert app.team_selection_get() is False
+
+    response = dispatcher.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "team.selection.set",
+            "params": {"enabled": True},
+        }
+    )
+    assert response["result"] is True
+    assert app.config.get_value("select_team_by_order") is True
+
+    response = dispatcher.dispatch(
+        {"jsonrpc": "2.0", "id": 2, "method": "team.selection.get"}
+    )
+    assert response["result"] is True
+    app.close()
+
+
+def test_team_queue_normalization_drops_manual_purposes() -> None:
+    config = object.__new__(Config)
+    config.config = FakeConfigModel({})
+    config.config.teams = {
+        "1": TeamSetting(team_number=1, purpose="mirror"),
+        "2": TeamSetting(team_number=2, purpose="luxcavation"),
+        "3": TeamSetting(team_number=3, purpose="general"),
+    }
+    config.config.teams_active_queue = [1, 2, 3]
+
+    config.normalize_and_sync_team_state(persist=False)
+
+    assert config.config.teams_active_queue == [1]
 
 
 def test_team_stats_rpc_reads_and_clears_legacy_team_history() -> None:
@@ -1574,6 +1633,38 @@ def test_team_save_allocates_id_and_isolates_luxcavation_from_mirror_queue() -> 
     assert converted["mirrorConfig"] is None
     assert app.config.config.teams["1"].shopping_strategy is True
     assert app.config.values["teams_active_queue"] == []
+    app.close()
+
+
+def test_team_save_keeps_general_teams_manual_only() -> None:
+    app = make_application()
+    app.config.config.teams = {
+        "1": TeamSetting(
+            team_number=1,
+            purpose="mirror",
+            chosen_sinners=[1] + [0] * 11,
+            sinner_order=[1] + [0] * 11,
+        )
+    }
+    app.config.values["teams_active_queue"] = [1]
+
+    saved = app.team_save(
+        {
+            "id": "team-1",
+            "name": "手动队伍",
+            "purpose": "general",
+            "mirrorConfig": {"team_system": 4, "use_team_code": True, "team_code": "H4sI-test"},
+            "enabled": True,
+        }
+    )
+
+    assert saved["purpose"] == "general"
+    assert saved["enabled"] is False
+    assert saved["queuePosition"] == 0
+    assert saved["mirrorConfig"] is not None
+    assert app.config.values["teams_active_queue"] == []
+    assert app.config.config.teams["1"].team_system == 4
+    assert app.config.config.teams["1"].team_code == "H4sI-test"
     app.close()
 
 

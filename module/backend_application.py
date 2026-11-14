@@ -2713,6 +2713,12 @@ class BackendApplication:
     def team_list(self) -> list[dict[str, Any]]:
         return self.team_service.list_teams()
 
+    def team_selection_get(self) -> bool:
+        return self.team_service.selection_get()
+
+    def team_selection_set(self, params: Any) -> bool:
+        return self.team_service.selection_set(params)
+
     def team_stats_get(self, params: Any) -> dict[str, Any]:
         return self.team_service.stats_get(params)
 

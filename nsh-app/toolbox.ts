@@ -33,7 +33,7 @@ export const TOOLS: {
     id: "screenshot",
     icon: "camera",
     title: "辅助截图",
-    description: "截取当前游戏窗口画面并保存到 AALC 目录",
+    description: "截取当前游戏窗口画面并保存到 AALC.nsh 目录",
   },
   {
     id: "resolution",

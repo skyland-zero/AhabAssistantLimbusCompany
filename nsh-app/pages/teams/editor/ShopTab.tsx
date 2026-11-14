@@ -1,15 +1,18 @@
-// The editor's shop section: the reward/opening strategy, the shop strategy
-// and the discarded gift systems; `ShopOptions` draws the dense settings after
-// them.
+// The editor's shop section: the route and theme-pack weight, the
+// reward/opening strategy, the shop strategy and the discarded gift systems;
+// `ShopOptions` draws the dense settings after them.
 import type { JSX } from "nsh";
 import { View } from "nsh";
 import { Select } from "../../../components/Select";
 import { Switch } from "../../../components/Switch";
 import {
+  ROUTE_OPTIONS,
   SYSTEM_LABELS,
   SYSTEM_NAMES,
   openingItemsOrderLabel,
   rewardCardsLabel,
+  routeLabel,
+  setDraftRoute,
   shoppingStrategyLabel,
   shopStrategyLabel,
   setMirrorBool,
@@ -81,6 +84,39 @@ function SwitchCard(props: {
 export function ShopTab(props: { config: () => TeamMirrorConfig }) {
   return (
     <View class="flex-col gap-4">
+      <EditorCard title="镜牢路线与主题包">
+        <View class="flex-col gap-2">
+          <ControlRow
+            label="镜牢路线"
+            control={
+              <Select<string>
+                accessibilityLabel="镜牢路线"
+                items={ROUTE_OPTIONS}
+                value={props.config().mirror_route_profile}
+                onChange={(next) => setDraftRoute(next)}
+                class="w-60"
+              />
+            }
+          />
+          <Hint>
+            {`${routeLabel(props.config().mirror_route_profile)}：按路线目录优先选择主题包与目标饰品；留空使用默认饰品逻辑。`}
+          </Hint>
+          <ControlRow
+            label="队伍专属主题包权重"
+            control={
+              <Switch
+                checked={props.config().use_custom_theme_pack_weight}
+                accessibilityLabel="队伍专属主题包权重"
+                onChange={({ checked }) =>
+                  setMirrorBool("use_custom_theme_pack_weight", checked)
+                }
+              />
+            }
+          />
+          <Hint>开启后由镜牢执行器读取该队伍的主题包权重文件。</Hint>
+        </View>
+      </EditorCard>
+
       <EditorCard title="奖励与开局策略">
         <View class="flex-col gap-2">
           <SwitchCard

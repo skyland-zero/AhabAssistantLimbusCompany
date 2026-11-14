@@ -159,6 +159,20 @@
 - **验证**：`teams.test.tsx` 9 条（列表、筛选、保存、新队伍、五页签、商店/星光交互、剪贴板、
   统计刷新与清除）；Windows 实机对照见 §1.6。
 
+### P6 队伍页：40 槽位、预设与轮换（2026-11-14）
+
+- **游戏版本对齐**：2026-08-27 起游戏编队位从 20 扩到 40；Rust `TEAM_SLOT_COUNT` 改为 40，页面用 8×5 的编队位图展示 1–40。旧 GPUI 的 20 槽截图只作历史参考，不再作为本页验收基线。
+- **用途不再切槽位**：`slots()` 返回 1–40 的全部编号；`extras()` 只显示编号 >40 的旧配置。默认配置的经验本/纽本在 #6/#7，不会再出现「经验本筛选只显示空 #01 + 额外编队」。
+- **页面结构**：工具栏筛选 + 单行「镜牢轮换」+ 编队位图 + 已配置队伍卡；空槽直接在该编号新建，已用槽打开编辑器。镜牢轮换按 `teams_active_queue` 显示顺序和难度限定。
+- **预设**：`TeamsStore.presets()` 暴露 6 个内置模板；预设选择器可选目标空位，只写入草稿，保存前不落盘；卡片上的「从预设覆盖」保留当前统计。
+- **通用仅手动**：`general` 队伍的 `enabled` 强制 false、从 `teams_active_queue` 移除，编辑器只显示基础编成；资源本同样不参与轮换。队列归一化只保留 `purpose="mirror"`。
+- **选队方式**：新增 `team.selection.get/set`，页面可切换「按队名 / 按序号」；按队名要求游戏内保持 `编队#N`，按序号依赖游戏内 1–40 顺序。
+- **编队来源与路线**：基础编成用 `编队码 / 手动顺序` 分段；资源本优先编队码、留空按顺序；镜牢路线在「商店与合成」第一张卡；队伍卡显示路线和来源。
+- **删除与反馈**：删除改为 `AlertDialog`，说明统计/主题包权重会删除、日常任务编号不会自动替换；反馈条带 success/warning/danger tone。
+- **契约**：`team.selection.get/set` 已加入 `contract.json`、Rust contract、Python dispatcher/application、Mock；`TeamDetail`/`TeamView` 增加只读 `queuePosition`，由 `teams_active_queue` 派生。
+- **验证**：`teams.test.tsx` 15 条全部通过；`nsh test nsh-app` 157/157（`AHAB_BACKEND=mock` + `AHAB_SETTINGS_IN_MEMORY=1`）；队伍服务相关 Python 用例 54 条通过；`cargo test -p aalc-native` 69 条通过；`python scripts/validate_contract.py` 通过；Windows 实机截图见 `artifacts/nsh/light-teams.png` 等。全量 `tests/unit` 另有 1 条既有失败：工作树缺失 `assets/images/default/share/mirror/ego_gifts/clear_mirror_calm_water.png`，与本次队伍页改动无关。
+- **后续**：轮换顺序拖拽/上移下移（`team.queue.set`）、编队码解码预览、日常引用检查、YAML 导入导出、统计摘要。
+
 ## 1.5 P3 剩余项（已全部处理）
 
 1. **队伍编辑器的镜牢配置**：五个页签（基础编成 / 商店与合成 / 二体系与战斗 / 开局星光 /
@@ -290,7 +304,7 @@ Mock 用例覆盖执行状态机、STALE_RUN、团队/统计、主题包/资源�
 
 ## 1.8 P1 第二轮：state / i18n / app_state（2026-11-12）
 
-- **`state/teams/`**：保存队伍、20 个固定编队位、额外编队、保存/删除/启用、`team.stats.*`；
+- **`state/teams/`**：保存队伍、40 个固定编队位、额外编队、保存/删除/启用、`team.stats.*`；
   `#[class] TeamsStore` 暴露 `teams()` / `slots()` / `extras()` / `save()` / `delete()` /
   `setEnabled()` / `stats()` / `clearStats()`。编辑器草稿仍留在 TSX（屏幕级状态）。
   TSX `teams-store.ts`、`teams-stats.ts` 改为镜像 Rust 返回值；`Teams.tsx` 补上额外编队区。

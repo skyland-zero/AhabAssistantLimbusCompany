@@ -167,6 +167,8 @@ impl Default for MockState {
                 },
                 ..ExecutionStatsPayload::default()
             },
+            team_queue: vec!["team-1".into()],
+            select_team_by_order: false,
             team_stats: HashMap::from([(
                 "team-1".to_owned(),
                 TeamStats {
@@ -203,6 +205,7 @@ impl Default for MockState {
                     accessoryScheme: "tremor".into(),
                     enabled: true,
                     teamCode: String::new(),
+                    queuePosition: 1,
                     mirrorConfig: Some(TeamMirrorConfig {
                         team_system: 2,
                         discard_systems: DiscardSystems {
@@ -223,6 +226,7 @@ impl Default for MockState {
                     accessoryScheme: "burn".into(),
                     enabled: false,
                     teamCode: String::new(),
+                    queuePosition: 0,
                     mirrorConfig: None,
                 },
                 TeamDetail {
@@ -240,6 +244,7 @@ impl Default for MockState {
                     accessoryScheme: "poise".into(),
                     enabled: false,
                     teamCode: String::new(),
+                    queuePosition: 0,
                     mirrorConfig: Some(TeamMirrorConfig {
                         team_system: 5,
                         ..Default::default()

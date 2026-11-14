@@ -3,37 +3,7 @@
 use nsh_core::prelude::*;
 use serde_json::Value;
 
-use crate::model::{TeamDetail, TeamPurpose};
-
-/// One formation filter: all teams or one purpose.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum TeamFilter {
-    #[default]
-    All,
-    Mirror,
-    Luxcavation,
-    General,
-}
-
-impl TeamFilter {
-    pub fn parse(value: &str) -> Self {
-        match value {
-            "mirror" => Self::Mirror,
-            "luxcavation" => Self::Luxcavation,
-            "general" => Self::General,
-            _ => Self::All,
-        }
-    }
-
-    pub const fn purpose(self) -> Option<TeamPurpose> {
-        match self {
-            Self::All => None,
-            Self::Mirror => Some(TeamPurpose::Mirror),
-            Self::Luxcavation => Some(TeamPurpose::Luxcavation),
-            Self::General => Some(TeamPurpose::General),
-        }
-    }
-}
+use crate::model::{LocalizedText, TeamDetail, TeamPreset, TeamPurpose};
 
 /// A fixed formation number and the team saved there, if any.
 #[derive(Clone, Debug, PartialEq)]
@@ -53,6 +23,8 @@ pub struct TeamView {
     pub accessory_scheme: String,
     pub enabled: bool,
     pub team_code: String,
+    /// The 1-based mirror queue position, or 0 when the team is not queued.
+    pub queue_position: u32,
     /// The mirror-run configuration, or `null` for an experience-dungeon team.
     pub mirror_config: Value,
 }
@@ -73,11 +45,54 @@ impl From<&TeamDetail> for TeamView {
             accessory_scheme: team.accessoryScheme.clone(),
             enabled: team.enabled,
             team_code: team.teamCode.clone(),
+            queue_position: team.queuePosition,
             mirror_config: team
                 .mirrorConfig
                 .as_ref()
                 .and_then(|config| serde_json::to_value(config).ok())
                 .unwrap_or(Value::Null),
+        }
+    }
+}
+
+/// One localized string as TSX sees it.
+#[derive(Clone, Debug, JsObject)]
+pub struct LocalizedTextView {
+    pub zh_cn: String,
+    pub en_us: String,
+}
+
+impl From<&LocalizedText> for LocalizedTextView {
+    fn from(text: &LocalizedText) -> Self {
+        Self {
+            zh_cn: text.zhCn.clone(),
+            en_us: text.enUs.clone(),
+        }
+    }
+}
+
+/// One built-in team template as TSX sees it.
+#[derive(Clone, Debug, JsObject)]
+pub struct TeamPresetView {
+    pub preset_id: String,
+    pub route_id: String,
+    pub name: LocalizedTextView,
+    pub description: LocalizedTextView,
+    pub floor_hint: LocalizedTextView,
+    pub route_name: LocalizedTextView,
+    pub team: TeamView,
+}
+
+impl From<&TeamPreset> for TeamPresetView {
+    fn from(preset: &TeamPreset) -> Self {
+        Self {
+            preset_id: preset.presetId.clone(),
+            route_id: preset.routeId.clone(),
+            name: LocalizedTextView::from(&preset.name),
+            description: LocalizedTextView::from(&preset.description),
+            floor_hint: LocalizedTextView::from(&preset.floorHint),
+            route_name: LocalizedTextView::from(&preset.routeName),
+            team: TeamView::from(&preset.team),
         }
     }
 }

@@ -22,6 +22,7 @@ import {
   setEditorTab,
   setTeamsFeedback,
   teamsFeedback,
+  teamsFeedbackTone,
 } from "../../teams";
 import type { Team, TeamEditorTab } from "../../teams";
 import { AdvancedTab } from "./editor/AdvancedTab";
@@ -49,7 +50,9 @@ export function TeamEditor() {
             <View class="w-full flex-none flex-row items-center justify-between gap-3 border-b border-border px-6 py-3">
               <View class="min-w-0 flex-col gap-1">
                 <Text class="text-base font-semibold text-popover-foreground">
-                  {editorIsNew() ? "新建队伍" : "编辑队伍"}
+                  {editorIsNew()
+                    ? `新建编队 #${String(team().id.replace("team-", "")).padStart(2, "0")}`
+                    : `编辑编队 #${String(team().id.replace("team-", "")).padStart(2, "0")}`}
                 </Text>
                 <Text class="text-[10px] text-muted-foreground">
                   保存前所有修改只存在于当前编辑器
@@ -87,7 +90,7 @@ export function TeamEditor() {
               <View class="min-w-0 flex-1">
                 <If when={teamsFeedback()}>
                   {(message) => (
-                    <Text class="text-xs text-warning">{message()}</Text>
+                    <Text class={`text-xs ${feedbackClass(teamsFeedbackTone())}`}>{message()}</Text>
                   )}
                 </If>
                 <If when={!teamsFeedback()}>
@@ -111,6 +114,14 @@ export function TeamEditor() {
       </If>
     </Dialog>
   );
+}
+
+/** The footer's feedback colour: errors are not success messages. */
+function feedbackClass(tone: "info" | "success" | "warning" | "danger"): string {
+  if (tone === "danger") return "text-danger";
+  if (tone === "warning") return "text-warning";
+  if (tone === "success") return "text-success";
+  return "text-muted-foreground";
 }
 
 /** One section tab; the starlight tab carries the current cost as a suffix. */

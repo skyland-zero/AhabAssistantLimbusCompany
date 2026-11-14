@@ -266,9 +266,7 @@ impl HomeState {
                     _ => "free".to_owned(),
                 }
             }
-            "reduceMiscontact" => {
-                windows.set_reduce_miscontact = value.as_bool().unwrap_or(true)
-            }
+            "reduceMiscontact" => windows.set_reduce_miscontact = value.as_bool().unwrap_or(true),
             "screenshotInterval" => {
                 windows.screenshot_interval = interval(value, windows.screenshot_interval)?
             }
@@ -626,7 +624,8 @@ impl HomeState {
                     }
                 }
                 event::EXECUTION_MIRROR_FLOOR => {
-                    if let Ok(floor) = serde_json::from_value::<MirrorFloorPayload>(envelope.payload)
+                    if let Ok(floor) =
+                        serde_json::from_value::<MirrorFloorPayload>(envelope.payload)
                         && self.same_run(floor.runId.as_deref())
                     {
                         self.mirror_floor = Some(floor);
@@ -730,7 +729,10 @@ fn text(value: Option<&Value>, key: &str, fallback: &str) -> String {
 
 /// A switch on a card, as `"on"` / `"off"`.
 fn flag(value: Option<&Value>, key: &str, fallback: bool) -> bool {
-    match value.and_then(|value| value.get(key)).and_then(Value::as_str) {
+    match value
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_str)
+    {
         Some("on") => true,
         Some("off") => false,
         _ => fallback,
@@ -785,7 +787,11 @@ fn interval(value: &Value, fallback: f32) -> Result<f32, String> {
     if !(0.05..=5.0).contains(&seconds) {
         return Err(format!("间隔超出范围（0.05~5s）：{seconds}"));
     }
-    Ok(if seconds.is_finite() { seconds } else { fallback })
+    Ok(if seconds.is_finite() {
+        seconds
+    } else {
+        fallback
+    })
 }
 
 #[cfg(test)]

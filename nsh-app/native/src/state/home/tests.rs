@@ -137,10 +137,15 @@ fn window_settings_are_saved_through_the_task_config() {
     assert_eq!(state.window_summary()["asyncInput"], true);
     state.set_window("position", &json!("left_top")).unwrap();
     assert_eq!(state.window_summary()["position"], "left_top");
-    state
-        .set_window("screenshotInterval", &json!(0.2))
-        .unwrap();
-    assert!((state.window_summary()["screenshotInterval"].as_f64().unwrap() - 0.2).abs() < 1e-3);
+    state.set_window("screenshotInterval", &json!(0.2)).unwrap();
+    assert!(
+        (state.window_summary()["screenshotInterval"]
+            .as_f64()
+            .unwrap()
+            - 0.2)
+            .abs()
+            < 1e-3
+    );
     state.set_window("mouseInterval", &json!("0.1")).unwrap();
     assert!((state.window_summary()["mouseInterval"].as_f64().unwrap() - 0.1).abs() < 1e-3);
     state.set_window("reduceMiscontact", &json!(false)).unwrap();
@@ -215,7 +220,13 @@ fn statistics_payload_and_daily_summary_are_available_for_details() {
     assert!(history[0]["team"]["name"].is_string());
 
     // The page's poll drains the queue and returns the same payload.
-    assert_eq!(state.poll_stats()["mirrorHistory"].as_array().unwrap().len(), 6);
+    assert_eq!(
+        state.poll_stats()["mirrorHistory"]
+            .as_array()
+            .unwrap()
+            .len(),
+        6
+    );
 
     let daily = state.load_daily_stats().unwrap();
     assert_eq!(daily.schemaVersion, 1);

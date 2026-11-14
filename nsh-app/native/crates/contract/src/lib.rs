@@ -207,6 +207,8 @@ pub mod method {
     pub const EXECUTION_PAUSE: &str = "execution.pause";
     pub const EXECUTION_RESUME: &str = "execution.resume";
     pub const TEAM_LIST: &str = "team.list";
+    pub const TEAM_SELECTION_GET: &str = "team.selection.get";
+    pub const TEAM_SELECTION_SET: &str = "team.selection.set";
     pub const TEAM_STATS_GET: &str = "team.stats.get";
     pub const TEAM_STATS_CLEAR: &str = "team.stats.clear";
     pub const TEAM_PRESET_LIST: &str = "team.preset.list";

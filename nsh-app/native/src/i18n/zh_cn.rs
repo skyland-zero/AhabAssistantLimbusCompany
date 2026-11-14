@@ -2,7 +2,7 @@ use super::Catalog;
 
 pub const CATALOG: Catalog = Catalog {
     app_name: "Ahab Assistant · Limbus Company",
-    titlebar_title: "AALC",
+    titlebar_title: "AALC.nsh",
     nav_home: "主控台",
     nav_teams: "队伍管理",
     nav_themes: "镜牢主题包",
@@ -30,7 +30,7 @@ pub const CATALOG: Catalog = Catalog {
     tray_stop: "停止任务",
     tray_pause: "暂停任务",
     tray_resume: "继续任务",
-    tray_quit: "退出 AALC",
+    tray_quit: "退出 AALC.nsh",
     preview_stopped: "已停止",
     preview_starting: "启动中",
     preview_error: "预览错误",

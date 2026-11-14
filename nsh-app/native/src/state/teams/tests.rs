@@ -19,9 +19,10 @@ fn team(id: &str, name: &str, purpose: TeamPurpose) -> TeamDetail {
         sinners: vec!["faust".into()],
         purpose,
         accessoryScheme: "burn".into(),
-        enabled: purpose != TeamPurpose::Luxcavation,
+        enabled: purpose == TeamPurpose::Mirror,
         teamCode: String::new(),
-        mirrorConfig: (purpose != TeamPurpose::Luxcavation).then(TeamMirrorConfig::default),
+        queuePosition: 0,
+        mirrorConfig: Some(TeamMirrorConfig::default()),
     }
 }
 
@@ -31,39 +32,41 @@ fn load_reads_teams_roster_and_presets() {
     assert_eq!(state.teams.len(), 3);
     assert_eq!(state.sinners.len(), 12);
     assert_eq!(state.presets.len(), 6);
-    assert_eq!(state.count_for(TeamFilter::All), 3);
-    assert_eq!(state.count_for(TeamFilter::Mirror), 1);
-    assert_eq!(state.count_for(TeamFilter::Luxcavation), 1);
-    assert_eq!(state.count_for(TeamFilter::General), 1);
+    let count = |purpose| {
+        state
+            .teams
+            .iter()
+            .filter(|team| team.purpose == purpose)
+            .count()
+    };
+    assert_eq!(count(TeamPurpose::Mirror), 1);
+    assert_eq!(count(TeamPurpose::Luxcavation), 1);
+    assert_eq!(count(TeamPurpose::General), 1);
 }
 
 #[test]
-fn fixed_slots_use_the_twenty_formation_numbers() {
+fn fixed_slots_cover_the_forty_game_loadouts() {
     let state = state();
-    let slots = state.slots_for(TeamFilter::All);
-    assert_eq!(slots.len(), 20);
+    let slots = state.slots();
+    assert_eq!(slots.len(), 40);
     assert_eq!(slots[0].number, 1);
     assert_eq!(slots[0].team.as_ref().unwrap().id, "team-1");
+    assert_eq!(slots[1].team.as_ref().unwrap().id, "team-2");
+    assert_eq!(slots[2].team.as_ref().unwrap().id, "team-3");
     assert!(slots[3].team.is_none());
-
-    let mirror = state.slots_for(TeamFilter::Mirror);
-    assert!(!mirror.iter().any(|slot| slot.number == 1));
-    assert!(mirror.iter().any(|slot| slot.number == 4));
-
-    // Slot 1 belongs to an existing mirror team, so the experience-dungeon
-    // filter has no fixed slot and shows team-2 as an extra team instead.
-    assert!(state.slots_for(TeamFilter::Luxcavation).is_empty());
-    assert!(state.slots_for(TeamFilter::General).is_empty());
+    assert_eq!(slots[39].number, 40);
 }
 
 #[test]
-fn extra_teams_are_everything_outside_the_fixed_numbers() {
-    let state = state();
-    let mirror = state.extra_teams_for(TeamFilter::Mirror);
-    assert_eq!(mirror[0].id, "team-1");
-    let lux = state.extra_teams_for(TeamFilter::Luxcavation);
-    assert_eq!(lux[0].id, "team-2");
-    assert!(state.extra_teams_for(TeamFilter::All).is_empty());
+fn extra_teams_are_only_legacy_numbers_above_forty() {
+    let mut state = state();
+    state
+        .teams
+        .push(team("team-41", "旧队伍", TeamPurpose::Mirror));
+    let extras = state.extra_teams();
+    assert_eq!(extras.len(), 1);
+    assert_eq!(extras[0].id, "team-41");
+    assert!(state.extra_teams().iter().all(|team| team.id == "team-41"));
 }
 
 #[test]
@@ -96,7 +99,7 @@ fn updating_a_team_replaces_the_saved_record() {
 #[test]
 fn luxcavation_saves_strip_the_mirror_config() {
     let mut state = state();
-    let mut lux = team("", "经验本", TeamPurpose::Luxcavation);
+    let mut lux = team("", "资源本", TeamPurpose::Luxcavation);
     lux.mirrorConfig = Some(TeamMirrorConfig::default());
     lux.enabled = true;
     let saved = state
@@ -111,6 +114,23 @@ fn luxcavation_saves_strip_the_mirror_config() {
 }
 
 #[test]
+fn general_saves_are_manual_only_and_keep_the_mirror_config() {
+    let mut state = state();
+    let mut general = team("", "手动队伍", TeamPurpose::General);
+    general.enabled = true;
+    general.mirrorConfig = Some(TeamMirrorConfig::default());
+    let saved = state
+        .save(TeamSaveInput {
+            team: general,
+            team_number: Some(6),
+        })
+        .unwrap();
+    assert_eq!(saved.id, "team-6");
+    assert!(!saved.enabled);
+    assert!(saved.mirrorConfig.is_some());
+}
+
+#[test]
 fn enabled_toggle_uses_a_partial_save() {
     let mut state = state();
     let saved = state.set_enabled("team-1", false).unwrap();
@@ -118,7 +138,28 @@ fn enabled_toggle_uses_a_partial_save() {
     assert!(!state.teams[0].enabled);
 
     let error = state.set_enabled("team-2", true).unwrap_err();
-    assert!(error.contains("经验本"));
+    assert!(error.contains("资源本"));
+
+    let error = state.set_enabled("team-3", true).unwrap_err();
+    assert!(error.contains("通用"));
+}
+
+#[test]
+fn disabling_a_queued_team_shifts_the_next_position() {
+    let mut state = state();
+    let created = state
+        .save(TeamSaveInput {
+            team: team("", "第二支镜牢队", TeamPurpose::Mirror),
+            team_number: Some(4),
+        })
+        .unwrap();
+    assert_eq!(created.queuePosition, 2);
+
+    state.set_enabled("team-1", false).unwrap();
+
+    let second = state.teams.iter().find(|team| team.id == "team-4").unwrap();
+    assert_eq!(second.queuePosition, 1);
+    assert!(second.enabled);
 }
 
 #[test]

@@ -22,7 +22,7 @@ export function SystemCard() {
           label="最小化到托盘"
           detail="窗口最小化时隐藏到系统托盘区"
         />
-        <FlagRow flag="autostart" label="开机自动启动" detail="跟随系统开机自启 AALC" />
+        <FlagRow flag="autostart" label="开机自动启动" detail="跟随系统开机自启 AALC.nsh" />
       </SettingList>
     </SettingsCard>
   );

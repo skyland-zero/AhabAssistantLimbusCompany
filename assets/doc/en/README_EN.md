@@ -81,7 +81,7 @@ For custom settings and process acceleration for Mirror Dungeon team composition
 ## How to download
 
 Click [Releases](https://github.com/KIYI671/AhabAssistantLimbusCompany/releases) and download the file called
-【AALC-Vx.x.x】 in the latest version, unzip it and run AALC.exe.
+【AALC.nsh_Vx.x.x.7z】 in the latest version, unzip it and run AALC.nsh.exe.
 
 Because of the lack of technical power, I also engaged in GUI and used third-party OCR, so the file size is relatively
 large
@@ -119,10 +119,10 @@ format, or add the theme package to recognize the text
 
 #### Modify the process
 
-- Run the AALC.exe once first (for new users)
-- A theme_pack_list.yaml file appears in the AALC folder
+- Run AALC.nsh.exe once first (for new users)
+- A theme_pack_list.yaml file appears in the AALC.nsh folder
 - Modify theme_pack_list.yaml file
-- Restart AALC after modification
+- Restart AALC.nsh after modification
 
 The file format is shown in the following picture.
 

@@ -50,7 +50,7 @@ export function DesktopIntegration() {
     const window = Window.get("main");
     const visible = window?.state()?.visible ?? true;
     Tray.set({
-      tooltip: "AALC",
+      tooltip: "AALC.nsh",
       menu: [
         {
           label: visible ? t("trayHide") : t("trayShow"),

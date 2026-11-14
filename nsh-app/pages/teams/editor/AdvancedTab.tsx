@@ -1,5 +1,6 @@
-// The editor's advanced section: the starting-gift search, the team's theme
-// pack weight, JSON import/export and the accumulated run statistics.
+// The editor's advanced section: the starting-gift search, JSON import/export
+// and the accumulated run statistics. The route and theme-pack weight live in
+// the shop section with the rest of the mirror economy.
 import { Dialog } from "nsh/base";
 import { Text, View, signal } from "nsh";
 import { Button, IconButton } from "../../../components/Button";
@@ -108,24 +109,6 @@ export function AdvancedTab() {
               </View>
             </View>
           </If>
-        </View>
-      </EditorCard>
-
-      <EditorCard>
-        <View class="flex-col gap-2">
-          <ControlRow
-            label="使用队伍专属主题包权重"
-            control={
-              <Switch
-                checked={draftMirror().use_custom_theme_pack_weight}
-                accessibilityLabel="使用队伍专属主题包权重"
-                onChange={({ checked }) =>
-                  setMirrorBool("use_custom_theme_pack_weight", checked)
-                }
-              />
-            }
-          />
-          <Hint>保存后由镜牢执行器读取该队伍的主题包权重。</Hint>
         </View>
       </EditorCard>
 

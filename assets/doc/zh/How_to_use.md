@@ -153,9 +153,9 @@
 # <> 内为必填内容
 # [] 内为可选参数
 # 不加括号的根据对应指令描述填写
-AALC.exe <command_name> command_args extra_args
+AALC.nsh.exe <command_name> command_args extra_args
 
-# 以下不写 "AALC.exe"
+# 以下不写 "AALC.nsh.exe"
 ```
 
 目前支持的指令:
@@ -166,6 +166,6 @@ AALC.exe <command_name> command_args extra_args
   - `[--exit]` 可选参数, 附带一个额外参数
     - `[int]` 一个`int`字符串, 含义为 AALC 长草界面 `combobox` 的索引, 如果不填写默认为 `5` 即**退出AALC**
 
-示例: `AALC.exe start --exit 6`
+示例: `AALC.nsh.exe start --exit 6`
 
 在当前版本会在结束后退出AALC与游戏

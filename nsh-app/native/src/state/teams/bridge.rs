@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use super::{
     store::TeamsState,
-    types::{SinnerView, TeamFilter, TeamSaveInput, TeamSlotView, TeamView},
+    types::{SinnerView, TeamPresetView, TeamSaveInput, TeamSlotView, TeamView},
 };
 
 /// The saved teams and their RPC boundary.
@@ -53,28 +53,39 @@ impl TeamsStore {
         self.state.teams.iter().map(TeamView::from).collect()
     }
 
-    /// The fixed formation slots for `filter` (`all`, `mirror`, `luxcavation`
-    /// or `general`).
-    pub fn slots(&self, filter: String) -> Vec<TeamSlotView> {
-        self.state
-            .slots_for(TeamFilter::parse(&filter))
-            .iter()
-            .map(TeamSlotView::from)
-            .collect()
+    /// Every game loadout number (1–40), with the team saved there, if any.
+    /// Purpose filtering is a page concern: a slot is not owned by a purpose.
+    pub fn slots(&self) -> Vec<TeamSlotView> {
+        self.state.slots().iter().map(TeamSlotView::from).collect()
     }
 
-    /// The teams outside the fixed formation numbers for `filter`.
-    pub fn extras(&self, filter: String) -> Vec<TeamView> {
+    /// Legacy teams outside the forty game loadouts.
+    pub fn extras(&self) -> Vec<TeamView> {
         self.state
-            .extra_teams_for(TeamFilter::parse(&filter))
+            .extra_teams()
             .iter()
             .map(TeamView::from)
             .collect()
     }
 
-    /// How many teams `filter` holds.
-    pub fn count(&self, filter: String) -> u32 {
-        self.state.count_for(TeamFilter::parse(&filter)) as u32
+    /// The built-in team templates from `team.preset.list`.
+    pub fn presets(&self) -> Vec<TeamPresetView> {
+        self.state
+            .presets()
+            .iter()
+            .map(TeamPresetView::from)
+            .collect()
+    }
+
+    /// Whether the automation selects a team by physical row instead of name.
+    pub fn selection(&self) -> bool {
+        self.state.select_team_by_order
+    }
+
+    /// Switch between OCR-by-name and physical-row selection.
+    #[allow(non_snake_case)]
+    pub fn setSelection(&mut self, enabled: bool) -> Result<bool, String> {
+        self.state.set_selection(enabled)
     }
 
     /// The sinner roster.

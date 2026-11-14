@@ -11,16 +11,23 @@ import {
 } from "./teams-mirror";
 import type { TeamMirrorConfig } from "./teams-mirror";
 import { blankTeam, saveTeam, setTeamsFeedback } from "./teams-store";
-import type { Team, TeamPurpose } from "./teams-store";
+import type { Team, TeamPreset, TeamPurpose } from "./teams-store";
+import { currentLanguage } from "./settings";
+import type { LocalizedText } from "./teams-store";
 
 /** The editor's five sections. */
 export type TeamEditorTab = "basic" | "shop" | "combat" | "starlight" | "advanced";
 
-/** The sections a purpose offers: a dungeon team has no mirror run. */
+/** The sections a purpose offers: only mirror teams have a mirror run. */
 export function editorTabs(purpose: TeamPurpose): TeamEditorTab[] {
-  return purpose === "luxcavation"
-    ? ["basic"]
-    : ["basic", "shop", "combat", "starlight", "advanced"];
+  return purpose === "mirror"
+    ? ["basic", "shop", "combat", "starlight", "advanced"]
+    : ["basic"];
+}
+
+/** Which string of a localized preset label the current language uses. */
+export function localizedText(text: LocalizedText): string {
+  return currentLanguage() === "enUs" ? text.enUs : text.zhCn;
 }
 
 /** The editor section's label. */
@@ -61,12 +68,80 @@ export function setEditorTab(next: TeamEditorTab): void {
   editorTab.set(next);
 }
 
-/** Opens the editor on `team`, or on a new team in the first free slot. */
-export function openEditor(team: Team | null): void {
-  draft.set(team ?? blankTeam());
+/** Opens the editor on `team`, or on a new team in `number` / the first free slot. */
+export function openEditor(team: Team | null, number?: number): void {
+  draft.set(team ?? blankTeam(number));
   draftIsNew.set(team === null);
   editorTab.set("basic");
   setTeamsFeedback(null);
+}
+
+/** Moves a new draft to another free formation number. The default
+ *  `编队 N` name follows the slot; a custom name is kept. */
+export function setDraftSlot(number: number): void {
+  if (!draftIsNew()) return;
+  draft.update((current) => {
+    if (current === null) return null;
+    const previous = current.name;
+    const wasDefault = previous === `编队 ${current.id.replace("team-", "")}`;
+    return {
+      ...current,
+      id: `team-${number}`,
+      name: wasDefault ? `编队 ${number}` : previous,
+      queuePosition: 0,
+    };
+  });
+}
+
+/** Applies a built-in preset to a new draft or over an existing team. */
+export function applyPreset(preset: TeamPreset, number: number, overwrite?: Team): void {
+  const isNew = overwrite === undefined;
+  const team = preset.team;
+  draft.set({
+    ...team,
+    id: isNew ? `team-${number}` : overwrite.id,
+    name: localizedText(preset.name) || team.name || `编队 ${number}`,
+    // A preset template has no saved slot; keep the current queue membership
+    // when it overwrites a mirror team, otherwise start disabled.
+    enabled: isNew ? false : overwrite.enabled,
+    queuePosition: isNew ? 0 : overwrite.queuePosition,
+  });
+  draftIsNew.set(isNew);
+  editorTab.set("basic");
+  setTeamsFeedback(`已载入预设：${localizedText(preset.name)}`);
+}
+
+/** The draft's current formation number, or `null`. */
+export function draftTeamNumber(): number | null {
+  const id = draft()?.id ?? "";
+  if (!id.startsWith("team-")) return null;
+  const number = Number(id.slice("team-".length));
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+/** The draft's formation source: an imported team code or the sinner order. */
+export function draftSource(): "code" | "order" {
+  const team = draft();
+  if (team === null) return "order";
+  if (team.purpose === "luxcavation") return team.teamCode.trim() === "" ? "order" : "code";
+  return team.mirrorConfig?.use_team_code === true ? "code" : "order";
+}
+
+/** Switches the draft between its team code and its click order. */
+export function setDraftSource(source: "code" | "order"): void {
+  if (draft()?.purpose === "luxcavation") return;
+  editMirror((config) => ({ ...config, use_team_code: source === "code" }));
+}
+
+/** A light shape check for a pasted Limbus team code. */
+export function looksLikeTeamCode(value: string): boolean {
+  const code = value.trim();
+  return code.length > 32 && /^H4sI[A-Za-z0-9+/]+={0,2}$/.test(code);
+}
+
+/** Sets the draft's mirror route profile. */
+export function setDraftRoute(route: string): void {
+  editMirror((config) => ({ ...config, mirror_route_profile: route }));
 }
 
 /** Closes the editor without saving. */
@@ -79,7 +154,26 @@ export function editTeam(change: Partial<Team>): void {
   draft.update((current) => {
     if (current === null) return null;
     const next = { ...current, ...change };
-    if (next.purpose === "luxcavation" && editorTab() !== "basic") editorTab.set("basic");
+    if (next.purpose !== current.purpose) {
+      // A resource team keeps its code at the top level; the other purposes
+      // read it from the mirror config. Copy it across so changing purpose
+      // cannot silently drop the imported formation.
+      if (current.purpose === "luxcavation" && next.purpose !== "luxcavation") {
+        const code = current.teamCode.trim();
+        if (code !== "" && (next.mirrorConfig?.team_code ?? "").trim() === "") {
+          next.mirrorConfig = {
+            ...(next.mirrorConfig ?? defaultMirrorConfig()),
+            team_code: code,
+            use_team_code: true,
+          };
+        }
+      }
+      if (next.purpose === "luxcavation") {
+        const code = next.mirrorConfig?.team_code?.trim() ?? "";
+        if (code !== "") next.teamCode = code;
+      }
+    }
+    if (next.purpose !== "mirror" && editorTab() !== "basic") editorTab.set("basic");
     return next;
   });
 }

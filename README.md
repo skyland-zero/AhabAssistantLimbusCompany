@@ -78,7 +78,7 @@
 ## 下载方式
 
 点击[Releases](https://github.com/KIYI671/AhabAssistantLimbusCompany/releases)
-并下载最新版中命名为【AALC-Vx.x.x】的文件，解压后运行AALC.exe即可。
+并下载最新版中命名为【AALC.nsh_Vx.x.x.7z】的文件，解压后运行 AALC.nsh.exe 即可。
 
 因为技术力不足，还搞了GUI和使用第三方OCR，所以导致文件比较大
 
@@ -111,10 +111,10 @@
 
 #### 修改流程
 
-- 先运行一次AALC.exe（新用户）
-- AALC文件夹下出现theme_pack_list.yaml文件
-- 修改theme_pack_list.yaml文件
-- 修改后重新启动AALC
+- 先运行一次 AALC.nsh.exe（新用户）
+- AALC.nsh 文件夹下出现 theme_pack_list.yaml 文件
+- 修改 theme_pack_list.yaml 文件
+- 修改后重新启动 AALC.nsh
 
 文件格式参考以下图片所示
 

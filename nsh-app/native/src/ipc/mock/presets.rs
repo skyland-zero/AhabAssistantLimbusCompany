@@ -75,6 +75,7 @@ pub(super) fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        queuePosition: 0,
         teamCode: String::new(),
         mirrorConfig: Some(normal_solo_config),
     };
@@ -86,6 +87,7 @@ pub(super) fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        queuePosition: 0,
         teamCode: String::new(),
         mirrorConfig: Some(hard_solo_config),
     };
@@ -118,6 +120,7 @@ pub(super) fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        queuePosition: 0,
         teamCode: String::new(),
         mirrorConfig: Some(spider_config),
     };
@@ -172,6 +175,7 @@ pub(super) fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Mirror,
         accessoryScheme: "poise".into(),
         enabled: false,
+        queuePosition: 0,
         teamCode: String::new(),
         mirrorConfig: Some(spider_farm_config),
     };
@@ -193,6 +197,7 @@ pub(super) fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Luxcavation,
         accessoryScheme: "poise".into(),
         enabled: false,
+        queuePosition: 0,
         teamCode: "H4sIAAAAAAAACgXBwQ2DMAxA0ZmoaG85fNtpclFULE6ZwIk6AIzf92wxMpOjqYkkz8t7/WA3I+NHQzeZ8MLjdKoyIzrf0GoSgnjbN+xBDk8OzqojWYnub6CUP39lOM9gAAAA".into(),
         mirrorConfig: None,
     };
@@ -212,6 +217,7 @@ pub(super) fn builtin_team_presets() -> Vec<TeamPreset> {
         purpose: TeamPurpose::Luxcavation,
         accessoryScheme: "poise".into(),
         enabled: false,
+        queuePosition: 0,
         teamCode: "H4sIAAAAAAAACgXBwQ2DMBBFwZYSCY4c3nodtCALVpxcwTdKAaH8zPjLkcQZxc3ErOh1wx+G8kujrHbD/Iu8ggp3ZudopbqlYdH2FX+jEeLkqmWIiezxAZblD9bzziNgAAAA".into(),
         mirrorConfig: None,
     };

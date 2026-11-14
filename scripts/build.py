@@ -14,7 +14,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-RELEASE = DIST / "AALC"
+RELEASE = DIST / "AALC.nsh"
 NATIVE_DECODER_DIR = ROOT / "native" / "scrcpy_decoder"
 NATIVE_DECODER_MANIFEST = NATIVE_DECODER_DIR / "Cargo.toml"
 # The decoder keeps its own target directory: `.cargo/config.toml` sends every
@@ -164,7 +164,7 @@ def build_release_manifest(
 
     return {
         "version": version,
-        "frontend": "AALC.exe",
+        "frontend": "AALC.nsh.exe",
         "backend": {
             "entry": BACKEND_ENTRY,
             "files": build_bundle_file_entries(backend_root, manifest_prefix="backend"),
@@ -258,8 +258,8 @@ def stage_runner_bundle(source: Path | None = None, destination: Path | None = N
 def stage_release(version: str, *, shared_runtime: bool = True) -> None:
     RELEASE.mkdir(parents=True, exist_ok=True)
 
-    nsh_binary = NSH_PACKAGE_DIR / "AALC" / "AALC.exe"
-    nsh_bundle = NSH_PACKAGE_DIR / "AALC" / "nsh"
+    nsh_binary = NSH_PACKAGE_DIR / "AALC.nsh" / "AALC.nsh.exe"
+    nsh_bundle = NSH_PACKAGE_DIR / "AALC.nsh" / "nsh"
     bundle = SHARED_RUNTIME_BUNDLE if shared_runtime else BACKEND_BUNDLE
     backend_binary = bundle / "AALC Backend.exe"
     updater_binary = DIST / "AALC Updater.exe"
@@ -268,7 +268,7 @@ def stage_release(version: str, *, shared_runtime: bool = True) -> None:
         if not path.exists():
             raise FileNotFoundError(f"required build output is missing: {path}")
 
-    shutil.copy2(nsh_binary, RELEASE / "AALC.exe")
+    shutil.copy2(nsh_binary, RELEASE / "AALC.nsh.exe")
     copy_tree(nsh_bundle, RELEASE / "nsh")
     stage_bundle(
         bundle,
@@ -311,7 +311,7 @@ def stage_release(version: str, *, shared_runtime: bool = True) -> None:
 
 
 def archive_release(version: str) -> Path:
-    archive_base = DIST / f"AALC_{version}"
+    archive_base = DIST / f"AALC.nsh_{version}"
     bundled_7z = ROOT / "assets" / "binary" / "7za.exe"
     seven_zip = (
         shutil.which("7z")
@@ -320,12 +320,12 @@ def archive_release(version: str) -> Path:
     )
     if seven_zip:
         archive = Path(f"{archive_base}.7z")
-        run([seven_zip, "a", "-mx=7", str(archive), "AALC/*"], cwd=DIST)
+        run([seven_zip, "a", "-mx=7", str(archive), "AALC.nsh/*"], cwd=DIST)
         return archive
 
     # A zip fallback keeps local builds usable on machines without 7-Zip;
     # CI installs 7-Zip and therefore publishes the normal .7z artifact.
-    archive = Path(shutil.make_archive(str(archive_base), "zip", root_dir=DIST, base_dir="AALC"))
+    archive = Path(shutil.make_archive(str(archive_base), "zip", root_dir=DIST, base_dir="AALC.nsh"))
     sys.stdout.write(f"7z/7zz not found; created fallback archive: {archive}\n")
     return archive
 

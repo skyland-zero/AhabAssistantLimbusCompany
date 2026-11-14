@@ -126,7 +126,7 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: AALC_${{ needs.prepare-version.outputs.version }}
+          name: AALC.nsh_${{ needs.prepare-version.outputs.version }}
           path: release
 
       - name: Detect signed update metadata
@@ -149,7 +149,7 @@ jobs:
           AALC_UPDATE_PUBLIC_KEYS: ${{ secrets.AALC_UPDATE_PUBLIC_KEYS }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: AALC_${{ needs.prepare-version.outputs.version }}_signature
+          name: AALC.nsh_${{ needs.prepare-version.outputs.version }}_signature
           path: release
 
       - name: Generate release notes
@@ -246,7 +246,7 @@ jobs:
           make_latest: false
           generate_release_notes: false
           body_path: ${{ runner.temp }}/aalc-release-notes.md
-          files: release/AALC_${{ needs.prepare-version.outputs.version }}.7z
+          files: release/AALC.nsh_${{ needs.prepare-version.outputs.version }}.7z
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -256,8 +256,8 @@ jobs:
         with:
           tag_name: ${{ needs.prepare-version.outputs.version }}
           files: |
-            release/AALC_${{ needs.prepare-version.outputs.version }}.manifest.json
-            release/AALC_${{ needs.prepare-version.outputs.version }}.manifest.sig
+            release/AALC.nsh_${{ needs.prepare-version.outputs.version }}.manifest.json
+            release/AALC.nsh_${{ needs.prepare-version.outputs.version }}.manifest.sig
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
 

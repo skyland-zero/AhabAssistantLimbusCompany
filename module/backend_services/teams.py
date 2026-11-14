@@ -183,6 +183,14 @@ def _team_number_from_id(team_id: str, name: str) -> int:
     return int(match.group(1))
 
 
+def _team_purpose(setting: Any) -> str:
+    if isinstance(setting, Mapping):
+        purpose = setting.get("purpose", "mirror")
+    else:
+        purpose = getattr(setting, "purpose", "mirror")
+    return purpose if purpose in TEAM_PURPOSES else "mirror"
+
+
 def _team_stats_bucket(setting: Any, mode: str) -> dict[str, Any]:
     time_values = getattr(setting, f"total_mirror_time_{mode}", [])
     if not isinstance(time_values, list):
@@ -229,11 +237,19 @@ class TeamService:
     def list_teams(self) -> list[dict[str, Any]]:
         config = self._config()
         teams = getattr(getattr(config, "config", None), "teams", {}) or {}
-        queue = {
+        queue = [
             int(number)
             for number in (config.get_value("teams_active_queue", []) or [])
             if isinstance(number, int) and not isinstance(number, bool)
-        }
+        ]
+        # The runner normalizes the queue to mirror teams before consuming it.
+        # Project the same positions so a stale general/resource entry cannot
+        # create a visible gap in the page's rotation strip.
+        positions: dict[int, int] = {}
+        for number in queue:
+            setting = teams.get(str(number))
+            if setting is not None and _team_purpose(setting) == "mirror":
+                positions[number] = len(positions) + 1
         details: list[dict[str, Any]] = []
         for raw_number, setting in sorted(teams.items(), key=self._sort_key):
             try:
@@ -241,8 +257,29 @@ class TeamService:
             except (TypeError, ValueError):
                 continue
             if number > 0:
-                details.append(self.detail(number, setting, number in queue))
+                details.append(
+                    self.detail(
+                        number,
+                        setting,
+                        number in positions,
+                        positions.get(number, 0),
+                    )
+                )
         return details
+
+    def selection_get(self) -> bool:
+        """Whether the automation selects a team by list order instead of name."""
+
+        return bool(self._config().get_value("select_team_by_order", False))
+
+    def selection_set(self, params: Any) -> bool:
+        values = _require_mapping(params, "team.selection.set")
+        enabled = _require_bool(values.get("enabled"), "team.selection.set.enabled")
+        with self._lock:
+            config = self._config()
+            config.unsaved_set_value("select_team_by_order", enabled)
+            self._persist_config()
+        return enabled
 
     def stats_get(self, params: Any) -> dict[str, Any]:
         values = _require_mapping(params, "team.stats.get")
@@ -360,14 +397,20 @@ class TeamService:
         if not isinstance(requested_enabled, bool):
             raise ValueError("team.save.enabled requires a boolean")
         config.config.teams[str(team_number)] = setting
-        if purpose == "luxcavation":
+        if purpose in {"luxcavation", "general"}:
             self._remove_team_from_queue(team_number)
             enabled = False
         else:
             self._set_team_enabled(team_number, requested_enabled)
             enabled = requested_enabled
         self._persist_config()
-        return self.detail(team_number, setting, enabled)
+        queue = [
+            value
+            for value in (config.get_value("teams_active_queue", []) or [])
+            if isinstance(value, int) and not isinstance(value, bool)
+        ]
+        position = queue.index(team_number) + 1 if team_number in queue else 0
+        return self.detail(team_number, setting, enabled, position)
 
     def delete(self, params: Any) -> bool:
         config = self._config()
@@ -393,7 +436,13 @@ class TeamService:
             for sinner_id, name in zip(SINNER_IDS, SINNER_NAMES, strict=True)
         ]
 
-    def detail(self, number: int, setting: Any, enabled: bool) -> dict[str, Any]:
+    def detail(
+        self,
+        number: int,
+        setting: Any,
+        enabled: bool,
+        queue_position: int = 0,
+    ) -> dict[str, Any]:
         values = (
             setting.model_dump() if hasattr(setting, "model_dump") else dict(setting)
         )
@@ -529,7 +578,12 @@ class TeamService:
             "sinners": sinners,
             "purpose": purpose,
             "accessoryScheme": SYSTEM_NAMES[team_system],
-            "enabled": False if purpose == "luxcavation" else bool(enabled),
+            "enabled": False if purpose in {"luxcavation", "general"} else bool(enabled),
+            "queuePosition": (
+                0
+                if purpose in {"luxcavation", "general"}
+                else max(0, int(queue_position))
+            ),
             "mirrorConfig": None if purpose == "luxcavation" else mirror,
             # Luxcavation teams hide mirrorConfig, so their formation code is
             # carried at the top level instead.  Mirror teams keep using
@@ -605,6 +659,10 @@ class TeamService:
         }
 
     def _set_team_enabled(self, number: int, enabled: bool) -> None:
+        setting = (getattr(self._config().config, "teams", {}) or {}).get(str(number))
+        purpose = getattr(setting, "purpose", "mirror") or "mirror"
+        if purpose in {"luxcavation", "general"}:
+            raise ValueError("只有镜牢队伍可以加入镜牢启用队列")
         config = self._config()
         if hasattr(config, "set_team_enabled"):
             config.set_team_enabled(number, enabled)

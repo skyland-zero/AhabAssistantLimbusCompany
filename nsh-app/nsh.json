@@ -1,7 +1,7 @@
 {
-  "name": "AALC",
-  "id": "com.kiyi671.aalc",
-  "version": "0.1.0",
+  "name": "AALC.nsh",
+  "id": "com.skyland-zero.aalc.nsh",
+  "version": "0.0.1",
   "build": 1,
   "rust": "native",
   "theme": "theme.json",
@@ -9,7 +9,7 @@
   "appearance": "system",
   "singleInstance": true,
   "window": {
-    "title": "AALC",
+    "title": "AALC.nsh",
     "defaultSize": {
       "width": 820,
       "height": 680

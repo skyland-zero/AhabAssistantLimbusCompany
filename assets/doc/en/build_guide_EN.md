@@ -44,10 +44,10 @@ The build runs, in order:
 1. `nsh package nsh-app --target windows` for the Native Shell frontend;
 2. `main_backend.spec` for the headless `AALC Backend.exe`;
 3. `updater.spec` for `AALC Updater.exe`;
-4. staging of `dist/AALC/` with `nsh/`, `assets/`, the README and the LICENSE;
-5. `dist/AALC_<version>.7z` through 7-Zip.
+4. staging of `dist/AALC.nsh/` with `nsh/`, `assets/`, the README and the LICENSE;
+5. `dist/AALC.nsh_<version>.7z` through 7-Zip.
 
 Without 7-Zip, an equivalent `.zip` archive is produced. A release package does
 not require Python, Qt or WebView2 at runtime. Before the first start, check that
-`AALC.exe`, `nsh/`, `backend/AALC Backend.exe` and `AALC Updater.exe` are in
-`dist/AALC/`.
+`AALC.nsh.exe`, `nsh/`, `backend/AALC Backend.exe` and `AALC Updater.exe` are in
+`dist/AALC.nsh/`.

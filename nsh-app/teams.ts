@@ -18,6 +18,8 @@ export {
   observeGiftLabel,
   openingItemsOrderLabel,
   rewardCardsLabel,
+  routeLabel,
+  ROUTE_OPTIONS,
   secondSystemFloorLabel,
   secondSystemSettingLabel,
   shoppingStrategyLabel,

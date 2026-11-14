@@ -80,7 +80,7 @@ export function TitleBar() {
       {/* Brand: a drag region, as the platform's own title bar was. */}
       <View class="h-full flex-row items-center gap-2 ps-3 pe-3" desktop={{ windowDrag: true }}>
         <Image src={banner} style={{ width: 38, height: 20 }} class="flex-none" accessibilityElementsHidden />
-        <Text class="text-xs font-semibold text-foreground">AALC</Text>
+        <Text class="text-xs font-semibold text-foreground">AALC.nsh</Text>
       </View>
 
       <NavBar />

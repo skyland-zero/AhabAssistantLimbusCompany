@@ -23,6 +23,8 @@
     "execution.pause": {"mutating": true, "params": "ExecutionControlParams", "result": "ExecutionStatus"},
     "execution.resume": {"mutating": true, "params": "ExecutionControlParams", "result": "ExecutionStatus"},
     "team.list": {"mutating": false, "params": "none", "result": "Team[]"},
+    "team.selection.get": {"mutating": false, "params": "none", "result": "boolean"},
+    "team.selection.set": {"mutating": true, "params": "TeamSelectionParams", "result": "boolean"},
     "team.stats.get": {"mutating": false, "params": "TeamIdParams", "result": "TeamStats"},
     "team.stats.clear": {"mutating": true, "params": "TeamIdParams", "result": "boolean"},
     "team.preset.list": {"mutating": false, "params": "none", "result": "TeamPreset[]"},

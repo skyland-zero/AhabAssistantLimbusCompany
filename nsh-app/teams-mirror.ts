@@ -138,6 +138,21 @@ export const STARLIGHT_DESCRIPTIONS = [
 /** The one gift id the advanced tab names instead of echoing. */
 export const SPIDERWEB_GIFT_ID = "spiderweb_entangled_in_red";
 
+/** The mirror routes the team editor can assign. Keep the ids in sync with
+ *  `module/mirror_routes.py`; the labels are UI copy. */
+export const ROUTE_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "默认饰品路线" },
+  { value: "hos_ryoshu_solo_route", label: "House of Spiders 良秀伪单通" },
+  { value: "spiderweb_family_route", label: "蜘蛛巢默认路线" },
+  { value: "spiderweb_family_normal_farm_route", label: "蜘蛛巢普牢速刷路线" },
+];
+
+/** The label for a route id, or the raw id when a config names a newer route. */
+export function routeLabel(route: string | null | undefined): string {
+  if (!route) return "默认饰品路线";
+  return ROUTE_OPTIONS.find((option) => option.value === route)?.label ?? route;
+}
+
 /** A fresh config: the Rust `Default`, with the team's system set by the caller. */
 export function defaultMirrorConfig(
   change: Partial<TeamMirrorConfig> = {},

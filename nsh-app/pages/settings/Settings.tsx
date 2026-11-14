@@ -7,6 +7,7 @@
 // lives here; every edited value lives in `settings.ts` (and, after P1, in Rust).
 import type { JSX, ScrollRef } from "nsh";
 import { Scroll, Text, View, signal } from "nsh";
+import { Runtime } from "aalc/native";
 import { Card, CardBody, Divider } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { Reveal } from "../../components/Reveal";
@@ -87,7 +88,7 @@ export function Settings() {
             <AboutCard />
           </Section>
           <Divider />
-          <Text class="text-center text-xs text-muted-foreground">zh-CN · AALC v0.1.0</Text>
+          <Text class="text-center text-xs text-muted-foreground">zh-CN · AALC.nsh v{Runtime.appVersion()}</Text>
           <If when={currentFeedback()}>
             {(line) => <Text class="text-center text-xs text-success">{line()}</Text>}
           </If>

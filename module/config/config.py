@@ -513,8 +513,21 @@ class Config(metaclass=SingletonMeta):
         return sorted(team_numbers)
 
     def _normalize_team_queue(self, queue: list[int]) -> list[int]:
-        """去重并过滤无效队伍编号，返回干净的队列"""
-        valid_team_numbers = set(self.get_team_numbers())
+        """去重、过滤无效编号，并只保留镜牢队伍。
+
+        资源本和通用队伍是手动/日常用途，不参与镜牢轮换；旧配置里残留的
+        编号会在这里被清掉，避免 Runner 选到不该轮换的队伍。
+        """
+        teams = self.get_value("teams", {}) or {}
+        valid_team_numbers: set[int] = set()
+        for team_num in self.get_team_numbers():
+            setting = teams.get(str(team_num)) if isinstance(teams, Mapping) else None
+            if isinstance(setting, Mapping):
+                purpose = setting.get("purpose", "mirror")
+            else:
+                purpose = getattr(setting, "purpose", "mirror")
+            if (purpose or "mirror") == "mirror":
+                valid_team_numbers.add(team_num)
         normalized_queue: list[int] = []
         seen: set[int] = set()
         for team_num in queue or []:

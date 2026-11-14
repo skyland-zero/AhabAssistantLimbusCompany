@@ -10,7 +10,7 @@ mod types;
 
 pub use bridge::TeamsStore;
 pub use store::TeamsState;
-pub use types::{TeamFilter, TeamSaveInput, TeamSlot, TeamView};
+pub use types::{TeamSaveInput, TeamSlot, TeamView};
 
 #[cfg(test)]
 mod tests;

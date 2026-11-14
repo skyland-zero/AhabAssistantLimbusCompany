@@ -5,7 +5,7 @@ use super::*;
 impl MockState {
     pub(super) fn handle_teams(&mut self, request: &RpcRequest) -> Result<Value, RpcError> {
         match request.method.as_str() {
-            method::TEAM_LIST => Ok(serde_json::to_value(&self.teams).unwrap()),
+            method::TEAM_LIST => Ok(serde_json::to_value(self.team_views()).unwrap()),
             method::TEAM_STATS_GET => {
                 let values: Value =
                     Self::params(request.params.clone(), "team.stats.get requires {id}")?;
@@ -42,6 +42,21 @@ impl MockState {
                     .or_insert_with(|| TeamStats::empty_for(team.id.clone(), number));
                 *stats = TeamStats::empty_for(team.id.clone(), number);
                 Ok(serde_json::to_value(stats).unwrap())
+            }
+            method::TEAM_SELECTION_GET => Ok(json!(self.select_team_by_order)),
+            method::TEAM_SELECTION_SET => {
+                let values: Value = Self::params(
+                    request.params.clone(),
+                    "team.selection.set requires {enabled}",
+                )?;
+                let enabled = values
+                    .get("enabled")
+                    .and_then(Value::as_bool)
+                    .ok_or_else(|| {
+                        RpcError::invalid_params("team.selection.set.enabled must be a boolean")
+                    })?;
+                self.select_team_by_order = enabled;
+                Ok(json!(enabled))
             }
             method::TEAM_PRESET_LIST => Ok(serde_json::to_value(builtin_team_presets()).unwrap()),
             method::TEAM_SAVE => {
@@ -103,6 +118,8 @@ impl MockState {
                         if team.purpose == TeamPurpose::Luxcavation {
                             team.enabled = false;
                             team.mirrorConfig = None;
+                        } else if team.purpose == TeamPurpose::General {
+                            team.enabled = false;
                         } else if team.mirrorConfig.is_none()
                             && let Some(existing) =
                                 self.teams.iter().find(|entry| entry.id == team.id)
@@ -116,7 +133,13 @@ impl MockState {
                         } else {
                             self.teams.push(team.clone());
                         }
-                        Ok(json!(team))
+                        self.apply_queue_membership(&team);
+                        let saved = self
+                            .team_views()
+                            .into_iter()
+                            .find(|entry| entry.id == team.id)
+                            .unwrap_or(team);
+                        Ok(json!(saved))
                     }
                 }
             }
@@ -128,11 +151,45 @@ impl MockState {
                     .and_then(Value::as_str)
                     .ok_or_else(|| RpcError::invalid_params("team.delete requires a string id"))?;
                 self.teams.retain(|team| team.id != team_id);
+                self.team_queue.retain(|id| id != team_id);
                 self.team_stats.remove(team_id);
                 Ok(json!(true))
             }
             method::SINNER_LIST => Ok(serde_json::to_value(&self.sinners).unwrap()),
             _ => Err(RpcError::method_not_found(&request.method)),
+        }
+    }
+
+    /// The team list with the mock's queue order applied. `enabled` and
+    /// `queuePosition` are derived, exactly like the Python projection.
+    fn team_views(&self) -> Vec<TeamDetail> {
+        let mut teams = self.teams.clone();
+        for team in &mut teams {
+            let position = self
+                .team_queue
+                .iter()
+                .position(|id| id == &team.id)
+                .map(|index| index as u32 + 1)
+                .unwrap_or(0);
+            team.queuePosition = if team.purpose == TeamPurpose::Mirror {
+                position
+            } else {
+                0
+            };
+            team.enabled = team.queuePosition > 0;
+        }
+        teams
+    }
+
+    /// Add, remove or reorder one team in the mock's mirror queue.
+    fn apply_queue_membership(&mut self, team: &TeamDetail) {
+        let existing = self.team_queue.iter().position(|id| id == &team.id);
+        self.team_queue.retain(|id| id != &team.id);
+        if team.purpose == TeamPurpose::Mirror && team.enabled {
+            match existing {
+                Some(index) => self.team_queue.insert(index, team.id.clone()),
+                None => self.team_queue.push(team.id.clone()),
+            }
         }
     }
 }

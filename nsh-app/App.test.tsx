@@ -9,7 +9,7 @@ const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
 test("the title bar lists every destination", async () => {
   const app = await open("./App.tsx", DESKTOP);
-  await app.waitFor("AALC");
+  await app.waitFor("AALC.nsh");
   for (const label of ["主控台", "队伍管理", "镜牢主题包", "工具箱"]) {
     await app.waitFor(`role:button[${label}]`);
   }
@@ -88,5 +88,5 @@ test("every destination keeps the shared window chrome", async () => {
   const app = await open("./App.tsx", DESKTOP);
   await app.press("role:button[工具箱]");
   await app.waitFor("自动战斗");
-  expect(app.texts()).toContain("AALC");
+  expect(app.texts()).toContain("AALC.nsh");
 });

@@ -182,6 +182,8 @@ impl MockState {
             | method::EXECUTION_PAUSE
             | method::EXECUTION_RESUME => self.handle_execution(&request),
             method::TEAM_LIST
+            | method::TEAM_SELECTION_GET
+            | method::TEAM_SELECTION_SET
             | method::TEAM_STATS_GET
             | method::TEAM_STATS_CLEAR
             | method::TEAM_PRESET_LIST

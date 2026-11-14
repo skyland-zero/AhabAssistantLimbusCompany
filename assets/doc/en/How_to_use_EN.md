@@ -158,9 +158,9 @@ Launch method:
 # < > indicates required content
 # [ ] indicates optional parameters
 # Parameters without brackets should be filled according to the corresponding command description
-AALC.exe <command_name> command_args extra_args
+AALC.nsh.exe <command_name> command_args extra_args
 
-# The following examples omit "AALC.exe"
+# The following examples omit "AALC.nsh.exe"
 ```
 
 Currently supported commands:
@@ -171,6 +171,6 @@ Currently supported commands:
   - `[--exit]` Optional parameter, comes with an additional parameter
     - `[int]` An integer string representing the index of the `combobox` on the AALC One-Click Grass interface. If not specified, the default is `5`, which means **Exit AALC**
 
-Example: `AALC.exe start --exit 6`
+Example: `AALC.nsh.exe start --exit 6`
 
 In the current version, this will exit both AALC and the game after completion.

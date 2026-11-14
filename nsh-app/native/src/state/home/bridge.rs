@@ -472,7 +472,11 @@ impl HomeStore {
             } else {
                 None
             },
-            elapsed_ms: if live { self.state.run_elapsed_ms() } else { None },
+            elapsed_ms: if live {
+                self.state.run_elapsed_ms()
+            } else {
+                None
+            },
         }
     }
 

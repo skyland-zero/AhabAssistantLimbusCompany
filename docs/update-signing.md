@@ -1,6 +1,6 @@
 # 更新包签名
 
-发布构建可为每个 `AALC_<version>.7z` 生成同名的
+发布构建可为每个 `AALC.nsh_<version>.7z` 生成同名的
 `*.manifest.json` 与 `*.manifest.sig`。清单绑定版本、文件名、大小和
 SHA-256，签名使用 Ed25519；更新器在解压和终止旧进程前完成校验。
 
@@ -16,9 +16,9 @@ base64 或 64 位十六进制私钥）签名，并使用
 ```powershell
 $env:AALC_UPDATE_SIGNING_KEY = "<ed25519-private-key>"
 uv run python scripts/sign_update_manifest.py `
-  --archive dist/AALC_v1.2.3.7z `
-  --manifest dist/AALC_v1.2.3.manifest.json `
-  --signature dist/AALC_v1.2.3.manifest.sig `
+  --archive dist/AALC.nsh_v1.2.3.7z `
+  --manifest dist/AALC.nsh_v1.2.3.manifest.json `
+  --signature dist/AALC.nsh_v1.2.3.manifest.sig `
   --version v1.2.3
 ```
 

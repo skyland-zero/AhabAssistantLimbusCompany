@@ -40,6 +40,10 @@ struct MockState {
     stats: ExecutionStatsPayload,
     team_stats: HashMap<String, TeamStats>,
     teams: Vec<TeamDetail>,
+    /// Mirror queue ids in execution order; `enabled`/`queuePosition` are
+    /// derived from this list.
+    team_queue: Vec<String>,
+    select_team_by_order: bool,
     sinners: Vec<SinnerInfo>,
     packs: ThemePackState,
     resources: Vec<ResourceGroup>,

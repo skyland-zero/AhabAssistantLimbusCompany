@@ -16,6 +16,9 @@ jobs:
   release:
     runs-on: windows-latest
     needs: build
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -35,6 +38,7 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Trigger MirrorChyanUploading
+        if: github.repository == 'KIYI671/AhabAssistantLimbusCompany'
         shell: bash
         run: |
           gh workflow run --repo $GITHUB_REPOSITORY mirrorchyan_release -f tag=${{ github.ref_name }}
