@@ -93,17 +93,29 @@ assets/images/default/share/mirror/ego_gifts/{gift_id}.png
 
 ## 3. 分支策略
 
-仓库约定以下分支分工：
+`dev-nsh` 是**自用分支**：不向上游仓库提 PR，也不把提交、分支或 tag 推送到上游仓库。上游只读，所有推送只发到个人 fork。
+
+远端约定（本仓库当前配置）：
+
+| 远端 | 仓库 | 用途 |
+| --- | --- | --- |
+| `fork` | `skyland-zero/AhabAssistantLimbusCompany` | 个人仓库，**唯一推送目标**；`dev-nsh` 跟踪 `fork/dev-nsh` |
+| `origin` | `KIYI671/AhabAssistantLimbusCompany` | 上游仓库，**只读**；`main` 跟踪 `origin/main` |
+
+分支分工：
 
 | 分支 | 角色 | 说明 |
 | --- | --- | --- |
-| `dev-nsh` | **日常开发分支** | 所有本地改动、提交都提交到这里，并推送到 `origin/dev-nsh` |
-| `main` | **上游同步分支** | 只用来拉取上游更新，保持与 `upstream/main` 一致，**不在 `main` 上提交任何本地改动** |
+| `dev-nsh` | **日常开发分支** | 所有本地改动、提交都提交到这里，并推送到 `fork/dev-nsh` |
+| `main` | **上游同步分支** | 只用来拉取上游更新，保持与 `origin/main` 一致，**不在 `main` 上提交任何本地改动** |
 | `dev-gpui` | **历史基线** | 迁移前基于 GPUI 的客户端，仅保留在 git 历史中；工作树已删除 |
 | `feat/gpui-kit-0.8` | 历史起点 | 当时创建 `dev-gpui` 的起点分支，已删除，不需要维护 |
 
 约定：
 
 - 开始工作前先确认当前在 `dev-nsh` 分支，不要直接在 `main` 上修改代码。
-- 同步上游流程：切到 `main` 执行 `git pull`（`main` 已跟踪 `upstream/main`）后，再切回 `dev-nsh` 合并或变基，`main` 本身不产生新提交。
+- **不向上游提 PR**；不要把分支、提交或 tag 推送到 `origin`，也不要执行 `git push origin ...`。
+- 发布 tag 同样只推送到 `fork`。
+- 同步上游流程：切到 `main` 执行 `git pull`（`main` 已跟踪 `origin/main`）后，再切回 `dev-nsh` 合并或变基，`main` 本身不产生新提交。
 - 如果 `main` 出现任何本地提交或未提交改动，应先处理干净再继续，保持其作为纯上游镜像。
+- GitHub Actions 的自动构建只在 `dev-nsh` 上触发；`main` 仅作为上游镜像，不自动运行。
