@@ -19,7 +19,7 @@ jobs:
         with:
           filetype: latest-release
           tag: ${{ inputs.tag }}
-          filename: "AALC_*.7z"
+          filename: "AALC.nsh_*.7z"
           p7zip: true
           mirrorchyan_rid: AALC
 

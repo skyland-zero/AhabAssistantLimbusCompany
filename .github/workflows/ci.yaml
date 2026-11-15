@@ -4,6 +4,7 @@ permissions:
   contents: read
   actions: read
 
+# main 只作为上游镜像，不随 push 自动运行；日常开发与验证在 dev-nsh。
 on:
   workflow_dispatch:
     inputs:
@@ -13,13 +14,14 @@ on:
         type: string
   pull_request:
     branches:
+      - dev-nsh
       - main
     paths-ignore: # 文档更新不必触发 CI
       - "**.md"
       - "readme/**"
   push:
     branches:
-      - main
+      - dev-nsh
     paths-ignore: # 文档更新不必触发 CI
       - "**.md"
       - "readme/**"
@@ -43,9 +45,7 @@ jobs:
         id: channel
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "channel=beta" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "channel=beta" >> "$GITHUB_OUTPUT"
           else
             echo "channel=alpha" >> "$GITHUB_OUTPUT"
@@ -111,9 +111,7 @@ jobs:
 
   publish-prerelease:
     name: Publish prerelease
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     needs: [prepare-version, test, build]
     permissions:
