@@ -54,7 +54,7 @@ class NotificationUpdateService:
         try:
             from module.update.checker import UpdateThread
 
-            checker = UpdateThread(timeout=10, flag=False)
+            checker = UpdateThread(timeout=10, flag=False, version=self._version())
             checker.run()
             if not checker.new_version:
                 return {

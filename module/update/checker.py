@@ -31,6 +31,12 @@ md_renderer = MarkdownIt("gfm-like", {"html": True})
 # 更新日志标题的翻译域，保持配置和文案兼容
 TRANSLATE_DOMAIN = "UpdateThread"
 
+# 本 Fork 的 V0.0.x 发布在 skyland-zero 的 GitHub Release 上。上游 KIYI671
+# 仓库与 Mirror酱 的 AALC 资源描述的是旧客户端，版本号也属于另一条发布线，
+# 因此更新检查只读取本仓库的 GitHub Release，避免把 1.x 当成新版本。
+UPDATE_REPO_OWNER = "skyland-zero"
+UPDATE_REPO_NAME = "AhabAssistantLimbusCompany"
+
 
 class UpdateStatus(Enum):
     """
@@ -55,13 +61,14 @@ class UpdateThread(Thread):
     需将回调封送回主线程（见 app.event_bridge.connect_queued）。
     """
 
-    def __init__(self, timeout, flag):
+    def __init__(self, timeout, flag, version=None):
         """
         初始化更新线程。
 
         参数:
         timeout -- 更新检查请求的超时时间（秒）
         flag -- 是否强制遵循配置项 check_update 来决定是否执行检查
+        version -- 当前应用版本；缺省时退回 cfg.version
         """
         super().__init__(daemon=True)
         # 实例级事件：不同检查实例的订阅互不干扰。
@@ -69,9 +76,12 @@ class UpdateThread(Thread):
         self.timeout = timeout  # 超时时间
         self.flag = flag  # 标志位，用于控制是否执行检查更新
         self.error_msg = ""  # 错误信息
+        # 版本以调用方传入的为准：冻结包里 module 的 assets 副本是
+        # “DEFAULT VERSION”，只有安装根目录的 version.txt 才是真实版本。
+        self.version = version if version is not None else cfg.version
 
-        self.user = "KIYI671"
-        self.repo = "AhabAssistantLimbusCompany"
+        self.user = UPDATE_REPO_OWNER
+        self.repo = UPDATE_REPO_NAME
         self.new_version = ""
         # 记录本次检查后“当前版本是否已追平最新版本”，供资源同步门禁读取。
         self.is_current_version_latest = False
@@ -86,9 +96,10 @@ class UpdateThread(Thread):
         返回:
         当前版本对象与最新版本对象组成的二元组
         """
-        self.new_version = version
-        current_version = parse(cfg.version.lstrip("Vv"))
+        current_version = parse(str(self.version).lstrip("Vv"))
         latest_version = parse(version.lstrip("Vv"))
+        # 只有两边都解析成功才记录，避免版本号异常时把旧结果当成新版本。
+        self.new_version = version
         self.is_current_version_latest = current_version == latest_version
         # 记录本地版本是否为预发布版（alpha/beta/rc），供资源同步门禁跳过测试版。
         self.is_prerelease = current_version.is_prerelease
@@ -104,15 +115,8 @@ class UpdateThread(Thread):
         返回:
         清理并补充说明后的更新日志文本
         """
-        content = self.remove_images_from_markdown(raw_content)
-        content = re.sub(
-            r"\r\n\r\n\[.*?Mirror酱.*?CDK.*?下载\]\(https?://.*?mirrorchyan\.com[^\)]*\)",
-            "",
-            content,
-            flags=re.IGNORECASE,
-        )
-        if cfg.update_source == "GitHub":
-            content = content + "\n\n若下载速度较慢，可尝试使用 Mirror酱（设置 → 关于 → 更新源） 高速下载"
+        # GitHub Release 不写正文时 API 返回 null；空正文仍然要能完成版本比较。
+        content = self.remove_images_from_markdown(raw_content or "")
         return content
 
     def _emit_version_check_result(self, version: str, current_version, latest_version, content: str) -> None:
@@ -128,7 +132,7 @@ class UpdateThread(Thread):
         # 第一步：若远端版本更高，则准备更新弹窗标题与渲染后的正文。
         if latest_version > current_version:
             self.title = tr(TRANSLATE_DOMAIN, "发现新版本：{Old_version} ——> {New_version}\n更新日志:").format(
-                Old_version=cfg.version, New_version=version
+                Old_version=self.version, New_version=version
             )
             self.content = "<style>a {color: #586f50; font-weight: bold;}</style>" + md_renderer.render(content)
             self.updateSignal.emit(UpdateStatus.UPDATE_AVAILABLE)
@@ -147,39 +151,28 @@ class UpdateThread(Thread):
             if self.flag and not cfg.get_value("check_update"):
                 return
 
-            # 第一步：优先从 Mirror酱 获取最新版本信息，并同步记录版本门禁需要的数据。
-            data = self.check_update_info_mirrorchyan()
-            version = data["version_name"]
+            # 本 Fork 只从自己的 GitHub Release 检查版本；Mirror酱 的 AALC
+            # 资源属于上游旧客户端，不能参与这里的版本比较。
+            data = self.check_update_info_github()
+            version = data["tag_name"]
             # 同步记录本次检查得到的最新版本号与比较结果，供资源同步门禁直接复用。
             current_version, latest_version = self._set_version_gate_state(version)
-            # 第二步：整理更新日志正文，去掉图片，生成可展示文本。
-            content = self._build_release_note_content(data["release_note"])
+            # 整理更新日志正文，去掉图片，生成可展示文本。
+            content = self._build_release_note_content(data["body"])
+            assets_url = self.get_download_url_from_assets(data["assets"])
 
-            # 第三步：比较当前版本与最新版本，并统一发出检查结果事件。
+            # 若当前发布未携带可下载资产，则按“当前无需更新”处理。
+            if assets_url is None:
+                self.updateSignal.emit(UpdateStatus.SUCCESS)
+                return
+
+            # 继续复用同一套版本比较逻辑，决定是否弹出更新提示。
             self._emit_version_check_result(version, current_version, latest_version, content)
         except Exception as e:
-            # Mirror酱 失败后自动回退到 GitHub，保持原有软件更新逻辑不变。
-            log.error(f"从Mirror酱源检查更新失败:{e},尝试使用GitHub源检查更新")
-            try:
-                data = self.check_update_info_github()
-                version = data["tag_name"]
-                # 当回退到 GitHub 源时，同样刷新版本比较结果，避免后续门禁读取到旧值。
-                current_version, latest_version = self._set_version_gate_state(version)
-                # 回退到 GitHub 后同样整理更新日志正文。
-                content = self._build_release_note_content(data["body"])
-                assets_url = self.get_download_url_from_assets(data["assets"])
-
-                # 若当前回退源未携带可下载资产，则按“当前无需更新”处理。
-                if assets_url is None:
-                    self.updateSignal.emit(UpdateStatus.SUCCESS)
-                    return
-
-                # 最后继续复用同一套版本比较逻辑，决定是否弹出更新提示。
-                self._emit_version_check_result(version, current_version, latest_version, content)
-            except Exception as e:
-                # 异常处理，发送失败事件
-                log.error(f"Mirror酱源与GitHub源均检查更新失败:{e}")
-                self.updateSignal.emit(UpdateStatus.FAILURE)
+            # 异常处理，发送失败事件
+            self.error_msg = str(e)
+            log.error(f"GitHub源检查更新失败:{e}")
+            self.updateSignal.emit(UpdateStatus.FAILURE)
 
     def check_update_info_github(self):
         """
@@ -216,13 +209,13 @@ class UpdateThread(Thread):
         """
         if not cfg.update_prerelease_enable:
             response = requests.get(
-                f"https://mirrorchyan.com/api/resources/AALC/latest?current_version={cfg.version}&user_agent={self.repo}&cdk={cdk}",
+                f"https://mirrorchyan.com/api/resources/AALC/latest?current_version={self.version}&user_agent={self.repo}&cdk={cdk}",
                 timeout=10,
                 headers=cfg.useragent,
             )
         else:
             response = requests.get(
-                f"https://mirrorchyan.com/api/resources/AALC/latest?current_version={cfg.version}&user_agent={self.repo}&channel=beta&cdk={cdk}",
+                f"https://mirrorchyan.com/api/resources/AALC/latest?current_version={self.version}&user_agent={self.repo}&channel=beta&cdk={cdk}",
                 timeout=10,
                 headers=cfg.useragent,
             )

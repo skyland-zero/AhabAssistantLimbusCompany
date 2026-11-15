@@ -11,8 +11,16 @@ from pathlib import Path
 
 _APPLICATION_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_ENV_PATH = os.environ.get("AALC_CONFIG_PATH")
+_VERSION_ENV_PATH = os.environ.get("AALC_VERSION_PATH")
 
-VERSION_PATH = str((_APPLICATION_ROOT / "assets" / "config" / "version.txt").resolve())
+# The frozen sidecar imports this module from ``backend/_internal``, where the
+# bundled copy still says "DEFAULT VERSION".  The launcher pins the staged
+# release file through ``AALC_VERSION_PATH`` so updates compare real versions.
+VERSION_PATH = str(
+    Path(_VERSION_ENV_PATH).expanduser().resolve()
+    if _VERSION_ENV_PATH
+    else (_APPLICATION_ROOT / "assets" / "config" / "version.txt").resolve()
+)
 EXAMPLE_PATH = str((_APPLICATION_ROOT / "assets" / "config" / "config.example.yaml").resolve())
 # ``Path.resolve`` also normalizes a relative environment override.  The
 # default intentionally resolves against the application root, not whatever

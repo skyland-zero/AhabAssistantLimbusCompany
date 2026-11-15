@@ -253,10 +253,18 @@ def _configure_runtime_paths(root: Path) -> None:
     }
     for name, path in defaults.items():
         os.environ.setdefault(name, str(path))
+    # The onedir bundle also carries the source tree's ``version.txt`` inside
+    # ``_internal`` ("DEFAULT VERSION").  Point module resolution at the staged
+    # release file so ``cfg.version`` matches ``app.version``; otherwise the
+    # update check cannot compare releases and reports a malformed version.
+    os.environ.setdefault("AALC_VERSION_PATH", str(root / "assets" / "config" / "version.txt"))
 
 
 def _version() -> str:
-    version_file = _application_root() / "assets" / "config" / "version.txt"
+    version_file = Path(
+        os.environ.get("AALC_VERSION_PATH")
+        or _application_root() / "assets" / "config" / "version.txt"
+    )
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
