@@ -33,7 +33,7 @@ export function Toolbox() {
               {(tool, index) => <ToolCard tool={tool()} index={index()} />}
             </Each>
           </View>
-          <Text class="px-1 text-xs text-muted-foreground">工具请求通过 Python sidecar 执行</Text>
+          <Text class="px-1 text-xs text-muted-foreground">工具请求将在后台执行</Text>
           <If when={toolboxFeedback()}>
             {(line) => <Notice tone="success" label={line()} />}
           </If>

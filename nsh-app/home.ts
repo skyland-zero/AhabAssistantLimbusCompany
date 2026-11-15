@@ -8,7 +8,7 @@ import { Backend, HomeStore } from "aalc/native";
 import { allTeams, teamNumber } from "./teams-store";
 import { mirrorHomeStatus } from "./store";
 
-/** What the Python sidecar link is doing. */
+/** What the automation core is doing. */
 export type BackendState = "mock" | "starting" | "ready" | "failed";
 
 /** The device the console drives. */
@@ -342,6 +342,9 @@ const window_ = signal<WindowSettings>({
 const afterCompletion = signal<AfterCompletion>({ actions: [], power: "none", keep: false });
 const afterCompletionOpen = signal(false);
 const logs = signal<LogEntry[]>([]);
+/** The startup retry lines mirrored from the native layer. They live beside
+ *  the backend's own log so a failed startup can still explain itself. */
+const startupLogs = signal<LogEntry[]>([]);
 const feedback = signal<string | null>(null);
 const tasks = signal<Task[]>(DEFAULT_TASKS.map((task) => ({ ...task })));
 const previewFrame = signal<string | null>(null);
@@ -355,6 +358,12 @@ const logDetailsOpen = signal(false);
 
 let store: HomeStore | null = null;
 let connecting = false;
+/** A failed startup does not try again from the 200ms console poll; only an
+ *  app restart (the failure dialog's button) starts a new process. */
+let startupFailed = false;
+/** Once startup reached a terminal state, the log mirror stops polling so a
+ *  cleared log stays cleared. */
+let startupObserved = false;
 
 function selectionFrom(list: Task[]): Record<string, Record<string, unknown>> {
   return Object.fromEntries(
@@ -405,6 +414,7 @@ function hydrateFrom(created: HomeStore): void {
   logs.set(created.logs());
   mirrorHomeStatus(created.executionState());
   backend.set(Backend.mode() === "mock" ? "mock" : "ready");
+  syncStartupLogs();
 }
 
 /** Mirrors the device selection the state layer owns (connect events included).
@@ -416,22 +426,51 @@ function syncDevice(current: HomeStore): void {
   if (state !== "connecting") selectedDevice.set(current.selectedDeviceId());
 }
 
+/** Mirrors the native startup lines into the console log. The normal
+ *  first-try startup is quiet: only a retry (warn) or the failure (error) makes
+ *  the lines visible. */
+function syncStartupLogs(): void {
+  if (Backend.mode() === "mock") return;
+  let info: ReturnType<typeof Backend.startupInfo>;
+  try {
+    info = Backend.startupInfo();
+  } catch {
+    return;
+  }
+  const lines = info.logs.map((entry) => ({
+    ts: entry.ts,
+    level: entry.level,
+    message: entry.message,
+  }));
+  startupLogs.set(lines.some((line) => line.level !== "info") ? lines : []);
+  if (info.state === "failed") {
+    startupFailed = true;
+    backend.set("failed");
+  }
+  if (info.state === "ready" || info.state === "failed" || info.state === "mock") {
+    startupObserved = true;
+  }
+}
+
 function ensureStore(): HomeStore | null {
   if (store) return store;
+  if (startupFailed) return null;
   if (Backend.mode() === "mock") {
     try {
       hydrateFrom(new HomeStore());
-    } catch (error) {
+    } catch {
       backend.set("failed");
-      feedback.set(error instanceof Error ? error.message : String(error));
+      feedback.set("自动化核心初始化失败，请重新启动应用。");
     }
   } else if (!connecting) {
     connecting = true;
     HomeStore.connect()
       .then(hydrateFrom)
-      .catch((error) => {
+      .catch(() => {
+        startupFailed = true;
         backend.set("failed");
-        feedback.set(error instanceof Error ? error.message : String(error));
+        syncStartupLogs();
+        feedback.set("自动化核心初始化失败，请重新启动应用。");
       })
       .finally(() => {
         connecting = false;
@@ -442,9 +481,14 @@ function ensureStore(): HomeStore | null {
 
 if (Backend.mode() === "mock") ensureStore();
 
-/** The sidecar link's state (tracked). */
+/** The automation core's state (tracked). */
 export function backendState(): BackendState {
   return backend();
+}
+
+/** Whether startup failed and the restart dialog should stay open. */
+export function startupFailure(): boolean {
+  return backend() === "failed";
 }
 
 /** The device list the selector offers (tracked). */
@@ -496,14 +540,15 @@ function applyWindow(view: ReturnType<HomeStore["window"]>): void {
 
 /** How many log lines the panel holds (tracked). */
 export function logLines(): number {
-  ensureStore();
-  return logs().length;
+  return logEntries().length;
 }
 
-/** The log lines, oldest first (tracked). */
+/** The log lines, oldest first (tracked): the startup retry lines and then
+ *  the backend's own run log. */
 export function logEntries(): LogEntry[] {
   ensureStore();
-  return logs();
+  const startup = startupLogs();
+  return startup.length > 0 ? [...startup, ...logs()] : logs();
 }
 
 /** The console's tasks (tracked). */
@@ -600,10 +645,14 @@ export function stopQueue(): void {
   }
 }
 
-/** Empties the run log. */
+/** Empties the run log, including the startup lines kept beside it. */
 export function clearLog(): void {
+  startupLogs.set([]);
   const current = ensureStore();
-  if (!current) return;
+  if (!current) {
+    feedback.set("日志已清空");
+    return;
+  }
   current.clearLogs();
   logs.set(current.logs());
   feedback.set(current.feedback());
@@ -659,6 +708,13 @@ export function currentPreviewStatus(): string {
   return previewStatus();
 }
 
+/** Mirrors the automation core's startup lines while the console is on screen.
+ *  It stops at the terminal state; the log panel keeps what it last showed. */
+export function pollStartup(): void {
+  if (startupObserved) return;
+  syncStartupLogs();
+}
+
 /** Drains queued events and updates the live preview and log mirror. */
 export function pollPreview(): void {
   const current = ensureStore();
@@ -676,7 +732,14 @@ export function pollPreview(): void {
   logs.set(current.logs());
   // The console card is a plain read of the state layer; this signal is what
   // makes it re-render when the run moves on.
-  runProgress.set(current.runProgress() as RunProgress);
+  const progress = current.runProgress() as RunProgress;
+  runProgress.set(progress);
+  // The running card's sheen reads these, so they must not tick with the poll:
+  // a new value would restart its animation every 200ms.
+  const task = progress.live ? progress.task : null;
+  if (runningTask() !== task) runningTask.set(task);
+  const moving = progress.state === "running";
+  if (runningTaskMoving() !== moving) runningTaskMoving.set(moving);
 }
 
 /** The statistics summary shown on the console (tracked). */
@@ -750,10 +813,28 @@ const IDLE_PROGRESS: RunProgress = {
  *  drain, so the top card follows the queue instead of freezing at mount. */
 const runProgress = signal<RunProgress>(IDLE_PROGRESS);
 
+/** The task the run is on and whether it advances. Primitives, kept apart from
+ *  `runProgress` so a card re-renders only when the task changes, not on every
+ *  200ms progress tick. */
+const runningTask = signal<string | null>(null);
+const runningTaskMoving = signal(false);
+
 /** The current run's counts, floor and clock (tracked by the console's poll). */
 export function consoleProgress(): RunProgress {
   ensureStore();
   return runProgress();
+}
+
+/** The task the run is on (tracked); `null` while nothing runs. */
+export function runningTaskId(): string | null {
+  ensureStore();
+  return runningTask();
+}
+
+/** Whether the running task advances (tracked): false while paused. */
+export function runningTaskMoves(): boolean {
+  ensureStore();
+  return runningTaskMoving();
 }
 
 /** The connected device's name, or `null` while nothing is connected. */

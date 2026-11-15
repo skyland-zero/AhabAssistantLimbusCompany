@@ -130,12 +130,12 @@ impl WebSocketClient {
             .shared
             .endpoint
             .clone()
-            .ok_or_else(|| "sidecar 端点不可用".to_owned())?;
+            .ok_or_else(|| "自动化核心端点不可用".to_owned())?;
         let sidecar = self.shared._sidecar.clone();
         if let Some(guard) = sidecar.as_ref()
             && !guard.is_alive()
         {
-            return Err("sidecar 进程已退出".to_owned());
+            return Err("自动化核心进程已退出".to_owned());
         }
         Self::connect_url(&endpoint.url, &endpoint.token, sidecar, None)
     }
@@ -194,7 +194,7 @@ impl WebSocketClient {
         let started = Instant::now();
         let address = sidecar::parse_loopback_address(url)?;
         let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
-            .map_err(|error| format!("连接 Python sidecar 失败：{error}"))?;
+            .map_err(|error| format!("连接自动化核心失败：{error}"))?;
         stream
             .set_read_timeout(Some(CONNECT_TIMEOUT))
             .map_err(|error| format!("设置 sidecar 读取超时失败：{error}"))?;
@@ -220,21 +220,21 @@ impl WebSocketClient {
                 })
                 .to_string(),
             ))
-            .map_err(|error| format!("sidecar 鉴权发送失败：{error}"))?;
+            .map_err(|error| format!("自动化核心鉴权发送失败：{error}"))?;
         let hello = socket
             .read()
-            .map_err(|error| format!("sidecar 鉴权读取失败：{error}"))?;
+            .map_err(|error| format!("自动化核心鉴权读取失败：{error}"))?;
         let hello_text =
-            worker::message_text(hello).ok_or_else(|| "sidecar 鉴权响应不是文本".to_owned())?;
+            worker::message_text(hello).ok_or_else(|| "自动化核心鉴权响应不是文本".to_owned())?;
         let hello_value: Value = serde_json::from_str(&hello_text)
-            .map_err(|error| format!("sidecar 鉴权响应无效：{error}"))?;
+            .map_err(|error| format!("自动化核心鉴权响应无效：{error}"))?;
         if hello_value.get("type") != Some(&Value::String("hello".into()))
             || hello_value.get("ok") != Some(&Value::Bool(true))
         {
-            return Err("sidecar 鉴权失败".to_owned());
+            return Err("自动化核心鉴权失败".to_owned());
         }
         if hello_value.get("schemaVersion") != Some(&json!(RPC_SCHEMA_VERSION)) {
-            return Err("sidecar RPC 协议版本不兼容".to_owned());
+            return Err("自动化核心 RPC 协议版本不兼容".to_owned());
         }
         let capabilities: Vec<String> = hello_value
             .get("capabilities")
@@ -256,7 +256,7 @@ impl WebSocketClient {
                 .any(|capability| capability == capability::CORE_RPC_V3)
         {
             return Err(format!(
-                "sidecar 缺少核心 RPC 能力：{}",
+                "自动化核心缺少 RPC 能力：{}",
                 capabilities.join(", ")
             ));
         }
@@ -306,7 +306,7 @@ impl WebSocketClient {
                     },
                 )
             })
-            .map_err(|error| format!("启动 sidecar 网络线程失败：{error}"))?;
+            .map_err(|error| format!("初始化自动化核心网络线程失败：{error}"))?;
 
         Ok(Self {
             shared: Arc::new(ClientShared {
@@ -338,7 +338,7 @@ impl WebSocketClient {
             Ok(response) => response,
             Err(error) => RpcResponse::failure(
                 id,
-                RpcError::new(-32000, format!("sidecar 请求超时或已断开：{error}")),
+                RpcError::new(-32000, format!("自动化核心请求超时或已断开：{error}")),
             ),
         }
     }
@@ -381,7 +381,7 @@ impl WebSocketClient {
         }) {
             let response = RpcResponse::failure(
                 id,
-                RpcError::new(-32000, format!("sidecar 请求发送失败：{error}")),
+                RpcError::new(-32000, format!("自动化核心请求发送失败：{error}")),
             );
             if let WorkerCommand::Request { response_tx, .. } = error.0 {
                 Self::deliver(response_tx, response.clone());
@@ -423,7 +423,7 @@ impl WebSocketClient {
             .lock()
             .ok()
             .and_then(|error| error.clone())
-            .unwrap_or_else(|| "Python sidecar 不可用".to_owned());
+            .unwrap_or_else(|| "自动化核心不可用".to_owned());
         RpcResponse::failure(id, RpcError::new(-32000, message))
     }
 }

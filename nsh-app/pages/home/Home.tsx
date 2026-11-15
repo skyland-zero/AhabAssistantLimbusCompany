@@ -20,8 +20,10 @@ import {
 } from "nsh";
 import { Collapsible } from "nsh/base";
 import { Badge } from "../../components/Badge";
+import { Breath } from "../../components/Breath";
 import { Button, IconButton, Pressable } from "../../components/Button";
 import { Card, Rule } from "../../components/Card";
+import { ConnectionBeacon } from "../../components/ConnectionBeacon";
 import { SettingLine, SettingPanel } from "../../components/Field";
 import { Figure } from "../../components/Figure";
 import { Icon } from "../../components/Icon";
@@ -52,7 +54,10 @@ import {
   openAfterCompletion,
   openLogDetails,
   pollPreview,
+  pollStartup,
   refreshDevices,
+  runningTaskId,
+  runningTaskMoves,
   selectAllTasks,
   selectDevice,
   selectedDeviceId,
@@ -123,7 +128,10 @@ export function Home() {
   // Poll the event queue while the console is on screen: preview frames and
   // log lines arrive as sidecar events and are mirrored into signals.
   effect(() => {
-    const timer = setInterval(() => pollPreview(), 200);
+    const timer = setInterval(() => {
+      pollStartup();
+      pollPreview();
+    }, 200);
     return () => clearInterval(timer);
   });
   return (
@@ -196,12 +204,17 @@ function StripHead(props: { icon: IconName; title: string; note?: string }) {
 /** The card's status line: what runs, on what, and the last mirror run. */
 function StripFoot(props: {
   label: string;
-  tone: "neutral" | "success" | "warning";
+  tone: "neutral" | "success" | "warning" | "danger";
   detail: string;
+  busy?: boolean;
 }) {
   return (
     <View class="w-full flex-row items-center gap-2">
-      <Badge label={props.label} tone={props.tone} dot />
+      <If when={props.busy} else={<Badge label={props.label} tone={props.tone} dot />}>
+        <View class="size-5 flex-none flex-row items-center justify-center">
+          <ConnectionBeacon />
+        </View>
+      </If>
       <Text class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{props.detail}</Text>
       <Text class="flex-none text-[10px] text-muted-foreground">上次镜牢</Text>
       <Text class="flex-none text-xs text-muted-foreground">{lastMirrorNote()}</Text>
@@ -225,7 +238,12 @@ function TotalsStrip() {
         />
       </View>
       <Rule class="my-2" />
-      <StripFoot label={backendLabel()} tone={backendTone()} detail={backendDetail()} />
+      <StripFoot
+        label={backendLabel()}
+        tone={backendTone()}
+        detail={backendDetail()}
+        busy={backendState() === "starting"}
+      />
     </View>
   );
 }
@@ -330,6 +348,16 @@ const RUN_TASKS: Record<string, { icon: IconName; label: string; counted: boolea
 
 const RUN_FALLBACK = { icon: "listChecks" as IconName, label: "运行中", counted: false };
 
+/** The execution's task id for each queue card. The two names differ only
+ *  because the store's queue and the run report it in their own vocabulary. */
+const RUN_IDS: Record<Task["id"], string> = {
+  daily: "daily_task",
+  rewards: "get_reward",
+  enkephalin: "buy_enkephalin",
+  mirror: "mirror",
+  resonance: "resonate_with_Ahab",
+};
+
 /** The last mirror run as `6:12 · 5 层`, or that there is none yet. */
 function lastMirrorNote(): string {
   const stats = consoleStats();
@@ -348,27 +376,26 @@ function elapsedText(ms: number): string {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
-function backendTone(): "neutral" | "success" | "warning" {
+function backendTone(): "neutral" | "success" | "warning" | "danger" {
   const state = backendState();
   if (state === "ready") return "success";
   if (state === "starting") return "warning";
+  if (state === "failed") return "danger";
   return "neutral";
 }
 
 function backendLabel(): string {
   const state = backendState();
   if (state === "mock") return "Mock 模式";
-  if (state === "starting") return "启动中";
-  if (state === "ready") return "已连接";
-  return "未连接";
+  return "自动化核心";
 }
 
 function backendDetail(): string {
   const state = backendState();
-  if (state === "mock") return "未启动 Python 后端";
-  if (state === "starting") return "正在启动 Python 后端…";
-  if (state === "ready") return "Python 后端已就绪";
-  return "Python 后端启动失败";
+  if (state === "mock") return "本地模拟";
+  if (state === "starting") return "自动化核心初始化中…";
+  if (state === "ready") return "就绪";
+  return "初始化失败，请重新启动应用";
 }
 
 /** The window and input settings the run will use. The queue's first row: a
@@ -488,6 +515,10 @@ function TaskCard(props: { task: Task; index: number }) {
   const task = () => props.task;
   const open = signal(false);
   const hasSettings = () => task().params.length > 0;
+  // The run reports the task it is on; only that card carries the breath. The
+  // selected surface stays while paused, so the state never rests on motion.
+  const live = () => runningTaskId() === RUN_IDS[task().id];
+  const moving = () => live() && runningTaskMoves();
   // The queue scrolls: a card near its end opens below the fold, so the press
   // asks the scroll view for the settings, the shortest way and animated.
   let body: ViewRef | undefined;
@@ -508,59 +539,64 @@ function TaskCard(props: { task: Task; index: number }) {
         }`
       : "");
   return (
-    <Card class="w-full p-0" arrive={props.index}>
-      <View class={rowClass()}>
-        <Switch
-          checked={task().enabled}
-          accessibilityLabel={`启用 ${task().name}`}
-          onChange={() => toggleTask(task().id)}
-        />
-        <If when={hasSettings()}>
-          <Pressable
-            accessibilityLabel={`${task().name}设置（${open() ? "已展开" : "已收起"}）`}
-            testID={`task-toggle-${task().id}`}
-            class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 active:bg-secondary"
-            onPress={toggleOpen}
-          >
-            <Icon name={task().icon} size={16} color={token("brand")} />
-            <Text class="min-w-0 text-sm text-foreground">{task().name}</Text>
-            <View class="flex-1" />
-            <View class="flex-row items-center gap-2">
-              <If when={!open()}>
-                <Text class="text-xs text-muted-foreground">{taskSummary(task())}</Text>
-              </If>
-              <Chevron open={open()} />
-            </View>
-          </Pressable>
-        </If>
-        <If when={!hasSettings()}>
-          <View class="min-w-0 flex-1 flex-row items-center gap-3">
-            <Icon name={task().icon} size={16} color={token("brand")} />
-            <Text class="min-w-0 truncate text-sm text-foreground">{task().name}</Text>
-          </View>
-        </If>
-      </View>
-      <If when={hasSettings()}>
-        <Expansion open={open()} bodyRef={(ref) => (body = ref)}>
-          <Each of={taskGroups(task())} key={(group) => group.title}>
-            {(group) => (
-              <View class="w-full flex-col gap-2">
-                <If when={group().title}>
-                  {(title) => (
-                    <Text class="text-xs font-medium text-muted-foreground">{title()}</Text>
-                  )}
+    <View class="relative w-full flex-col">
+      <Card class="w-full p-0" arrive={props.index} selected={live()}>
+        <View class={rowClass()}>
+          <Switch
+            checked={task().enabled}
+            accessibilityLabel={`启用 ${task().name}`}
+            onChange={() => toggleTask(task().id)}
+          />
+          <If when={hasSettings()}>
+            <Pressable
+              accessibilityLabel={`${task().name}设置（${open() ? "已展开" : "已收起"}）`}
+              testID={`task-toggle-${task().id}`}
+              class="min-w-0 flex-1 flex-row items-center gap-3 rounded-(--radius) ps-1 py-0.5 active:bg-secondary"
+              onPress={toggleOpen}
+            >
+              <Icon name={task().icon} size={16} color={token("brand")} />
+              <Text class="min-w-0 text-sm text-foreground">{task().name}</Text>
+              <View class="flex-1" />
+              <View class="flex-row items-center gap-2">
+                <If when={!open()}>
+                  <Text class="text-xs text-muted-foreground">{taskSummary(task())}</Text>
                 </If>
-                <SettingPanel columns={settingColumns(group().params.length)}>
-                  <Each of={group().params} key={(param) => param.id}>
-                    {(param) => <ParamRow task={task().id} param={param()} />}
-                  </Each>
-                </SettingPanel>
+                <Chevron open={open()} />
               </View>
-            )}
-          </Each>
-        </Expansion>
+            </Pressable>
+          </If>
+          <If when={!hasSettings()}>
+            <View class="min-w-0 flex-1 flex-row items-center gap-3">
+              <Icon name={task().icon} size={16} color={token("brand")} />
+              <Text class="min-w-0 truncate text-sm text-foreground">{task().name}</Text>
+            </View>
+          </If>
+        </View>
+        <If when={hasSettings()}>
+          <Expansion open={open()} bodyRef={(ref) => (body = ref)}>
+            <Each of={taskGroups(task())} key={(group) => group.title}>
+              {(group) => (
+                <View class="w-full flex-col gap-2">
+                  <If when={group().title}>
+                    {(title) => (
+                      <Text class="text-xs font-medium text-muted-foreground">{title()}</Text>
+                    )}
+                  </If>
+                  <SettingPanel columns={settingColumns(group().params.length)}>
+                    <Each of={group().params} key={(param) => param.id}>
+                      {(param) => <ParamRow task={task().id} param={param()} />}
+                    </Each>
+                  </SettingPanel>
+                </View>
+              )}
+            </Each>
+          </Expansion>
+        </If>
+      </Card>
+      <If when={moving()}>
+        <Breath />
       </If>
-    </Card>
+    </View>
   );
 }
 

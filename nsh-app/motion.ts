@@ -37,6 +37,16 @@ export const RISE = 6;
  *  that outlives the transition it belongs to reads as lag. */
 export const WAVE = { step: 20, cap: 5 } as const;
 
+/** The automation-core initialization beacon: one orbit, and one radar-ring
+ *  pulse. Both loop while the core initializes; reduced motion keeps the mark. */
+export const BEACON = { spin: 1100, ping: 1500 } as const;
+
+/** The running task card's border breath: a ring lights up and dims, with only
+ *  the short pause at the bottom of an exhale. It is sampled at 15 fps rather
+ *  than the display's 60: the 1px line changes too slowly for the step to show,
+ *  and the renderer wakes a quarter as often. */
+export const BREATH = { in: 1500, out: 1500, rest: 500, frame: 66 } as const;
+
 /** The entrance of a listed item: it fades in and rises, a step after the one
  *  before it. `index` is its place in that list, capped so a wave never runs
  *  longer than `WAVE`. */

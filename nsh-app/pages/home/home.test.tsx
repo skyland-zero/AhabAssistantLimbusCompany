@@ -6,7 +6,7 @@ const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 test("the console shows the backend, this week's summary and the task queue", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   for (const text of [
-    "未启动 Python 后端",
+    "本地模拟",
     "Mock 模式",
     "周期统计（今日/本周）",
     "上次镜牢",
@@ -55,6 +55,25 @@ test("starting the queue says what it did", async () => {
   await app.waitFor("已提交启动请求");
   await app.waitFor("Mock 任务已开始");
   expect(app.texts()).toContain("F10");
+});
+
+test("only the running task card carries the border breath", async () => {
+  const app = await open("../../App.tsx", DESKTOP);
+  expect(app.count("id:task-running-breath")).toBe(0);
+  await app.press("id:link-start");
+  await app.waitFor("Mock 任务已开始");
+  await app.waitFor("id:task-running-breath");
+  expect(app.count("id:task-running-breath")).toBe(1);
+  await app.press("id:link-start");
+  await app.waitFor("id:task-running-breath", { state: "gone" });
+});
+
+test("reduced motion keeps the running task card still", async () => {
+  const app = await open("../../App.tsx", { ...DESKTOP, reducedMotion: true });
+  await app.press("id:link-start");
+  await app.waitFor("Mock 任务已开始");
+  await app.waitFor("运行中");
+  expect(app.count("id:task-running-breath")).toBe(0);
 });
 
 test("the run bar turns Link Start into stop while the queue runs", async () => {

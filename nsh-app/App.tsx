@@ -7,6 +7,7 @@ import { Runtime } from "aalc/native";
 import { PageHost } from "./pages/PageHost";
 import { DesktopIntegration } from "./shell/DesktopIntegration";
 import { SkinBackdrop } from "./shell/SkinBackdrop";
+import { StartupDialog } from "./shell/StartupDialog";
 import { TitleBar } from "./shell/TitleBar";
 import { currentPage, initTheme } from "./store";
 
@@ -24,6 +25,7 @@ function App() {
       <View class="min-h-0 flex-1">
         <PageHost page={currentPage()} />
       </View>
+      <StartupDialog />
     </View>
   );
 }

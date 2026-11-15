@@ -66,7 +66,7 @@ pub(super) fn run_worker(
                 Ok(command) => command,
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    fatal_error = Some("sidecar client dropped".to_owned());
+                    fatal_error = Some("自动化核心客户端已关闭".to_owned());
                     break;
                 }
             };
@@ -101,7 +101,7 @@ pub(super) fn run_worker(
                         Err(send_error) => {
                             let response = RpcResponse::failure(
                                 id,
-                                RpcError::new(-32000, format!("sidecar 写入失败：{send_error}")),
+                                RpcError::new(-32000, format!("自动化核心写入失败：{send_error}")),
                             );
                             complete(
                                 PendingRequest {
@@ -121,7 +121,7 @@ pub(super) fn run_worker(
                 }
                 WorkerCommand::Shutdown => {
                     let _ = socket.close(None);
-                    fatal_error = Some("sidecar client closed".to_owned());
+                    fatal_error = Some("自动化核心客户端已关闭".to_owned());
                     break;
                 }
             }
@@ -137,7 +137,7 @@ pub(super) fn run_worker(
                 }
                 Ok(_) => {}
                 Err(parse_error) => {
-                    fatal_error = Some(format!("sidecar 二进制事件无效：{parse_error}"));
+                    fatal_error = Some(format!("自动化核心二进制事件无效：{parse_error}"));
                     break;
                 }
             },
@@ -161,14 +161,14 @@ pub(super) fn run_worker(
                                     }
                                     Err(parse_error) => {
                                         fatal_error =
-                                            Some(format!("sidecar 响应无效：{parse_error}"));
+                                            Some(format!("自动化核心响应无效：{parse_error}"));
                                         break;
                                     }
                                 }
                             }
                         }
                         Err(parse_error) => {
-                            fatal_error = Some(format!("sidecar 消息无效：{parse_error}"));
+                            fatal_error = Some(format!("自动化核心消息无效：{parse_error}"));
                             break;
                         }
                     }
@@ -176,7 +176,7 @@ pub(super) fn run_worker(
             }
             Err(read_error) if is_read_timeout(&read_error) => {}
             Err(read_error) => {
-                fatal_error = Some(format!("sidecar 连接断开：{read_error}"));
+                fatal_error = Some(format!("自动化核心连接断开：{read_error}"));
                 break;
             }
         }
@@ -190,14 +190,14 @@ pub(super) fn run_worker(
             if let Some(request) = pending.remove(&id) {
                 complete(
                     request,
-                    RpcResponse::failure(id, RpcError::new(-32000, "sidecar 请求超时")),
+                    RpcResponse::failure(id, RpcError::new(-32000, "自动化核心请求超时")),
                     &completions,
                 );
             }
         }
     }
 
-    let message = fatal_error.unwrap_or_else(|| "sidecar 连接已关闭".to_owned());
+    let message = fatal_error.unwrap_or_else(|| "自动化核心连接已关闭".to_owned());
     connected.store(false, Ordering::Release);
     if let Ok(mut stored_error) = error.lock() {
         *stored_error = Some(message.clone());

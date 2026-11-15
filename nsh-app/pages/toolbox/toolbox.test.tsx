@@ -4,13 +4,13 @@ import { open, test } from "nsh/test";
 
 const DESKTOP = { width: 820, height: 680, platform: "windows" as const };
 
-test("the toolbox lists every tool and the sidecar note", async () => {
+test("the toolbox lists every tool and its background note", async () => {
   const app = await open("../../App.tsx", DESKTOP);
   await app.press("role:button[工具箱]");
   for (const title of ["自动战斗", "体力换饼", "辅助截图", "分辨率修改"]) {
     await app.waitFor(title);
   }
-  await app.waitFor("工具请求通过 Python sidecar 执行");
+  await app.waitFor("工具请求将在后台执行");
 });
 
 test("running a tool switches it to stop and says so", async () => {

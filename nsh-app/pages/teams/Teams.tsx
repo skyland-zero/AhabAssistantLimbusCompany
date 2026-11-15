@@ -109,8 +109,8 @@ export function Teams() {
                 title={teamsLoading() ? "正在加载队伍…" : "队伍数据暂不可用"}
                 detail={
                   teamsLoading()
-                    ? "正在连接 Python 后端。"
-                    : "请检查后端连接后重试；已保存的队伍不会被清空。"
+                    ? "自动化核心初始化中…"
+                    : "自动化核心暂不可用，请重新启动应用后重试；已保存的队伍不会被清空。"
                 }
                 class="min-h-60"
               />
