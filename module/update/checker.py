@@ -10,6 +10,7 @@ import os  # 导入os模块以便操作文件路径
 import re
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 from enum import Enum
 from pathlib import Path
 from threading import Thread
@@ -36,6 +37,12 @@ TRANSLATE_DOMAIN = "UpdateThread"
 # 因此更新检查只读取本仓库的 GitHub Release，避免把 1.x 当成新版本。
 UPDATE_REPO_OWNER = "skyland-zero"
 UPDATE_REPO_NAME = "AhabAssistantLimbusCompany"
+
+# 更新检查不走 GitHub API（未认证 60 次/小时，共享 IP 很容易被限流）：
+# 稳定版读取 releases/latest 的 302 跳转，预览版读取 releases.atom。
+_GITHUB_WEB = "https://github.com"
+_RELEASE_TAG_MARKER = "/releases/tag/"
+_ATOM_NAMESPACE = "{http://www.w3.org/2005/Atom}"
 
 
 class UpdateStatus(Enum):
@@ -158,15 +165,9 @@ class UpdateThread(Thread):
             # 同步记录本次检查得到的最新版本号与比较结果，供资源同步门禁直接复用。
             current_version, latest_version = self._set_version_gate_state(version)
             # 整理更新日志正文，去掉图片，生成可展示文本。
-            content = self._build_release_note_content(data["body"])
-            assets_url = self.get_download_url_from_assets(data["assets"])
+            content = self._build_release_note_content(data.get("body") or "")
 
-            # 若当前发布未携带可下载资产，则按“当前无需更新”处理。
-            if assets_url is None:
-                self.updateSignal.emit(UpdateStatus.SUCCESS)
-                return
-
-            # 继续复用同一套版本比较逻辑，决定是否弹出更新提示。
+            # 版本比较只依赖 tag；是否带下载资产不影响“有没有新版本”的判断。
             self._emit_version_check_result(version, current_version, latest_version, content)
         except Exception as e:
             # 异常处理，发送失败事件
@@ -176,7 +177,57 @@ class UpdateThread(Thread):
 
     def check_update_info_github(self):
         """
-        从 GitHub 获取最新发布版本的信息。
+        从 GitHub 网页获取最新发布版本，不占用 API 配额。
+
+        稳定版读取 ``releases/latest`` 的 302 跳转；预览版读取
+        ``releases.atom``，它天然按发布时间倒序并包含预发布版本。
+
+        返回:
+        含 ``tag_name``、``body``、``assets`` 的发布信息
+        """
+        if cfg.update_prerelease_enable:
+            return self._check_update_info_github_atom()
+        return self._check_update_info_github_redirect()
+
+    def _check_update_info_github_redirect(self):
+        """稳定版：跟随 releases/latest 的重定向，从 Location 读 tag。"""
+        url = f"{_GITHUB_WEB}/{self.user}/{self.repo}/releases/latest"
+        response = requests.get(
+            url,
+            timeout=10,
+            headers=cfg.useragent,
+            allow_redirects=False,
+        )
+        location = response.headers.get("Location", "")
+        if response.status_code in (301, 302, 303, 307, 308) and _RELEASE_TAG_MARKER in location:
+            tag = unquote(location.split(_RELEASE_TAG_MARKER, 1)[1].split("?", 1)[0].strip("/"))
+            if tag:
+                return {"tag_name": tag, "body": "", "assets": []}
+        response.raise_for_status()
+        raise RuntimeError(f"无法从 {url} 解析最新版本")
+
+    def _check_update_info_github_atom(self):
+        """预览版：解析 releases.atom，取最新一条发布。"""
+        url = f"{_GITHUB_WEB}/{self.user}/{self.repo}/releases.atom"
+        response = requests.get(url, timeout=10, headers=cfg.useragent)
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+        for entry in root.findall(f"{_ATOM_NAMESPACE}entry"):
+            link = entry.find(f"{_ATOM_NAMESPACE}link")
+            href = link.get("href", "") if link is not None else ""
+            if _RELEASE_TAG_MARKER not in href:
+                continue
+            tag = unquote(href.split(_RELEASE_TAG_MARKER, 1)[1].split("?", 1)[0].strip("/"))
+            if not tag:
+                continue
+            content = entry.find(f"{_ATOM_NAMESPACE}content")
+            body = content.text if content is not None and content.text else ""
+            return {"tag_name": tag, "body": body, "assets": []}
+        raise RuntimeError(f"发布源中没有可用版本：{url}")
+
+    def check_update_info_github_api(self):
+        """
+        旧的 GitHub API 实现，只供下载资产路径复用。
 
         返回:
         最新发布版本的信息（JSON 格式）
@@ -288,8 +339,8 @@ class UpdateThread(Thread):
                     self.updateSignal.emit(UpdateStatus.FAILURE)
                     return None
             else:
-                # 复用统一的 GitHub release 查询逻辑，避免重复维护接口路径与预发布分支判断。
-                data = self.check_update_info_github()
+                # 下载资产仍走 API；检查版本本身已经改用网页跳转/Atom，不占配额。
+                data = self.check_update_info_github_api()
                 assets_url = self.get_download_url_from_assets(data["assets"])
 
                 # 如果没有可用的下载 URL，则发送成功信号并返回

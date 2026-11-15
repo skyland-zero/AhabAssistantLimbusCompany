@@ -5,29 +5,47 @@ from typing import Any
 from module.rpc_contract import SCHEMA_VERSION
 from module.update import checker
 
+_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>V0.0.4-beta.1</title>
+    <link rel="alternate" href="https://github.com/skyland-zero/AhabAssistantLimbusCompany/releases/tag/V0.0.4-beta.1"/>
+    <updated>2026-11-15T11:31:28Z</updated>
+    <content type="html">&lt;p&gt;preview notes&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <title>V0.0.3</title>
+    <link rel="alternate" href="https://github.com/skyland-zero/AhabAssistantLimbusCompany/releases/tag/V0.0.3"/>
+    <updated>2026-11-15T11:11:38Z</updated>
+    <content type="html">&lt;p&gt;stable notes&lt;/p&gt;</content>
+  </entry>
+</feed>
+"""
+
 
 class _Response:
-    def __init__(self, payload: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        *,
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
+        text: str = "",
+        payload: Any = None,
+    ) -> None:
+        self.status_code = status_code
+        self.headers = headers or {}
+        self.text = text
         self.payload = payload
 
     def raise_for_status(self) -> None:
         return None
 
-    def json(self) -> dict[str, Any]:
+    def json(self) -> Any:
         return self.payload
 
 
 def _release(tag: str, *, body: Any = "", assets: list[dict[str, str]] | None = None) -> dict[str, Any]:
     return {"tag_name": tag, "body": body, "assets": assets or []}
-
-
-def _asset(tag: str) -> list[dict[str, str]]:
-    return [
-        {
-            "name": f"AALC.nsh_{tag}.7z",
-            "browser_download_url": f"https://example.com/AALC.nsh_{tag}.7z",
-        }
-    ]
 
 
 def _statuses(thread: checker.UpdateThread) -> list[checker.UpdateStatus]:
@@ -36,46 +54,75 @@ def _statuses(thread: checker.UpdateThread) -> list[checker.UpdateStatus]:
     return seen
 
 
-def test_github_check_reads_this_forks_latest_release(monkeypatch) -> None:
-    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.2")
-    seen: dict[str, str] = {}
+def test_stable_check_follows_the_release_redirect(monkeypatch) -> None:
+    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.3")
+    seen: dict[str, Any] = {}
 
-    def fake_get(url: str, *, timeout: float, headers: dict[str, str]) -> _Response:
+    def fake_get(url: str, **kwargs: Any) -> _Response:
         seen["url"] = url
-        return _Response(_release("V0.0.2"))
+        seen["allow_redirects"] = kwargs.get("allow_redirects")
+        return _Response(
+            status_code=302,
+            headers={
+                "Location": "https://github.com/skyland-zero/AhabAssistantLimbusCompany/releases/tag/V0.0.4"
+            },
+        )
 
     monkeypatch.setattr(checker.cfg, "update_prerelease_enable", False)
     monkeypatch.setattr(checker.requests, "get", fake_get)
 
-    assert thread.check_update_info_github()["tag_name"] == "V0.0.2"
+    release = thread.check_update_info_github()
+
+    assert release["tag_name"] == "V0.0.4"
     assert seen["url"] == (
-        "https://api.github.com/repos/skyland-zero/AhabAssistantLimbusCompany/releases/latest"
+        "https://github.com/skyland-zero/AhabAssistantLimbusCompany/releases/latest"
+    )
+    assert seen["allow_redirects"] is False
+
+
+def test_preview_check_reads_the_release_feed(monkeypatch) -> None:
+    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.3")
+    seen: dict[str, str] = {}
+
+    def fake_get(url: str, **kwargs: Any) -> _Response:
+        seen["url"] = url
+        return _Response(text=_ATOM)
+
+    monkeypatch.setattr(checker.cfg, "update_prerelease_enable", True)
+    monkeypatch.setattr(checker.requests, "get", fake_get)
+
+    release = thread.check_update_info_github()
+
+    assert release["tag_name"] == "V0.0.4-beta.1"
+    assert "preview notes" in release["body"]
+    assert seen["url"] == (
+        "https://github.com/skyland-zero/AhabAssistantLimbusCompany/releases.atom"
     )
 
 
-def test_run_reports_a_newer_release_with_an_empty_body(monkeypatch) -> None:
-    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.2")
+def test_run_reports_a_newer_release_without_api_or_assets(monkeypatch) -> None:
+    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.3")
     monkeypatch.setattr(
         thread,
         "check_update_info_github",
-        lambda: _release("V0.0.3", body=None, assets=_asset("V0.0.3")),
+        lambda: _release("V0.0.4", body=None, assets=[]),
     )
     statuses = _statuses(thread)
 
     thread.run()
 
     assert statuses == [checker.UpdateStatus.UPDATE_AVAILABLE]
-    assert thread.new_version == "V0.0.3"
+    assert thread.new_version == "V0.0.4"
     assert thread.is_current_version_latest is False
     assert thread.title.startswith("发现新版本")
 
 
 def test_run_reports_up_to_date_for_the_same_release(monkeypatch) -> None:
-    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.3")
+    thread = checker.UpdateThread(timeout=1, flag=False, version="V0.0.4")
     monkeypatch.setattr(
         thread,
         "check_update_info_github",
-        lambda: _release("V0.0.3", assets=_asset("V0.0.3")),
+        lambda: _release("V0.0.4"),
     )
     statuses = _statuses(thread)
 
@@ -90,7 +137,7 @@ def test_run_rejects_a_malformed_current_version(monkeypatch) -> None:
     monkeypatch.setattr(
         thread,
         "check_update_info_github",
-        lambda: _release("V0.0.3", assets=_asset("V0.0.3")),
+        lambda: _release("V0.0.4"),
     )
     statuses = _statuses(thread)
 
@@ -112,7 +159,7 @@ def test_update_service_passes_the_application_version(monkeypatch) -> None:
             created["timeout"] = timeout
             created["flag"] = flag
             created["version"] = version
-            self.new_version = "V0.0.3"
+            self.new_version = "V0.0.4"
             self.is_current_version_latest = False
             self.error_msg = ""
 
@@ -124,13 +171,13 @@ def test_update_service_passes_the_application_version(monkeypatch) -> None:
     service = NotificationUpdateService(
         None,
         lambda key, default: default,
-        lambda: "V0.0.2",
+        lambda: "V0.0.3",
     )
 
     assert service.check_update() == {
         "schemaVersion": SCHEMA_VERSION,
         "status": "available",
         "updateAvailable": True,
-        "latest": "V0.0.3",
+        "latest": "V0.0.4",
     }
-    assert created["version"] == "V0.0.2"
+    assert created["version"] == "V0.0.3"
