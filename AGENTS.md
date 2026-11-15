@@ -93,7 +93,7 @@ assets/images/default/share/mirror/ego_gifts/{gift_id}.png
 
 ## 3. 分支策略
 
-`dev-nsh` 是**自用分支**：不向上游仓库提 PR，也不把提交、分支或 tag 推送到上游仓库。上游只读，所有推送只发到个人 fork。
+`main` 只用于同步上游 `main` 分支；`dev-nsh` 是**自用开发分支**：不向上游仓库提 PR，也不把提交、分支或 tag 推送到上游仓库。上游只读，所有推送只发到个人 fork。
 
 远端约定（本仓库当前配置）：
 
@@ -106,8 +106,8 @@ assets/images/default/share/mirror/ego_gifts/{gift_id}.png
 
 | 分支 | 角色 | 说明 |
 | --- | --- | --- |
-| `dev-nsh` | **日常开发分支** | 所有本地改动、提交都提交到这里，并推送到 `fork/dev-nsh` |
-| `main` | **上游同步分支** | 只用来拉取上游更新，保持与 `origin/main` 一致，**不在 `main` 上提交任何本地改动** |
+| `dev-nsh` | **自用开发分支** | 日常开发都在这里；所有本地改动、提交都提交到这里，并推送到 `fork/dev-nsh` |
+| `main` | **上游同步分支** | 只用于同步上游 `main` 分支，保持与 `origin/main` 一致，**不在 `main` 上提交任何本地改动** |
 | `dev-gpui` | **历史基线** | 迁移前基于 GPUI 的客户端，仅保留在 git 历史中；工作树已删除 |
 | `feat/gpui-kit-0.8` | 历史起点 | 当时创建 `dev-gpui` 的起点分支，已删除，不需要维护 |
 
