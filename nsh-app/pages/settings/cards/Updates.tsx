@@ -5,8 +5,9 @@
 // the check is P1's work; the mirror choice and the CDK are editable now.
 import { View } from "nsh";
 import { Button } from "../../../components/Button";
+import { Rule } from "../../../components/Card";
 import { Input } from "../../../components/Input";
-import { SettingLine, SettingList } from "../../../components/Field";
+import { SettingLine, SettingsGroup } from "../../../components/Field";
 import { Select } from "../../../components/Select";
 import { Switch } from "../../../components/Switch";
 import { UPDATE_SOURCE_LABELS } from "../../../model/types";
@@ -21,7 +22,7 @@ import {
   systemFlag,
   toggleSystemFlag,
 } from "../../../settings";
-import { SettingsCard } from "../SettingsCard";
+import { SettingsSection } from "../SettingsSection";
 
 /** The two mirrors, in the order the menu lists them. */
 const SOURCES: { value: UpdateSource; label: string }[] = [
@@ -31,8 +32,8 @@ const SOURCES: { value: UpdateSource; label: string }[] = [
 
 export function UpdatesCard() {
   return (
-    <SettingsCard title="更新与源配置">
-      <SettingList>
+    <SettingsSection title="更新与源配置">
+      <SettingsGroup title="版本渠道">
         <SettingLine label="参与预览版渠道">
           <Switch
             checked={systemFlag("prerelease")}
@@ -40,6 +41,8 @@ export function UpdatesCard() {
             onChange={() => toggleSystemFlag("prerelease")}
           />
         </SettingLine>
+      </SettingsGroup>
+      <SettingsGroup title="更新源">
         <SettingLine label="更新源选择">
           <Select<UpdateSource>
             accessibilityLabel="更新源选择"
@@ -49,6 +52,9 @@ export function UpdatesCard() {
             class="w-44"
           />
         </SettingLine>
+        <If when={currentUpdateSource() === "mirrorChyan"}>
+          <Rule />
+        </If>
         <If when={currentUpdateSource() === "mirrorChyan"}>
           <SettingLine label="Mirror 酱 CDK">
             <View class="flex-row items-center gap-2">
@@ -64,7 +70,7 @@ export function UpdatesCard() {
             </View>
           </SettingLine>
         </If>
-      </SettingList>
+      </SettingsGroup>
       <View class="flex-row pt-1">
         <Button
           label="检查更新"
@@ -73,6 +79,6 @@ export function UpdatesCard() {
           onPress={() => checkForUpdates()}
         />
       </View>
-    </SettingsCard>
+    </SettingsSection>
   );
 }

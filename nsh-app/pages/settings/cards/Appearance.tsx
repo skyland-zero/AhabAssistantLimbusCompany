@@ -6,7 +6,8 @@
 // and appearance in effect.
 import { Text, View, colorScheme, signal } from "nsh";
 import { Button } from "../../../components/Button";
-import { SettingLine, SettingList } from "../../../components/Field";
+import { Rule } from "../../../components/Card";
+import { SettingLine, SettingsGroup } from "../../../components/Field";
 import { Input } from "../../../components/Input";
 import { Segmented, SwatchRow } from "../../../components/Segmented";
 import { Swatch } from "../../../components/Swatch";
@@ -31,14 +32,15 @@ import {
 } from "../../../store";
 import type { Appearance } from "../../../store";
 import { SkinPicker } from "./SkinPicker";
-import { SettingsCard } from "../SettingsCard";
+import { SettingsSection } from "../SettingsSection";
 
 export function AppearanceCard() {
   return (
-    <SettingsCard title="外观">
-      <SettingList>
+    <SettingsSection title="外观">
+      <SettingsGroup title="主题">
         <SettingLine label="主题模式">
           <Segmented<Appearance>
+            surface="muted"
             accessibilityLabel="主题模式"
             value={currentAppearance}
             onChange={(next) => {
@@ -52,6 +54,7 @@ export function AppearanceCard() {
             ]}
           />
         </SettingLine>
+        <Rule />
         <SettingLine label="强调色">
           <SwatchRow label="强调色">
             <Each of={ACCENTS}>
@@ -74,40 +77,39 @@ export function AppearanceCard() {
             </If>
           </SwatchRow>
         </SettingLine>
-        <SettingLine label="颜色主题">
-          <View class="flex-col gap-1.5">
-            <View class="flex-row flex-wrap items-center gap-2">
-              <Each of={SEED_PRESETS}>
-                {(preset) => (
-                  <Swatch
-                    label={preset().label}
-                    color={preset().hex}
-                    selected={currentSeed() === preset().hex}
-                    onPress={() => {
-                      setThemeSeed(preset().hex);
-                      setFeedback(`颜色主题：${preset().label}`);
-                    }}
-                  />
-                )}
-              </Each>
-              <If when={currentSeed()}>
-                <Button
-                  label="清除"
-                  size="xs"
-                  variant="ghost"
+      </SettingsGroup>
+
+      <SettingsGroup title="颜色主题">
+        <SettingLine label="预设">
+          <View class="flex-row flex-wrap items-center gap-2">
+            <Each of={SEED_PRESETS}>
+              {(preset) => (
+                <Swatch
+                  label={preset().label}
+                  color={preset().hex}
+                  selected={currentSeed() === preset().hex}
                   onPress={() => {
-                    setThemeSeed(null);
-                    setFeedback("颜色主题：随皮肤");
+                    setThemeSeed(preset().hex);
+                    setFeedback(`颜色主题：${preset().label}`);
                   }}
                 />
-              </If>
-            </View>
-            <Text class="text-xs text-muted-foreground">
-              主题色会覆盖强调色，决定品牌色与页面渐变；清除后回到皮肤自带的配色。
-            </Text>
+              )}
+            </Each>
+            <If when={currentSeed()}>
+              <Button
+                label="清除"
+                size="xs"
+                variant="ghost"
+                onPress={() => {
+                  setThemeSeed(null);
+                  setFeedback("颜色主题：随皮肤");
+                }}
+              />
+            </If>
           </View>
         </SettingLine>
-        <SettingLine label="自定义颜色">
+        <Rule />
+        <SettingLine label="自定义">
           <View class="flex-row items-center gap-2">
             <Input
               value={customSeed()}
@@ -125,8 +127,15 @@ export function AppearanceCard() {
             </If>
           </View>
         </SettingLine>
-        <SettingLine label="语言 / Language">
+        <Text class="text-xs text-muted-foreground">
+          主题色会覆盖强调色，决定品牌色与页面渐变；清除后回到皮肤自带的配色。
+        </Text>
+      </SettingsGroup>
+
+      <SettingsGroup title="语言">
+        <SettingLine label="界面语言">
           <Segmented<Language>
+            surface="muted"
             accessibilityLabel="语言"
             value={currentLanguage}
             onChange={(next) => setLanguage(next)}
@@ -136,16 +145,16 @@ export function AppearanceCard() {
             ]}
           />
         </SettingLine>
-      </SettingList>
+      </SettingsGroup>
 
-      <View class="flex-col gap-2">
-        <Text class="text-xs font-medium text-foreground">界面皮肤</Text>
+      <View class="w-full flex-col gap-2">
+        <Text class="text-xs font-medium text-muted-foreground">界面皮肤</Text>
         <SkinPicker />
         <Text class="text-xs text-muted-foreground">
           「镜牢主题包」在导航栏单独管理，与界面皮肤无关。
         </Text>
       </View>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 

@@ -1,13 +1,13 @@
-// Setting rows: the label/control grid every settings card uses.
+// Setting rows: the label/control grid the console and the settings page use.
 //
 // Two shapes, as the GPUI page had: a line (a label and its control on one
 // baseline) and a row (a label with a description, and a control that may be
 // wider). Both keep the control in a fixed trailing lane so labels line up
-// across a card, and the label column may shrink while the control may not.
+// across a surface, and the label column may shrink while the control may not.
 import type { JSX } from "nsh";
 import { Text, View } from "nsh";
 
-/** The vertical rhythm of one card's settings: 12pt between rows. Two columns
+/** The vertical rhythm of one group's settings: 12pt between rows. Two columns
  *  keep the same row rhythm, with a wider column gap so neighbouring rows read
  *  apart; a list stays a column unless its caller asks for the split. */
 export function SettingList(props: { columns?: 1 | 2; children?: JSX.Element }) {
@@ -21,9 +21,9 @@ export function SettingList(props: { columns?: 1 | 2; children?: JSX.Element }) 
  *  Two columns share one 1pt rule down the middle, inside a 20pt gutter, so a
  *  control at the end of one column is never read as the next column's label.
  *  A single column keeps the surface and drops the rule. */
-export function SettingPanel(props: { columns?: 1 | 2; children?: JSX.Element }) {
+export function SettingPanel(props: { columns?: 1 | 2; class?: string; children?: JSX.Element }) {
   return (
-    <View class="w-full rounded-(--radius-lg) bg-muted p-2">
+    <View class={`w-full rounded-(--radius-lg) bg-muted p-2 ${props.class ?? ""}`}>
       <View class="relative w-full">
         <View
           class="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-input"
@@ -31,6 +31,35 @@ export function SettingPanel(props: { columns?: 1 | 2; children?: JSX.Element })
         />
         <SettingList columns={props.columns}>{props.children}</SettingList>
       </View>
+    </View>
+  );
+}
+
+/** A titled group of settings on the settings page. The group title sits
+ *  outside the tonal surface; the surface itself gets a hairline because the
+ *  page background and `muted` are nearly the same in the flat light skins
+ *  (default, Bettbox), where a fill alone would disappear. */
+export function SettingsGroup(props: {
+  title?: string;
+  /** A trailing detail of the group title: a status badge, a count. */
+  aside?: JSX.Element;
+  columns?: 1 | 2;
+  children?: JSX.Element;
+}) {
+  const titled = () => props.title !== undefined || props.aside !== undefined;
+  return (
+    <View class="w-full flex-col gap-2">
+      <If when={titled()}>
+        <View class="w-full min-h-4 flex-row items-center gap-2">
+          <Text class="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
+            {props.title ?? ""}
+          </Text>
+          {props.aside}
+        </View>
+      </If>
+      <SettingPanel columns={props.columns} class="border border-input/80">
+        {props.children}
+      </SettingPanel>
     </View>
   );
 }

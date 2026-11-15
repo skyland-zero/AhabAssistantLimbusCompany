@@ -7,7 +7,7 @@ import { Text, View } from "nsh";
 import { Badge } from "../../../components/Badge";
 import { Button } from "../../../components/Button";
 import { Rule } from "../../../components/Card";
-import { SettingLine, SettingList } from "../../../components/Field";
+import { SettingLine, SettingsGroup } from "../../../components/Field";
 import {
   checkResources,
   currentSyncProgress,
@@ -17,21 +17,21 @@ import {
   syncResources,
 } from "../../../resources";
 import type { ResourceGroup } from "../../../resources";
-import { SettingsCard } from "../SettingsCard";
+import { SettingsSection } from "../SettingsSection";
 
 export function ResourcesCard() {
   const progress = () => currentSyncProgress();
   return (
-    <SettingsCard title="资源同步">
+    <SettingsSection title="资源同步">
       <If when={resourceGroups().length > 0}>
-        <View class="w-full flex-col gap-3">
+        <View class="w-full flex-col gap-4">
           <Each of={resourceGroups()} key={(group) => group.id}>
-            {(group, index) => <ResourceGroupRows group={group()} first={index() === 0} />}
+            {(group) => <ResourceGroupRows group={group()} />}
           </Each>
         </View>
       </If>
       <If when={resourceGroups().length === 0 && progress() === null}>
-        <Text class="text-xs text-muted-foreground">资源状态将在后端接入后显示。</Text>
+        <Text class="text-xs text-muted-foreground">资源状态暂不可用。</Text>
       </If>
       <If when={progress() !== null}>
         <View class="h-1 w-full overflow-hidden rounded-full bg-border">
@@ -55,12 +55,12 @@ export function ResourcesCard() {
           )}
         </If>
       </View>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
 /** One resource group: its name and state, then local, remote and last sync. */
-function ResourceGroupRows(props: { group: ResourceGroup; first: boolean }) {
+function ResourceGroupRows(props: { group: ResourceGroup }) {
   const status = () => {
     const syncing = currentSyncProgress();
     if (syncing !== null) return { label: `同步中… ${syncing}%`, tone: "accent" as const };
@@ -69,30 +69,26 @@ function ResourceGroupRows(props: { group: ResourceGroup; first: boolean }) {
     return { label: "已是最新", tone: "success" as const };
   };
   return (
-    <View class="w-full flex-col gap-2">
-      <If when={!props.first}>
-        <Rule />
-      </If>
-      <View class="w-full flex-row items-center justify-between gap-2">
-        <Text class="min-w-0 text-xs font-medium text-foreground">{props.group.name}</Text>
-        <Badge label={status().label} tone={status().tone} />
-      </View>
-      <SettingList>
-        <SettingLine label="本地版本">
-          <Text class="font-mono text-xs text-muted-foreground">{props.group.localVersion}</Text>
-        </SettingLine>
-        <SettingLine label="远端版本">
-          <Text class="font-mono text-xs text-muted-foreground">
-            {props.group.remoteVersion ?? "—"}
-          </Text>
-        </SettingLine>
-        <SettingLine label="上次同步">
-          <Text class="font-mono text-xs text-muted-foreground">
-            {formatSyncTime(props.group.lastSyncAt)}
-          </Text>
-        </SettingLine>
-      </SettingList>
-    </View>
+    <SettingsGroup
+      title={props.group.name}
+      aside={<Badge label={status().label} tone={status().tone} />}
+    >
+      <SettingLine label="本地版本">
+        <Text class="font-mono text-xs text-muted-foreground">{props.group.localVersion}</Text>
+      </SettingLine>
+      <Rule />
+      <SettingLine label="远端版本">
+        <Text class="font-mono text-xs text-muted-foreground">
+          {props.group.remoteVersion ?? "—"}
+        </Text>
+      </SettingLine>
+      <Rule />
+      <SettingLine label="上次同步">
+        <Text class="font-mono text-xs text-muted-foreground">
+          {formatSyncTime(props.group.lastSyncAt)}
+        </Text>
+      </SettingLine>
+    </SettingsGroup>
   );
 }
 

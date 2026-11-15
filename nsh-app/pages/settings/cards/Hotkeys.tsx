@@ -5,7 +5,8 @@
 // Escape cancels without changing the binding.
 import { Text, View, effect, keymap } from "nsh";
 import { Button } from "../../../components/Button";
-import { SettingLine, SettingList } from "../../../components/Field";
+import { Rule } from "../../../components/Card";
+import { SettingLine, SettingsGroup } from "../../../components/Field";
 import { Switch } from "../../../components/Switch";
 import {
   beginHotkeyCapture,
@@ -16,7 +17,7 @@ import {
   finishHotkeyCapture,
   setHotkeysEnabled,
 } from "../../../settings";
-import { SettingsCard } from "../SettingsCard";
+import { SettingsSection } from "../SettingsSection";
 
 /** Keys the capture listens for, before modifiers are added. */
 const KEYS = [
@@ -82,8 +83,8 @@ function formatShortcut(keystroke: string): string {
 export function HotkeysCard() {
   const hotkeys = () => currentHotkeys();
   return (
-    <SettingsCard title="全局热键">
-      <SettingList>
+    <SettingsSection title="全局热键">
+      <SettingsGroup title="快捷键">
         <SettingLine label="启用全局热键">
           <Switch
             checked={hotkeys().enabled}
@@ -91,6 +92,7 @@ export function HotkeysCard() {
             onChange={({ checked }) => setHotkeysEnabled(checked)}
           />
         </SettingLine>
+        <Rule />
         <SettingLine label="启动 / 停止热键">
           <Combo
             target="startStop"
@@ -98,6 +100,7 @@ export function HotkeysCard() {
             disabled={!hotkeys().enabled}
           />
         </SettingLine>
+        <Rule />
         <SettingLine label="暂停 / 继续热键">
           <Combo
             target="pauseResume"
@@ -105,8 +108,8 @@ export function HotkeysCard() {
             disabled={!hotkeys().enabled}
           />
         </SettingLine>
-      </SettingList>
-    </SettingsCard>
+      </SettingsGroup>
+    </SettingsSection>
   );
 }
 

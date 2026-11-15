@@ -12,12 +12,17 @@
 
 ### 1.1 设计语言：FlClash 式分组表面
 
-设置类界面（主控台窗口设置、任务设置等）借用 FlClash 的 Material You 表面语言：
+设置类界面（主控台窗口设置、任务设置、设置页）借用 FlClash 的 Material You 表面语言：
 
-- 分组使用 **tonal surface**：`bg-muted`、`rounded-(--radius-lg)`、`p-2`，无边框、无阴影。
-  它是表面容器，不是第二层卡片，不违反“卡片里不再套卡片”。
+- 分组使用 **tonal surface**：`bg-muted`、`rounded-(--radius-lg)`、`p-2`，无阴影。
+  它是表面容器，不是第二层卡片，不违反“卡片里不再套卡片”。主控台的分组嵌在卡片里，无边框；
+  设置页的分组直接落在页面背景上，必须加 1pt `border-input/80`，否则浅色平皮肤
+  （default、Bettbox）的 `muted` 与 `background` 几乎同色，分组会消失。
 - 分组标题在表面外：`text-xs font-medium text-muted-foreground`，表面上方 8pt。
 - 两列时列槽 20pt，中央 1pt `bg-input` 竖线；单列隐藏。行距 12pt，标签和控件之间 16pt。
+- 设置页不使用卡片：分区标题 14pt 半粗 + `Rule`，分区之间 24pt；组间 16pt；
+  单列组在行间用 `Rule` 分隔，双列组只保留中央竖线。`Rule` 在 `plain` / `gradient`
+  皮肤用 `bg-input/80`，因为这两套皮肤的 `border` 透明。
 - 强调色只给开关、选中态和焦点环，不用品牌色铺底。
 - 导航（标题栏 tab、统计/设置图标）的选中态用 soft brand：浅色 `bg-brand/15`、
   深色 `bg-brand-light`，配 `text-brand`/brand 图标，选中字重 600；
@@ -27,9 +32,9 @@
   `brand-foreground`。保持 36×20 和 2pt 内缩；不引入灰色 off 轨道。
 - 保持现有 12pt 标签和控件尺寸；不搬 FlClash 的 48–56pt Material list tile、
   每行 leading icon 或 Material 色板。
-- 新设置界面优先复用 `components/Field.tsx` 的 `SettingPanel` / `SettingList`；
-  详细参数见 `DESIGN.md` 的「主控台的设置面板」，视觉稿见
-  `docs/design/task-settings-flclash.html`。
+- 新设置界面优先复用 `components/Field.tsx` 的 `SettingsGroup`（设置页）或
+  `SettingPanel` / `SettingList`（主控台）；详细参数见 `DESIGN.md` 的
+  「主控台的设置面板」与「设置页」，视觉稿见 `docs/design/task-settings-flclash.html`。
 
 ## 2. 目录职责
 

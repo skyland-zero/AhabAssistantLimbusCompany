@@ -125,14 +125,14 @@
 | 文件 | 组件 | 说明 |
 | --- | --- | --- |
 | `Button.tsx` | `Button` / `IconButton` / `Pressable` | 变体 `default` `primary` `secondary` `soft` `outline` `ghost` `danger` `link` `nav`，尺寸 `xs`–`lg`；`Pressable` 是不带外观的整面按压容器（页面专属选项卡用）；`soft` 是浅品牌底 + brand 字的安静选中态（统计/设置图标按钮）；`nav` 只给标题栏的选中项（胶囊由标题栏的滑块画，文字/图标为 brand） |
-| `Field.tsx` | `SettingList` / `SettingLine` / `SettingRow` | 标签/控件网格（行距 12pt，控件固定尾列）：设置页与主控台的窗口设置都用它 |
+| `Field.tsx` | `SettingList` / `SettingPanel` / `SettingLine` / `SettingRow` / `SettingsGroup` | 标签/控件网格（行距 12pt，控件固定尾列）：主控台设置用 `SettingPanel`，设置页用 `SettingsGroup`（组标题 + 带 1pt 边框的 tonal surface） |
 | `Tabs.tsx` | `Tabs` | 分段选择的本体：一条选中胶囊在选项下移动（宽度一起伸缩），选项自己是透明按钮；统计范围/难度、队伍筛选、设置的主题与语言都走它 |
-| `Segmented.tsx` | `Segmented` / `SwatchRow` | `Tabs` 的简短形式（`secondary` 胶囊）；`SwatchRow` 是色块行 |
+| `Segmented.tsx` | `Segmented` / `SwatchRow` | `Tabs` 的简短形式（`secondary` 胶囊）；`surface="muted"` 时胶囊改用 `bg-card`，供灰面板上的设置行使用；`SwatchRow` 是色块行 |
 | `Switch.tsx` | `Switch` | 开关（轨道 `brand-light`→`brand`，滑块 16pt：浅色 off `bg-card`、on `brand-foreground`；深色 off `foreground`、on `brand-foreground`，`transition-transform`；浅色下是浅粉轨道 + 白滑块，开启为品牌色轨道 + 白滑块） |
 | `Input.tsx` | `Input` | 单行输入（与开关同高的描边框） |
 | `Select.tsx` | `Select` | 下拉选择：触发器与输入框同高，弹出层用统一浮层表面（`popover` + `input` 描边 + 阴影，因浅色下 `popover` 与卡片同为白）；列表行 24pt 高、2pt 间距、`focus:` 淡洗、选中行 `brand/10` + 行首对勾；`value=null` + `placeholder` 显示未选提示，`bare` 去掉自带边框/底色，供字段组使用 |
 | `Swatch.tsx` | `Swatch` | 强调色色块（28pt，选中环在色块外侧） |
-| `Card.tsx` | `Card` / `CardHeader` / `CardBody` / `Rule` | 卡片表面、44pt 标题带（图标 + 标题 + 注脚 + 尾部控件）、正文内缩；`Card` 的 `arrive` 让卡片在页面进入时随波纹到位（动效绑在卡片自己的 View，网格的 `items-stretch` 不变） |
+| `Card.tsx` | `Card` / `CardHeader` / `CardBody` / `Rule` | 卡片表面、44pt 标题带（图标 + 标题 + 注脚 + 尾部控件）、正文内缩；`Card` 的 `arrive` 让卡片在页面进入时随波纹到位（动效绑在卡片自己的 View，网格的 `items-stretch` 不变）；`Rule` 在 `plain` / `gradient` 用 `bg-input/80`，因为这两套皮肤的 `border` 透明 |
 | `Figure.tsx` | `Figure` | 数据卡里的一项读数：标签与注脚同一行，主值 `text-xl` + 单位/分母 |
 | `Notice.tsx` | `Notice` | 页面级一行提示（警告/成功/信息），不是卡片：贴在页面上，不另开一个盒 |
 | `Reveal.tsx` | `Reveal` | 非卡片行的进场包裹层（帮助目录这类按钮列），参数同波纹 |
@@ -163,7 +163,7 @@
 
 | 形态 | 结构 | 用在哪 |
 | --- | --- | --- |
-| 带标题的卡片 | `Card title` + `CardHeader`（44pt：图标 + 标题 + 注脚 + 尾部控件）+ `CardBody`（`px-4 pt-3 pb-4`，行距 12pt） | 设置各段、统计各卡、工具箱每件工具、队伍卡、帮助目录 |
+| 带标题的卡片 | `Card title` + `CardHeader`（44pt：图标 + 标题 + 注脚 + 尾部控件）+ `CardBody`（`px-4 pt-3 pb-4`，行距 12pt） | 统计各卡、工具箱每件工具、队伍卡、帮助目录 |
 | 单行卡片 | `Card class="p-0"` + 一行 `px-4 py-3`：开关/图标 + 名称 + 摘要 + 箭头 | 主控台队列与窗口设置、主题包行、队伍页的镜牢轮换条 |
 | 数据卡片 | `Card class="px-4 py-2.5"`：紧凑标题行（12pt 半粗 + 10pt 注脚 + 尾部幽灵按钮）→ `Figure` 行 → `Rule` → 一行 10pt 注脚 | 主控台顶部卡、统计的总览、主控台右侧栏（设备/画面/日志） |
 
@@ -173,6 +173,7 @@
 - 页面不自己写卡片内缩：标题卡用 `CardBody`，单行卡用 `px-4 py-3`，数据卡用 `px-4 py-2.5`。
 - 卡片里不再套卡片：分组用 `Rule` 和间距；页面的警告/成功提示用 `Notice`，不用带底色的卡片。
 - 数据卡的主值只出自 `Figure`，单位与分母在 `unit` 里；`—` 用 `quiet`。
+- 设置页不使用卡片：分区是页面背景上的标题 + `Rule`，组内用 `SettingGroup` 的 tonal surface，见下面「设置页」。
 
 ### 图标着色的已知限制
 
@@ -224,6 +225,18 @@ token；不要为此改 `nsh`。
 设置区按可用宽度分 1 / 2 列：设置区 ≥520pt（当前固定框线约窗口 ≥806pt）时，每组内部成为两列网格，列槽 20pt，中央 1pt `bg-input` 竖线；默认 820pt 窗口显示两列，最小 800pt 窗口回到单列。单列时表面保留，竖线隐藏。只有一项的分组不拆列。两列时控件宽度不变（`w-36` / 36pt 开关），每列约 249pt，`经验斩击（周一/二）` 这类长标签允许自然换行。窗口设置与任务卡共用这套规则。
 
 视觉稿：`docs/design/task-settings-flclash.html`。
+
+### 设置页
+
+设置页采用 B 方案：不把每个分区做成卡片，而是页面背景上的分区标题 + `Rule` + FlClash 分组。这样页面从「八张同形卡片」变成一条可扫读的设置列表，分区、组、行三层关系分别由标题、表面和细线表达。
+
+- 左栏是纯导航列，没有卡片：12pt「快速导航」+ `Rule`，8 个 28pt 左对齐行按钮；选中态用 `soft`（浅色 `bg-brand/15`、深色 `bg-brand-light`，brand 字），版本号和保存反馈放在底部。
+- 右栏是一个 `Scroll`：每个分区是 14pt 半粗标题 + `Rule`，分区之间 24pt；分区内按类型分组，组标题在表面外，12pt 中等字重、`muted-foreground`。
+- 分组表面走 `SettingsGroup`：`SettingPanel`（`bg-muted`、`rounded-(--radius-lg)`、`p-2`）加 1pt `border-input/80`。设置页直接落在页面背景上，而 flat light skins 的 `muted` 与 `background` 几乎同色（default `#f5f5f5` / `#f5f2f2`，Bettbox `#f4f2f3` / `#fafafa`），没有这圈细边分组会消失；它不是卡片，不加阴影。
+- 组内保持 12pt 行距；单列组在行间用 `Rule` 分隔，双列组只用中央 1pt 竖线，不画横线。设置页当前全部单列：组内带说明、热键组合、输入框或版本信息时不适合拆两列；`SettingsGroup` 保留 `columns`，将来只有纯短标签组再开两列。
+- 皮肤缩略图网格不套灰面板：它本身是一组自带背景的预览卡，放在「界面皮肤」组标题下的页面背景上。
+- 外观里的 `Segmented` 位于灰面板上，用 `surface="muted"` 把选中胶囊从 `secondary` 改为 `bg-card`；否则胶囊与 `SettingPanel` 同色会看不见。
+- `Rule` 在 `plain` / `gradient` 皮肤改用 `bg-input/80`：这两套皮肤的 `border` 是透明的，旧的 `bg-border` 细线在默认和 Bettbox 明暗下都不可见。
 
 ### 队伍页
 
@@ -322,15 +335,16 @@ token；不要为此改 `nsh`。
 
 | 变化 | 动效 |
 | --- | --- |
+| 分区进场 | 每个分区用 `Reveal`，依次淡入上浮（同页面内容的进场波纹） |
 | 导航项 hover / 按下 | 淡洗 + `active:scale-[0.97]`，`duration-150` |
-| 导航项选中 | 换变体（`ghost`→`secondary`），颜色 `duration-150` 过渡 |
+| 导航项选中 | `Pressable` 行切换到 `soft`（浅色 `bg-brand/15`、深色 `bg-brand-light` + brand 字），颜色 `duration-150` 过渡 |
 | 导航项点击跳段 | `scrollTo({ animated: true })`，原生滚动，非信号驱动 |
 | 滚动改变当前段 | 高亮瞬时切换（不做淡入：滚动手势中再叠动画会晃） |
 | 开关翻转 | 轨道 `transition-colors duration-150`，滑块 `transition-transform duration-150`，位移 16pt |
 | 分段选择 | 选中底是一条滑动胶囊（`Tabs`）：左边缘与宽度一起滑到目标，`240ms`，`ENTER_EASING`；文字颜色 `duration-150`；不位移、不缩放容器 |
 | 强调色色块 | hover 透明度、按下 `scale-[0.92]`，选中环由 `outline` 立即出现（无动画：环是状态而非过程） |
 | 皮肤卡片 | hover 边框变亮，按下 `scale-[0.99]`，选中 `border-2` + `ring` 色 |
-| 反馈行 | 出现在卡片栈下方，颜色由 token 决定，无入场动画（一行文字，动效无信息量） |
+| 反馈行 | 出现在左栏底部，颜色由 token 决定，无入场动画（一行文字，动效无信息量） |
 | 减少动效 | 以上全部瞬时；颜色变化保留 |
 
 ### 动效清单（窗口壳）
@@ -426,8 +440,9 @@ nsh run nsh-app       # 开窗看
 
 ### 本轮（卡片语言统一到全部页面）
 
-- 每个页面只用三种卡片形态中的一种：设置各段 / 统计各卡 / 工具箱工具 / 队伍卡 / 帮助目录用标题卡；
+- 每个页面只用一种卡片形态：统计各卡 / 工具箱工具 / 队伍卡 / 帮助目录用标题卡；
   主控台队列与主题包行用单行卡；主控台顶部卡、统计总览与右侧栏用数据卡。
+  设置页不使用卡片：分区标题 + `Rule` + `SettingsGroup`（见「设置页」）。
 - 卡片圆角 `radius-lg` → `radius-xl`（Bettbox 16 → 20），`EmptyState` 同档；标题卡的正文改由
   `CardBody` 统一内缩，页面不再各写 `p-3`/`p-4`。
 - 页面级提示不再用带底色的卡片：`Notice` 一行贴在页面上（主题包的困难镜牢提示、各页的成功反馈）。
@@ -435,6 +450,7 @@ nsh run nsh-app       # 开窗看
 - 队伍卡把名字提到标题带，`#编号` 作注脚；空槽位改为居中的占位块（`bg-muted/25`）。P6 起改为「编队位图 + 已配置队伍卡」：标题是 `#NN 备注名`，注脚是轮换/日常/手动，空槽位是 8×5 图里的编号格（见「队伍页」）。
 - 校验：`nsh check` / `nsh build` 无告警；`AHAB_BACKEND=mock nsh test nsh-app` 145 项全过；
   截图由 `nsh test nsh-app/visual.test.tsx --target windows` 写入 `artifacts/nsh/`（浅/深各一页）。
-- 未验证 / 未覆盖：只在设置页看过 7 皮肤（现代 / 玻璃 / 档案 / 边狱 / 血雾 / nsh / Bettbox）的标题带；
-  带图标或尾部控件的标题带只在 Bettbox 与边狱上看过（工具箱、帮助、统计图例）。
+- 未验证 / 未覆盖：设置页的分区与分组在 Bettbox、现代、边狱与 nsh 上做过浅/深截图；玻璃、档案、血雾
+  以及 800pt 最小宽度的完整长页面仍需在实机再扫一遍。带图标或尾部控件的标题带只在 Bettbox 与边狱上看过
+  （工具箱、帮助、统计图例）。
 

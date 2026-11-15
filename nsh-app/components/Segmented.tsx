@@ -15,6 +15,10 @@ export function Segmented<T extends string>(props: {
   onChange: (value: T) => void;
   /** What screen readers call the group: the setting it chooses. */
   accessibilityLabel?: string;
+  /** Where the control sits. A tonal `SettingPanel` is `muted`, so its raised
+   *  marker must be the card surface instead of the `secondary` fill that
+   *  would disappear into the panel. */
+  surface?: "card" | "muted";
   class?: string;
 }) {
   return (
@@ -25,7 +29,7 @@ export function Segmented<T extends string>(props: {
       accessibilityLabel={props.accessibilityLabel}
       trackClass={`gap-1 ${props.class ?? ""}`}
       itemClass="min-h-5 px-3"
-      pillClass="bg-secondary"
+      pillClass={props.surface === "muted" ? "bg-card" : "bg-secondary"}
     />
   );
 }

@@ -202,13 +202,16 @@ export function Rule(props: { class?: string }) {
 }
 
 const RULE_CLASS: Record<Decor, string> = {
-  plain: "bg-border",
+  // The flat skins make `border` transparent, so a rule drawn in `border`
+  // disappears in the default light and Bettbox appearances. `input` is the
+  // structural hairline those skins actually keep visible.
+  plain: "bg-input/80",
   glass: "bg-border",
   archive: "bg-decor-line opacity-60",
   limbus: "bg-decor-line opacity-60",
   mist: "bg-border",
   hairline: "bg-border",
-  gradient: "bg-border",
+  gradient: "bg-input/80",
 };
 
 /** A decorative section divider: the shipped gold flourish for the ruled
