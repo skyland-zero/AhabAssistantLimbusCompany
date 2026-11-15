@@ -7,7 +7,6 @@ import { Scroll, Text, View, token } from "nsh";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card, CardBody } from "../../components/Card";
-import { Notice } from "../../components/Notice";
 import { PageRoot } from "../../components/Page";
 import {
   TOOLS,
@@ -16,7 +15,6 @@ import {
   resetResolution,
   screenshot,
   toggleTool,
-  toolboxFeedback,
 } from "../../toolbox";
 import type { ToolId } from "../../toolbox";
 
@@ -34,9 +32,6 @@ export function Toolbox() {
             </Each>
           </View>
           <Text class="px-1 text-xs text-muted-foreground">工具请求将在后台执行</Text>
-          <If when={toolboxFeedback()}>
-            {(line) => <Notice tone="success" label={line()} />}
-          </If>
         </View>
       </Scroll>
     </PageRoot>

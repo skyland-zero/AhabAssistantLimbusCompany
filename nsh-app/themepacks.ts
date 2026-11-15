@@ -4,6 +4,8 @@
 // `themePack.resetWeights`); this module mirrors the returned list into signals.
 import { signal } from "nsh";
 import { Backend, ThemePacksStore } from "aalc/native";
+import { notify } from "./shell/Toast";
+import type { ToastTone } from "./shell/Toast";
 
 /** One Mirror Dungeon theme pack. */
 export type ThemePack = {
@@ -21,7 +23,6 @@ export const MAX_WEIGHT = 10;
 
 const packs = signal<ThemePack[]>([]);
 const sortByWeight = signal(false);
-const feedback = signal<string | null>(null);
 const hardMirrorActive = signal(true);
 
 let store: ThemePacksStore | null = null;
@@ -48,7 +49,14 @@ function hydrate(view: ReturnType<ThemePacksStore["packs"]>): void {
 }
 
 function failure(error: unknown): void {
-  feedback.set(error instanceof Error ? error.message : String(error));
+  themePacksNotify(error instanceof Error ? error.message : String(error), "danger");
+}
+
+/** Shows a theme-pack result at the window's bottom-right. Pack switches and
+ *  weight sliders stay silent: the list itself confirms them. */
+function themePacksNotify(message: string | null, tone: ToastTone = "success"): void {
+  if (message === null) return;
+  notify(message, { tone, id: "theme-packs-feedback" });
 }
 
 function ensureStore(): ThemePacksStore | null {
@@ -106,7 +114,6 @@ export function toggleSortByWeight(): void {
     backend.setSortByWeight(next);
     hydrate(backend.packs());
   }
-  feedback.set("主题包排序已更新");
 }
 
 /** Whether the hard-cycle warning shows (tracked). */
@@ -115,18 +122,12 @@ export function hardMirror(): boolean {
   return hardMirrorActive();
 }
 
-/** The line under the toolbar, when the last action left something to say. */
-export function themePacksFeedback(): string | null {
-  return feedback();
-}
-
 /** Turns one pack on or off. */
 export function togglePack(id: string): void {
   const backend = ensureStore();
   if (!backend) return;
   try {
     hydrate(backend.toggle(id));
-    feedback.set(backend.feedback());
   } catch (error) {
     failure(error);
   }
@@ -142,7 +143,6 @@ export function setPackWeight(id: string, weight: number): void {
   if (!backend) return;
   try {
     hydrate(backend.setWeight(id, held));
-    feedback.set(backend.feedback());
   } catch (error) {
     failure(error);
   }
@@ -154,7 +154,7 @@ export function setAllEnabled(enabled: boolean): void {
   if (!backend) return;
   try {
     hydrate(backend.setAll(enabled));
-    feedback.set(backend.feedback());
+    themePacksNotify(backend.feedback());
   } catch (error) {
     failure(error);
   }
@@ -166,7 +166,7 @@ export function resetWeights(): void {
   if (!backend) return;
   try {
     hydrate(backend.resetWeights());
-    feedback.set(backend.feedback());
+    themePacksNotify(backend.feedback());
   } catch (error) {
     failure(error);
   }

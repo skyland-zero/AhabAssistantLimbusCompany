@@ -27,7 +27,7 @@ import {
   setDraftTeamCode,
   setMirrorBool,
   setMirrorNumber,
-  setTeamsFeedback,
+  notifyTeams,
   teamCodeValue,
   toggleDraftSinner,
 } from "../../../teams";
@@ -142,7 +142,7 @@ export function BasicTab(props: { team: () => Team }) {
                 label="复制"
                 variant="outline"
                 onPress={() => {
-                  Clipboard.writeText(code()).then(() => setTeamsFeedback("编队码已复制"));
+                  Clipboard.writeText(code()).then(() => notifyTeams("编队码已复制"));
                 }}
               />
             </View>

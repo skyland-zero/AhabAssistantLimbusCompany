@@ -22,12 +22,12 @@ test("the settings page lists every section", async () => {
     "系统与防护",
     "实验性功能",
     "更新与源配置",
-    "资源同步",
     "任务通知",
     "关于",
   ]) {
     await app.waitFor(title);
   }
+  expect(app.texts()).not.toContain("资源同步");
 });
 
 test("the quick navigation reaches a section and says what it edited", async () => {
@@ -42,19 +42,16 @@ test("the quick navigation reaches a section and says what it edited", async () 
 test("choosing an interface skin applies it", async () => {
   const app = await openSettings();
   await app.press("role:button[边狱 / limbus]");
-  await app.waitFor("界面皮肤：边狱");
 });
 
 test("the NSH skin is offered beside the migrated ones", async () => {
   const app = await openSettings();
   await app.press("role:button[NSH / nsh]");
-  await app.waitFor("界面皮肤：NSH");
 });
 
 test("a colour theme applies from the appearance card", async () => {
   const app = await openSettings();
   await app.press("role:radio[粉]");
-  await app.waitFor("颜色主题：粉");
 });
 
 test("a custom colour is refused until it is #rrggbb", async () => {
@@ -69,7 +66,6 @@ test("a hotkey row captures the next combination", async () => {
   await app.press("id:hotkey-capture-startStop");
   await app.keyboard.press("ctrl+f9");
   await app.waitFor("Ctrl+F9");
-  await app.waitFor("设置已保存");
 
   await app.press("id:hotkey-capture-startStop");
   await app.keyboard.press("escape");
@@ -81,4 +77,14 @@ test("the update mirror reveals its CDK field", async () => {
   await app.press("label:更新源选择");
   await app.press("role:option[Mirror 酱]");
   await app.waitFor("Mirror 酱 CDK");
+});
+
+test("checking for updates reports the result in a toast", async () => {
+  const app = await openSettings();
+  await app.press("role:button[更新与源配置]");
+  await app.waitFor("检查更新");
+  await app.press("role:button[检查更新]");
+  await app.waitUntil(() =>
+    app.texts().some((line) => line.includes("当前已是最新版本")),
+  );
 });

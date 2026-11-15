@@ -5,6 +5,8 @@
 import { signal } from "nsh";
 import { Backend, TeamsStore } from "aalc/native";
 import type { LocalizedTextView, TeamPresetView, TeamSlotView, TeamView } from "aalc/native";
+import { notify } from "./shell/Toast";
+import type { ToastTone } from "./shell/Toast";
 import { SYSTEM_LABELS, defaultMirrorConfig } from "./teams-mirror";
 import type { TeamMirrorConfig } from "./teams-mirror";
 
@@ -63,8 +65,6 @@ export const teamsLoading = signal(false);
 export const deleteTarget = signal<Team | null>(null);
 
 const filter = signal<TeamFilter>("all");
-const feedback = signal<string | null>(null);
-const feedbackTone = signal<"info" | "success" | "warning" | "danger">("success");
 
 let store: TeamsStore | null = null;
 let connecting = false;
@@ -104,8 +104,7 @@ function hydratePresets(list: TeamPresetView[]): void {
 }
 
 function failure(error: unknown): void {
-  feedbackTone.set("danger");
-  feedback.set(error instanceof Error ? error.message : String(error));
+  notifyTeams(error instanceof Error ? error.message : String(error), "danger");
 }
 
 /** The Rust store once it is loaded, or `null` while a sidecar connects. */
@@ -251,8 +250,7 @@ export function setTeamEnabled(id: string, enabled: boolean): void {
   if (!backend) return;
   try {
     hydrate(backend.setEnabled(id, enabled));
-    feedbackTone.set("success");
-    feedback.set(enabled ? "队伍已加入镜牢轮换" : "队伍已移出镜牢轮换");
+    notifyTeams(enabled ? "队伍已加入镜牢轮换" : "队伍已移出镜牢轮换");
   } catch (error) {
     failure(error);
   }
@@ -264,11 +262,11 @@ export function setSelectionMode(enabled: boolean): void {
   if (!backend) return;
   try {
     selectionMode.set(backend.setSelection(enabled));
-    feedbackTone.set("success");
-    feedback.set(
+    notifyTeams(
       enabled
         ? "已改为按序号选队：游戏内编队顺序需要保持 1–40"
         : "已改为按队名选队：游戏内队名需要保持 编队#N",
+      "info",
     );
   } catch (error) {
     failure(error);
@@ -294,8 +292,7 @@ export function confirmDeleteTeam(): void {
   if (!backend) return;
   try {
     hydrate(backend.delete(target.id));
-    feedbackTone.set("success");
-    feedback.set("队伍已删除");
+    notifyTeams("队伍已删除");
   } catch (error) {
     failure(error);
   }
@@ -306,7 +303,7 @@ export function confirmDeleteTeam(): void {
 export function saveTeam(team: Team, isNew: boolean): boolean {
   const backend = ensureStore();
   if (!backend) {
-    feedback.set("队伍数据尚未加载");
+    notifyTeams("队伍数据尚未加载", "danger");
     return false;
   }
   const number = teamNumber(team.id);
@@ -317,8 +314,7 @@ export function saveTeam(team: Team, isNew: boolean): boolean {
   };
   try {
     hydrate(backend.save(payload));
-    feedbackTone.set("success");
-    feedback.set("队伍已保存");
+    notifyTeams("队伍已保存");
     return true;
   } catch (error) {
     failure(error);
@@ -326,23 +322,10 @@ export function saveTeam(team: Team, isNew: boolean): boolean {
   }
 }
 
-/** The line under the toolbar, when the last action left something to say. */
-export function teamsFeedback(): string | null {
-  return feedback();
-}
-
-/** The tone of the last feedback line. */
-export function teamsFeedbackTone(): "info" | "success" | "warning" | "danger" {
-  return feedbackTone();
-}
-
-/** Writes the editor's feedback line. */
-export function setTeamsFeedback(
-  message: string | null,
-  tone: "info" | "success" | "warning" | "danger" = "success",
-): void {
-  feedbackTone.set(tone);
-  feedback.set(message);
+/** Shows the teams page's latest result in the window's toast stack. */
+export function notifyTeams(message: string | null, tone: ToastTone = "success"): void {
+  if (message === null) return;
+  notify(message, { tone, id: "teams-feedback" });
 }
 
 /** A blank team in `number`, or in the first formation slot that is free. */

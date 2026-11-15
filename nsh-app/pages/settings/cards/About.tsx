@@ -3,11 +3,10 @@
 // The repository opens outside the app (`openUrl`, granted for `https` in
 // `nsh.json`), which is what the link role is for: it leaves the app for a
 // resource, so it is not a command.
-import { Text, openUrl } from "nsh";
+import { Text, appInfo, openUrl } from "nsh";
 import { Button } from "../../../components/Button";
 import { Rule } from "../../../components/Card";
 import { SettingLine, SettingsGroup } from "../../../components/Field";
-import { Runtime } from "aalc/native";
 import { setFeedback } from "../../../settings";
 import { navigate } from "../../../store";
 import { SettingsSection } from "../SettingsSection";
@@ -19,7 +18,9 @@ export function AboutCard() {
     <SettingsSection title="关于">
       <SettingsGroup>
         <SettingLine label="版本">
-          <Text class="font-mono text-xs text-muted-foreground">v{Runtime.appVersion()}</Text>
+          <Text class="font-mono text-xs text-muted-foreground">
+            v{appInfo().version ?? "dev"}
+          </Text>
         </SettingLine>
         <Rule />
         <SettingLine label="开源地址">
@@ -28,7 +29,7 @@ export function AboutCard() {
             icon="package"
             variant="ghost"
             onPress={() => {
-              openUrl(REPO_URL).catch(() => setFeedback("无法打开浏览器"));
+              openUrl(REPO_URL).catch(() => setFeedback("无法打开浏览器", "danger"));
             }}
           />
         </SettingLine>

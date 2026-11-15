@@ -23,8 +23,6 @@ import {
   setSelectionMode,
   setTeamFilter,
   teamFilter,
-  teamsFeedback,
-  teamsFeedbackTone,
   teamsFor,
   teamsLoading,
   type Team,
@@ -97,9 +95,6 @@ export function Teams() {
           </View>
         </View>
       </PageToolbar>
-      <If when={teamsFeedback()}>
-        {(line) => <Notice tone={teamsFeedbackTone()} label={line()} />}
-      </If>
       <Scroll class="min-h-0 flex-1">
         <View class="w-full flex-col gap-3 pb-2">
           <If

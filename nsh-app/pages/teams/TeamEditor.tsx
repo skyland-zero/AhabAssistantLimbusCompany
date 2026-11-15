@@ -21,9 +21,7 @@ import {
   editingTeam,
   saveDraft,
   setEditorTab,
-  setTeamsFeedback,
-  teamsFeedback,
-  teamsFeedbackTone,
+  notifyTeams,
 } from "../../teams";
 import type { Team, TeamEditorTab } from "../../teams";
 import { AdvancedTab } from "./editor/AdvancedTab";
@@ -68,7 +66,7 @@ export function TeamEditor() {
                 variant="outline"
                 onPress={() => {
                   Clipboard.writeText(draftJson()).then(() =>
-                    setTeamsFeedback("队伍 JSON 已复制"),
+                    notifyTeams("队伍 JSON 已复制"),
                   );
                 }}
               />
@@ -92,16 +90,9 @@ export function TeamEditor() {
 
             <View class="w-full flex-none flex-row items-center justify-between gap-3 border-t border-border bg-card px-6 py-3">
               <View class="min-w-0 flex-1">
-                <If when={teamsFeedback()}>
-                  {(message) => (
-                    <Text class={`text-xs ${feedbackClass(teamsFeedbackTone())}`}>{message()}</Text>
-                  )}
-                </If>
-                <If when={!teamsFeedback()}>
-                  <Text class="text-xs text-muted-foreground">
-                    支持中文输入、剪贴板和 JSON 导入
-                  </Text>
-                </If>
+                <Text class="text-xs text-muted-foreground">
+                  支持中文输入、剪贴板和 JSON 导入
+                </Text>
               </View>
               <View class="flex-row flex-none gap-2">
                 <Button label="取消" variant="ghost" onPress={() => closeEditor()} />
@@ -118,14 +109,6 @@ export function TeamEditor() {
       </If>
     </Dialog>
   );
-}
-
-/** The footer's feedback colour: errors are not success messages. */
-function feedbackClass(tone: "info" | "success" | "warning" | "danger"): string {
-  if (tone === "danger") return "text-danger";
-  if (tone === "warning") return "text-warning";
-  if (tone === "success") return "text-success";
-  return "text-muted-foreground";
 }
 
 /** One section tab; the starlight tab carries the current cost as a suffix. */

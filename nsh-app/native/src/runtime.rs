@@ -12,10 +12,11 @@ pub struct Runtime;
 
 #[module]
 impl Runtime {
-    /// The backend crate's version.
+    /// The Rust crate's version.
     ///
-    /// Kept in step with `nsh.json` `"version"` by the release script; the
-    /// value here is what the running binary was built with.
+    /// This is not the product version: user-facing version text comes from
+    /// `nsh.json` / `nsh package --app-version`, exposed to TSX as
+    /// `appInfo().version`.
     pub fn app_version() -> String {
         env!("CARGO_PKG_VERSION").to_owned()
     }

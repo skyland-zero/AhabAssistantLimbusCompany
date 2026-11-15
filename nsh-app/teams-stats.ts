@@ -3,7 +3,7 @@
 // Rust owns the `TEAM_STATS_GET` / `TEAM_STATS_CLEAR` calls; this module mirrors
 // the answer into signals and formats durations for the advanced tab.
 import { signal } from "nsh";
-import { setTeamsFeedback, teamsBackend } from "./teams";
+import { notifyTeams, teamsBackend } from "./teams";
 
 export type TeamStatsBucket = {
   count: number;
@@ -53,7 +53,7 @@ function toStats(value: unknown): TeamStats {
 }
 
 function failure(error: unknown): void {
-  setTeamsFeedback(error instanceof Error ? error.message : String(error));
+  notifyTeams(error instanceof Error ? error.message : String(error), "danger");
 }
 
 /** A team's stats (tracked); an unloaded team has zeroes, like the client
@@ -75,7 +75,6 @@ export function refreshTeamStats(id: string | null): void {
   try {
     const value = toStats(backend.stats(id));
     stats.update((all) => ({ ...all, [id]: value }));
-    setTeamsFeedback(null);
   } catch (error) {
     failure(error);
   }
@@ -101,7 +100,7 @@ export function clearTeamStats(id: string | null): void {
   try {
     const value = toStats(backend.clearStats(id));
     stats.update((all) => ({ ...all, [id]: value }));
-    setTeamsFeedback("队伍统计已清空");
+    notifyTeams("队伍统计已清空");
   } catch (error) {
     failure(error);
   }

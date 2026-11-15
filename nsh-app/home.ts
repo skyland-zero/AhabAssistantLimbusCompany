@@ -5,6 +5,8 @@
 // module mirrors the snapshots into signals and writes through the store.
 import { signal } from "nsh";
 import { Backend, HomeStore } from "aalc/native";
+import { notify } from "./shell/Toast";
+import type { ToastTone } from "./shell/Toast";
 import { allTeams, teamNumber } from "./teams-store";
 import { mirrorHomeStatus } from "./store";
 
@@ -345,7 +347,6 @@ const logs = signal<LogEntry[]>([]);
 /** The startup retry lines mirrored from the native layer. They live beside
  *  the backend's own log so a failed startup can still explain itself. */
 const startupLogs = signal<LogEntry[]>([]);
-const feedback = signal<string | null>(null);
 const tasks = signal<Task[]>(DEFAULT_TASKS.map((task) => ({ ...task })));
 const previewFrame = signal<string | null>(null);
 // The last frame stays underneath the next one while the new image decodes,
@@ -364,6 +365,12 @@ let startupFailed = false;
 /** Once startup reached a terminal state, the log mirror stops polling so a
  *  cleared log stays cleared. */
 let startupObserved = false;
+
+/** Shows the console's latest result at the window's bottom-right. */
+function homeFeedback(message: string | null, tone: ToastTone = "info"): void {
+  if (message === null) return;
+  notify(message, { tone, id: "home-feedback" });
+}
 
 function selectionFrom(list: Task[]): Record<string, Record<string, unknown>> {
   return Object.fromEntries(
@@ -399,7 +406,7 @@ function syncTasks(): void {
   try {
     store.configure(selectionFrom(tasks()));
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -460,7 +467,7 @@ function ensureStore(): HomeStore | null {
       hydrateFrom(new HomeStore());
     } catch {
       backend.set("failed");
-      feedback.set("自动化核心初始化失败，请重新启动应用。");
+      homeFeedback("自动化核心初始化失败，请重新启动应用。", "danger");
     }
   } else if (!connecting) {
     connecting = true;
@@ -470,7 +477,7 @@ function ensureStore(): HomeStore | null {
         startupFailed = true;
         backend.set("failed");
         syncStartupLogs();
-        feedback.set("自动化核心初始化失败，请重新启动应用。");
+        homeFeedback("自动化核心初始化失败，请重新启动应用。", "danger");
       })
       .finally(() => {
         connecting = false;
@@ -520,9 +527,8 @@ export function setWindowSetting(field: WindowField, value: string | boolean): v
   if (!current) return;
   try {
     applyWindow(current.setWindow(field, value));
-    feedback.set("窗口设置已保存");
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -557,12 +563,6 @@ export function consoleTasks(): Task[] {
   return tasks();
 }
 
-/** The console's last-action line, shown in the run log card, not under the
- *  queue. */
-export function consoleFeedback(): string | null {
-  return feedback();
-}
-
 /** Turns a task on or off. */
 export function toggleTask(id: TaskId): void {
   tasks.update((list) =>
@@ -592,14 +592,14 @@ export function setTaskParam(id: TaskId, paramId: string, value: string): void {
 export function selectAllTasks(): void {
   tasks.update((list) => list.map((task) => ({ ...task, enabled: true })));
   syncTasks();
-  feedback.set("已全选任务");
+  homeFeedback("已全选任务");
 }
 
 /** Empties the queue's selection without deleting the tasks. */
 export function clearTasks(): void {
   tasks.update((list) => list.map((task) => ({ ...task, enabled: false })));
   syncTasks();
-  feedback.set("已清空任务");
+  homeFeedback("已清空任务");
 }
 
 /** Starts the queue. */
@@ -611,9 +611,9 @@ export function startQueue(): void {
     current.start();
     mirrorHomeStatus(current.executionState());
     logs.set(current.logs());
-    feedback.set(current.feedback() ?? "已提交启动请求");
+    homeFeedback(current.feedback() ?? "已提交启动请求", "success");
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -625,9 +625,9 @@ export function pauseOrResumeQueue(): void {
     current.pauseOrResume();
     mirrorHomeStatus(current.executionState());
     logs.set(current.logs());
-    feedback.set(current.feedback());
+    homeFeedback(current.feedback());
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -639,9 +639,9 @@ export function stopQueue(): void {
     current.stop();
     mirrorHomeStatus(current.executionState());
     logs.set(current.logs());
-    feedback.set(current.feedback());
+    homeFeedback(current.feedback());
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -650,12 +650,12 @@ export function clearLog(): void {
   startupLogs.set([]);
   const current = ensureStore();
   if (!current) {
-    feedback.set("日志已清空");
+    homeFeedback("日志已清空");
     return;
   }
   current.clearLogs();
   logs.set(current.logs());
-  feedback.set(current.feedback());
+  homeFeedback(current.feedback());
 }
 
 /** Re-reads the device list without blocking the window. */
@@ -666,9 +666,9 @@ export async function refreshDevices(): Promise<void> {
     const list = await current.refreshDevices();
     devices.set(list.map((entry) => ({ id: entry.id, name: entry.name })));
     syncDevice(current);
-    feedback.set(current.feedback());
+    homeFeedback(current.feedback());
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -682,11 +682,11 @@ export async function selectDevice(id: string): Promise<void> {
   try {
     await current.connectDevice(id);
     syncDevice(current);
-    feedback.set(current.feedback());
+    homeFeedback(current.feedback(), "success");
     if (device() === "connected") current.setPreviewEnabled(true);
   } catch (error) {
     syncDevice(current);
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -918,10 +918,10 @@ export function saveAfterCompletion(next: AfterCompletion): void {
   if (!current) return;
   try {
     applyAfterCompletion(current.setAfterCompletion(next.actions, next.power, next.keep));
-    feedback.set("结束后操作已保存");
+    homeFeedback("结束后操作已保存", "success");
     afterCompletionOpen.set(false);
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    homeFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 

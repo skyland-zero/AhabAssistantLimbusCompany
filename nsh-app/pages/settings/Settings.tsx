@@ -1,24 +1,21 @@
 // The settings page: a quick-navigation column (200pt) beside one scrolling
 // list of sections. B drops the per-section cards: each section is a page-level
 // heading and rule followed by FlClash-style tonal groups, so the page reads as
-// one settings surface rather than eight stacked cards.
+// one settings surface rather than a stack of cards.
 //
 // The navigation highlights the section the reader is in: each section reports
 // its offset inside the scroll content, and the scroll offset picks the last one
 // that has started. Pressing an entry scrolls to it. This is screen state, so it
 // lives here; every edited value lives in `settings.ts` (and, after P1, in Rust).
 import type { JSX, ScrollRef } from "nsh";
-import { Scroll, Text, View, effect, signal } from "nsh";
-import { Runtime } from "aalc/native";
+import { Scroll, Text, View, appInfo, effect, signal } from "nsh";
 import { Pressable } from "../../components/Button";
 import { Rule } from "../../components/Card";
 import { Reveal } from "../../components/Reveal";
-import { currentFeedback } from "../../settings";
 import { AboutCard } from "./cards/About";
 import { AppearanceCard } from "./cards/Appearance";
 import { HotkeysCard } from "./cards/Hotkeys";
 import { NotificationsCard } from "./cards/Notifications";
-import { ResourcesCard } from "./cards/Resources";
 import { ExperimentalCard, SystemCard } from "./cards/System";
 import { UpdatesCard } from "./cards/Updates";
 
@@ -29,7 +26,6 @@ const SECTIONS = [
   "系统与防护",
   "实验性功能",
   "更新与源配置",
-  "资源同步",
   "任务通知",
   "关于",
 ] as const;
@@ -115,12 +111,9 @@ export function Settings() {
             <UpdatesCard />
           </Section>
           <Section index={5} onOffset={record}>
-            <ResourcesCard />
-          </Section>
-          <Section index={6} onOffset={record}>
             <NotificationsCard />
           </Section>
-          <Section index={7} onOffset={record}>
+          <Section index={6} onOffset={record}>
             <AboutCard />
           </Section>
         </View>
@@ -172,11 +165,8 @@ function SettingsNav(props: { active: number; onJump: (index: number) => void })
       <View class="flex-1" />
       <View class="w-full flex-col gap-1 px-2 pt-2">
         <Text class="text-[10px] text-muted-foreground">
-          zh-CN · AALC.nsh v{Runtime.appVersion()}
+          zh-CN · AALC.nsh v{appInfo().version ?? "dev"}
         </Text>
-        <If when={currentFeedback()}>
-          {(line) => <Text class="text-[10px] text-success">{line()}</Text>}
-        </If>
       </View>
     </View>
   );

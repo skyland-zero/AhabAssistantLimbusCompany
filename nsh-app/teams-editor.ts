@@ -10,7 +10,7 @@ import {
   systemIndex,
 } from "./teams-mirror";
 import type { TeamMirrorConfig } from "./teams-mirror";
-import { blankTeam, saveTeam, setTeamsFeedback } from "./teams-store";
+import { blankTeam, notifyTeams, saveTeam } from "./teams-store";
 import type { Team, TeamPreset, TeamPurpose } from "./teams-store";
 import { currentLanguage } from "./settings";
 import type { LocalizedText } from "./teams-store";
@@ -86,7 +86,6 @@ export function openEditor(team: Team | null, number?: number): void {
   draft.set(team ?? blankTeam(number));
   draftIsNew.set(team === null);
   editorTab.set("basic");
-  setTeamsFeedback(null);
 }
 
 /** Moves a new draft to another free formation number. The default
@@ -121,7 +120,7 @@ export function applyPreset(preset: TeamPreset, number: number, overwrite?: Team
   });
   draftIsNew.set(isNew);
   editorTab.set("basic");
-  setTeamsFeedback(`已载入预设：${localizedText(preset.name)}`);
+  notifyTeams(`已载入预设：${localizedText(preset.name)}`, "info");
 }
 
 /** The draft's current formation number, or `null`. */
@@ -273,7 +272,7 @@ export function addObserveGift(gift: string): void {
     const canonical = value === "赤红纠缠的蜘蛛巢" ? "spiderweb_entangled_in_red" : value;
     if (config.observe_ego_gift_selected.includes(canonical)) return config;
     if (config.observe_ego_gift_selected.length >= 3) {
-      setTeamsFeedback("最多只能观测 3 个 E.G.O 饰品");
+      notifyTeams("最多只能观测 3 个 E.G.O 饰品", "warning");
       return config;
     }
     return {
@@ -332,7 +331,6 @@ export function saveDraft(): void {
   };
   if (!saveTeam(saved, draftIsNew())) return;
   draft.set(null);
-  setTeamsFeedback("队伍已保存");
 }
 
 /** The draft as the `Teams.*` payload (schema 3), pretty-printed for copy. */
@@ -356,23 +354,23 @@ export function draftJson(): string {
   );
 }
 
-/** Applies a pasted `TeamDetail` JSON to the draft. Returns false and writes a
- *  feedback line when the text is not a valid team. */
+/** Applies a pasted `TeamDetail` JSON to the draft. Returns false and shows a
+ *  toast when the text is not a valid team. */
 export function applyDraftJson(text: string): boolean {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
-    setTeamsFeedback("JSON 解析失败：请检查格式");
+    notifyTeams("JSON 解析失败：请检查格式", "danger");
     return false;
   }
   if (value === null || typeof value !== "object") {
-    setTeamsFeedback("JSON 必须是队伍对象");
+    notifyTeams("JSON 必须是队伍对象", "danger");
     return false;
   }
   const record = value as Record<string, unknown>;
   if (typeof record.name !== "string" || record.name.trim() === "") {
-    setTeamsFeedback("JSON 缺少队伍名称");
+    notifyTeams("JSON 缺少队伍名称", "danger");
     return false;
   }
   const purpose: TeamPurpose =
@@ -425,7 +423,7 @@ export function applyDraftJson(text: string): boolean {
     teamCode: typeof record.teamCode === "string" ? record.teamCode : "",
     mirrorConfig,
   });
-  setTeamsFeedback("队伍 JSON 已导入");
+  notifyTeams("队伍 JSON 已导入");
   return true;
 }
 

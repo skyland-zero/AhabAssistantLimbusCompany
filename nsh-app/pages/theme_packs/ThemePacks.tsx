@@ -19,7 +19,6 @@ import {
   setAllEnabled,
   setPackWeight,
   themePacks,
-  themePacksFeedback,
   togglePack,
   toggleSortByWeight,
   totalWeight,
@@ -59,9 +58,6 @@ export function ThemePacks() {
           tone="warning"
           label="困难镜牢周期进行中：建议优先筛选高星主题包并提高其权重"
         />
-      </If>
-      <If when={themePacksFeedback()}>
-        {(line) => <Notice tone="success" label={line()} />}
       </If>
       <Scroll class="min-h-0 flex-1">
         <View class="w-full flex-col gap-2">

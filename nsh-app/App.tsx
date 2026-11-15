@@ -4,6 +4,7 @@
 // transparent window, so the app paints every pixel of it, corners included.
 import { mount, View } from "nsh";
 import { Runtime } from "aalc/native";
+import { Toaster } from "./shell/Toast";
 import { PageHost } from "./pages/PageHost";
 import { DesktopIntegration } from "./shell/DesktopIntegration";
 import { SkinBackdrop } from "./shell/SkinBackdrop";
@@ -26,6 +27,7 @@ function App() {
         <PageHost page={currentPage()} />
       </View>
       <StartupDialog />
+      <Toaster />
     </View>
   );
 }

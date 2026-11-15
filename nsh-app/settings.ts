@@ -6,6 +6,8 @@
 import { signal } from "nsh";
 import { Backend, I18n, SettingsStore } from "aalc/native";
 import type { SystemView } from "aalc/native";
+import { notify } from "./shell/Toast";
+import type { ToastTone } from "./shell/Toast";
 import { currentLanguage, setLanguage } from "./store";
 import type { UpdateSource } from "./model/types";
 
@@ -45,8 +47,6 @@ const hotkeys = signal({
 
 const hotkeyCapture = signal<"startStop" | "pauseResume" | null>(null);
 
-const feedback = signal<string | null>(null);
-
 let store: SettingsStore | null = null;
 let connecting = false;
 
@@ -78,7 +78,7 @@ function hydrateHotkeys(view: {
 }
 
 function failure(error: unknown): void {
-  feedback.set(error instanceof Error ? error.message : String(error));
+  setFeedback(error instanceof Error ? error.message : String(error), "danger");
 }
 
 /** The Rust store once it is loaded, or `null` while a sidecar connects. */
@@ -126,7 +126,6 @@ export function toggleSystemFlag(flag: SystemFlag): void {
   }
   try {
     hydrateSystem(backend.setSystemFlag(flag, next));
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -147,7 +146,6 @@ export function setUpdateSource(next: UpdateSource): void {
   }
   try {
     hydrateSystem(backend.setUpdateSource(next));
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -170,7 +168,6 @@ export function saveCdk(): void {
   if (!backend) return;
   try {
     hydrateSystem(backend.saveCdk());
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -193,7 +190,6 @@ export function saveWxpusherSpt(): void {
   if (!backend) return;
   try {
     hydrateSystem(backend.saveSpt());
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -205,7 +201,7 @@ export function testNotification(): void {
   if (!backend) return;
   try {
     backend.testNotification();
-    feedback.set(backend.feedback() ?? "测试通知已发送");
+    setFeedback(backend.feedback() ?? "测试通知已发送", "success");
   } catch (error) {
     failure(error);
   }
@@ -216,10 +212,20 @@ export function checkForUpdates(): void {
   const backend = ensureStore();
   if (!backend) return;
   try {
-    feedback.set(backend.checkUpdate());
+    const message = backend.checkUpdate();
+    setFeedback(message, updateTone(message));
   } catch (error) {
     failure(error);
   }
+}
+
+/** `最新`/`latest` is a success; a failed check is a danger; an available
+ *  update is informational. */
+function updateTone(message: string): ToastTone {
+  const line = message.toLowerCase();
+  if (/(失败|错误|failed|error)/.test(line)) return "danger";
+  if (/(最新|latest|up to date)/.test(line)) return "success";
+  return "info";
 }
 
 /** The global hotkey configuration (tracked). */
@@ -237,7 +243,6 @@ export function setHotkeysEnabled(enabled: boolean): void {
   }
   try {
     hydrateHotkeys(backend.setHotkeysEnabled(enabled));
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -252,7 +257,6 @@ export function clearHotkey(target: "startStop" | "pauseResume"): void {
   }
   try {
     hydrateHotkeys(backend.clearHotkey(target));
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -264,7 +268,6 @@ export function setHotkey(target: "startStop" | "pauseResume", value: string): v
   if (!backend) return;
   try {
     hydrateHotkeys(backend.setHotkey(target, value));
-    feedback.set("设置已保存");
   } catch (error) {
     failure(error);
   }
@@ -294,14 +297,10 @@ export function finishHotkeyCapture(
   setHotkey(target, value);
 }
 
-/** The line under the card stack, in the current language. */
-export function currentFeedback(): string | null {
-  return translatedFeedback(feedback());
-}
-
-/** Says what an action did; `null` clears it. */
-export function setFeedback(next: string | null): void {
-  feedback.set(next);
+/** Shows a transient result; ordinary setting changes stay silent. */
+export function setFeedback(next: string | null, tone: ToastTone = "info"): void {
+  if (next === null) return;
+  notify(translatedFeedback(next) ?? next, { tone, id: "settings-feedback" });
 }
 
 /** The catalog entry for a shell/page key in the current language. */

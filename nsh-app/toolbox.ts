@@ -5,6 +5,8 @@
 // the same functions.
 import { signal } from "nsh";
 import { Backend, ToolboxStore } from "aalc/native";
+import { notify } from "./shell/Toast";
+import type { ToastTone } from "./shell/Toast";
 import { translatedFeedback } from "./settings";
 
 /** The four tools the page offers, as the sidecar names them. */
@@ -51,10 +53,14 @@ const running = signal<Record<ToolId, boolean>>({
   resolution: false,
 });
 
-const feedback = signal<string | null>(null);
-
 let store: ToolboxStore | null = null;
 let connecting = false;
+
+/** Shows the toolbox's latest result at the window's bottom-right. */
+function toolFeedback(message: string | null, tone: ToastTone = "info"): void {
+  if (message === null) return;
+  notify(translatedFeedback(message) ?? message, { tone, id: "toolbox-feedback" });
+}
 
 function ensureStore(): ToolboxStore | null {
   if (store) return store;
@@ -68,7 +74,7 @@ function ensureStore(): ToolboxStore | null {
         store = created;
       })
       .catch((error) => {
-        feedback.set(error instanceof Error ? error.message : String(error));
+        toolFeedback(error instanceof Error ? error.message : String(error), "danger");
       })
       .finally(() => {
         connecting = false;
@@ -95,11 +101,6 @@ export function isToolRunning(id: ToolId): boolean {
   return running()[id];
 }
 
-/** The line under the tool grid, when the last action left something to say. */
-export function toolboxFeedback(): string | null {
-  return translatedFeedback(feedback());
-}
-
 /** Starts or stops a tool. */
 export function toggleTool(id: ToolId): void {
   if (id === "screenshot") return;
@@ -108,9 +109,9 @@ export function toggleTool(id: ToolId): void {
   try {
     backend.toggle(id);
     syncRunning();
-    feedback.set(backend.feedback());
+    toolFeedback(backend.feedback(), "success");
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    toolFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -120,9 +121,9 @@ export function screenshot(): void {
   if (!backend) return;
   try {
     backend.screenshot();
-    feedback.set(backend.feedback());
+    toolFeedback(backend.feedback(), "success");
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    toolFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -132,9 +133,9 @@ export function applyResolution(): void {
   if (!backend) return;
   try {
     backend.applyResolution();
-    feedback.set(backend.feedback());
+    toolFeedback(backend.feedback(), "success");
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    toolFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }
 
@@ -144,8 +145,8 @@ export function resetResolution(): void {
   if (!backend) return;
   try {
     backend.resetResolution();
-    feedback.set(backend.feedback());
+    toolFeedback(backend.feedback(), "success");
   } catch (error) {
-    feedback.set(error instanceof Error ? error.message : String(error));
+    toolFeedback(error instanceof Error ? error.message : String(error), "danger");
   }
 }

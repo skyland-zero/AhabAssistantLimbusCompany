@@ -8,7 +8,6 @@ import { Text, View, colorScheme } from "nsh";
 import { Button } from "nsh/base";
 import { DECOR_OF, SKINS, SKIN_BLURBS, SKIN_LABELS, tokensFor } from "../../../themes";
 import type { SkinName } from "../../../themes";
-import { setFeedback } from "../../../settings";
 import { currentAccent, currentSeed, currentSkin, setSkin } from "../../../store";
 
 export function SkinPicker() {
@@ -19,10 +18,7 @@ export function SkinPicker() {
           <SkinOption
             skin={skin()}
             active={currentSkin() === skin()}
-            onPress={() => {
-              setSkin(skin());
-              setFeedback(`界面皮肤：${SKIN_LABELS[skin()]}`);
-            }}
+            onPress={() => setSkin(skin())}
           />
         )}
       </Each>

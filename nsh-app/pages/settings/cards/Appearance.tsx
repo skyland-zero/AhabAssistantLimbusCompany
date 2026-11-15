@@ -11,7 +11,7 @@ import { SettingLine, SettingsGroup } from "../../../components/Field";
 import { Input } from "../../../components/Input";
 import { Segmented, SwatchRow } from "../../../components/Segmented";
 import { Swatch } from "../../../components/Swatch";
-import { currentLanguage, setFeedback, setLanguage } from "../../../settings";
+import { currentLanguage, setLanguage } from "../../../settings";
 import type { Language } from "../../../settings";
 import {
   ACCENTS,
@@ -43,10 +43,7 @@ export function AppearanceCard() {
             surface="muted"
             accessibilityLabel="主题模式"
             value={currentAppearance}
-            onChange={(next) => {
-              applyAppearance(next);
-              setFeedback(`主题模式：${APPEARANCE_LABELS[next]}`);
-            }}
+            onChange={(next) => applyAppearance(next)}
             options={[
               { value: "light", label: "浅色" },
               { value: "dark", label: "深色" },
@@ -63,10 +60,7 @@ export function AppearanceCard() {
                   label={ACCENT_LABELS[accent()]}
                   color={tokensFor(currentSkin(), accent(), colorScheme())["brand"]}
                   selected={currentAccent() === accent()}
-                  onPress={() => {
-                    setAccent(accent());
-                    setFeedback(`强调色：${ACCENT_LABELS[accent()]}`);
-                  }}
+                  onPress={() => setAccent(accent())}
                 />
               )}
             </Each>
@@ -88,10 +82,7 @@ export function AppearanceCard() {
                   label={preset().label}
                   color={preset().hex}
                   selected={currentSeed() === preset().hex}
-                  onPress={() => {
-                    setThemeSeed(preset().hex);
-                    setFeedback(`颜色主题：${preset().label}`);
-                  }}
+                  onPress={() => setThemeSeed(preset().hex)}
                 />
               )}
             </Each>
@@ -100,10 +91,7 @@ export function AppearanceCard() {
                 label="清除"
                 size="xs"
                 variant="ghost"
-                onPress={() => {
-                  setThemeSeed(null);
-                  setFeedback("颜色主题：随皮肤");
-                }}
+                onPress={() => setThemeSeed(null)}
               />
             </If>
           </View>
@@ -169,14 +157,7 @@ function applyCustomSeed(): void {
     return;
   }
   setThemeSeed(next);
-  setFeedback(`颜色主题：${next}`);
 }
-
-const APPEARANCE_LABELS: Record<Appearance, string> = {
-  light: "浅色",
-  dark: "深色",
-  system: "跟随系统",
-};
 
 /** The frame skins were designed around a brass rule; say so instead of letting
  *  a violet accent fight a gold frame. */

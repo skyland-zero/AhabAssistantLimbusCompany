@@ -39,7 +39,6 @@ import {
   backendState,
   clearLog,
   clearTasks,
-  consoleFeedback,
   consoleProgress,
   consoleStats,
   consoleTasks,
@@ -845,11 +844,6 @@ function LogCard() {
             />
           </View>
         </View>
-        {/* The last action's line lives with the logs: the queue is a work
-            list, not a message board. */}
-        <If when={consoleFeedback()}>
-          {(line) => <Text class="text-xs text-muted-foreground">{line()}</Text>}
-        </If>
         {/* A log is a growing history: the list keeps itself at the end while
             the reader is there, and leaves the position alone once scrolled up. */}
         <List<LogEntry>

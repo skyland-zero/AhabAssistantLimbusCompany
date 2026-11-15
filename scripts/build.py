@@ -336,17 +336,21 @@ def build(version: str, *, separate_bundles: bool = False) -> Path:
 
     if NSH_PACKAGE_DIR.exists():
         shutil.rmtree(NSH_PACKAGE_DIR)
-    run(
-        [
-            "nsh",
-            "package",
-            "nsh-app",
-            "--target",
-            "windows",
-            "-o",
-            str(NSH_PACKAGE_DIR),
-        ]
-    )
+    app_version = version[1:] if version[:1] in ("V", "v") else version
+    package_command = [
+        "nsh",
+        "package",
+        "nsh-app",
+        "--target",
+        "windows",
+        "-o",
+        str(NSH_PACKAGE_DIR),
+    ]
+    # Keep `appInfo().version` on the release tag/CI version instead of the
+    # checkout's `nsh.json` value. A local build has no release version yet.
+    if app_version and app_version != "dev":
+        package_command += ["--app-version", app_version]
+    run(package_command)
     build_native_decoder()
     if separate_bundles:
         build_python_executable("packaging/specs/main_backend.spec")
