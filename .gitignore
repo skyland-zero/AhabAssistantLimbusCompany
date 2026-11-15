@@ -37,6 +37,8 @@ theme_pack_list.yaml
 logs
 pythonlogs
 runtime_stats.json
+# 资源同步的运行期状态（上次应用的 manifest、本地快照与远端 ETag），同步一次就会生成。
+assets/config/image_resource_state.json
 /screenshots/
 # Runner 配置快照和清理账本（module/backend_application.py 的 .aalc-runs/cleanup）。
 # 与 runtime_stats.json 一样属于运行时产物，任何一次真实运行都会生成。
