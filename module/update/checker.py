@@ -39,10 +39,25 @@ UPDATE_REPO_OWNER = "skyland-zero"
 UPDATE_REPO_NAME = "AhabAssistantLimbusCompany"
 
 # 更新检查不走 GitHub API（未认证 60 次/小时，共享 IP 很容易被限流）：
-# 稳定版读取 releases/latest 的 302 跳转，预览版读取 releases.atom。
+# 稳定版读取 releases.atom 或 releases/latest 的 302 跳转，预览版读取 atom。
 _GITHUB_WEB = "https://github.com"
 _RELEASE_TAG_MARKER = "/releases/tag/"
 _ATOM_NAMESPACE = "{http://www.w3.org/2005/Atom}"
+
+# 国内可访问的 GitHub 代理。检查更新优先读镜像的 releases.atom，镜像全部
+# 失败时才直连 GitHub；后续接入下载时也可以复用这些前缀。
+UPDATE_MIRRORS = (
+    "https://gh-proxy.com",
+    "https://ghfast.top",
+)
+
+
+def update_mirror_bases() -> tuple[str, ...]:
+    """返回镜像前缀；可用 AALC_UPDATE_MIRROR 以逗号分隔覆盖。"""
+    override = os.environ.get("AALC_UPDATE_MIRROR", "").strip()
+    if not override:
+        return UPDATE_MIRRORS
+    return tuple(part.strip().rstrip("/") for part in override.split(",") if part.strip())
 
 
 class UpdateStatus(Enum):
@@ -179,22 +194,31 @@ class UpdateThread(Thread):
         """
         从 GitHub 网页获取最新发布版本，不占用 API 配额。
 
-        稳定版读取 ``releases/latest`` 的 302 跳转；预览版读取
-        ``releases.atom``，它天然按发布时间倒序并包含预发布版本。
+        优先读取国内镜像的 ``releases.atom``，镜像全部失败时再直连
+        GitHub；稳定版在 Atom 也失败时最后尝试 ``releases/latest`` 的
+        302 跳转。Atom 天然按发布时间倒序并包含预发布版本。
 
         返回:
         含 ``tag_name``、``body``、``assets`` 的发布信息
         """
-        if cfg.update_prerelease_enable:
+        try:
             return self._check_update_info_github_atom()
-        return self._check_update_info_github_redirect()
+        except Exception as atom_error:
+            if not cfg.update_prerelease_enable:
+                try:
+                    return self._check_update_info_github_redirect()
+                except Exception as redirect_error:
+                    raise RuntimeError(
+                        f"镜像与 GitHub 均无法获取版本：{atom_error}；{redirect_error}"
+                    ) from atom_error
+            raise
 
     def _check_update_info_github_redirect(self):
-        """稳定版：跟随 releases/latest 的重定向，从 Location 读 tag。"""
+        """稳定版兜底：跟随 releases/latest 的重定向，从 Location 读 tag。"""
         url = f"{_GITHUB_WEB}/{self.user}/{self.repo}/releases/latest"
         response = requests.get(
             url,
-            timeout=10,
+            timeout=(4, 12),
             headers=cfg.useragent,
             allow_redirects=False,
         )
@@ -207,11 +231,23 @@ class UpdateThread(Thread):
         raise RuntimeError(f"无法从 {url} 解析最新版本")
 
     def _check_update_info_github_atom(self):
-        """预览版：解析 releases.atom，取最新一条发布。"""
-        url = f"{_GITHUB_WEB}/{self.user}/{self.repo}/releases.atom"
-        response = requests.get(url, timeout=10, headers=cfg.useragent)
-        response.raise_for_status()
-        root = ET.fromstring(response.text)
+        """按“国内镜像 -> 直连”的顺序解析 releases.atom。"""
+        atom_url = f"{_GITHUB_WEB}/{self.user}/{self.repo}/releases.atom"
+        urls = [f"{base}/{atom_url}" for base in update_mirror_bases()]
+        urls.append(atom_url)
+        errors = []
+        for url in urls:
+            try:
+                response = requests.get(url, timeout=(4, 12), headers=cfg.useragent)
+                response.raise_for_status()
+                return self._latest_release_from_atom(response.text, url)
+            except Exception as e:
+                errors.append(f"{url}: {e}")
+        raise RuntimeError("无法从发布源获取版本：" + "；".join(errors[-2:]))
+
+    def _latest_release_from_atom(self, text: str, source: str):
+        """从 Atom 正文里取第一条可用发布，稳定版跳过预发布标签。"""
+        root = ET.fromstring(text)
         for entry in root.findall(f"{_ATOM_NAMESPACE}entry"):
             link = entry.find(f"{_ATOM_NAMESPACE}link")
             href = link.get("href", "") if link is not None else ""
@@ -220,10 +256,16 @@ class UpdateThread(Thread):
             tag = unquote(href.split(_RELEASE_TAG_MARKER, 1)[1].split("?", 1)[0].strip("/"))
             if not tag:
                 continue
+            if not cfg.update_prerelease_enable:
+                try:
+                    if parse(tag.lstrip("Vv")).is_prerelease:
+                        continue
+                except Exception:
+                    continue
             content = entry.find(f"{_ATOM_NAMESPACE}content")
             body = content.text if content is not None and content.text else ""
             return {"tag_name": tag, "body": body, "assets": []}
-        raise RuntimeError(f"发布源中没有可用版本：{url}")
+        raise RuntimeError(f"发布源中没有可用版本：{source}")
 
     def check_update_info_github_api(self):
         """
