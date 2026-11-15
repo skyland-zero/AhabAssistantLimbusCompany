@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import json
 import os
+import shutil
 import signal
 import sys
 import threading
@@ -39,12 +40,77 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def _run(args: argparse.Namespace) -> None:
+def _remove_legacy_runtime_layout(root: Path) -> list[str]:
+    """Remove Runner files that the merged runtime no longer ships.
+
+    The cleanup is driven by the staged ``release.json`` rather than by a
+    version check: a release whose Runner entry is the sidecar executable
+    cannot use the standalone ``backend/AALCRunner.exe``.  A shared-runtime
+    release also makes a leftover ``runner/`` bundle stale; a separate-bundles
+    release keeps that directory and only drops the old backend runner.
+    """
+
+    try:
+        release = json.loads((root / "release.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    runner = release.get("runner") if isinstance(release, dict) else None
+    if not isinstance(runner, dict):
+        return []
+    entry = runner.get("entry")
+    if not isinstance(entry, str) or not entry:
+        return []
+    normalized_entry = entry.replace("\\", "/").casefold()
+    runtime = release.get("runtime")
+    shared_runtime = isinstance(runtime, str) and runtime.casefold() == "shared"
+
+    removed: list[str] = []
+    backend = root / "backend"
+    stale_runner = backend / "AALCRunner.exe"
+    if (
+        normalized_entry != "backend/aalcrunner.exe"
+        and (backend / "AALC Backend.exe").is_file()
+        and stale_runner.is_file()
+    ):
+        try:
+            stale_runner.unlink()
+            removed.append(str(stale_runner))
+        except OSError:
+            pass
+    legacy_runner_dir = root / "runner"
+    if shared_runtime and legacy_runner_dir.is_dir():
+        try:
+            shutil.rmtree(legacy_runner_dir)
+            removed.append(str(legacy_runner_dir))
+        except OSError:
+            pass
+    return removed
+
+
+def _start_legacy_layout_cleanup(root: Path) -> None:
+    """Run the one-time layout migration off the startup path."""
+
+    def cleanup() -> None:
+        from module.logger import log
+
+        removed = _remove_legacy_runtime_layout(root)
+        if removed:
+            log.info("已清理旧版 Runner 布局：%s", ", ".join(removed))
+
+    threading.Thread(
+        target=cleanup,
+        name="AALCLayoutCleanup",
+        daemon=True,
+    ).start()
+
+
+async def _run(args: argparse.Namespace, root: Path) -> None:
     started = time.monotonic()
     from module.logger import log
     from module.logger.my_log import Logger
 
     Logger(headless=True)
+    _start_legacy_layout_cleanup(root)
     # Preload OpenCV/NumPy on the main thread.  NumPy's OpenBLAS DLL can
     # deadlock inside the Windows loader when its first import happens on an
     # RPC worker thread while the config, hotkey and stdin threads are already
@@ -332,7 +398,7 @@ def main() -> None:
     args.token = token
     os.chdir(root)
     try:
-        asyncio.run(_run(args))
+        asyncio.run(_run(args, root))
     except KeyboardInterrupt:
         pass
 

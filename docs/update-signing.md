@@ -28,3 +28,15 @@ closed）。仅当确实要对接无法提供签名的旧发布源时，显式�
 才会退回兼容模式。新发布流程在配置 signing secret 后会自动上传签名元数据；
 `module/update/checker.py` 启动 `AALC Updater.exe` 时也会显式传递
 `AALC_UPDATE_REQUIRE_SIGNATURE=1`，避免环境继承导致降级。
+
+## 原生更新器
+
+`AALC Updater.exe` 默认由 `native/updater/` 的 Rust crate 构建。它在解压和终止
+进程之前，按磁盘上的原始 manifest 字节完成 Ed25519 校验，并核对归档文件名、大小和
+SHA-256；随后定位 `AALC.nsh/` 解压根目录（不再按压缩包文件名猜测），停止安装目录内
+的进程并覆盖安装。旧版 Python 更新器仍可通过 `scripts/build.py --legacy-updater`
+构建，作为一版回滚路径保留。
+
+Rust 更新器接受 raw 32 字节、base64、hex 和 PKCS#8 PEM 公钥；签名接受 64 字节原始
+文件、base64 或 hex。`scripts/smoke_native_updater.py` 使用真实签名包覆盖全量安装、
+增量安装、篡改拒绝、旧 Runner 布局迁移和更新器交接场景。

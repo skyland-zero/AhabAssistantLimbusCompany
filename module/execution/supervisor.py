@@ -10,6 +10,7 @@ testable without launching Python or creating a platform Job Object.
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import sys
 import threading
@@ -44,6 +45,7 @@ from .platform import (
 )
 
 SCHEMA_VERSION = 3
+RUNNER_ROLE_FLAG = "--execution-runner"
 STDERR_TAIL_LIMIT = 256 * 1024
 
 
@@ -377,6 +379,51 @@ class SubprocessRunnerFactory:
         else:
             self.python_executable = sys.executable
 
+    def _release_runner_command(self) -> list[str] | None:
+        """Return the Runner argv described by the staged ``release.json``.
+
+        The shared runtime ships one executable and records the role flag in
+        ``release.json``; the separate-bundles layout names
+        ``runner/AALCRunner.exe`` there.  Only the known role flag is accepted
+        so a malformed manifest cannot inject arbitrary arguments.
+        """
+
+        release_root = self.app_root.parent if self.app_root.name == "backend" else self.app_root
+        release_path = release_root / "release.json"
+        try:
+            payload = json.loads(release_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        runner = payload.get("runner") if isinstance(payload, dict) else None
+        if not isinstance(runner, dict):
+            return None
+        entry = runner.get("entry")
+        args = runner.get("args", [])
+        if not isinstance(entry, str) or not isinstance(args, list):
+            return None
+        if not all(isinstance(argument, str) for argument in args):
+            return None
+        if any(argument != RUNNER_ROLE_FLAG for argument in args):
+            return None
+        normalized_entry = entry.replace("\\", "/").casefold()
+        # The role flag belongs to the merged sidecar entry; a flag on a
+        # standalone runner is a malformed manifest.  Fall back to the legacy
+        # runner lookup instead of passing an unknown argument.
+        if RUNNER_ROLE_FLAG in args and normalized_entry != "backend/aalc backend.exe":
+            return None
+        # A merged runtime entry without the role flag would start a second
+        # sidecar; refuse it instead of silently running the wrong role.
+        if normalized_entry == "backend/aalc backend.exe" and RUNNER_ROLE_FLAG not in args:
+            return None
+        try:
+            candidate = (release_root / entry).resolve()
+            candidate.relative_to(release_root.resolve())
+        except (OSError, ValueError):
+            return None
+        if not candidate.is_file():
+            return None
+        return [str(candidate), *args]
+
     def locate(self) -> tuple[list[str], bool]:
         configured = os.environ.get("AHAB_RUNNER_EXE")
         if configured:
@@ -392,6 +439,9 @@ class SubprocessRunnerFactory:
             return [str(self.executable)], True
         frozen = getattr(sys, "frozen", False)
         if frozen:
+            release_command = self._release_runner_command()
+            if release_command is not None:
+                return release_command, True
             executable_name = "AALCRunner.exe" if os.name == "nt" else "AALCRunner"
             # ``app_root`` is normally the executable directory.  Retaining a
             # second candidate based on ``sys.executable`` also makes an

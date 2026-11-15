@@ -30,7 +30,13 @@ BACKEND_ENTRY = "backend/AALC Backend.exe"
 RUNNER_BUNDLE = DIST / "AALCRunner"
 RUNNER_RELEASE_DIR = RELEASE / "runner"
 RUNNER_ENTRY = "runner/AALCRunner.exe"
-SHARED_RUNNER_ENTRY = "backend/AALCRunner.exe"
+# The shared runtime launches its Runner through the sidecar executable.
+SHARED_RUNNER_ENTRY = "backend/AALC Backend.exe"
+RUNNER_ROLE_FLAG = "--execution-runner"
+UPDATER_DIR = ROOT / "native" / "updater"
+UPDATER_MANIFEST = UPDATER_DIR / "Cargo.toml"
+UPDATER_TARGET_DIR = UPDATER_DIR / "target"
+UPDATER_BINARY = UPDATER_TARGET_DIR / "release" / "aalc-updater.exe"
 NSH_PACKAGE_DIR = ROOT / "artifacts" / "nsh" / "build"
 
 
@@ -89,6 +95,35 @@ def build_native_decoder() -> None:
             str(SCRCPY_RUNTIME_DIR),
         ]
     )
+
+
+def build_native_updater() -> None:
+    """Build the Rust updater and stage it beside the other executables."""
+
+    # Static CRT: the updater runs from the install root before the backend
+    # directory is on the DLL search path, so it must not depend on a
+    # separately installed VC++ redistributable.
+    rustflags = os.environ.get("RUSTFLAGS", "").strip()
+    rustflags = f"{rustflags} -C target-feature=+crt-static".strip()
+    run(
+        [
+            "cargo",
+            "+1.99.1",
+            "build",
+            "--release",
+            "--manifest-path",
+            str(UPDATER_MANIFEST),
+        ],
+        env={
+            **os.environ,
+            "CARGO_TARGET_DIR": str(UPDATER_TARGET_DIR),
+            "RUSTFLAGS": rustflags,
+        },
+    )
+    if not UPDATER_BINARY.is_file():
+        raise FileNotFoundError(f"native updater build output is missing: {UPDATER_BINARY}")
+    DIST.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(UPDATER_BINARY, DIST / "AALC Updater.exe")
 
 
 def copy_tree(source: Path, destination: Path, ignore=None) -> None:
@@ -153,10 +188,12 @@ def build_release_manifest(
         runner_root = backend_root
         runner_entry = SHARED_RUNNER_ENTRY
         runner_prefix = "backend"
+        runner_args = [RUNNER_ROLE_FLAG]
     else:
         runner_root = Path(runner_root) if runner_root is not None else release_root / "runner"
         runner_entry = RUNNER_ENTRY
         runner_prefix = "runner"
+        runner_args = []
     for entry, root in ((runner_entry, runner_root), (BACKEND_ENTRY, backend_root)):
         entry_path = release_root / entry.replace("/", os.sep)
         if not entry_path.is_file():
@@ -172,6 +209,7 @@ def build_release_manifest(
         "updater": "AALC Updater.exe",
         "runner": {
             "entry": runner_entry,
+            "args": runner_args,
             "files": build_bundle_file_entries(runner_root, manifest_prefix=runner_prefix),
         },
         "runtime": "shared" if shared_runtime else "separate",
@@ -263,8 +301,10 @@ def stage_release(version: str, *, shared_runtime: bool = True) -> None:
     bundle = SHARED_RUNTIME_BUNDLE if shared_runtime else BACKEND_BUNDLE
     backend_binary = bundle / "AALC Backend.exe"
     updater_binary = DIST / "AALC Updater.exe"
-    runner_binary = bundle / "AALCRunner.exe" if shared_runtime else RUNNER_BUNDLE / "AALCRunner.exe"
-    for path in (nsh_binary, nsh_bundle, backend_binary, updater_binary, runner_binary):
+    required = [nsh_binary, nsh_bundle, backend_binary, updater_binary]
+    if not shared_runtime:
+        required.append(RUNNER_BUNDLE / "AALCRunner.exe")
+    for path in required:
         if not path.exists():
             raise FileNotFoundError(f"required build output is missing: {path}")
 
@@ -330,9 +370,15 @@ def archive_release(version: str) -> Path:
     return archive
 
 
-def build(version: str, *, separate_bundles: bool = False) -> Path:
+def build(
+    version: str,
+    *,
+    separate_bundles: bool = False,
+    legacy_updater: bool = False,
+) -> Path:
     if DIST.exists():
         shutil.rmtree(DIST)
+    DIST.mkdir(parents=True, exist_ok=True)
 
     if NSH_PACKAGE_DIR.exists():
         shutil.rmtree(NSH_PACKAGE_DIR)
@@ -356,7 +402,10 @@ def build(version: str, *, separate_bundles: bool = False) -> Path:
         build_python_executable("packaging/specs/main_backend.spec")
     else:
         build_python_executable("packaging/specs/shared_runtime.spec")
-    build_python_executable("packaging/specs/updater.spec")
+    if legacy_updater:
+        build_python_executable("packaging/specs/updater.spec")
+    else:
+        build_native_updater()
     if separate_bundles:
         build_python_executable("packaging/specs/execution_runner.spec")
     stage_release(version, shared_runtime=not separate_bundles)
@@ -373,8 +422,17 @@ def main() -> None:
         action="store_true",
         help="build independent sidecar/Runner onedir trees instead of the shared runtime",
     )
+    parser.add_argument(
+        "--legacy-updater",
+        action="store_true",
+        help="build the legacy Python updater instead of the native Rust updater",
+    )
     args = parser.parse_args()
-    build(args.version, separate_bundles=args.separate_bundles)
+    build(
+        args.version,
+        separate_bundles=args.separate_bundles,
+        legacy_updater=args.legacy_updater,
+    )
 
 
 if __name__ == "__main__":

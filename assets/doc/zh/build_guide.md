@@ -40,8 +40,11 @@ uv run python scripts/build.py --version 1.0.0
 构建流程会依次编译：
 
 1. `nsh package nsh-app --target windows` 生成 Native Shell 前端；
-2. `main_backend.spec` 生成无界面的 `AALC Backend.exe`；
-3. `updater.spec` 生成 `AALC Updater.exe`；
+2. `shared_runtime.spec` 生成一个 `AALC Backend.exe`，同时承担 sidecar 和 Runner
+   两个角色（Runner 通过 `--execution-runner` 启动）；需要旧版双入口时加
+   `--separate-bundles`；
+3. 构建 `native/updater/` 的 Rust 更新器并生成 `AALC Updater.exe`；需要旧版
+   Python 更新器时加 `--legacy-updater`；
 4. 组装 `dist/AALC.nsh/` 并复制 `nsh/`、`assets/`、README 和 LICENSE；
 5. 使用 7-Zip 生成 `dist/AALC.nsh_<version>.7z`。
 

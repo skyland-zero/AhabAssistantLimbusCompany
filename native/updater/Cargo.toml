@@ -1,0 +1,39 @@
+[package]
+name = "aalc-updater"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+publish = false
+description = "Native updater for AALC release archives."
+
+[workspace]
+
+[lib]
+name = "aalc_updater"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aalc-updater"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "z"
+panic = "abort"
+strip = true

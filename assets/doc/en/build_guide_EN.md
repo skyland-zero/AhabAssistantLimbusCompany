@@ -42,8 +42,11 @@ uv run python scripts/build.py --version 1.0.0
 The build runs, in order:
 
 1. `nsh package nsh-app --target windows` for the Native Shell frontend;
-2. `main_backend.spec` for the headless `AALC Backend.exe`;
-3. `updater.spec` for `AALC Updater.exe`;
+2. `shared_runtime.spec` for one `AALC Backend.exe` that serves both the
+   sidecar and Runner roles (the Runner starts with `--execution-runner`); add
+   `--separate-bundles` for the old two-executable layout;
+3. the Rust updater in `native/updater/` for `AALC Updater.exe`; add
+   `--legacy-updater` to build the old Python updater instead;
 4. staging of `dist/AALC.nsh/` with `nsh/`, `assets/`, the README and the LICENSE;
 5. `dist/AALC.nsh_<version>.7z` through 7-Zip.
 

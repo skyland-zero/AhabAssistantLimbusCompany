@@ -1,9 +1,10 @@
 """Shared PyInstaller collection rules for the sidecar and task runner.
 
-The sidecar and one-shot runner intentionally use different entry points, but
-they execute the same lazy-loaded automation/task modules.  Keeping the
-collection rules here prevents a module or native provider from silently
-drifting out of one of the two bundles.
+The shared runtime uses one entry point and switches to the Runner role with
+``--execution-runner``; the ``--separate-bundles`` rollback keeps the two
+dedicated entry points.  Both execute the same lazy-loaded automation/task
+modules.  Keeping the collection rules here prevents a module or native
+provider from silently drifting out of a bundle.
 
 This module is also importable by the release builder without importing
 PyInstaller.  The PyInstaller hook helpers are loaded lazily so manifest and

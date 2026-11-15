@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import queue
 import threading
 import time
@@ -343,6 +344,100 @@ def test_frozen_factory_prefers_shared_runtime_runner(monkeypatch, tmp_path) -> 
     argv, is_frozen = factory.locate()
     assert argv == [str(shared_runner)]
     assert is_frozen is True
+
+
+def test_frozen_factory_uses_merged_release_runner(monkeypatch, tmp_path) -> None:
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    executable = backend / "AALC Backend.exe"
+    executable.write_bytes(b"backend")
+    (tmp_path / "release.json").write_text(
+        json.dumps(
+            {
+                "runtime": "shared",
+                "runner": {
+                    "entry": "backend/AALC Backend.exe",
+                    "args": ["--execution-runner"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(supervisor_module.sys, "executable", str(executable))
+    monkeypatch.setattr(supervisor_module.sys, "frozen", True, raising=False)
+    monkeypatch.delenv("AHAB_RUNNER_EXE", raising=False)
+
+    factory = SubprocessRunnerFactory()
+    argv, is_frozen = factory.locate()
+
+    assert argv == [str(executable), "--execution-runner"]
+    assert is_frozen is True
+
+
+def test_frozen_factory_uses_separate_release_runner(monkeypatch, tmp_path) -> None:
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    executable = backend / "AALC Backend.exe"
+    executable.write_bytes(b"backend")
+    runner = tmp_path / "runner" / "AALCRunner.exe"
+    runner.parent.mkdir()
+    runner.write_bytes(b"runner")
+    (tmp_path / "release.json").write_text(
+        json.dumps({"runtime": "separate", "runner": {"entry": "runner/AALCRunner.exe", "args": []}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(supervisor_module.sys, "executable", str(executable))
+    monkeypatch.setattr(supervisor_module.sys, "frozen", True, raising=False)
+    monkeypatch.delenv("AHAB_RUNNER_EXE", raising=False)
+
+    factory = SubprocessRunnerFactory()
+    argv, is_frozen = factory.locate()
+
+    assert argv == [str(runner)]
+    assert is_frozen is True
+
+
+def test_frozen_factory_rejects_merged_runner_without_the_role_flag(monkeypatch, tmp_path) -> None:
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    executable = backend / "AALC Backend.exe"
+    executable.write_bytes(b"backend")
+    (tmp_path / "release.json").write_text(
+        json.dumps(
+            {
+                "runtime": "shared",
+                "runner": {"entry": "backend/AALC Backend.exe", "args": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(supervisor_module.sys, "executable", str(executable))
+    monkeypatch.setattr(supervisor_module.sys, "frozen", True, raising=False)
+    monkeypatch.delenv("AHAB_RUNNER_EXE", raising=False)
+
+    factory = SubprocessRunnerFactory()
+    with pytest.raises(supervisor_module.SupervisorError):
+        factory.locate()
+
+
+def test_frozen_factory_rejects_runner_outside_the_release_root(monkeypatch, tmp_path) -> None:
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    executable = backend / "AALC Backend.exe"
+    executable.write_bytes(b"backend")
+    outside = tmp_path.parent / f"{tmp_path.name}-outside-runner.exe"
+    outside.write_bytes(b"runner")
+    (tmp_path / "release.json").write_text(
+        json.dumps({"runner": {"entry": f"../{outside.name}", "args": []}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(supervisor_module.sys, "executable", str(executable))
+    monkeypatch.setattr(supervisor_module.sys, "frozen", True, raising=False)
+    monkeypatch.delenv("AHAB_RUNNER_EXE", raising=False)
+
+    factory = SubprocessRunnerFactory()
+    with pytest.raises(supervisor_module.SupervisorError):
+        factory.locate()
 
 
 def test_snapshot_updates_never_run_while_the_session_lock_is_held(monkeypatch) -> None:

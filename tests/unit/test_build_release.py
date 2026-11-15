@@ -74,7 +74,6 @@ def test_shared_runtime_manifest_uses_one_backend_directory(tmp_path: Path) -> N
     runtime = release / "backend"
     runtime.mkdir(parents=True)
     (runtime / "AALC Backend.exe").write_bytes(b"backend")
-    (runtime / "AALCRunner.exe").write_bytes(b"runner")
 
     manifest = build.build_release_manifest(
         "1.2.3", release_root=release, shared_runtime=True
@@ -83,11 +82,9 @@ def test_shared_runtime_manifest_uses_one_backend_directory(tmp_path: Path) -> N
     assert manifest["frontend"] == "AALC.nsh.exe"
     assert manifest["runtime"] == "shared"
     assert manifest["backend"]["entry"] == "backend/AALC Backend.exe"
-    assert manifest["runner"]["entry"] == "backend/AALCRunner.exe"
-    assert {entry["path"] for entry in manifest["runner"]["files"]} == {
-        "backend/AALC Backend.exe",
-        "backend/AALCRunner.exe",
-    }
+    assert manifest["runner"]["entry"] == "backend/AALC Backend.exe"
+    assert manifest["runner"]["args"] == ["--execution-runner"]
+    assert manifest["runner"]["files"] == manifest["backend"]["files"]
 
 
 def test_release_manifest_records_both_onedir_bundles(tmp_path: Path) -> None:
@@ -113,6 +110,7 @@ def test_release_manifest_records_both_onedir_bundles(tmp_path: Path) -> None:
         },
     ]
     assert manifest["runner"]["entry"] == "runner/AALCRunner.exe"
+    assert manifest["runner"]["args"] == []
     assert manifest["runner"]["files"] == [
         {
             "path": "runner/AALCRunner.exe",
@@ -128,3 +126,9 @@ def test_release_manifest_records_both_onedir_bundles(tmp_path: Path) -> None:
 
     manifest_path = build.write_release_manifest("1.2.3", release_root=release)
     assert json.loads(manifest_path.read_text(encoding="utf-8")) == manifest
+
+
+def test_runner_role_flag_matches_the_runtime() -> None:
+    from module.execution.supervisor import RUNNER_ROLE_FLAG as runtime_flag
+
+    assert build.RUNNER_ROLE_FLAG == runtime_flag

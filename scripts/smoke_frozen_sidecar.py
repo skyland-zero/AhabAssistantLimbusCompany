@@ -143,17 +143,41 @@ def smoke(executable: Path, *, timeout: float = SHUTDOWN_TIMEOUT) -> dict[str, A
                 process.wait(timeout=5)
 
 
+def check_runner_dispatch(executable: Path) -> dict[str, Any]:
+    """Prove the shared executable still routes `--execution-runner` to the
+    one-shot bootstrap without importing the backend."""
+
+    executable = Path(executable)
+    if not executable.is_file():
+        raise FileNotFoundError(f"frozen runtime is missing: {executable}")
+    result = subprocess.run(
+        [str(executable), "--execution-runner", "--help"],
+        cwd=executable.parent,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode != 0 or "Runner" not in output:
+        raise RuntimeError(
+            "frozen runtime did not dispatch --execution-runner "
+            f"(exit {result.returncode}): {output[-500:]}"
+        )
+    return {"runnerDispatch": True, "exitCode": result.returncode}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke-test a frozen onedir sidecar")
     parser.add_argument(
         "executable",
         nargs="?",
-        default=str(Path(__file__).resolve().parents[1] / "dist" / "AALCBackend" / "AALC Backend.exe"),
+        default=str(Path(__file__).resolve().parents[1] / "dist" / "AALCRuntime" / "AALC Backend.exe"),
     )
     parser.add_argument("--timeout", type=float, default=SHUTDOWN_TIMEOUT)
     args = parser.parse_args()
     ready = smoke(Path(args.executable), timeout=args.timeout)
-    sys.stdout.write(json.dumps(ready, ensure_ascii=False) + "\n")
+    runner = check_runner_dispatch(Path(args.executable))
+    sys.stdout.write(json.dumps({**ready, "runner": runner}, ensure_ascii=False) + "\n")
     return 0
 
 
