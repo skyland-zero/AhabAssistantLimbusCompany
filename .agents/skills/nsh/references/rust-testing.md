@@ -164,8 +164,7 @@ fn adds_and_deletes_a_todo() -> Result<(), String> {
 - `shows(text)`, `matches(sel)`, `count(sel)`, `enabled(sel)`, `selected(sel)`, `input_text(sel)`,
   `accessibility_state(sel)`.
 - `dialogs()`, `clipboard()`, `opened_urls()`, `picks()`, `file_requests()`: what the app asked the platform for.
-- `commands()`, `sent(&command)`: commands sent to views (focus, scroll). `app.clear_commands()` starts the record
-  afresh: a long test calls it before the steps whose commands it checks.
+- `commands()`, `sent(&command)`: commands sent to views (focus, scroll).
 
 Assert on what a user sees. Do not export signals from the app so that a test can read them.
 

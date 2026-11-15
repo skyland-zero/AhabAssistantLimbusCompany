@@ -5,7 +5,7 @@
 - Windows x64
 - Python 3.12 或更高版本
 - Rust 1.99.1
-- Native Shell 0.5.0
+- Native Shell 0.5.1
 - [uv](https://docs.astral.sh/uv/)
 
 ```powershell

@@ -349,7 +349,7 @@ Windows 实机验证：
 P5 清理：
 
 - 旧客户端已从工作树删除：源码、资源、Cargo 工程与对照图生成脚本全部移除；对照图继续保留在 `docs/reference/gpui/`。
-- 构建脚本改为 `nsh package nsh-app`；CI 改用 `nsh-app/native` 并安装 Native Shell 0.5.0。
+- 构建脚本改为 `nsh package nsh-app`；CI 改用 `nsh-app/native` 并安装 Native Shell 0.5.1。
 - `scripts/capture_gpui.py`、`scripts/benchmark_nsh_vs_gpui.ps1`、`scripts/export_nsh_theme.py` 等一次性迁移工具随旧树删除。
 - `scripts/check_no_legacy_client_refs.py` 不再有迁移白名单，检查通过。
 
@@ -412,7 +412,7 @@ P5 清理：
 - [x] `nsh run nsh-app --target gpui` 已在无 GPU 机器上跑通：Xvfb + `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`（lavapipe）。截图见 `nsh-app/docs/shots/`。
 - [x] **mixed 模式会按应用构建宿主**：首次 `nsh test --target gpui` 花了 **11 分钟**编 `nsh-gpui-host`（NSH 引擎 + GPUI Fast + QuickJS + 我们的 crate），之后增量几分之一分钟。这意味着**任何要出包的机器（含 CI）都要有 Rust + 平台系统库**：Linux 需 GTK3 / WebKitGTK 4.1 / GStreamer / clang 的开发包。
 - [x] 截图链路：Linux 用 `scripts/capture_nsh.py`（Xvfb + lavapipe，无需 GPU）抓桌面尺寸；旧客户端用 `scripts/capture_gpui.py` 出同一视口的对照图，基准已入库 `docs/reference/gpui/`。Windows 用 `nsh test nsh-app/visual.test.tsx --target windows` 抓 820×680 实机图（见 §1.6）；`app.screenshot()` 不含系统文本框的文字。
-- [x] `cargo check` / `cargo fmt --check` / `cargo test --lib` 在 `nsh-app/native` 通过（nsh-core 0.5.0，Rust 1.99.1）。
+- [x] `cargo check` / `cargo fmt --check` / `cargo test --lib` 在 `nsh-app/native` 通过（nsh-core 0.5.1，Rust 1.99.1）。
 - [~] `nsh-testing` 的 `bundle` feature 在本机依赖链编译失败（`rolldown 1.2.13` 与 `rolldown_std_utils` 不兼容），因此原生侧暂不加 `nsh-testing`/`nsh-engine` 开发依赖；不阻塞 `nsh test`（它自己构建 headless runner），P1 需要 crate 级 UI 测试时再解决。
 - [x] mixed 模式引入 QuickJS 后的发布包体积与冷启动时间：打包版 `AALC.exe` 62.1 MB，首窗中位 123.3 ms（9/10 次 118.1–146 ms），工作集 61.9 MB；对 GPUI 的 release 版启动快约 19%，内存高约 5 MB（§1.6）。
 - [x] Win32 后端打包覆盖原 `app.manifest` 的 DPI 感知与单实例语义：175% 缩放下窗口为 1435×1190 物理像素，第二次启动退出且保持一个进程/窗口。

@@ -19,9 +19,9 @@
 ```text
 仓库：https://github.com/longbridge/nsh
 路径：skills/
-同步提交：e8d1100 text: Place inline views on their wrapped line in headless layout (#1787)
-同步日期：2026-11-12
-nsh CLI：0.5.0
+同步提交：224d9a7 release: Prepare version 0.5.1 (#2025)
+同步日期：2026-11-15
+nsh CLI：0.5.1
 ```
 
 更新方式（保持目录结构一致，只覆盖这两个 skill）：
