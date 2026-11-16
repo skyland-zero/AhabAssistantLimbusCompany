@@ -74,6 +74,13 @@ fn update_check_maps_the_backend_status() {
 }
 
 #[test]
+fn install_update_maps_the_backend_status() {
+    let mut state = settings();
+    let message = state.install_update().unwrap();
+    assert!(message.contains("正在检查并下载更新"));
+}
+
+#[test]
 fn theme_packs_load_sort_and_persist() {
     let mut state = theme_packs();
     assert_eq!(state.data.packs.len(), 8);

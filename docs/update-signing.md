@@ -40,3 +40,17 @@ SHA-256；随后定位 `AALC.nsh/` 解压根目录（不再按压缩包文件名
 Rust 更新器接受 raw 32 字节、base64、hex 和 PKCS#8 PEM 公钥；签名接受 64 字节原始
 文件、base64 或 hex。`scripts/smoke_native_updater.py` 使用真实签名包覆盖全量安装、
 增量安装、篡改拒绝、旧 Runner 布局迁移和更新器交接场景。
+
+## 自动安装
+
+设置页「更新与源配置」里的「安装更新」通过 `app.installUpdate` 让 sidecar：
+
+1. 用 `UpdateThread` 检查最新版本；
+2. 读取最新 GitHub Release 的 `.7z`、`.manifest.json` 和 `.manifest.sig`；
+3. 下载到 `update_temp`；
+4. 启动 `AALC Updater.exe`，由它验签、停止应用、覆盖安装并重启。
+
+自动安装目前只支持 GitHub 源；Mirror 酱源仍可用于检查版本和手动下载。V0.0.7 及更早
+的安装在首次升级到签名版本时还没有 `update_public_keys.json`，需要手动安装一次
+V0.0.8 或更新版本；从该版本起 `update_public_keys.json` 随包提供，后续可以在应用内
+直接更新。

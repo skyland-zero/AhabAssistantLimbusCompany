@@ -442,7 +442,7 @@ def update(assets_url, *, manifest_url=None, signature_url=None):
             log.error("更新失败：签名清单 URL 无效")
             return False
 
-        with requests.get(assets_url, stream=True, timeout=10) as response:
+        with requests.get(assets_url, stream=True, timeout=(10, 60)) as response:
             response.raise_for_status()
             total_size = int(response.headers.get("content-length", 0))
             max_size = int(os.getenv("AALC_UPDATE_MAX_BYTES", str(2 * 1024 * 1024 * 1024)))

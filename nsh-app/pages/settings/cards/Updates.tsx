@@ -1,8 +1,9 @@
 // Updates & Sources: the prerelease channel, the download mirror, the mirror's
 // CDK (only while that mirror is chosen) and the check for updates.
 //
-// `checkUpdate` needs the updater and the sidecar, so the button reports that
-// the check is P1's work; the mirror choice and the CDK are editable now.
+// `checkUpdate` reports available versions; `installUpdate` downloads the
+// signed GitHub assets and hands them to the native updater.  The mirror
+// choice and its CDK remain for checks and manual downloads.
 import { View } from "nsh";
 import { Button } from "../../../components/Button";
 import { Rule } from "../../../components/Card";
@@ -16,6 +17,7 @@ import {
   checkForUpdates,
   currentCdk,
   currentUpdateSource,
+  installUpdate,
   saveCdk,
   setCdk,
   setUpdateSource,
@@ -71,12 +73,18 @@ export function UpdatesCard() {
           </SettingLine>
         </If>
       </SettingsGroup>
-      <View class="flex-row pt-1">
+      <View class="flex-row gap-2 pt-1">
         <Button
           label="检查更新"
           icon="check"
           variant="outline"
           onPress={() => checkForUpdates()}
+        />
+        <Button
+          label="安装更新"
+          icon="package"
+          variant="default"
+          onPress={() => installUpdate()}
         />
       </View>
     </SettingsSection>

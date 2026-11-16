@@ -114,6 +114,11 @@ impl MockState {
                 "updateAvailable": false,
                 "latest": env!("CARGO_PKG_VERSION")
             })),
+            method::APP_INSTALL_UPDATE => Ok(json!({
+                "schemaVersion": 3,
+                "status": "checking",
+                "latest": "v9.9.9"
+            })),
             method::APP_SHUTDOWN => Ok(json!(true)),
             method::APP_DIAGNOSE => Ok(json!({
                 "schemaVersion": 3,

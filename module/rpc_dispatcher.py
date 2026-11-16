@@ -118,6 +118,7 @@ class RpcDispatcher:
     @staticmethod
     def is_mutating(method: Any) -> bool:
         return method in {
+            "app.installUpdate",
             "app.shutdown",
             "tasks.setConfig",
             "execution.start",
@@ -168,6 +169,7 @@ class RpcDispatcher:
             "app.ping": "app_ping",
             "app.version": "app_version",
             "app.checkUpdate": "app_check_update",
+            "app.installUpdate": "app_install_update",
             "app.shutdown": "app_shutdown",
             "app.diagnose": "__app_diagnose",
             "stats.getSummary": "stats_get_summary",
@@ -222,6 +224,7 @@ class RpcDispatcher:
             "app.ping",
             "app.version",
             "app.checkUpdate",
+            "app.installUpdate",
             "app.shutdown",
             "stats.getSummary",
             "tasks.getConfig",

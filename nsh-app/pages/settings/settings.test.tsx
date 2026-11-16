@@ -88,3 +88,13 @@ test("checking for updates reports the result in a toast", async () => {
     app.texts().some((line) => line.includes("当前已是最新版本")),
   );
 });
+
+test("installing an update reports the accepted status", async () => {
+  const app = await openSettings();
+  await app.press("role:button[更新与源配置]");
+  await app.waitFor("安装更新");
+  await app.press("role:button[安装更新]");
+  await app.waitUntil(() =>
+    app.texts().some((line) => line.includes("正在检查并下载更新")),
+  );
+});

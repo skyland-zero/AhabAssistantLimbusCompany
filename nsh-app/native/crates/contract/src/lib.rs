@@ -195,6 +195,7 @@ pub mod method {
     pub const APP_PING: &str = "app.ping";
     pub const APP_VERSION: &str = "app.version";
     pub const APP_CHECK_UPDATE: &str = "app.checkUpdate";
+    pub const APP_INSTALL_UPDATE: &str = "app.installUpdate";
     pub const APP_SHUTDOWN: &str = "app.shutdown";
     pub const APP_DIAGNOSE: &str = "app.diagnose";
     pub const STATS_GET_SUMMARY: &str = "stats.getSummary";

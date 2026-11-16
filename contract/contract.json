@@ -11,6 +11,7 @@
     "app.ping": {"mutating": false, "params": "none", "result": "string"},
     "app.version": {"mutating": false, "params": "none", "result": "AppVersion"},
     "app.checkUpdate": {"mutating": false, "params": "none", "result": "UpdateCheck"},
+    "app.installUpdate": {"mutating": true, "params": "none", "result": "UpdateInstall"},
     "app.shutdown": {"mutating": true, "params": "none", "result": "boolean"},
     "app.diagnose": {"mutating": false, "params": "none", "result": "BackendDiagnostics"},
     "stats.getSummary": {"mutating": false, "params": "none", "result": "ExecutionSummary"},

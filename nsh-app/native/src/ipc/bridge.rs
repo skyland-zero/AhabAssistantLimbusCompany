@@ -126,7 +126,7 @@ fn start_service() -> BackendClient {
         STARTUP_ATTEMPTS,
         STARTUP_RETRY_DELAY,
         BackendClient::try_sidecar,
-        |level, message| record_startup(level, message),
+        record_startup,
     ) {
         Ok(client) => {
             STARTUP_STATE.store(STARTUP_READY, Ordering::Release);

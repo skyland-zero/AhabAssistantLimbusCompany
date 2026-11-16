@@ -882,6 +882,7 @@ class BackendApplication:
                 self.notifications,
                 self._config_value,
                 lambda: self.version,
+                emit=self.emit,
             )
         return self._notification_update
 
@@ -3024,6 +3025,9 @@ class BackendApplication:
 
     def app_check_update(self) -> dict[str, Any]:
         return self.notification_update_service.check_update()
+
+    def app_install_update(self) -> dict[str, Any]:
+        return self.notification_update_service.install_update()
 
     def close(self) -> None:
         with self._lock:

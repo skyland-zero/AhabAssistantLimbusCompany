@@ -184,6 +184,11 @@ impl SettingsStore {
         self.state.check_update()
     }
 
+    /// Starts a signed in-app update and returns the feedback line.
+    pub fn install_update(&mut self) -> Result<String, String> {
+        self.state.install_update()
+    }
+
     /// Turns global hotkeys on or off and saves the config.
     pub fn set_hotkeys_enabled(&mut self, enabled: bool) -> Result<HotkeyView, String> {
         self.state.set_hotkeys_enabled(enabled)?;

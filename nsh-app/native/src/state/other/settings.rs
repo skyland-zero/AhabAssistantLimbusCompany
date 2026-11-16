@@ -157,6 +157,40 @@ impl SettingsState {
         Ok(message)
     }
 
+    pub fn install_update(&mut self) -> Result<String, String> {
+        let result = self
+            .rpc
+            .request_value(method::APP_INSTALL_UPDATE, None)
+            .map_err(|error| error.message)?
+            .unwrap_or_default();
+        let latest = result
+            .get("latest")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        let message = match result.get("status").and_then(|value| value.as_str()) {
+            Some("checking") => {
+                if latest.is_empty() {
+                    "正在检查并下载更新...".to_owned()
+                } else {
+                    format!("正在检查并下载更新：{latest}")
+                }
+            }
+            Some("busy") => "更新正在进行中...".to_owned(),
+            Some("up_to_date") => format!(
+                "当前已是最新版本：{}",
+                if latest.is_empty() { "未知" } else { latest }
+            ),
+            Some("unsupported_source") => "自动安装暂仅支持 GitHub 更新源".to_owned(),
+            _ => result
+                .get("error")
+                .and_then(|value| value.as_str())
+                .unwrap_or("自动更新启动失败")
+                .to_owned(),
+        };
+        self.feedback = Some(message.clone());
+        Ok(message)
+    }
+
     fn persist_hotkey(&mut self) -> Result<(), String> {
         self.rpc
             .request_value(

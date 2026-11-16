@@ -219,6 +219,18 @@ export function checkForUpdates(): void {
   }
 }
 
+/** Downloads and starts the signed update; progress arrives as notices. */
+export function installUpdate(): void {
+  const backend = ensureStore();
+  if (!backend) return;
+  try {
+    const message = backend.installUpdate();
+    setFeedback(message, updateTone(message));
+  } catch (error) {
+    failure(error);
+  }
+}
+
 /** `最新`/`latest` is a success; a failed check is a danger; an available
  *  update is informational. */
 function updateTone(message: string): ToastTone {
