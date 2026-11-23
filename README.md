@@ -241,7 +241,7 @@ git clone https://github.com/KIYI671/AhabAssistantLimbusCompany
 cd AhabAssistantLimbusCompany
 # 请使用 Python 3.14.x
 pip install -r requirements.txt
-# 需要预先安装 Rust 1.99.1 与 Native Shell 0.5.1
+# 需要预先安装 Rust 1.99.1 与 Native Shell 0.6.1
 nsh run nsh-app
 
 # 更新

@@ -19,9 +19,9 @@
 ```text
 仓库：https://github.com/longbridge/nsh
 路径：skills/
-同步提交：224d9a7 release: Prepare version 0.5.1 (#2025)
-同步日期：2026-11-15
-nsh CLI：0.5.1
+同步提交：2f51d86 release: Prepare version 0.6.1 (#2617)
+同步日期：2026-11-23
+nsh CLI：0.6.1
 ```
 
 更新方式（保持目录结构一致，只覆盖这两个 skill）：

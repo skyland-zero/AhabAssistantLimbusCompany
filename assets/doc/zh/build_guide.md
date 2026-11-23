@@ -5,7 +5,7 @@
 - Windows x64
 - Python 3.12+
 - Rust 1.99.1
-- Native Shell 0.5.1（`nsh` 命令在 PATH 中）
+- Native Shell 0.6.1（`nsh` 命令在 PATH 中）
 - `uv`（推荐）和 7-Zip
 
 安装依赖：

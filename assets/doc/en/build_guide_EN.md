@@ -5,7 +5,7 @@
 - Windows x64
 - Python 3.12+
 - Rust 1.99.1
-- Native Shell 0.5.1 (`nsh` on `PATH`)
+- Native Shell 0.6.1 (`nsh` on `PATH`)
 - `uv` (recommended) and 7-Zip
 
 Install dependencies:

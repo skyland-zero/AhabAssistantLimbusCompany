@@ -349,7 +349,7 @@ Windows 实机验证：
 P5 清理：
 
 - 旧客户端已从工作树删除：源码、资源、Cargo 工程与对照图生成脚本全部移除；对照图继续保留在 `docs/reference/gpui/`。
-- 构建脚本改为 `nsh package nsh-app`；CI 改用 `nsh-app/native` 并安装 Native Shell 0.5.1。
+- 构建脚本改为 `nsh package nsh-app`；CI 改用 `nsh-app/native` 并安装 Native Shell 0.6.1。
 - `scripts/capture_gpui.py`、`scripts/benchmark_nsh_vs_gpui.ps1`、`scripts/export_nsh_theme.py` 等一次性迁移工具随旧树删除。
 - `scripts/check_no_legacy_client_refs.py` 不再有迁移白名单，检查通过。
 
