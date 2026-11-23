@@ -111,3 +111,50 @@
 | D1 `D2` | `0f456e36` `732002f2` `55ae1715` `2abbe5cc` | `tasks/mirror/mirror.py` | `f713b63e` |
 | D3 | `998c751e` | `utils/image_utils.py`（`match_color_regions`）、`tasks/mirror/mirror.py`（`_count_clear_badges` 仲裁） | `f713b63e` |
 | D4 | `fb2ef56d` | `module/game_and_screen/game.py`（`_has_game_window`） | `f713b63e` |
+
+## 2026-11-23 同步（基线 `2fcb1b46` 2026-11-08 → `origin/main` `ec8aa175` 2026-11-19）
+
+接上一轮的 tip 继续，只处理 Python 侧（`nsh-app` / TSX 无上游改动）。
+本轮共 12 个提交，其中非 merge 8 个（4 个 merge 是发布动作）。
+
+| 提交 | 日期 | 标题 | 状态 | 说明 |
+| --- | --- | --- | --- | --- |
+| `3293a901` | 11-10 | fix(team-setting): 修复时间统计重置无法生效的问题 | 放弃 | 只改 `app/team_setting_card.py`（Qt 界面） |
+| `95fa9f88` | 11-13 | feat(assets): 添加中英文通行证奖励识别资源 | 已合并 | `default/{en,zh_cn}/pass/` 补 battle_pass / claim_all / daily / seasonal，weekly 换新 |
+| `2d52dd72` | 11-13 | feat(automation): 支持按分辨率获取模板位置 | 部分合并 | 取 `Automation.get_template_position()`；本分支已有 `ImageUtils.get_bbox_from_path()`（按窗口缩放 + 主题/语言缓存），故不搬 `_find_image_path` / `get_template_bbox` 与纯文档化重构 |
+| `bbe646d4` | 11-13 | feat(reward): 独立配置任务、通行证和邮件奖励 | 部分合并 | 取 `get_prize.py` 新流程（daily/weekly/seasonal 三 tab + 徽章检测 + 通行证 claim_all）；配置仍用 `set_get_prize` 三档，由 `to_get_reward()` 映射，不动契约与 TSX。通行证奖励暂不领（同上游对旧配置的迁移默认值） |
+| `c9a884a8` | 11-19 | fix(mirror): 修复后返回按钮识别及点击逻辑 | 已合并 | 新增 `home/back2_assets.png`；`back_init_menu`、`luxcavation`（经验本/纽本）、`team_formation`、`mirror`（两处）双模板兜底，`first_prompt` 阈值 0.9，取坐标后显式 `mouse_click` |
+| `80c766c8` | 11-19 | docs(readme): 更新文档中的图标 | 放弃 | 上游品牌图标（`assets/logo/my_icon_256.png`），本分支品牌资源自有 |
+| `c0e49264` | 11-19 | 更新采光及镜牢入口图片资源 | 已合并 | `default/{en,zh_cn}/home/{luxcavation,mirror_dungeons}_assets.png` |
+| `f4677605` | 11-19 | git: add ignore for cloud image | 已存在 | `.gitignore` 已忽略真实路径 `assets/config/image_resource_state.json`（`module/resource_sync/state.py`） |
+
+### 上游血统说明
+
+`origin/main` 的提交历史在 2026-09 之后被重写过：`dev-nsh` 在 2026-10-27 合并的
+`e968ead5` 只是 fork 自己的 OpenCV wheel CI 分支（`build_opencv_slim.yml`），不在今天的
+`origin/main` 里。因此 `git merge-base dev-nsh origin/main` 仍停在 `d7a6b376`（2026-08-28），
+比台账记录的真实基线旧了近三个月 —— **基线以台账里的 `origin/main` tip 为准，不要用
+merge-base 或 `git log base..origin/main` 推断进度**。
+
+### 落地明细
+
+| 批次 | 上游 | 本分支改动 | 落地提交 |
+| --- | --- | --- | --- |
+| A 资源 | `95fa9f88` `c9a884a8` `c0e49264` | `assets/images/default/{en,zh_cn}/pass/*`、`assets/images/default/share/home/back2_assets.png`、`assets/images/dark/share/home/back2_assets.png`、`assets/images/default/{en,zh_cn}/home/{luxcavation,mirror_dungeons}_assets.png` | `b95cb36d` |
+| B 代码 | `2d52dd72` `bbe646d4` `c9a884a8` | `module/automation/automation.py`、`tasks/daily/get_prize.py`、`tasks/base/script_task_scheme.py`、`tasks/base/back_init_menu.py`、`tasks/daily/luxcavation.py`、`tasks/teams/team_formation.py`、`tasks/mirror/mirror.py`、`tests/unit/module/test_automation.py`、`tests/unit/tasks/test_script_task_scheme.py` | `45249825` |
+
+### 未做 / 待办
+
+- 通行证奖励（`claim_battle_pass_rewards`）只移植了代码路径，界面与契约还没有开关；
+  要开放需同步 `contract/contract.json`、Rust `model/tasks/config.rs`、TSX 设置页。
+- `bbe646d4` 的配置迁移（`set_get_prize` → 三个布尔开关）与 `config.example.yaml` 未取，
+  保持三档模式；如后续切到独立开关，再补迁移与示例配置。
+
+### 验证
+
+```powershell
+uv run python scripts/check_upstream_boundary.py   # OK
+uv run python scripts/check_no_legacy_client_refs.py  # OK
+uv run ruff check .        # 26 个既有告警均在 scripts/ 与 test_in_shop.py，本次改动 0 告警
+uv run pytest -q           # 626 passed, 1 skipped
+```
