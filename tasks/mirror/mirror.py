@@ -645,10 +645,11 @@ class Mirror:
             auto.mouse_to_blank()
             if retry() is False:
                 return False
-            if auto.find_element("home/first_prompt_assets.png", model="clam") and auto.find_element(
-                "home/back_assets.png", model="normal"
-            ):
-                auto.click_element("home/back_assets.png")
+            if auto.find_element("home/first_prompt_assets.png", model="clam", threshold=0.9):
+                if back_button := auto.click_element("home/back_assets.png", model="normal", click=False):
+                    auto.mouse_click(back_button[0], back_button[1])
+                elif back_button := auto.click_element("home/back2_assets.png", model="normal", click=False):
+                    auto.mouse_click(back_button[0], back_button[1])
                 continue
             if auto.find_element("mirror/claim_reward/clear_assets.png"):
                 self.bequest_from_the_previous_game = True
@@ -1160,10 +1161,11 @@ class Mirror:
             if self._handle_mirror_extension():
                 continue
 
-            if auto.find_element("home/first_prompt_assets.png", model="clam") and auto.find_element(
-                "home/back_assets.png", model="normal"
-            ):
-                auto.click_element("home/back_assets.png")
+            if auto.find_element("home/first_prompt_assets.png", model="clam", threshold=0.9):
+                if back_button := auto.click_element("home/back_assets.png", model="normal", click=False):
+                    auto.mouse_click(back_button[0], back_button[1])
+                elif back_button := auto.click_element("home/back2_assets.png", model="normal", click=False):
+                    auto.mouse_click(back_button[0], back_button[1])
                 continue
 
             # 防卡死

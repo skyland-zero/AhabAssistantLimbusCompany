@@ -100,8 +100,8 @@ def back_init_menu(*, allow_restart: bool = True):
         if auto.find_element("base/waiting_assets.png") or auto.find_element("base/waiting_2_assets.png"):
             continue
 
-        # 左上角有后退键
-        if auto.click_element("home/back_assets.png"):
+        # 左上角有后退键（赛季改版后是 back2_assets，两个都试）
+        if auto.click_element("home/back_assets.png") or auto.click_element("home/back2_assets.png"):
             continue
 
         # 在战斗中

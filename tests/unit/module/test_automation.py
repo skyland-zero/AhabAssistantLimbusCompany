@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 import psutil
+import pytest
 from PIL import Image
 
 from module.automation.automation import Automation
@@ -229,3 +230,49 @@ def test_find_feature_element_returns_none_without_a_screenshot(monkeypatch) -> 
     monkeypatch.setattr(automation, "_load_feature_template", lambda _target: (np.zeros((4, 4), dtype=np.uint8), None))
 
     assert automation.find_feature_element("anything.png") is None
+
+
+def test_get_template_position_returns_the_center_or_the_bbox(monkeypatch) -> None:
+    automation = object.__new__(Automation)
+    monkeypatch.setattr(ImageUtils, "get_bbox_from_path", lambda _target: (100, 200, 140, 240))
+
+    assert automation.get_template_position("home/season_assets.png") == (120, 220)
+    assert automation.get_template_position("home/season_assets.png", "bbox") == (100, 200, 140, 240)
+
+    with pytest.raises(ValueError):
+        automation.get_template_position("home/season_assets.png", "corner")
+
+
+def test_get_template_position_without_the_asset_returns_none(monkeypatch) -> None:
+    automation = object.__new__(Automation)
+    monkeypatch.setattr(ImageUtils, "get_bbox_from_path", lambda _target: None)
+
+    assert automation.get_template_position("home/missing_assets.png") is None
+
+
+def test_find_regions_by_color_counts_red_dots_and_restores_the_gray_frame(monkeypatch) -> None:
+    automation = object.__new__(Automation)
+    automation._screenshot_array_cache = {}
+
+    color_frame = Image.new("RGB", (2560, 1440), (30, 30, 30))
+    color_frame.paste((150, 0, 0), (560, 385, 600, 415))
+    color_frame.paste((150, 0, 0), (560, 665, 600, 695))
+    # 金框/棕卡面：被掩码排除，不能算成徽章。
+    color_frame.paste((200, 170, 40), (560, 950, 600, 990))
+
+    def fake_take_screenshot(gray=True):
+        automation.screenshot = color_frame
+        return color_frame
+
+    monkeypatch.setattr(automation, "take_screenshot", fake_take_screenshot)
+
+    def red_mask(roi_rgb):
+        return ((roi_rgb[..., 0] >= 110) & (roi_rgb[..., 1] <= 30) & (roi_rgb[..., 2] <= 30)).astype(np.uint8) * 255
+
+    daily = automation.find_regions_by_color((520, 365, 615, 440), red_mask, min_area=500)
+    seasonal = automation.find_regions_by_color((520, 935, 615, 1020), red_mask, min_area=500)
+
+    assert daily is not None and len(daily) == 1
+    assert seasonal == []
+    # 取完彩色数据后必须回到灰度帧，后续模板/OCR 流程默认吃灰度图。
+    assert automation.screenshot.mode == "L"

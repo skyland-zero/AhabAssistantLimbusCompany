@@ -255,18 +255,19 @@ def onetime_mir_process(team_setting: TeamSetting, team_num: int):
 
 
 def to_get_reward():
-    if cfg.set_get_prize == 0:
+    # 界面仍只有三档「领取模式」：0 全部 / 1 狂气（任务） / 2 邮件。上游 bbe646d4
+    # 起把任务、通行证、邮件拆成三个独立开关，这里按模式映射；通行证奖励暂不领
+    # （与上游对旧配置的迁移默认值一致，等界面加开关后再打开）。
+    claim_missions = cfg.set_get_prize in (0, 1)
+    claim_mail = cfg.set_get_prize in (0, 2)
+    if not (claim_missions or claim_mail):
+        return
+    back_init_menu()
+    if claim_missions:
+        if not get_pass_prize(claim_missions=True, claim_rewards=False):
+            return
         back_init_menu()
-        get_pass_prize()
-        back_init_menu()
-        get_mail_prize()
-        back_init_menu()
-    elif cfg.set_get_prize == 1:
-        back_init_menu()
-        get_pass_prize()
-        back_init_menu()
-    else:
-        back_init_menu()
+    if claim_mail:
         get_mail_prize()
         back_init_menu()
 

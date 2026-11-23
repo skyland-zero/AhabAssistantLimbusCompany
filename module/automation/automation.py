@@ -6,7 +6,7 @@ import threading
 import time
 import unicodedata
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Literal
 
 import cv2
 import numpy as np
@@ -831,6 +831,26 @@ class Automation(metaclass=SingletonMeta):
                 init_game()
                 start_time = time.time()
 
+    def get_template_position(
+        self, target: str, output: Literal["center", "bbox"] = "center"
+    ) -> tuple[int, int] | tuple[int, int, int, int] | None:
+        """返回黑底模板在当前窗口坐标系下的中心或最小外接矩形。
+
+        ``ImageUtils.get_bbox_from_path`` 随窗口尺寸缩放模板，并按主题/语言缓存，
+        所以这里不需要再做 ``set_win_size / 1440`` 换算（上游 2d52dd72 的做法）。
+        """
+
+        if output not in ("center", "bbox"):
+            raise ValueError(f"不支持的模板位置输出类型: {output}")
+        bbox = ImageUtils.get_bbox_from_path(target)
+        if bbox is None:
+            log.error(f"无法获取模板位置：{target}")
+            return None
+        left, top, right, bottom = bbox
+        if output == "bbox":
+            return left, top, right, bottom
+        return (left + right) // 2, (top + bottom) // 2
+
     def find_element(
         self,
         target,
@@ -915,6 +935,32 @@ class Automation(metaclass=SingletonMeta):
             if i < max_retries - 1:
                 interruptible_sleep(1)  # 在重试前等待一定时间
         return None
+
+    def find_regions_by_color(self, roi, mask_fn, min_area=300, min_dist=80) -> List | None:
+        """在彩色截图里按颜色掩码找区域。
+
+        Args:
+            roi: (x1, y1, x2, y2) 1440 高度基准坐标，内部按实际截图高度自动缩放
+            mask_fn: callable(ROI 的 RGB ndarray) -> uint8 掩码 (0/255)
+            min_area/min_dist: 透传 ImageUtils.match_color_regions
+
+        Returns:
+            list[(cx, cy, area)]: 颜色区域质心与面积；无匹配返回 []，匹配出错返回 None
+        """
+
+        while self.take_screenshot(gray=False) is None:
+            continue
+        color_image = np.array(self.screenshot.convert("RGB"))
+        if self.screenshot.mode != "L":
+            # 其余流程默认吃灰度帧，取完彩色数据后恢复，避免下游重复转换。
+            self.screenshot = self.screenshot.convert("L")
+            getattr(self, "_screenshot_array_cache", {}).clear()
+        regions = ImageUtils.match_color_regions(
+            color_image, mask_fn, roi=roi, min_area=min_area, min_dist=min_dist
+        )
+        if regions is not None:
+            log.debug(f"颜色匹配到{len(regions)}个区域：{regions}")
+        return regions
 
     def find_image_with_multiple_targets(
         self,

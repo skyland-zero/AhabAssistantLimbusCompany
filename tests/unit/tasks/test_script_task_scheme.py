@@ -190,3 +190,42 @@ def test_cancelled_runner_does_not_create_completion_request(monkeypatch) -> Non
             script_task_scheme.script_task(runner_mode=True)
     finally:
         bind_cancel_event(None)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (0, ["back", ("pass", True, False), "back", "mail", "back"]),
+        (1, ["back", ("pass", True, False), "back"]),
+        (2, ["back", "mail", "back"]),
+    ],
+)
+def test_to_get_reward_maps_the_claim_mode_to_the_upstream_switches(monkeypatch, mode, expected) -> None:
+    """上游把任务/通行证/邮件拆成独立开关后，界面三档模式仍要映射正确。"""
+
+    calls: list[object] = []
+
+    def fake_get_pass_prize(*, claim_missions, claim_rewards):
+        calls.append(("pass", claim_missions, claim_rewards))
+        return True
+
+    monkeypatch.setattr(script_task_scheme.cfg, "set_get_prize", mode, raising=False)
+    monkeypatch.setattr(script_task_scheme, "back_init_menu", lambda: calls.append("back"))
+    monkeypatch.setattr(script_task_scheme, "get_pass_prize", fake_get_pass_prize)
+    monkeypatch.setattr(script_task_scheme, "get_mail_prize", lambda: calls.append("mail"))
+
+    script_task_scheme.to_get_reward()
+
+    assert calls == expected
+
+
+def test_to_get_reward_stops_before_mail_when_the_pass_page_fails(monkeypatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(script_task_scheme.cfg, "set_get_prize", 0, raising=False)
+    monkeypatch.setattr(script_task_scheme, "back_init_menu", lambda: calls.append("back"))
+    monkeypatch.setattr(script_task_scheme, "get_pass_prize", lambda **_kwargs: calls.append("pass") or False)
+    monkeypatch.setattr(script_task_scheme, "get_mail_prize", lambda: calls.append("mail"))
+
+    script_task_scheme.to_get_reward()
+
+    assert "mail" not in calls
